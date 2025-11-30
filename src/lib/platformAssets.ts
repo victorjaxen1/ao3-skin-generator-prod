@@ -93,6 +93,7 @@ export const PLATFORM_ASSETS = {
  * These files exist in /public/assets/
  */
 export const LOCAL_ASSETS: Record<string, boolean> = {
+  // Twitter
   'twitter-verifiedBadge.png': true,
   'twitter-logo.png': true,
   'twitter-replyIcon.png': true,
@@ -100,18 +101,25 @@ export const LOCAL_ASSETS: Record<string, boolean> = {
   'twitter-likeIcon.png': true,
   'twitter-views.png': true,
   'twitter-upload.png': true,
+  // WhatsApp
   'whatsapp-clockicon.png': true,
   'whatsapp-checkmarkSent.png': true,
   'whatsappcheckmarkDelivered.png': true,
   'whatsapp-checkmarkRead.png': true,
+  'whatsapp-logo.png': true,
+  'whatapp-header.png': true,
+  'whatsapp-footer.png': true,
+  // iOS/iMessage
+  'imessage-logo.png': true,
+  'imessage-header.png': true,
+  'imessage-footer.jpg': true,
+  // Other platforms
   'discord-logo.png': true,
   'google-logo-long.png': true,
   'google-search-glass.png': true,
   'google-mic-270775.png': true,
   'google-clear-X.png': true,
-  'imessage-logo.png': true,
   'instagram-logo.png': true,
-  'whatsapp-logo.png': true,
   'tinder-logo.png': true,
   'email-logo.png': true,
 };
