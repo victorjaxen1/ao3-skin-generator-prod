@@ -1,0 +1,45 @@
+``<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OAuth Callback - AO3 Skin Generator</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
+        .success { color: #28a745; }
+        .code { background: #f4f4f4; padding: 10px; border-radius: 4px; margin: 10px 0; word-break: break-all; }
+    </style>
+</head>
+<body>
+    <h1>OAuth Callback Handler</h1>
+    <p>This page receives OAuth tokens from Imgur API registration.</p>
+    <div id="result"></div>
+    
+    <script>
+        // Parse OAuth callback parameters from URL fragment
+        const params = new URLSearchParams(window.location.hash.substring(1));
+        const accessToken = params.get('access_token');
+        const refreshToken = params.get('refresh_token');
+        const expiresIn = params.get('expires_in');
+        
+        const resultDiv = document.getElementById('result');
+        
+        if (accessToken) {
+            resultDiv.innerHTML = `
+                <h2 class="success">✓ Authorization Successful!</h2>
+                <p><strong>Access Token:</strong></p>
+                <div class="code">${accessToken}</div>
+                <p><strong>Refresh Token:</strong></p>
+                <div class="code">${refreshToken || 'N/A'}</div>
+                <p><strong>Expires in:</strong> ${expiresIn} seconds</p>
+                <p><em>Note: For this application, you only need the Client ID from registration.</em></p>
+            `;
+        } else {
+            resultDiv.innerHTML = `
+                <p>Waiting for authorization callback...</p>
+                <p><em>If you're seeing this without coming from an OAuth flow, the callback URL is configured correctly.</em></p>
+            `;
+        }
+    </script>
+</body>
+</html>

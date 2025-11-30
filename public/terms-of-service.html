@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" >
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" >
+    <meta name="description" content="Terms of Service for AO3 Skin Generator - Rules and guidelines for using our service." >
+    <title>Terms of Service - AO3 Skin Generator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" >
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin >
+    <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Roboto:wght@300;400;500&display=swap" rel="stylesheet" >
+    
+    <style>
+:root {
+--primary: #1a73e8;
+--primary-dark: #0d47a1;
+--primary-light: #8ab4f8;
+--primary-bg: #e8f0fe;
+--secondary: #34a853;
+--accent: #fbbc05;
+--danger: #ea4335;
+--text-dark: #202124;
+--text-gray: #5f6368;
+--text-light: #e8eaed;
+--bg-light: #f8f9fa;
+--border-light: #dadce0;
+--shadow-sm: 0 1px 2px rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15);
+--shadow-md: 0 2px 6px rgba(60,64,67,0.3), 0 1px 8px 1px rgba(60,64,67,0.15);
+--shadow-lg: 0 4px 12px rgba(60,64,67,0.3), 0 1px 16px 2px rgba(60,64,67,0.15);
+--radius-sm: 4px;
+--radius-md: 8px;
+--radius-lg: 16px;
+--transition-fast: 0.15s ease;
+--transition-normal: 0.25s ease;
+--content-max-width: 900px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Roboto', Arial, sans-serif; }
+
+body { color: var(--text-dark); line-height: 1.7; background: white; }
+
+h1, h2, h3, h4, h5, h6 { font-family: 'Google Sans', 'Roboto', Arial, sans-serif; font-weight: 500; margin-bottom: 0.75em; line-height: 1.3; color: var(--text-dark); }
+
+h1 { font-size: clamp(2rem, 5vw, 2.5rem); font-weight: 700; margin-bottom: 1rem; }
+
+h2 { font-size: clamp(1.5rem, 4vw, 1.875rem); margin-top: 2.5rem; margin-bottom: 1rem; color: var(--primary); }
+
+h3 { font-size: clamp(1.25rem, 3vw, 1.5rem); margin-top: 2rem; margin-bottom: 0.75rem; }
+
+p { margin-bottom: 1.25em; font-size: 1rem; }
+
+ul, ol { margin-bottom: 1.25em; padding-left: 2rem; }
+
+li { margin-bottom: 0.5em; }
+
+a { color: var(--primary); text-decoration: none; transition: color var(--transition-fast); }
+
+a:hover { color: var(--primary-dark); text-decoration: underline; }
+
+.container { width: 100%; max-width: var(--content-max-width); margin: 0 auto; padding: 0 clamp(1rem, 5vw, 2rem); }
+
+.btn { display: inline-block; padding: 12px 24px; border-radius: var(--radius-sm); font-family: 'Google Sans'; font-weight: 500; font-size: 16px; text-decoration: none; cursor: pointer; transition: all var(--transition-normal); box-shadow: var(--shadow-sm); border: none; }
+
+.btn-primary { background-color: var(--primary); color: white; border: 1px solid var(--primary); }
+
+.btn-primary:hover { background-color: var(--primary-dark); box-shadow: var(--shadow-md); transform: translateY(-2px); text-decoration: none; }
+
+header { background-color: rgba(255, 255, 255, 0.98); position: sticky; top: 0; z-index: 1000; box-shadow: var(--shadow-sm); backdrop-filter: blur(10px); }
+
+.header-container { display: flex; justify-content: space-between; align-items: center; padding: 1rem clamp(1rem, 5vw, 2rem); }
+
+.logo { display: flex; align-items: center; text-decoration: none; color: var(--text-dark); }
+
+.logo svg { height: 32px; width: 32px; margin-right: 10px; }
+
+.logo-text { font-family: 'Google Sans'; font-size: 1.35rem; font-weight: 700; }
+
+.logo-text .highlight { color: var(--primary); }
+
+.page-header { background: linear-gradient(135deg, var(--primary-bg) 0%, #f8f9fa 100%); padding: clamp(3rem, 8vw, 4rem) 0 clamp(2rem, 6vw, 3rem); text-align: center; }
+
+.page-header h1 { margin-bottom: 0.5rem; }
+
+.page-header p { font-size: 1.1rem; color: var(--text-gray); max-width: 600px; margin: 0 auto; }
+
+.content-section { padding: clamp(3rem, 8vw, 4rem) 0; }
+
+.last-updated { display: inline-block; background: var(--bg-light); padding: 8px 16px; border-radius: var(--radius-sm); font-size: 0.9rem; color: var(--text-gray); margin-bottom: 2rem; border: 1px solid var(--border-light); }
+
+.info-box { background: var(--primary-bg); border-left: 4px solid var(--primary); padding: 1.5rem; border-radius: var(--radius-sm); margin: 2rem 0; }
+
+.info-box p:last-child { margin-bottom: 0; }
+
+.warning-box { background: #fef5f5; border-left: 4px solid var(--danger); padding: 1.5rem; border-radius: var(--radius-sm); margin: 2rem 0; }
+
+.warning-box p:last-child { margin-bottom: 0; }
+
+.highlight-box { background: var(--bg-light); border: 1px solid var(--border-light); padding: 1.5rem; border-radius: var(--radius-md); margin: 1.5rem 0; }
+
+strong { font-weight: 500; color: var(--text-dark); }
+
+footer { background-color: var(--text-dark); color: white; padding: 3rem 0 1.5rem; margin-top: 4rem; }
+
+.footer-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 2rem; margin-bottom: 2rem; }
+
+.footer-col h3 { font-size: 1.1rem; margin-bottom: 1rem; color: white; }
+
+.footer-col ul { list-style: none; padding: 0; }
+
+.footer-col li { margin-bottom: 0.5rem; }
+
+.footer-col a { color: var(--text-light); text-decoration: none; font-size: 0.95rem; }
+
+.footer-col a:hover { color: white; text-decoration: underline; }
+
+.footer-bottom { text-align: center; padding-top: 1.5rem; border-top: 1px solid rgba(255, 255, 255, 0.1); }
+
+.footer-bottom p { color: var(--text-light); font-size: 0.9rem; margin-bottom: 0; }
+
+.footer-bottom a { color: var(--primary-light); }
+
+@media (max-width: 768px) {
+.page-header { padding: 2rem 0 1.5rem; }
+h2 { margin-top: 2rem; }
+}
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="header-container">
+        <a href="https://ao3skingen.netlify.app" class="logo">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="12" y1="18" x2="12" y2="12"></line>
+            <line x1="9" y1="15" x2="15" y2="15"></line>
+          </svg>
+          <div class="logo-text">AO3 <span class="highlight">Skin Generator</span></div>
+        </a>
+        <a href="/" class="btn btn-primary" style="padding: 10px 20px; font-size: 15px;">Back to Generator</a>
+      </div>
+    </header>
+
+    <div class="page-header">
+      <div class="container">
+        <h1>Terms of Service</h1>
+        <p>Guidelines for using AO3 Skin Generator</p>
+      </div>
+    </div>
+
+    <main>
+      <section class="content-section">
+        <div class="container">
+          <div class="last-updated">
+            Last updated: November 27, 2025
+          </div>
+
+          <div class="info-box">
+            <p><strong>TL;DR:</strong> Use the tool freely and fairly. Don't abuse it, don't violate others' rights, and understand that we provide this service "as-is" with no guarantees. Your generated content is yours. We're not liable if something breaks or causes issues with your AO3 account (though we work hard to prevent that).</p>
+          </div>
+
+          <h2>1. Acceptance of Terms</h2>
+          <p>Welcome to AO3 Skin Generator. By accessing or using our website at <a href="https://ao3skingen.wordfokus.com">ao3skingen.wordfokus.com</a> (the "Service"), you agree to be bound by these Terms of Service ("Terms"). If you do not agree to these Terms, please do not use the Service.</p>
+          <p>We reserve the right to modify these Terms at any time. Continued use of the Service after changes constitutes acceptance of the modified Terms.</p>
+
+          <h2>2. Description of Service</h2>
+          <p>AO3 Skin Generator is a free, browser-based tool that helps users create custom work skins (CSS styling and HTML templates) for Archive of Our Own (AO3) fanfiction. The Service includes:</p>
+          <ul>
+            <li>Pre-built templates for Twitter/X threads, iOS/Android chat interfaces, and other formats</li>
+            <li>Visual editing interface with live preview</li>
+            <li>Export functionality for CSS, HTML, and images</li>
+            <li>Optional image upload via third-party service (Cloudinary)</li>
+            <li>Local browser storage for saving work in progress</li>
+          </ul>
+          <p>The Service is provided free of charge and does not require account creation.</p>
+
+          <h2>3. User Eligibility</h2>
+          <p>You must be at least 13 years old to use this Service. If you are between 13 and 18 years old (or the age of majority in your jurisdiction), you must have parental or guardian consent to use the Service.</p>
+          <p>By using the Service, you represent and warrant that you meet these age requirements and have the legal capacity to enter into these Terms.</p>
+
+          <h2>4. Acceptable Use</h2>
+          
+          <h3>4.1 You May:</h3>
+          <ul>
+            <li>Use the Service to create work skins for your own fanfiction on AO3</li>
+            <li>Share your generated CSS/HTML with others</li>
+            <li>Use generated skins on other platforms (with attribution appreciated but not required)</li>
+            <li>Export and save your work locally</li>
+            <li>Modify exported code as you see fit</li>
+          </ul>
+
+          <h3>4.2 You May Not:</h3>
+          <ul>
+            <li><strong>Abuse the Service:</strong> Automated scraping, excessive requests, or attempts to overload our systems</li>
+            <li><strong>Violate Laws:</strong> Use the Service for any illegal purpose or in violation of any local, state, national, or international law</li>
+            <li><strong>Infringe Rights:</strong> Upload copyrighted images, trademarks, or other content you don't have rights to use</li>
+            <li><strong>Harm Others:</strong> Create content that harasses, threatens, or promotes violence against individuals or groups</li>
+            <li><strong>Spread Malware:</strong> Attempt to inject malicious code or exploit security vulnerabilities</li>
+            <li><strong>Impersonate:</strong> Misrepresent your identity or affiliation with any person or organization</li>
+            <li><strong>Reverse Engineer:</strong> Attempt to reverse engineer, decompile, or extract source code from the Service</li>
+          </ul>
+
+          <div class="warning-box">
+            <p><strong>Important:</strong> Violation of these terms may result in restriction or termination of your access to the Service. We reserve the right to refuse service to anyone for any reason at any time.</p>
+          </div>
+
+          <h2>5. Intellectual Property</h2>
+          
+          <h3>5.1 Your Content</h3>
+          <p><strong>You retain all rights to content you create using the Service.</strong> This includes:</p>
+          <ul>
+            <li>The text, dialogue, and creative elements you input</li>
+            <li>The exported CSS and HTML code</li>
+            <li>Any images you upload (subject to your having rights to those images)</li>
+          </ul>
+          <p>By using the Service, you grant us no rights to your content. It's yours, period.</p>
+
+          <h3>5.2 Our Content</h3>
+          <p>The Service itself (including but not limited to the website design, interface, templates, code structure, and branding) is owned by AO3 Skin Generator and protected by copyright, trademark, and other intellectual property laws.</p>
+          <p>You may not:</p>
+          <ul>
+            <li>Copy or redistribute the Service's codebase</li>
+            <li>Use our branding or logos without permission</li>
+            <li>Create derivative works based on the Service's core functionality</li>
+          </ul>
+          <p><strong>Exception:</strong> The exported CSS/HTML code you generate is yours to use, modify, and share as you wish.</p>
+
+          <h3>5.3 Third-Party Content</h3>
+          <p>Templates and examples may reference or emulate third-party designs (Twitter/X, iOS, Android). These designs are property of their respective owners. Our Service creates parody/transformative work for fanfiction purposes, which we believe falls under fair use.</p>
+
+          <h2>6. Third-Party Services</h2>
+          <p>The Service integrates with third-party providers:</p>
+          <ul>
+            <li><strong>Cloudinary:</strong> For temporary image hosting. Subject to <a href="https://cloudinary.com/tos" target="_blank" rel="noopener noreferrer">Cloudinary's Terms of Service</a>.</li>
+            <li><strong>Google Analytics:</strong> For usage analytics. Subject to <a href="https://marketingplatform.google.com/about/analytics/terms/us/" target="_blank" rel="noopener noreferrer">Google Analytics Terms of Service</a>.</li>
+            <li><strong>Ko-fi:</strong> For optional donations/support. Subject to <a href="https://ko-fi.com/home/terms" target="_blank" rel="noopener noreferrer">Ko-fi's Terms of Service</a>.</li>
+          </ul>
+          <p>We are not responsible for the availability, policies, or practices of these third-party services. Your interactions with them are governed by their respective terms.</p>
+
+          <h2>7. Disclaimers and Limitations of Liability</h2>
+          
+          <h3>7.1 "As-Is" Service</h3>
+          <p><strong>THE SERVICE IS PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT WARRANTIES OF ANY KIND, EXPRESS OR IMPLIED.</strong> We do not guarantee that:</p>
+          <ul>
+            <li>The Service will be uninterrupted or error-free</li>
+            <li>Generated skins will work perfectly on AO3 or other platforms</li>
+            <li>Your locally-stored data will be preserved indefinitely</li>
+            <li>The Service will meet your specific needs or expectations</li>
+          </ul>
+
+          <h3>7.2 No Liability for User Content</h3>
+          <p>We are not responsible for:</p>
+          <ul>
+            <li>Content you create using the Service</li>
+            <li>How you use exported CSS/HTML</li>
+            <li>Violations of AO3's Terms of Service resulting from your skins</li>
+            <li>Copyright or trademark issues arising from images you upload</li>
+            <li>Any damages or losses resulting from your use of the Service</li>
+          </ul>
+
+          <h3>7.3 Limitation of Liability</h3>
+          <p><strong>TO THE MAXIMUM EXTENT PERMITTED BY LAW, WE SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR ANY LOSS OF PROFITS OR REVENUES, WHETHER INCURRED DIRECTLY OR INDIRECTLY, OR ANY LOSS OF DATA, USE, GOODWILL, OR OTHER INTANGIBLE LOSSES RESULTING FROM:</strong></p>
+          <ul>
+            <li>Your use or inability to use the Service</li>
+            <li>Any unauthorized access to or use of our servers</li>
+            <li>Any bugs, viruses, or malicious code</li>
+            <li>Any errors or omissions in content</li>
+            <li>Any conduct or content of third parties</li>
+          </ul>
+          <p><strong>OUR TOTAL LIABILITY SHALL NOT EXCEED $100 USD OR THE AMOUNT YOU PAID US (WHICH IS ZERO, SINCE THE SERVICE IS FREE).</strong></p>
+
+          <div class="warning-box">
+            <p><strong>Plain English:</strong> This is a free tool we built to help the fanfiction community. We can't guarantee it will always work perfectly, and we're not responsible if something goes wrong. Use it at your own risk, and please don't sue us.</p>
+          </div>
+
+          <h2>8. Indemnification</h2>
+          <p>You agree to indemnify, defend, and hold harmless AO3 Skin Generator, its creators, affiliates, and partners from any claims, damages, losses, liabilities, costs, or expenses (including legal fees) arising from:</p>
+          <ul>
+            <li>Your use of the Service</li>
+            <li>Your violation of these Terms</li>
+            <li>Your violation of any rights of another party</li>
+            <li>Content you create or upload using the Service</li>
+          </ul>
+
+          <h2>9. Data and Privacy</h2>
+          <p>Our collection and use of personal information is governed by our <a href="https://ao3skingen.wordfokus.com/privacy-policy">Privacy Policy</a>. Key points:</p>
+          <ul>
+            <li>Your creative work is stored locally in your browser, not on our servers</li>
+            <li>We collect anonymous analytics data via Google Analytics</li>
+            <li>We do not sell or share your data with third parties (except as described in the Privacy Policy)</li>
+            <li>You are responsible for backing up your work</li>
+          </ul>
+
+          <h2>10. Termination</h2>
+          <p>We reserve the right to suspend or terminate your access to the Service at any time, for any reason, without notice. Reasons may include but are not limited to:</p>
+          <ul>
+            <li>Violation of these Terms</li>
+            <li>Abusive behavior or excessive resource consumption</li>
+            <li>Legal or regulatory requirements</li>
+            <li>Discontinuation of the Service</li>
+          </ul>
+          <p>Upon termination, your right to use the Service ceases immediately. Any data stored locally in your browser will remain, but we are not responsible for its preservation.</p>
+
+          <h2>11. Changes to the Service</h2>
+          <p>We reserve the right to:</p>
+          <ul>
+            <li>Modify or discontinue any part of the Service at any time</li>
+            <li>Impose limits on certain features or restrict access to parts of the Service</li>
+            <li>Change these Terms with or without notice</li>
+          </ul>
+          <p>We will make reasonable efforts to notify users of significant changes via:</p>
+          <ul>
+            <li>A notice on the website for 30 days</li>
+            <li>Updates to the "Last updated" date on this page</li>
+          </ul>
+
+          <h2>12. Relationship with Archive of Our Own (AO3)</h2>
+          <p><strong>Important Clarification:</strong></p>
+          <ul>
+            <li>AO3 Skin Generator is <strong>not affiliated with, endorsed by, or officially connected to Archive of Our Own (AO3)</strong> or the Organization for Transformative Works (OTW).</li>
+            <li>We are an independent tool created to help users format their work for AO3.</li>
+            <li>You are responsible for ensuring your use of generated skins complies with <a href="https://archiveofourown.org/tos" target="_blank" rel="noopener noreferrer">AO3's Terms of Service</a>.</li>
+            <li>We are not responsible if AO3 disallows or breaks compatibility with skins generated by our Service.</li>
+          </ul>
+
+          <h2>13. Donations and Support</h2>
+          <p>The Service is free to use. We accept optional donations via Ko-fi to support development and hosting costs. Donations are voluntary and do not entitle you to:</p>
+          <ul>
+            <li>Additional features or priority support</li>
+            <li>Guaranteed uptime or service availability</li>
+            <li>Refunds (all donations are final)</li>
+            <li>Any form of equity or ownership in the Service</li>
+          </ul>
+          <p>Donations are a gesture of support, not a purchase. Ko-fi transactions are governed by <a href="https://ko-fi.com/home/terms" target="_blank" rel="noopener noreferrer">Ko-fi's Terms of Service</a>.</p>
+
+          <h2>14. Copyright Infringement (DMCA)</h2>
+          <p>We respect intellectual property rights. If you believe content on our Service infringes your copyright, please contact us with:</p>
+          <ul>
+            <li>Identification of the copyrighted work claimed to be infringed</li>
+            <li>Identification of the infringing material and its location</li>
+            <li>Your contact information (email, phone, address)</li>
+            <li>A statement that you have a good faith belief that the use is not authorized</li>
+            <li>A statement under penalty of perjury that the information is accurate and you are authorized to act on behalf of the copyright owner</li>
+            <li>Your physical or electronic signature</li>
+          </ul>
+          <p><strong>Note:</strong> Since the Service creates CSS/HTML, not hosts user content, DMCA claims are rare. If you uploaded an infringing image to Cloudinary, that falls under Cloudinary's DMCA process.</p>
+
+          <h2>15. Governing Law</h2>
+          <p>These Terms shall be governed by and construed in accordance with applicable international laws and regulations. If you have a dispute, please contact us first at <a href="mailto:hello@wordfokus.com">hello@wordfokus.com</a> to attempt a good-faith resolution.</p>
+
+          <h2>16. Severability</h2>
+          <p>If any provision of these Terms is found to be invalid or unenforceable, the remaining provisions shall remain in full force and effect. The invalid provision shall be replaced with a valid provision that most closely matches the intent of the original.</p>
+
+          <h2>17. Entire Agreement</h2>
+          <p>These Terms, together with our Privacy Policy, constitute the entire agreement between you and AO3 Skin Generator regarding the Service and supersede any prior agreements.</p>
+
+          <h2>18. Contact Information</h2>
+          <p>If you have questions about these Terms, please contact us:</p>
+          
+          <div class="highlight-box">
+            <p><strong>Email:</strong> <a href="mailto:hello@wordfokus.com">hello@wordfokus.com</a></p>
+            <p><strong>Ko-fi:</strong> <a href="https://ko-fi.com/ao3skingen" target="_blank" rel="noopener noreferrer">https://ko-fi.com/ao3skingen</a></p>
+            <p><strong>Website:</strong> <a href="https://ao3skingen.wordfokus.com">https://ao3skingen.wordfokus.com</a></p>
+          </div>
+
+          <h2>19. Acknowledgment</h2>
+          <p>By using the Service, you acknowledge that you have read, understood, and agree to be bound by these Terms of Service. If you do not agree, please discontinue use immediately.</p>
+
+          <div class="info-box" style="margin-top: 3rem;">
+            <p><strong>Thank You!</strong> We built this tool to help the fanfiction community create beautiful work. We hope you enjoy using it as much as we enjoyed building it. If you have feedback or suggestions, we'd love to hear from you. ❤️</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="container">
+        <div class="footer-grid">
+          <div class="footer-col">
+            <h3>Product</h3>
+            <ul>
+              <li><a href="/">Generator</a></li>
+              <li><a href="/#features">Features</a></li>
+              <li><a href="/#how-it-works">How It Works</a></li>
+            </ul>
+          </div>
+          
+          <div class="footer-col">
+            <h3>Legal</h3>
+            <ul>
+              <li><a href="/privacy-policy.html">Privacy Policy</a></li>
+              <li><a href="/terms-of-service.html">Terms of Service</a></li>
+            </ul>
+          </div>
+          
+          <div class="footer-col">
+            <h3>Support</h3>
+            <ul>
+              <li><a href="https://ko-fi.com/ao3skingen">Support on Ko-fi</a></li>
+              <li><a href="https://wordfokus.com">WordFokus</a></li>
+            </ul>
+          </div>
+        </div>
+        
+        <div class="footer-bottom">
+          <p>
+            © 2025 AO3 Skin Generator. Built by the creator of <a href="https://wordfokus.com">WordFokus</a>.
+          </p>
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>

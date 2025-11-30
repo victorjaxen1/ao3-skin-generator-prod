@@ -1,0 +1,924 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" >
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" >
+    <meta name="description" content="See real examples of beautiful AO3 work skins created with our generator. Twitter threads, chat interfaces, and custom formatting." >
+    <title>Examples Gallery - AO3 Skin Generator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" >
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin >
+    <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Roboto:wght@300;400;500&display=swap" rel="stylesheet" >
+    
+    <style>
+:root {
+--primary: #1a73e8;
+--primary-dark: #0d47a1;
+--primary-light: #8ab4f8;
+--primary-bg: #e8f0fe;
+--secondary: #34a853;
+--accent: #fbbc05;
+--danger: #ea4335;
+--text-dark: #202124;
+--text-gray: #5f6368;
+--text-light: #e8eaed;
+--bg-light: #f8f9fa;
+--border-light: #dadce0;
+--shadow-sm: 0 1px 2px rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15);
+--shadow-md: 0 2px 6px rgba(60,64,67,0.3), 0 1px 8px 1px rgba(60,64,67,0.15);
+--shadow-lg: 0 4px 12px rgba(60,64,67,0.3), 0 1px 16px 2px rgba(60,64,67,0.15);
+--radius-sm: 4px;
+--radius-md: 8px;
+--radius-lg: 16px;
+--transition-fast: 0.15s ease;
+--transition-normal: 0.25s ease;
+--content-max-width: 1200px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Roboto', Arial, sans-serif; }
+
+body { color: var(--text-dark); line-height: 1.6; overflow-x: hidden; background: white; }
+
+h1, h2, h3, h4, h5, h6 { font-family: 'Google Sans', 'Roboto', Arial, sans-serif; font-weight: 500; margin-bottom: 0.5em; line-height: 1.3; }
+
+h1 { font-size: clamp(2.2rem, 5vw, 3rem); font-weight: 700; margin-bottom: 1rem; }
+
+h2 { font-size: clamp(1.75rem, 4vw, 2.25rem); margin-top: 1rem; margin-bottom: 2rem; }
+
+h3 { font-size: clamp(1.25rem, 3vw, 1.5rem); margin-bottom: 0.75rem; }
+
+h4 { font-size: clamp(1.1rem, 2.5vw, 1.25rem); }
+
+p { margin-bottom: 1.25em; font-size: clamp(1rem, 2.5vw, 1.1rem); }
+
+.container { width: 100%; max-width: var(--content-max-width); margin: 0 auto; padding: 0 clamp(1rem, 5vw, 2rem); }
+
+.btn { display: inline-block; padding: 14px 32px; border-radius: var(--radius-sm); font-family: 'Google Sans'; font-weight: 500; font-size: 16px; text-decoration: none; cursor: pointer; transition: all var(--transition-normal); box-shadow: var(--shadow-sm); border: none; }
+
+.btn-primary { background-color: var(--primary); color: white; border: 1px solid var(--primary); }
+
+.btn-primary:hover { background-color: var(--primary-dark); box-shadow: var(--shadow-md); transform: translateY(-2px); }
+
+.btn-secondary { background-color: white; color: var(--primary); border: 1px solid var(--border-light); }
+
+.btn-secondary:hover { background-color: var(--bg-light); border-color: var(--primary-light); box-shadow: var(--shadow-md); transform: translateY(-2px); }
+
+.btn-large { padding: 18px 42px; font-size: 18px; font-weight: 600; box-shadow: var(--shadow-md); }
+
+.trust-bar { background: var(--primary-dark); color: white; text-align: center; padding: 10px 0; font-weight: 500; font-size: 14px; position: sticky; top: 0; z-index: 1001; }
+
+header { background-color: rgba(255, 255, 255, 0.98); position: sticky; top: 42px; z-index: 1000; box-shadow: var(--shadow-sm); backdrop-filter: blur(10px); }
+
+.header-container { display: flex; justify-content: space-between; align-items: center; padding: 1rem clamp(1rem, 5vw, 2rem); }
+
+.logo { display: flex; align-items: center; text-decoration: none; color: var(--text-dark); }
+
+.logo svg { height: 36px; width: 36px; margin-right: 12px; }
+
+.logo-text { font-family: 'Google Sans'; font-size: 1.5rem; font-weight: 700; }
+
+.logo-text .highlight { color: var(--primary); }
+
+nav ul { display: flex; list-style: none; gap: 2rem; align-items: center; }
+
+nav a { text-decoration: none; color: var(--text-dark); font-family: 'Google Sans'; font-weight: 500; transition: color var(--transition-normal); }
+
+nav a:hover { color: var(--primary); }
+
+.menu-toggle { display: none; background: none; border: none; font-size: 1.8rem; cursor: pointer; color: var(--text-dark); padding: 8px; border-radius: 50%; }
+
+.menu-toggle:hover { background-color: rgba(0,0,0,0.05); }
+
+/* Page Header */
+.page-header { background: linear-gradient(135deg, var(--primary-bg) 0%, #f8f9fa 100%); padding: clamp(3rem, 8vw, 5rem) 0 clamp(2rem, 6vw, 3rem); text-align: center; }
+
+.page-header h1 { margin-bottom: 0.5rem; }
+
+.page-header p { font-size: 1.2rem; color: var(--text-gray); max-width: 700px; margin: 0 auto; }
+
+/* Filter Tabs */
+.filter-section { padding: 3rem 0 1rem; background: white; position: sticky; top: 120px; z-index: 100; border-bottom: 1px solid var(--border-light); }
+
+.filter-tabs { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+
+.filter-tab { padding: 10px 24px; background: white; border: 2px solid var(--border-light); border-radius: 50px; font-family: 'Google Sans'; font-weight: 500; font-size: 15px; color: var(--text-gray); cursor: pointer; transition: all var(--transition-fast); }
+
+.filter-tab:hover { border-color: var(--primary-light); color: var(--primary); }
+
+.filter-tab.active { background: var(--primary); color: white; border-color: var(--primary); }
+
+/* Examples Grid */
+.examples-section { padding: clamp(3rem, 8vw, 5rem) 0; background: white; }
+
+.category-section { margin-bottom: 5rem; }
+
+.category-header { text-align: center; margin-bottom: 3rem; }
+
+.category-header h2 { color: var(--text-dark); }
+
+.category-header p { color: var(--text-gray); max-width: 600px; margin: 0 auto; }
+
+.examples-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 2.5rem; }
+
+/* Example Card */
+.example-card { background: white; border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow-sm); border: 1px solid var(--border-light); transition: all var(--transition-normal); cursor: pointer; }
+
+.example-card:hover { transform: translateY(-8px); box-shadow: var(--shadow-lg); border-color: var(--primary-light); }
+
+.example-preview { width: 100%; min-height: 300px; background: var(--bg-light); display: flex; align-items: center; justify-content: center; padding: 1rem; position: relative; }
+
+.example-preview img { width: 100%; height: auto; max-width: 100%; object-fit: contain; }
+
+.example-placeholder { color: var(--text-gray); font-size: 14px; text-align: center; padding: 2rem; }
+
+.example-badge { position: absolute; top: 12px; right: 12px; background: rgba(255,255,255,0.95); padding: 6px 14px; border-radius: 50px; font-size: 12px; font-weight: 600; color: var(--primary); box-shadow: var(--shadow-sm); }
+
+.example-content { padding: 1.5rem; }
+
+.example-header { display: flex; justify-content: space-between; align-items: start; margin-bottom: 1rem; }
+
+.example-title { font-size: 1.2rem; font-weight: 600; color: var(--text-dark); margin-bottom: 0.25rem; }
+
+.example-type { font-size: 0.85rem; color: var(--text-gray); text-transform: uppercase; letter-spacing: 0.5px; }
+
+.example-description { color: var(--text-gray); font-size: 0.95rem; line-height: 1.6; margin-bottom: 1.25rem; }
+
+.example-tags { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
+
+.tag { display: inline-block; padding: 4px 12px; background: var(--primary-bg); color: var(--primary); border-radius: 50px; font-size: 0.8rem; font-weight: 500; }
+
+.example-footer { display: flex; gap: 0.75rem; padding-top: 1rem; border-top: 1px solid var(--border-light); }
+
+.example-btn { flex: 1; padding: 10px 16px; font-size: 14px; text-align: center; border-radius: var(--radius-sm); font-family: 'Google Sans'; font-weight: 500; cursor: pointer; transition: all var(--transition-fast); border: none; }
+
+.example-btn-primary { background: var(--primary); color: white; }
+
+.example-btn-primary:hover { background: var(--primary-dark); transform: translateY(-1px); }
+
+.example-btn-secondary { background: var(--bg-light); color: var(--text-dark); border: 1px solid var(--border-light); }
+
+.example-btn-secondary:hover { background: white; border-color: var(--primary-light); }
+
+/* Use Case Sections */
+.use-case-section { padding: 4rem 0; background: var(--bg-light); }
+
+.use-case-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 2rem; margin-top: 3rem; }
+
+.use-case-card { background: white; padding: 2rem; border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); border: 1px solid var(--border-light); transition: all var(--transition-normal); }
+
+.use-case-card:hover { transform: translateY(-5px); box-shadow: var(--shadow-md); }
+
+.use-case-icon { width: 56px; height: 56px; background: linear-gradient(135deg, var(--primary-bg), rgba(52, 168, 83, 0.08)); border-radius: 14px; display: flex; align-items: center; justify-content: center; margin-bottom: 1.5rem; }
+
+.use-case-icon svg { width: 28px; height: 28px; color: var(--primary); }
+
+.use-case-card h3 { font-size: 1.2rem; margin-bottom: 0.75rem; color: var(--text-dark); }
+
+.use-case-card p { font-size: 0.95rem; color: var(--text-gray); margin-bottom: 1.25rem; line-height: 1.6; }
+
+.use-case-card ul { list-style: none; padding: 0; }
+
+.use-case-card li { padding: 0.5rem 0; color: var(--text-gray); font-size: 0.9rem; display: flex; align-items: center; gap: 8px; }
+
+.use-case-card li::before { content: '✓'; color: var(--secondary); font-weight: bold; }
+
+/* CTA Section */
+.cta-section { padding: clamp(4rem, 10vw, 5rem) 0; background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%); color: white; text-align: center; }
+
+.cta-section h2 { color: white; margin-bottom: 1rem; }
+
+.cta-section p { font-size: 1.2rem; color: rgba(255,255,255,0.9); max-width: 600px; margin: 0 auto 2.5rem; }
+
+.cta-section .btn-primary { background: white; color: var(--primary); border-color: white; }
+
+.cta-section .btn-primary:hover { background: var(--bg-light); transform: translateY(-3px); }
+
+/* Footer */
+footer { background-color: var(--text-dark); color: white; padding: 4rem 0 2rem; }
+
+.footer-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 2.5rem; margin-bottom: 3rem; }
+
+.footer-col h3 { font-size: 1.15rem; margin-bottom: 1.5rem; color: white; position: relative; padding-bottom: 0.5rem; }
+
+.footer-col h3::after { content: ''; position: absolute; left: 0; bottom: 0; width: 40px; height: 3px; background: linear-gradient(90deg, var(--primary), var(--secondary)); border-radius: 2px; }
+
+.footer-col ul { list-style: none; }
+
+.footer-col li { margin-bottom: 0.75rem; }
+
+.footer-col a { color: var(--text-light); text-decoration: none; transition: color var(--transition-fast); font-size: 0.95rem; }
+
+.footer-col a:hover { color: white; text-decoration: underline; }
+
+.footer-brand { max-width: 280px; }
+
+.footer-brand p { font-size: 0.95rem; color: var(--text-light); line-height: 1.6; }
+
+.footer-bottom { text-align: center; padding-top: 2rem; border-top: 1px solid rgba(255, 255, 255, 0.1); }
+
+.footer-bottom p { color: var(--text-light); font-size: 0.9rem; margin-bottom: 0; }
+
+.footer-bottom a { color: var(--primary-light); text-decoration: none; }
+
+.footer-bottom a:hover { text-decoration: underline; }
+
+/* Mobile Navigation */
+.mobile-nav { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); z-index: 999; opacity: 0; visibility: hidden; transition: opacity var(--transition-normal), visibility var(--transition-normal); }
+
+.mobile-nav.active { opacity: 1; visibility: visible; }
+
+.mobile-nav-menu { position: fixed; top: 0; right: 0; width: 85%; max-width: 350px; height: 100%; background-color: white; box-shadow: -4px 0 15px rgba(0,0,0,0.2); padding: 2rem; transform: translateX(100%); transition: transform var(--transition-normal); overflow-y: auto; }
+
+.mobile-nav.active .mobile-nav-menu { transform: translateX(0); }
+
+.mobile-nav-close { position: absolute; top: 1.5rem; right: 1.5rem; font-size: 2rem; background: none; border: none; color: var(--text-gray); cursor: pointer; padding: 0; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 50%; }
+
+.mobile-nav-close:hover { background-color: var(--bg-light); }
+
+.mobile-nav ul { list-style: none; padding: 0; margin-top: 3rem; }
+
+.mobile-nav ul a { display: block; padding: 1rem 0; font-size: 1.1rem; color: var(--text-dark); text-decoration: none; border-bottom: 1px solid var(--border-light); font-family: 'Google Sans'; font-weight: 500; transition: color var(--transition-fast); }
+
+.mobile-nav ul a:hover { color: var(--primary); }
+
+/* Responsive */
+@media (max-width: 992px) {
+.examples-grid { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+.use-case-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 768px) {
+.trust-bar { font-size: 13px; padding: 8px 0; }
+header { top: 40px; }
+.filter-section { top: 80px; }
+.menu-toggle { display: block; }
+nav { display: none; }
+.examples-grid { grid-template-columns: 1fr; }
+.filter-tabs { gap: 0.5rem; }
+.filter-tab { padding: 8px 16px; font-size: 14px; }
+}
+    </style>
+  </head>
+  <body>
+    <div class="trust-bar">
+      ✨ Free Forever • No Signup Required • Twitter, iMessage, WhatsApp & Google Search
+    </div>
+
+    <header>
+      <div class="header-container">
+        <a href="https://ao3skingen.netlify.app" class="logo">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="12" y1="18" x2="12" y2="12"></line>
+            <line x1="9" y1="15" x2="15" y2="15"></line>
+          </svg>
+          <div class="logo-text">AO3 <span class="highlight">Skin Generator</span></div>
+        </a>
+        <nav>
+          <ul>
+            <li><a href="https://ao3skingen.netlify.app">Home</a></li>
+            <li><a href="https://ao3skingen.netlify.app#features">Features</a></li>
+            <li><a href="/examples-gallery.html">Examples</a></li>
+            <li><a href="/" class="btn btn-primary" style="padding: 10px 20px; font-size: 15px;">Launch Generator</a></li>
+          </ul>
+        </nav>
+        <button class="menu-toggle" aria-label="Toggle Menu">☰</button>
+      </div>
+    </header>
+
+    <div class="mobile-nav" id="mobileNav">
+      <div class="mobile-nav-menu">
+        <button class="mobile-nav-close" aria-label="Close Menu">×</button>
+        <ul>
+          <li><a href="https://ao3skingen.netlify.app">Home</a></li>
+          <li><a href="https://ao3skingen.netlify.app#features">Features</a></li>
+          <li><a href="/examples-gallery.html">Examples</a></li>
+          <li><a href="/" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">Launch Generator</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="page-header">
+      <div class="container">
+        <h1>Examples Gallery</h1>
+        <p>Get inspired by real work skins created with our generator. Click any example to see details and try it yourself.</p>
+      </div>
+    </div>
+
+    <div class="filter-section">
+      <div class="container">
+        <div class="filter-tabs">
+          <button class="filter-tab active" data-filter="all">All Examples</button>
+          <button class="filter-tab" data-filter="twitter">Twitter/X</button>
+          <button class="filter-tab" data-filter="ios">iOS iMessage</button>
+          <button class="filter-tab" data-filter="whatsapp">WhatsApp</button>
+          <button class="filter-tab" data-filter="google">Google Search</button>
+        </div>
+      </div>
+    </div>
+
+    <main>
+      <!-- Twitter Thread Examples -->
+      <section class="examples-section">
+        <div class="container">
+          <div class="category-section category-twitter">
+            <div class="category-header">
+              <h2>Twitter/X Examples</h2>
+              <p>Create authentic tweets and threads with custom profiles, verified badges, and engagement metrics</p>
+            </div>
+
+            <div class="examples-grid">
+              <!-- Example Card 1 -->
+              <div class="example-card">
+                <div class="example-preview">
+                  <img src="https://media.publit.io/file/AO3-Skins-App/twitter-character-thread.png" alt="Twitter Character Thread Example" loading="lazy">
+                  <div class="example-badge">Twitter</div>
+                </div>
+                <div class="example-content">
+                  <div class="example-header">
+                    <div>
+                      <h3 class="example-title">Character Tweet Thread</h3>
+                      <div class="example-type">Twitter/X</div>
+                    </div>
+                  </div>
+                  <p class="example-description">
+                    Create custom character profiles with avatars and verified badges. Build thread-style posts with timestamps.
+                  </p>
+                  <div class="example-tags">
+                    <span class="tag">Social Media AU</span>
+                    <span class="tag">Custom Profiles</span>
+                    <span class="tag">Thread Mode</span>
+                  </div>
+                  <div class="example-footer">
+                    <button class="example-btn example-btn-primary">Try This Style</button>
+                    <button class="example-btn example-btn-secondary">View Code</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Example Card 2 -->
+              <div class="example-card">
+                <div class="example-preview">
+                  <img src="https://media.publit.io/file/AO3-Skins-App/twitter-verified-account.png" alt="Twitter Verified Account Example" loading="lazy">
+                  <div class="example-badge">Twitter</div>
+                </div>
+                <div class="example-content">
+                  <div class="example-header">
+                    <div>
+                      <h3 class="example-title">Verified Account</h3>
+                      <div class="example-type">Twitter/X</div>
+                    </div>
+                  </div>
+                  <p class="example-description">
+                    Verified badge support with custom likes, retweets, and reply counts. Perfect for celebrity AU fics.
+                  </p>
+                  <div class="example-tags">
+                    <span class="tag">Verified Badge</span>
+                    <span class="tag">Engagement Stats</span>
+                    <span class="tag">Celebrity AU</span>
+                  </div>
+                  <div class="example-footer">
+                    <button class="example-btn example-btn-primary">Try This Style</button>
+                    <button class="example-btn example-btn-secondary">View Code</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Example Card 3 -->
+              <div class="example-card">
+                <div class="example-preview">
+                  <img src="https://media.publit.io/file/AO3-Skins-App/twitter-media-image.png" alt="Twitter Tweet with Media Example" loading="lazy">
+                  <div class="example-badge">Twitter</div>
+                </div>
+                <div class="example-content">
+                  <div class="example-header">
+                    <div>
+                      <h3 class="example-title">Tweet with Media</h3>
+                      <div class="example-type">Twitter/X</div>
+                    </div>
+                  </div>
+                  <p class="example-description">
+                    Add images to tweets with custom timestamps. Great for photo-based storytelling and visual moments.
+                  </p>
+                  <div class="example-tags">
+                    <span class="tag">Image Support</span>
+                    <span class="tag">Media Rich</span>
+                    <span class="tag">Visual</span>
+                  </div>
+                  <div class="example-footer">
+                    <button class="example-btn example-btn-primary">Try This Style</button>
+                    <button class="example-btn example-btn-secondary">View Code</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- iOS Messages Examples -->
+          <div class="category-section category-ios">
+            <div class="category-header">
+              <h2>iOS iMessage Examples</h2>
+              <p>Authentic iPhone blue bubble interface for 1-on-1 conversations with read receipts and typing indicators</p>
+            </div>
+
+            <div class="examples-grid">
+              <!-- iOS Example 1 -->
+              <div class="example-card">
+                <div class="example-preview">
+                  <img src="https://media.publit.io/file/AO3-Skins-App/ios-two-person-chat.png" alt="iOS Two-Person Chat Example" loading="lazy">
+                  <div class="example-badge">iOS</div>
+                </div>
+                <div class="example-content">
+                  <div class="example-header">
+                    <div>
+                      <h3 class="example-title">Two-Person Chat</h3>
+                      <div class="example-type">iOS iMessage</div>
+                    </div>
+                  </div>
+                  <p class="example-description">
+                    Classic blue/gray bubble conversation. Perfect for intimate two-character dialogue scenes.
+                  </p>
+                  <div class="example-tags">
+                    <span class="tag">1-on-1</span>
+                    <span class="tag">Blue Bubbles</span>
+                    <span class="tag">Read Receipts</span>
+                  </div>
+                  <div class="example-footer">
+                    <button class="example-btn example-btn-primary">Try This Style</button>
+                    <button class="example-btn example-btn-secondary">View Code</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- iOS Example 2 -->
+              <div class="example-card">
+                <div class="example-preview">
+                  <img src="https://media.publit.io/file/AO3-Skins-App/ios-contact-avatar.png" alt="iOS Contact with Avatar Example" loading="lazy">
+                  <div class="example-badge">iOS</div>
+                </div>
+                <div class="example-content">
+                  <div class="example-header">
+                    <div>
+                      <h3 class="example-title">Contact with Avatar</h3>
+                      <div class="example-type">iOS iMessage</div>
+                    </div>
+                  </div>
+                  <p class="example-description">
+                    Add contact name and profile picture to personalize conversations. Perfect for named character chats.
+                  </p>
+                  <div class="example-tags">
+                    <span class="tag">Contact Name</span>
+                    <span class="tag">Profile Picture</span>
+                    <span class="tag">Personalized</span>
+                  </div>
+                  <div class="example-footer">
+                    <button class="example-btn example-btn-primary">Try This Style</button>
+                    <button class="example-btn example-btn-secondary">View Code</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- iOS Example 3 -->
+              <div class="example-card">
+                <div class="example-preview">
+                  <img src="https://media.publit.io/file/AO3-Skins-App/ios-typing-indicators.png" alt="iOS Typing Indicators Example" loading="lazy">
+                  <div class="example-badge">iOS</div>
+                </div>
+                <div class="example-content">
+                  <div class="example-header">
+                    <div>
+                      <h3 class="example-title">Typing Indicators</h3>
+                      <div class="example-type">iOS iMessage</div>
+                    </div>
+                  </div>
+                  <p class="example-description">
+                    Real-time conversation feel with "..." typing bubbles. Creates tension and anticipation.
+                  </p>
+                  <div class="example-tags">
+                    <span class="tag">Typing</span>
+                    <span class="tag">Tension</span>
+                    <span class="tag">Real-time</span>
+                  </div>
+                  <div class="example-footer">
+                    <button class="example-btn example-btn-primary">Try This Style</button>
+                    <button class="example-btn example-btn-secondary">View Code</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- WhatsApp Examples -->
+          <div class="category-section category-whatsapp">
+            <div class="category-header">
+              <h2>WhatsApp Examples</h2>
+              <p>Authentic WhatsApp interface with green bubbles, timestamps, and read receipts for 1-on-1 chats</p>
+            </div>
+
+            <div class="examples-grid">
+              <!-- WhatsApp Example 1 -->
+              <div class="example-card">
+                <div class="example-preview">
+                  <img src="https://media.publit.io/file/AO3-Skins-App/whatsapp-chat.png" alt="WhatsApp Chat Example" loading="lazy">
+                  <div class="example-badge">WhatsApp</div>
+                </div>
+                <div class="example-content">
+                  <div class="example-header">
+                    <div>
+                      <h3 class="example-title">WhatsApp Chat</h3>
+                      <div class="example-type">WhatsApp</div>
+                    </div>
+                  </div>
+                  <p class="example-description">
+                    Authentic WhatsApp interface with green bubbles and gray received messages. Perfect for modern texting fics.
+                  </p>
+                  <div class="example-tags">
+                    <span class="tag">WhatsApp</span>
+                    <span class="tag">Green Bubbles</span>
+                    <span class="tag">Modern</span>
+                  </div>
+                  <div class="example-footer">
+                    <button class="example-btn example-btn-primary">Try This Style</button>
+                    <button class="example-btn example-btn-secondary">View Code</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- WhatsApp Example 2 -->
+              <div class="example-card">
+                <div class="example-preview">
+                  <img src="https://media.publit.io/file/AO3-Skins-App/whatsapp-profile-picture.png" alt="WhatsApp with Profile Picture Example" loading="lazy">
+                  <div class="example-badge">WhatsApp</div>
+                </div>
+                <div class="example-content">
+                  <div class="example-header">
+                    <div>
+                      <h3 class="example-title">With Profile Picture</h3>
+                      <div class="example-type">WhatsApp</div>
+                    </div>
+                  </div>
+                  <p class="example-description">
+                    Add contact name and profile picture to WhatsApp chats for personalized conversations.
+                  </p>
+                  <div class="example-tags">
+                    <span class="tag">Profile Picture</span>
+                    <span class="tag">Contact Name</span>
+                    <span class="tag">Personalized</span>
+                  </div>
+                  <div class="example-footer">
+                    <button class="example-btn example-btn-primary">Try This Style</button>
+                    <button class="example-btn example-btn-secondary">View Code</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- WhatsApp Example 3 -->
+              <div class="example-card">
+                <div class="example-preview">
+                  <img src="https://media.publit.io/file/AO3-Skins-App/whatsapp-timestamps-receipts.png" alt="WhatsApp Timestamps & Read Receipts Example" loading="lazy">
+                  <div class="example-badge">WhatsApp</div>
+                </div>
+                <div class="example-content">
+                  <div class="example-header">
+                    <div>
+                      <h3 class="example-title">Timestamps & Read Receipts</h3>
+                      <div class="example-type">WhatsApp</div>
+                    </div>
+                  </div>
+                  <p class="example-description">
+                    Show message timestamps and read status with checkmarks. Perfect for timing-sensitive conversations.
+                  </p>
+                  <div class="example-tags">
+                    <span class="tag">Timestamps</span>
+                    <span class="tag">Read Receipts</span>
+                    <span class="tag">Timeline</span>
+                  </div>
+                  <div class="example-footer">
+                    <button class="example-btn example-btn-primary">Try This Style</button>
+                    <button class="example-btn example-btn-secondary">View Code</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Google Search Examples -->
+          <div class="category-section category-google">
+            <div class="category-header">
+              <h2>Google Search Examples</h2>
+              <p>Create realistic Google search results pages with custom queries, titles, URLs, and snippets</p>
+            </div>
+
+            <div class="examples-grid">
+              <!-- Google Example 1 -->
+              <div class="example-card">
+                <div class="example-preview">
+                  <img src="https://media.publit.io/file/AO3-Skins-App/google-search-history.png" alt="Google Search History Example" loading="lazy">
+                  <div class="example-badge">Google</div>
+                </div>
+                <div class="example-content">
+                  <div class="example-header">
+                    <div>
+                      <h3 class="example-title">Character Search History</h3>
+                      <div class="example-type">Google Search</div>
+                    </div>
+                  </div>
+                  <p class="example-description">
+                    Show what a character searches for. Create custom search results that reveal personality and plot.
+                  </p>
+                  <div class="example-tags">
+                    <span class="tag">Search Results</span>
+                    <span class="tag">Character Development</span>
+                    <span class="tag">Reveal</span>
+                  </div>
+                  <div class="example-footer">
+                    <button class="example-btn example-btn-primary">Try This Style</button>
+                    <button class="example-btn example-btn-secondary">View Code</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Google Example 2 -->
+              <div class="example-card">
+                <div class="example-preview">
+                  <img src="https://media.publit.io/file/AO3-Skins-App/google-research-montage.png" alt="Google Research Montage Example" loading="lazy">
+                  <div class="example-badge">Google</div>
+                </div>
+                <div class="example-content">
+                  <div class="example-header">
+                    <div>
+                      <h3 class="example-title">Research Montage</h3>
+                      <div class="example-type">Google Search</div>
+                    </div>
+                  </div>
+                  <p class="example-description">
+                    Build investigation scenes with custom search queries. Perfect for mystery and research-heavy fics.
+                  </p>
+                  <div class="example-tags">
+                    <span class="tag">Investigation</span>
+                    <span class="tag">Mystery</span>
+                    <span class="tag">Research</span>
+                  </div>
+                  <div class="example-footer">
+                    <button class="example-btn example-btn-primary">Try This Style</button>
+                    <button class="example-btn example-btn-secondary">View Code</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Google Example 3 -->
+              <div class="example-card">
+                <div class="example-preview">
+                  <img src="https://media.publit.io/file/AO3-Skins-App/google-news-articles.png" alt="Google Fake News Articles Example" loading="lazy">
+                  <div class="example-badge">Google</div>
+                </div>
+                <div class="example-content">
+                  <div class="example-header">
+                    <div>
+                      <h3 class="example-title">Fake News Articles</h3>
+                      <div class="example-type">Google Search</div>
+                    </div>
+                  </div>
+                  <p class="example-description">
+                    Create realistic news article results with custom headlines, URLs, and descriptions for world-building.
+                  </p>
+                  <div class="example-tags">
+                    <span class="tag">World Building</span>
+                    <span class="tag">News</span>
+                    <span class="tag">Articles</span>
+                  </div>
+                  <div class="example-footer">
+                    <button class="example-btn example-btn-primary">Try This Style</button>
+                    <button class="example-btn example-btn-secondary">View Code</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Use Cases Section -->
+      <section class="use-case-section">
+        <div class="container">
+          <div class="category-header">
+            <h2>Popular Use Cases</h2>
+            <p>See how writers are using these skins to enhance their storytelling</p>
+          </div>
+
+          <div class="use-case-grid">
+            <div class="use-case-card">
+              <div class="use-case-icon">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+                </svg>
+              </div>
+              <h3>Social Media AUs</h3>
+              <p>Set your entire fic in a social media world where characters interact through tweets, posts, and comments.</p>
+              <ul>
+                <li>Character viral moments</li>
+                <li>Ship discourse threads</li>
+                <li>Fandom reactions</li>
+                <li>Celebrity AU interactions</li>
+              </ul>
+            </div>
+
+            <div class="use-case-card">
+              <div class="use-case-icon">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                </svg>
+              </div>
+              <h3>Text Message Fics</h3>
+              <p>Tell entire stories through 1-on-1 text conversations with authentic messaging interfaces.</p>
+              <ul>
+                <li>Long-distance relationships</li>
+                <li>Secret communication</li>
+                <li>Late-night conversations</li>
+                <li>Confession scenes</li>
+              </ul>
+            </div>
+
+            <div class="use-case-card">
+              <div class="use-case-icon">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+                </svg>
+              </div>
+              <h3>Epistolary Stories</h3>
+              <p>Modern epistolary fiction told through digital communication formats.</p>
+              <ul>
+                <li>Found footage style</li>
+                <li>Timeline reconstructions</li>
+                <li>Mystery revelations</li>
+                <li>Multiple POV switches</li>
+              </ul>
+            </div>
+
+            <div class="use-case-card">
+              <div class="use-case-icon">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"></path>
+                </svg>
+              </div>
+              <h3>Character Voices</h3>
+              <p>Show distinct character personalities through their texting/posting styles.</p>
+              <ul>
+                <li>Formal vs casual texters</li>
+                <li>Emoji usage patterns</li>
+                <li>Typing speed differences</li>
+                <li>Platform preferences</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- CTA Section -->
+      <section class="cta-section">
+        <div class="container">
+          <h2>Ready to Create Your Own?</h2>
+          <p>Start building beautiful work skins in minutes. No coding required, completely free.</p>
+          <a href="/" class="btn btn-primary btn-large">Launch Generator Now</a>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="container">
+        <div class="footer-grid">
+          <div class="footer-col footer-brand">
+            <h3>AO3 Skin Generator</h3>
+            <p>
+              Create beautiful, professional work skins for Archive of Our Own in seconds. Built with ❤️ for the fanfiction community.
+            </p>
+          </div>
+          
+          <div class="footer-col">
+            <h3>Product</h3>
+            <ul>
+              <li><a href="https://ao3skingen.netlify.app#features">Features</a></li>
+              <li><a href="/examples-gallery.html">Examples</a></li>
+              <li><a href="/">Launch Generator</a></li>
+            </ul>
+          </div>
+          
+          <div class="footer-col">
+            <h3>Resources</h3>
+            <ul>
+              <li><a href="#">AO3 Skin Tutorial</a></li>
+              <li><a href="#">Template Gallery</a></li>
+              <li><a href="https://wordfokus.com">WordFokus - Focus Tool</a></li>
+            </ul>
+          </div>
+          
+          <div class="footer-col">
+            <h3>Legal & Support</h3>
+            <ul>
+              <li><a href="/privacy-policy.html">Privacy Policy</a></li>
+              <li><a href="/terms-of-service.html">Terms of Service</a></li>
+              <li><a href="https://ko-fi.com/ao3skingen">Support on Ko-fi</a></li>
+            </ul>
+          </div>
+        </div>
+        
+        <div class="footer-bottom">
+          <p>
+            © 2025 AO3 Skin Generator. Built by the creator of <a href="https://wordfokus.com">WordFokus</a>. 
+            Made with ❤️ for the fanfiction community.
+          </p>
+        </div>
+      </div>
+    </footer>
+
+    <script>
+      // Mobile menu toggle
+      const menuToggle = document.querySelector('.menu-toggle');
+      const mobileNav = document.getElementById('mobileNav');
+      const mobileNavClose = document.querySelector('.mobile-nav-close');
+
+      function toggleMobileMenu(show) {
+        if (mobileNav) {
+          mobileNav.classList.toggle('active', show);
+          document.body.style.overflow = show ? 'hidden' : '';
+          if (menuToggle) {
+            menuToggle.textContent = show ? '×' : '☰';
+          }
+        }
+      }
+
+      if (menuToggle && mobileNav) {
+        menuToggle.addEventListener('click', (e) => {
+          e.stopPropagation();
+          toggleMobileMenu(!mobileNav.classList.contains('active'));
+        });
+      }
+
+      if (mobileNavClose && mobileNav) {
+        mobileNavClose.addEventListener('click', () => toggleMobileMenu(false));
+      }
+
+      if (mobileNav) {
+        mobileNav.addEventListener('click', (e) => {
+          if (e.target === mobileNav) {
+            toggleMobileMenu(false);
+          }
+        });
+      }
+
+      const mobileNavLinks = document.querySelectorAll('.mobile-nav a');
+      mobileNavLinks.forEach(link => {
+        link.addEventListener('click', () => {
+          toggleMobileMenu(false);
+        });
+      });
+
+      // Filter functionality
+      const filterTabs = document.querySelectorAll('.filter-tab');
+      const exampleCards = document.querySelectorAll('.example-card');
+      const categorySections = document.querySelectorAll('.category-section');
+
+      filterTabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+          const filter = tab.dataset.filter;
+          
+          // Update active tab
+          filterTabs.forEach(t => t.classList.remove('active'));
+          tab.classList.add('active');
+          
+          // Filter content
+          if (filter === 'all') {
+            categorySections.forEach(section => section.style.display = 'block');
+          } else {
+            categorySections.forEach(section => {
+              if (section.classList.contains(`category-${filter}`)) {
+                section.style.display = 'block';
+              } else {
+                section.style.display = 'none';
+              }
+            });
+          }
+        });
+      });
+
+      // Example card interaction (placeholder for modal/navigation)
+      const exampleBtns = document.querySelectorAll('.example-btn-primary');
+      exampleBtns.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          // Navigate to generator with template (implement later)
+          console.log('Launch generator with this template');
+        });
+      });
+
+      const viewCodeBtns = document.querySelectorAll('.example-btn-secondary');
+      viewCodeBtns.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          // Show code modal (implement later)
+          console.log('Show generated code');
+        });
+      });
+    </script>
+  </body>
+</html>

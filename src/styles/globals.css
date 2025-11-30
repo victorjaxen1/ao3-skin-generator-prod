@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* WordFokus Brand Design System */
+:root {
+  --primary: #1a73e8;
+  --primary-dark: #0d47a1;
+  --primary-light: #8ab4f8;
+  --primary-bg: #e8f0fe;
+  --secondary: #34a853;
+  --accent: #fbbc05;
+  --danger: #ea4335;
+  --text-dark: #202124;
+  --text-gray: #5f6368;
+  --text-light: #e8eaed;
+  --bg-light: #f8f9fa;
+  --border-light: #dadce0;
+  --shadow-sm: 0 1px 2px rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15);
+  --shadow-md: 0 2px 6px rgba(60,64,67,0.3), 0 1px 8px 1px rgba(60,64,67,0.15);
+  --shadow-lg: 0 4px 12px rgba(60,64,67,0.3), 0 1px 16px 2px rgba(60,64,67,0.15);
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 16px;
+}
+
+html, body { 
+  height: 100%; 
+  font-family: 'Roboto', Arial, Helvetica, sans-serif;
+  color: var(--text-dark);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Google Sans', 'Roboto', Arial, sans-serif;
+  font-weight: 500;
+}
