@@ -421,11 +421,11 @@ export default function HomePage() {
 
           {/* Links */}
           <div className="flex flex-wrap items-center justify-center gap-4 text-xs text-text-gray">
-            <a href="https://github.com/victorjaxen1/ao3-skin-generator" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">
+            <a href="https://github.com/victorjaxen1/ao3-skin-generator-prod" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">
               📦 GitHub
             </a>
             <span className="text-gray-400">•</span>
-            <a href="https://github.com/victorjaxen1/ao3-skin-generator/issues" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">
+            <a href="https://github.com/victorjaxen1/ao3-skin-generator-prod/issues" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">
               🐛 Report Bug
             </a>
             <span className="text-gray-400">•</span>
