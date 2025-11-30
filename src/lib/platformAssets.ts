@@ -1,70 +1,145 @@
 /**
- * Platform Asset URLs
- * Hosted on Cloudinary/imgbb for authentic platform icons and graphics
- * Replace these URLs with your own hosted assets
+ * Platform Asset URLs with Local Fallbacks
+ * Primary: Publit.io CDN
+ * Fallback: Local /assets/ folder
  */
+
+const PRIMARY_CDN = 'https://media.publit.io/file/AO3-Skins-App/';
+const LOCAL_FALLBACK = '/assets/';
+
+/**
+ * Creates an asset URL object with primary and fallback sources
+ */
+function createAssetUrl(filename: string): string {
+  return `${PRIMARY_CDN}${filename}`;
+}
+
+/**
+ * Get the local fallback URL for an asset
+ */
+export function getLocalFallback(filename: string): string {
+  return `${LOCAL_FALLBACK}${filename}`;
+}
+
+/**
+ * Extract filename from a full URL (for use in onError handlers)
+ */
+export function getFilenameFromUrl(url: string): string {
+  const parts = url.split('/');
+  return parts[parts.length - 1];
+}
 
 export const PLATFORM_ASSETS = {
   twitter: {
-    verifiedBadge: 'https://media.publit.io/file/AO3-Skins-App/twitter-verifiedBadge.png', // 16x16px blue checkmark
-    logo: 'https://media.publit.io/file/AO3-Skins-App/twitter-logo.png', // 16x16px X/Twitter logo
-    replyIcon: 'https://media.publit.io/file/AO3-Skins-App/twitter-replyIcon.png', // 14x14px reply arrow
-    retweetIcon: 'https://media.publit.io/file/AO3-Skins-App/twitter-retweetIcon.png', // 14x14px retweet icon
-    likeIcon: 'https://media.publit.io/file/AO3-Skins-App/twitter-likeIcon.png', // 14x14px heart
-    viewsIcon: 'https://media.publit.io/file/AO3-Skins-App/twitter-views.png', // Views icon
-    bookmarkIcon: 'https://media.publit.io/file/AO3-Skins-App/twitter-upload.png', // Bookmark icon
+    verifiedBadge: createAssetUrl('twitter-verifiedBadge.png'),
+    logo: createAssetUrl('twitter-logo.png'),
+    replyIcon: createAssetUrl('twitter-replyIcon.png'),
+    retweetIcon: createAssetUrl('twitter-retweetIcon.png'),
+    likeIcon: createAssetUrl('twitter-likeIcon.png'),
+    viewsIcon: createAssetUrl('twitter-views.png'),
+    bookmarkIcon: createAssetUrl('twitter-upload.png'),
   },
   instagram: {
-    headerGradient: 'https://i.ibb.co/instagram-gradient.png', // Purple-pink gradient (placeholder)
-    likeIcon: 'https://i.ibb.co/instagram-heart.png', // Red heart (placeholder)
-    commentIcon: 'https://i.ibb.co/instagram-comment.png', // Comment icon (placeholder)
-    locationPin: 'https://media.publit.io/file/AO3-Skins-App/instagram-locationPin.png', // 12x12px location pin
-    verifiedBadge: 'https://i.ibb.co/instagram-verified.png', // Blue checkmark (placeholder)
+    headerGradient: 'https://i.ibb.co/instagram-gradient.png',
+    likeIcon: 'https://i.ibb.co/instagram-heart.png',
+    commentIcon: 'https://i.ibb.co/instagram-comment.png',
+    locationPin: createAssetUrl('instagram-locationPin.png'),
+    verifiedBadge: 'https://i.ibb.co/instagram-verified.png',
   },
   whatsapp: {
-    checkmarkSending: 'https://media.publit.io/file/AO3-Skins-App/whatsapp-clockicon.png', // Clock icon for pending
-    checkmarkSent: 'https://media.publit.io/file/AO3-Skins-App/whatsapp-checkmarkSent.png', // Grey single check
-    checkmarkDelivered: 'https://media.publit.io/file/AO3-Skins-App/whatsappcheckmarkDelivered.png', // Grey double check
-    checkmarkRead: 'https://media.publit.io/file/AO3-Skins-App/whatsapp-checkmarkRead.png', // Blue double check
-    onlineIcon: 'https://i.ibb.co/whatsapp-online.png', // Green dot (placeholder)
-    headerImage: 'https://media.publit.io/file/AO3-Skins-App/whatapp-header.png', // WhatsApp header background
-    footerImage: 'https://media.publit.io/file/AO3-Skins-App/whatsapp-footer.png', // WhatsApp footer background
+    checkmarkSending: createAssetUrl('whatsapp-clockicon.png'),
+    checkmarkSent: createAssetUrl('whatsapp-checkmarkSent.png'),
+    checkmarkDelivered: createAssetUrl('whatsappcheckmarkDelivered.png'),
+    checkmarkRead: createAssetUrl('whatsapp-checkmarkRead.png'),
+    onlineIcon: 'https://i.ibb.co/whatsapp-online.png',
+    headerImage: createAssetUrl('whatapp-header.png'),
+    footerImage: createAssetUrl('whatsapp-footer.png'),
   },
   ios: {
-    messageIcon: 'https://i.ibb.co/ios-messages-icon.png', // Messages app icon
-    bubbleTailBlue: 'https://i.ibb.co/ios-bubble-tail-blue.png', // Blue tail (PNG with transparency)
-    bubbleTailGreen: 'https://i.ibb.co/ios-bubble-tail-green.png', // Green tail
-    bubbleTailGrey: 'https://i.ibb.co/ios-bubble-tail-grey.png', // Grey tail
+    messageIcon: 'https://i.ibb.co/ios-messages-icon.png',
+    bubbleTailBlue: 'https://i.ibb.co/ios-bubble-tail-blue.png',
+    bubbleTailGreen: 'https://i.ibb.co/ios-bubble-tail-green.png',
+    bubbleTailGrey: 'https://i.ibb.co/ios-bubble-tail-grey.png',
     deliveredIcon: 'https://i.ibb.co/ios-delivered.png',
-    headerImage: 'https://media.publit.io/file/AO3-Skins-App/imessage-header.png', // iMessage header background
-    footerImage: 'https://media.publit.io/file/AO3-Skins-App/imessage-footer.jpg', // iMessage footer background
+    headerImage: createAssetUrl('imessage-header.png'),
+    footerImage: createAssetUrl('imessage-footer.jpg'),
   },
   discord: {
-    logo: 'https://i.ibb.co/discord-logo.png',
+    logo: '/assets/discord-logo.png',
     hashtagIcon: 'https://i.ibb.co/discord-hashtag.png',
-    onlineStatus: 'https://i.ibb.co/discord-online.png', // Green circle
+    onlineStatus: 'https://i.ibb.co/discord-online.png',
   },
   google: {
-    logo: 'https://media.publit.io/file/AO3-Skins-App/google-logo-long.png', // Google full color logo
-    searchIcon: 'https://media.publit.io/file/AO3-Skins-App/google-search-glass.png', // Magnifying glass
-    micIcon: 'https://media.publit.io/file/AO3-Skins-App/google-mic-270775.png', // Microphone (colorful)
-    lensIcon: 'https://media.publit.io/file/AO3-Skins-App/google-camera-lens.png', // Google Lens camera
-    clearIcon: 'https://media.publit.io/file/AO3-Skins-App/google-clear-X.png', // X to clear search
+    logo: createAssetUrl('google-logo-long.png'),
+    searchIcon: createAssetUrl('google-search-glass.png'),
+    micIcon: createAssetUrl('google-mic-270775.png'),
+    lensIcon: createAssetUrl('google-camera-lens.png'),
+    clearIcon: createAssetUrl('google-clear-X.png'),
   },
   tinder: {
-    verifiedBadge: 'https://media.publit.io/file/AO3-Skins-App/tinder-verified.png', // Blue checkmark badge
-    rewindButton: 'https://media.publit.io/file/AO3-Skins-App/tinder-rewind.png', // Yellow rewind icon
-    passButton: 'https://media.publit.io/file/AO3-Skins-App/tinder-pass.png', // Red X
-    superLikeButton: 'https://media.publit.io/file/AO3-Skins-App/tinder-superlike.png', // Blue star
-    likeButton: 'https://media.publit.io/file/AO3-Skins-App/tinder-like.png', // Green heart
-    boostButton: 'https://media.publit.io/file/AO3-Skins-App/tinder-boost.png', // Purple lightning
-    distancePin: 'https://media.publit.io/file/AO3-Skins-App/tinder-distance-pin.png', // Location pin icon
-    infoButton: 'https://media.publit.io/file/AO3-Skins-App/tinder-info.png', // Info/details button
+    verifiedBadge: createAssetUrl('tinder-verified.png'),
+    rewindButton: createAssetUrl('tinder-rewind.png'),
+    passButton: createAssetUrl('tinder-pass.png'),
+    superLikeButton: createAssetUrl('tinder-superlike.png'),
+    likeButton: createAssetUrl('tinder-like.png'),
+    boostButton: createAssetUrl('tinder-boost.png'),
+    distancePin: createAssetUrl('tinder-distance-pin.png'),
+    infoButton: createAssetUrl('tinder-info.png'),
   }
 };
 
 /**
- * Placeholder/fallback assets if hosted images fail to load
+ * Map of available local fallback assets
+ * These files exist in /public/assets/
+ */
+export const LOCAL_ASSETS: Record<string, boolean> = {
+  'twitter-verifiedBadge.png': true,
+  'twitter-logo.png': true,
+  'twitter-replyIcon.png': true,
+  'twitter-retweetIcon.png': true,
+  'twitter-likeIcon.png': true,
+  'twitter-views.png': true,
+  'twitter-upload.png': true,
+  'whatsapp-clockicon.png': true,
+  'whatsapp-checkmarkSent.png': true,
+  'whatsappcheckmarkDelivered.png': true,
+  'whatsapp-checkmarkRead.png': true,
+  'discord-logo.png': true,
+  'google-logo-long.png': true,
+  'google-search-glass.png': true,
+  'google-mic-270775.png': true,
+  'google-clear-X.png': true,
+  'imessage-logo.png': true,
+  'instagram-logo.png': true,
+  'whatsapp-logo.png': true,
+  'tinder-logo.png': true,
+  'email-logo.png': true,
+};
+
+/**
+ * Handle image load error by falling back to local asset
+ */
+export function handleImageError(
+  event: React.SyntheticEvent<HTMLImageElement>,
+  fallbackFilename?: string
+): void {
+  const img = event.currentTarget;
+  const currentSrc = img.src;
+  
+  // Avoid infinite loop - don't retry if already using local
+  if (currentSrc.startsWith('/assets/') || currentSrc.includes('localhost')) {
+    return;
+  }
+  
+  const filename = fallbackFilename || getFilenameFromUrl(currentSrc);
+  
+  if (LOCAL_ASSETS[filename]) {
+    img.src = getLocalFallback(filename);
+  }
+}
+
+/**
+ * Placeholder/fallback text if images fail completely
  */
 export const FALLBACK_TEXT = {
   twitter: {
