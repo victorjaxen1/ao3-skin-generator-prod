@@ -25,16 +25,17 @@ export default function PWAInstallPrompt() {
 
     // Listen for beforeinstallprompt event
     const handler = (e: Event) => {
-      e.preventDefault();
-      setDeferredPrompt(e as BeforeInstallPromptEvent);
-      
-      // Don't show immediately - wait for user to engage with the app
-      setTimeout(() => {
-        const dismissed = localStorage.getItem('pwa-install-dismissed');
-        if (!dismissed || Date.now() - parseInt(dismissed) > 7 * 24 * 60 * 60 * 1000) {
-          setShowPrompt(true);
-        }
-      }, 30000); // Show after 30 seconds of use
+      const dismissed = localStorage.getItem('pwa-install-dismissed');
+      const shouldShow = !dismissed || Date.now() - parseInt(dismissed) > 7 * 24 * 60 * 60 * 1000;
+
+      if (shouldShow) {
+        // Suppress browser mini-infobar only when we'll show our own UI
+        e.preventDefault();
+        setDeferredPrompt(e as BeforeInstallPromptEvent);
+        // Don't show immediately - wait for user to engage with the app
+        setTimeout(() => setShowPrompt(true), 30000);
+      }
+      // If dismissed recently, do nothing - let browser handle it naturally
     };
 
     window.addEventListener('beforeinstallprompt', handler);
