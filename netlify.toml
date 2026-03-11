@@ -11,6 +11,12 @@
   # Get a free API key at https://api.imgbb.com/
 
 [[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+    Service-Worker-Allowed = "/"
+
+[[headers]]
   for = "/*"
   [headers.values]
     Content-Security-Policy = "img-src 'self' data: blob: https:; default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https:"
