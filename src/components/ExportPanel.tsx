@@ -55,7 +55,7 @@ function applyWatermark(canvas: HTMLCanvasElement, skipWatermark: boolean): HTML
 
   const ctx = out.getContext('2d')!;
   ctx.drawImage(canvas, 0, 0);
-  ctx.fillStyle = '#1e40af';
+  ctx.fillStyle = '#7c3aed';
   ctx.fillRect(0, canvas.height, out.width, watermarkHeight);
   ctx.fillStyle = '#ffffff';
   ctx.font = 'bold 14px system-ui, -apple-system, sans-serif';
@@ -486,28 +486,28 @@ export const ExportPanel: React.FC<Props> = ({
       {/* ------------------------------------------------------------------ */}
       {/* Sticky bottom bar                                                   */}
       {/* ------------------------------------------------------------------ */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-2xl z-50">
-        <div className="max-w-7xl mx-auto px-4 py-3">
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-stone-200 shadow-[0_-4px_24px_rgba(0,0,0,0.08)] z-50">
+        <div className="max-w-4xl mx-auto px-4 py-3">
 
-          {/* Scale + help row */}
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-500 font-medium">Quality:</span>
+          {/* Quality + help row */}
+          <div className="flex items-center justify-between mb-2.5">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] text-stone-400 font-medium uppercase tracking-wide mr-1">Quality</span>
               {[1, 2, 4].map(s => (
                 <button
                   key={s}
                   onClick={() => setExportScale(s)}
                   disabled={s === 4 && !proStatus.isPro}
-                  title={s === 4 && !proStatus.isPro ? 'Pro only' : `${s}× quality`}
-                  className={`px-2.5 py-1 text-xs font-semibold rounded transition-all ${
+                  title={s === 4 && !proStatus.isPro ? 'Upgrade for 4× quality' : `${s}× resolution`}
+                  className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all ${
                     exportScale === s
-                      ? 'bg-blue-600 text-white'
+                      ? 'bg-violet-600 text-white'
                       : s === 4 && !proStatus.isPro
-                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      ? 'bg-stone-100 text-stone-300 cursor-not-allowed'
+                      : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
                   }`}
                 >
-                  {s}×{s === 4 ? ' ✨' : ''}
+                  {s}×{s === 4 && !proStatus.isPro ? ' ✦' : ''}
                 </button>
               ))}
             </div>
@@ -516,57 +516,57 @@ export const ExportPanel: React.FC<Props> = ({
               {!proStatus.isPro && (
                 <button
                   onClick={() => setShowProModal(true)}
-                  className="text-xs text-purple-600 font-semibold hover:underline hidden sm:block"
+                  className="text-[11px] text-violet-600 font-semibold hover:underline hidden sm:block"
                 >
-                  ✨ Go Pro
+                  Upgrade
                 </button>
               )}
               <button
                 onClick={() => setShowHelp(!showHelp)}
-                className={`text-xs px-2.5 py-1 rounded font-semibold transition-all ${
+                className={`text-[11px] px-2.5 py-1 rounded-lg font-medium transition-all ${
                   showHelp
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    ? 'bg-stone-800 text-white'
+                    : 'bg-stone-100 text-stone-500 hover:bg-stone-200'
                 }`}
               >
-                ❓ Help
+                How to use
               </button>
             </div>
           </div>
 
           {/* Two main action buttons */}
-          <div className="flex gap-3">
+          <div className="flex gap-2.5">
             <button
               onClick={handleDownloadImage}
               disabled={isExporting}
-              className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-bold text-sm shadow transition-all ${
+              className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-semibold text-sm transition-all ${
                 isExporting
-                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                  : 'bg-gray-800 text-white hover:bg-gray-900 hover:shadow-lg'
+                  ? 'bg-stone-100 text-stone-300 cursor-not-allowed'
+                  : 'bg-stone-800 text-white hover:bg-stone-900 shadow-sm hover:shadow'
               }`}
             >
-              <span className="text-base">📥</span>
-              <span>Download Image</span>
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              <span>Save Image</span>
             </button>
 
             <button
               onClick={handleGetAO3Code}
               disabled={isExporting}
-              className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-bold text-sm shadow transition-all ${
+              className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-semibold text-sm transition-all ${
                 isExporting
-                  ? 'bg-blue-300 text-white cursor-not-allowed'
-                  : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 hover:shadow-lg'
+                  ? 'bg-violet-300 text-white cursor-not-allowed'
+                  : 'bg-violet-600 text-white hover:bg-violet-700 shadow-sm hover:shadow'
               }`}
             >
               {isExporting ? (
                 <>
-                  <span className="animate-spin text-base">⏳</span>
-                  <span className="truncate">{progressLabel || 'Working...'}</span>
+                  <svg className="animate-spin" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                  <span className="truncate">{progressLabel || 'Working…'}</span>
                 </>
               ) : (
                 <>
-                  <span className="text-base">📝</span>
-                  <span>Get AO3 Code</span>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                  <span>Copy for AO3</span>
                 </>
               )}
             </button>
@@ -574,21 +574,10 @@ export const ExportPanel: React.FC<Props> = ({
 
           {/* Help panel */}
           {showHelp && (
-            <div className="mt-3 pt-3 border-t border-gray-100">
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                <p className="font-bold text-sm text-blue-900 mb-1.5">How to use:</p>
-                <ol className="list-decimal ml-4 space-y-1 text-xs text-blue-800">
-                  <li>
-                    <strong>Download Image</strong> — saves a PNG of your conversation to your
-                    device. Great for sharing on Tumblr, Twitter, etc.
-                  </li>
-                  <li>
-                    <strong>Get AO3 Code</strong> — renders your conversation as an image,
-                    uploads it automatically, and gives you a ready-to-paste snippet for your
-                    AO3 chapter.{' '}
-                    <strong>No work skin needed</strong> — just paste into the HTML editor.
-                  </li>
-                </ol>
+            <div className="mt-3 pt-3 border-t border-stone-100">
+              <div className="bg-stone-50 border border-stone-200 rounded-xl p-3 space-y-1.5 text-xs text-stone-600">
+                <p><strong className="text-stone-800">Save Image</strong> — downloads a PNG to your device. Share on Tumblr, Twitter, etc.</p>
+                <p><strong className="text-stone-800">Copy for AO3</strong> — renders and uploads your conversation automatically, then gives you an <code className="bg-stone-200 px-1 rounded">&lt;img&gt;</code> tag ready to paste into AO3's HTML editor. <strong className="text-stone-800">No work skin needed.</strong></p>
               </div>
             </div>
           )}
@@ -608,16 +597,16 @@ export const ExportPanel: React.FC<Props> = ({
             onClick={e => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="bg-gray-900 text-white px-5 py-4 flex items-center justify-between">
+            <div className="bg-stone-900 text-white px-5 py-4 flex items-center justify-between">
               <div>
-                <h3 className="text-base font-bold">📝 Your AO3 Code</h3>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  Paste this into your chapter's HTML editor on AO3
+                <h3 className="text-sm font-semibold">Your AO3 code</h3>
+                <p className="text-xs text-stone-400 mt-0.5">
+                  Paste into your chapter's HTML editor on AO3
                 </p>
               </div>
               <button
                 onClick={() => setShowCodeModal(false)}
-                className="text-white hover:text-gray-300 text-2xl font-bold leading-none ml-4"
+                className="text-white hover:text-stone-300 text-2xl font-bold leading-none ml-4"
               >
                 ×
               </button>
@@ -638,33 +627,28 @@ export const ExportPanel: React.FC<Props> = ({
             <div className="px-5 pb-5 flex flex-col gap-3">
               <button
                 onClick={handleCopyCode}
-                className={`w-full py-3 rounded-xl font-bold text-base transition-all ${
+                className={`w-full py-3 rounded-xl font-semibold text-sm transition-all ${
                   copiedCode
                     ? 'bg-green-500 text-white'
-                    : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700'
+                    : 'bg-violet-600 text-white hover:bg-violet-700'
                 }`}
               >
-                {copiedCode ? '✓ Copied!' : '📋 Copy Code'}
+                {copiedCode ? '✓ Copied!' : 'Copy code'}
               </button>
 
               {/* How-to accordion */}
               <button
                 onClick={() => setShowHowTo(!showHowTo)}
-                className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1 justify-center"
+                className="text-xs text-stone-400 hover:text-stone-600 flex items-center gap-1 justify-center"
               >
                 <span>{showHowTo ? '▲' : '▼'}</span>
                 <span>How to paste this into AO3</span>
               </button>
               {showHowTo && (
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-700 space-y-1.5">
-                  <p>
-                    1. In AO3, open your chapter editor and click{' '}
-                    <strong>HTML mode</strong> (the &lt;&gt; button).
-                  </p>
+                <div className="bg-stone-50 border border-stone-200 rounded-xl p-3 text-xs text-stone-600 space-y-1.5">
+                  <p>1. Open your chapter editor and click <strong className="text-stone-800">HTML mode</strong> (the &lt;&gt; button).</p>
                   <p>2. Place your cursor where you want the conversation to appear.</p>
-                  <p>
-                    3. Paste the code above. <strong>No work skin setup needed.</strong>
-                  </p>
+                  <p>3. Paste the code. <strong className="text-stone-800">No work skin setup needed.</strong></p>
                   <p>4. Preview your chapter, then post!</p>
                 </div>
               )}

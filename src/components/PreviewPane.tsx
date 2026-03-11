@@ -66,74 +66,51 @@ const PreviewPaneComponent: React.FC<Props> = ({ project, mobile, dark, onMessag
   const editModeStyles = editModeEnabled ? `
     #workskin [data-message-id] {
       cursor: pointer;
-      transition: outline 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+      transition: outline 0.15s ease, box-shadow 0.15s ease;
     }
     #workskin [data-message-id]:hover {
-      outline: 2px solid rgba(59, 130, 246, 0.6);
+      outline: 2px solid rgba(124, 58, 237, 0.5);
       outline-offset: 2px;
-      box-shadow: 0 0 12px rgba(59, 130, 246, 0.3);
+      box-shadow: 0 0 10px rgba(124, 58, 237, 0.2);
     }
     #workskin .tweet[data-message-id]:hover,
     #workskin .row[data-message-id]:hover {
-      background: rgba(59, 130, 246, 0.05);
+      background: rgba(124, 58, 237, 0.04);
       border-radius: 8px;
     }
   ` : '';
   
   return (
     <div className="h-full flex flex-col">
-      {/* Preview Header - Minimal */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <div className={`w-2 h-2 rounded-full ${project.messages.length > 0 ? 'bg-green-500 animate-pulse' : 'bg-gray-300'}`}></div>
-          <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">
-            {mobile ? '📱 Mobile' : '🖥️ Desktop'} Preview
-          </span>
-          {editModeEnabled && (
-            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">
-              ✏️ Click to edit
-            </span>
-          )}
-        </div>
-        {project.messages.length === 0 && (
-          <span className="text-xs text-gray-400">Add messages to see preview</span>
-        )}
-      </div>
-      
-      {/* Preview Container - Device Frame Feel */}
-      <div 
+      {/* Preview container */}
+      <div
         ref={containerRef}
-        className={`flex-1 rounded-2xl overflow-auto transition-all duration-300 ${
-          dark 
-            ? 'bg-gray-900 shadow-inner' 
-            : 'bg-gradient-to-b from-gray-50 to-gray-100 shadow-inner'
+        className={`flex-1 overflow-auto ${
+          dark ? 'bg-stone-900' : 'bg-stone-50'
         }`}
-        style={{ minHeight: '500px', maxHeight: 'calc(100vh - 200px)' }}
       >
-        {/* Phone Frame Effect for Mobile */}
-        <div className={`${mobile ? 'p-4' : 'p-2'}`}>
+        <div className="p-3">
           <style dangerouslySetInnerHTML={{__html: css + editModeStyles}} />
-          <div 
-            id="workskin" 
+          <div
+            id="workskin"
             ref={workskinRef}
             onClick={handlePreviewClick}
-            className={`mx-auto transition-all duration-300 ${mobile ? 'rounded-xl overflow-hidden shadow-lg' : ''} ${editModeEnabled ? 'edit-mode-active' : ''}`}
+            className={`mx-auto ${editModeEnabled ? 'edit-mode-active' : ''}`}
             style={{
-              width: mobile ? 375 : '100%', 
+              width: 375,
               maxWidth: '100%',
               paddingBottom: '60px',
-              background: dark ? 'transparent' : 'white'
-            }} 
-            dangerouslySetInnerHTML={{__html: html}} 
+              background: dark ? 'transparent' : 'white',
+            }}
+            dangerouslySetInnerHTML={{__html: html}}
           />
         </div>
-        
-        {/* Empty State */}
+
         {project.messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="text-5xl mb-4 opacity-50">💬</div>
-            <p className="text-gray-400 text-sm font-medium">Your conversation will appear here</p>
-            <p className="text-gray-300 text-xs mt-1">Start by adding messages in the Editor tab</p>
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <div className="w-12 h-12 rounded-2xl bg-stone-200 flex items-center justify-center mb-3 text-2xl">💬</div>
+            <p className="text-stone-500 text-sm font-medium">Nothing here yet</p>
+            <p className="text-stone-400 text-xs mt-1">Add messages on the left to see a preview</p>
           </div>
         )}
       </div>
