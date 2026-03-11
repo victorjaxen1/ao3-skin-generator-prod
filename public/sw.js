@@ -10,8 +10,6 @@ const RUNTIME_CACHE = 'ao3-runtime-v1';
 const PRECACHE_ASSETS = [
   '/',
   '/manifest.json',
-  '/icon-192.png',
-  '/icon-512.png',
 ];
 
 // Install event - precache critical assets
