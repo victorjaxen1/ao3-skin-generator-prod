@@ -45,7 +45,9 @@ const nextConfig = {
 
     return [
       {
-        source: '/:path*',
+        // Apply security headers to pages only — exclude /_next/static/ and /_next/image/
+        // so X-Content-Type-Options: nosniff doesn't block Next.js's own JS/CSS chunks
+        source: '/((?!_next).*)',
         headers: [
           // Prevent MIME type sniffing
           { key: 'X-Content-Type-Options', value: 'nosniff' },
