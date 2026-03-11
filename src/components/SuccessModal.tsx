@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
+import { recordDonationClick, recordDismissForever } from '../lib/donationPrompt';
 
 interface Props {
   show: boolean;
   onClose: () => void;
-  actionType: 'css' | 'html' | 'image';
+  actionType: 'image' | 'ao3code';
 }
 
 export const SuccessModal: React.FC<Props> = ({ show, onClose, actionType }) => {
@@ -19,22 +20,30 @@ export const SuccessModal: React.FC<Props> = ({ show, onClose, actionType }) => 
     }
   }, [show]);
 
+  const handleDonationClick = () => {
+    recordDonationClick();
+    // Link opens in new tab automatically
+  };
+
+  const handleDismissForever = () => {
+    recordDismissForever();
+    onClose();
+  };
+
   if (!show) return null;
 
   const getActionMessage = () => {
     switch (actionType) {
-      case 'css':
-        return 'CSS copied to clipboard! 🎉';
-      case 'html':
-        return 'HTML copied to clipboard! 🎉';
       case 'image':
         return 'Image downloaded successfully! 🎉';
+      case 'ao3code':
+        return 'AO3 code copied! 🎉';
       default:
         return 'Success! 🎉';
     }
   };
 
-  const estimatedTimeSaved = actionType === 'image' ? '2-3 hours' : '1-2 hours';
+  const estimatedTimeSaved = actionType === 'image' ? '2-3 hours' : '1-2 hours'; // ao3code also saves significant time
 
   return (
     <div 
@@ -70,6 +79,7 @@ export const SuccessModal: React.FC<Props> = ({ show, onClose, actionType }) => 
               href="https://ko-fi.com/ao3skingen" 
               target="_blank" 
               rel="noopener noreferrer"
+              onClick={handleDonationClick}
               className="inline-flex items-center gap-2 px-6 py-3 bg-primary hover:bg-primary-dark text-white rounded-material-sm font-heading font-semibold shadow-material-md hover:shadow-material-lg transition-all transform hover:scale-105"
             >
               <span className="text-xl">☕</span>
@@ -135,13 +145,22 @@ export const SuccessModal: React.FC<Props> = ({ show, onClose, actionType }) => 
           </div>
         )}
 
-        {/* Close Button */}
-        <button
-          onClick={onClose}
-          className="w-full mt-4 px-4 py-3 bg-bg-light hover:bg-gray-200 text-text-dark rounded-material-sm font-heading font-semibold transition-all shadow-material-sm"
-        >
-          Close
-        </button>
+        {/* Close Buttons */}
+        <div className="flex gap-2">
+          <button
+            onClick={onClose}
+            className="flex-1 mt-4 px-4 py-3 bg-bg-light hover:bg-gray-200 text-text-dark rounded-material-sm font-heading font-semibold transition-all shadow-material-sm"
+          >
+            Close
+          </button>
+          <button
+            onClick={handleDismissForever}
+            className="mt-4 px-4 py-3 bg-transparent hover:bg-gray-100 text-text-gray text-xs rounded-material-sm transition-all whitespace-nowrap"
+            title="Don't show this prompt again"
+          >
+            Don't show again
+          </button>
+        </div>
       </div>
 
       <style jsx>{`

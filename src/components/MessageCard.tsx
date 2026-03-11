@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Message, TwitterCharacter } from '../lib/schema';
 
 interface MessageCardProps {
@@ -32,6 +32,7 @@ export const MessageCard: React.FC<MessageCardProps> = ({
   children,
   template
 }) => {
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const getTemplateConfig = () => {
     switch (template) {
       case 'twitter':
@@ -123,18 +124,37 @@ export const MessageCard: React.FC<MessageCardProps> = ({
               ↓
             </button>
           )}
-          <button 
-            type="button" 
-            onClick={() => {
-              if (confirm('Delete this message?')) {
-                onDelete();
-              }
-            }}
-            className="text-red-500 hover:text-red-700 hover:bg-white font-bold text-base sm:text-lg leading-none px-1.5 sm:px-2 py-1 rounded transition"
-            title="Delete"
-          >
-            ×
-          </button>
+          {showDeleteConfirm ? (
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-red-600">Delete?</span>
+              <button 
+                type="button" 
+                onClick={() => {
+                  onDelete();
+                  setShowDeleteConfirm(false);
+                }}
+                className="text-red-600 hover:text-red-700 hover:bg-white text-xs px-1.5 py-0.5 rounded transition font-medium"
+              >
+                Yes
+              </button>
+              <button 
+                type="button" 
+                onClick={() => setShowDeleteConfirm(false)}
+                className="text-gray-500 hover:text-gray-700 hover:bg-white text-xs px-1.5 py-0.5 rounded transition font-medium"
+              >
+                No
+              </button>
+            </div>
+          ) : (
+            <button 
+              type="button" 
+              onClick={() => setShowDeleteConfirm(true)}
+              className="text-red-500 hover:text-red-700 hover:bg-white font-bold text-base sm:text-lg leading-none px-1.5 sm:px-2 py-1 rounded transition"
+              title="Delete"
+            >
+              ×
+            </button>
+          )}
         </div>
       </div>
 

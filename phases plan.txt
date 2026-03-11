@@ -1,0 +1,79 @@
+Yes, I understand completely.
+
+You want me to:
+
+Create a detailed phased implementation plan based on the strategic pivot
+Wait for your approval before executing any code changes
+Implement step-by-step once you give the go-ahead
+Let me create the implementation plan now.
+
+📋 Phased Implementation Plan: Social Media AU Engine Pivot
+Phase 1: Infrastructure & Monetization Foundation (Week 1)
+De-risk the platform and lay groundwork for revenue
+
+
+Task	Description	Files Affected
+1.1	Base64 encode all platform icons - Convert Twitter, WhatsApp, Google icons to Base64 strings embedded in code	platformAssets.ts
+1.2	Add watermark to image export - Discreet "Made with AO3SkinGen" watermark on PNG downloads	ExportPanel.tsx
+1.3	Deprecate image upload UI - Change "Upload Image" to "Paste Image URL" as the primary input	IOSEditor.tsx, AndroidEditor.tsx, TwitterEditor.tsx
+1.4	Remove/disable Cloudinary integration - Clean up unused upload code	imgur.ts (or equivalent)
+Phase 2: Stitch Mode - Long Image Export (Week 2)
+Unlock Tumblr/Pinterest market with single tall PNG export
+
+Task	Description	Files Affected
+2.1	Add "Stitch Mode" toggle - UI checkbox in export panel	ExportPanel.tsx
+2.2	Modify html2canvas logic - Capture full scrollable container height, not just viewport	ExportPanel.tsx
+2.3	Handle long conversations - Ensure CSS doesn't truncate when >10 messages	generator.ts
+Phase 3: Character Bank (localStorage MVP) (Week 3)
+Retention hook - save characters for reuse
+
+Task	Description	Files Affected
+3.1	Create Character schema - TypeScript interface for saved characters	schema.ts
+3.2	Build Character Bank storage - localStorage CRUD functions	characterCache.ts (new or expand existing)
+3.3	Character Bank UI - Sidebar/modal to save, load, delete character presets	New component: src/components/CharacterBank.tsx
+3.4	Integrate into editors - "Load Character" dropdown in message forms	EditorForm.tsx, platform editors
+Phase 4: Legal & Safety Shield (Week 4)
+Protect against misuse before scaling
+
+Task	Description	Files Affected
+4.1	Force "PARODY" label on verified badges - When Twitter verified is enabled, overlay/watermark "PARODY" that cannot be removed	generator.ts, TwitterEditor.tsx
+4.2	Add disclaimer footer in editor - "This tool is for fictional storytelling and parody only"	index.tsx
+4.3	Update Terms of Service - Add disinformation/defamation clause	terms-of-service.html
+4.4	Create "Content Policy" page - Visible link in footer	New file: public/content-policy.html
+Phase 5: Thread Builder Polish (Week 5-6)
+The "wow" feature for Twitter AU creators
+
+Task	Description	Files Affected
+5.1	Enhanced reply chain UI - Drag-and-drop reordering of tweets in thread	TwitterEditor.tsx
+5.2	Visual thread preview - Show connecting lines between threaded tweets	generator.ts (CSS), PreviewPane.tsx
+5.3	Multi-export options - "Export as ZIP (individual images)" vs "Export as Strip"	ExportPanel.tsx
+Phase 6: Pro Tier Foundation (Week 7-8)
+Monetization infrastructure
+
+Task	Description	Files Affected
+6.1	Create Pro feature flags - isPro state management	New: src/lib/proFeatures.ts
+6.2	Watermark removal gating - Pro users skip watermark	ExportPanel.tsx
+6.3	High-res export (2x/4x) - Scale multiplier option for Pro	ExportPanel.tsx
+6.4	Payment integration placeholder - Gumroad/Stripe link for one-time purchase	src/components/ProUpgradeModal.tsx (new)
+Future Phases (Post-MVP)
+Phase 7: Video/GIF export prototype (internal testing)
+Phase 8: Cloud-synced Character Bank (Firebase/Supabase)
+Phase 9: Public gallery / "Featured AUs" page
+📊 Summary
+Phase	Focus	Duration	Risk Level
+1	Infrastructure & Watermark	Week 1	Low
+2	Stitch Mode	Week 2	Low
+3	Character Bank	Week 3	Medium
+4	Legal Shield	Week 4	Low
+5	Thread Builder	Week 5-6	Medium
+6	Pro Tier	Week 7-8	Medium
+✅ Ready for Your Go-Ahead
+I have the full implementation plan ready. When you say "Start Phase 1" (or whichever phase you want to begin with), I will:
+
+Create a todo list for that phase
+Implement each task step-by-step
+Show you the changes before moving to the next task
+Wait for your approval before proceeding to the next phase
+Which phase would you like me to start with?
+
+Claude Opus 4.5 (Preview) • 1x

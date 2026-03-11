@@ -1,24 +1,27 @@
 /**
- * Platform Asset URLs with Local Fallbacks
- * Primary: Publit.io CDN
- * Fallback: Local /assets/ folder
+ * Platform Asset URLs - Hybrid CDN + Local Fallback Strategy
+ * 
+ * APPROACH:
+ * - Primary: Publit.io CDN for stable platform icons (Twitter, WhatsApp, Google, etc.)
+ * - Fallback: Local /assets/ folder as backup if CDN fails
+ * - Avatars: See characterBank.ts for 30 curated options + custom URL support
  */
 
-const PRIMARY_CDN = 'https://media.publit.io/file/AO3-Skins-App/';
-const LOCAL_FALLBACK = '/assets/';
+const PUBLIT_CDN = 'https://media.publit.io/file/AO3-Skins-App';
+const LOCAL_ASSETS = '/assets/';
 
 /**
- * Creates an asset URL object with primary and fallback sources
+ * Creates a Publit.io CDN URL
  */
-function createAssetUrl(filename: string): string {
-  return `${PRIMARY_CDN}${filename}`;
+function cdnUrl(filename: string): string {
+  return `${PUBLIT_CDN}/${filename}`;
 }
 
 /**
- * Get the local fallback URL for an asset
+ * Get local asset URL (fallback)
  */
 export function getLocalFallback(filename: string): string {
-  return `${LOCAL_FALLBACK}${filename}`;
+  return `${LOCAL_ASSETS}${filename}`;
 }
 
 /**
@@ -31,68 +34,73 @@ export function getFilenameFromUrl(url: string): string {
 
 export const PLATFORM_ASSETS = {
   twitter: {
-    verifiedBadge: createAssetUrl('twitter-verifiedBadge.png'),
-    logo: createAssetUrl('twitter-logo.png'),
-    replyIcon: createAssetUrl('twitter-replyIcon.png'),
-    retweetIcon: createAssetUrl('twitter-retweetIcon.png'),
-    likeIcon: createAssetUrl('twitter-likeIcon.png'),
-    viewsIcon: createAssetUrl('twitter-views.png'),
-    bookmarkIcon: createAssetUrl('twitter-upload.png'),
+    verifiedBadge: 'https://media.publit.io/file/AO3-Skins-App/twitter-verifiedBadge.png',
+    logo: 'https://media.publit.io/file/AO3-Skins-App/twitter-logo.png',
+    replyIcon: 'https://media.publit.io/file/AO3-Skins-App/twitter-replyIcon.png',
+    retweetIcon: 'https://media.publit.io/file/AO3-Skins-App/twitter-retweetIcon.png',
+    likeIcon: 'https://media.publit.io/file/AO3-Skins-App/twitter-likeIcon.png',
+    viewsIcon: 'https://media.publit.io/file/AO3-Skins-App/twitter-views.png',
+    bookmarkIcon: 'https://media.publit.io/file/AO3-Skins-App/twitter-upload.png',
+    // Dark mode gray variants
+    replyIconGrey: 'https://media.publit.io/file/AO3-Skins-App/twitter-reply.png',
+    retweetIconGrey: 'https://media.publit.io/file/AO3-Skins-App/twitter-retweet-grey.png',
+    likeIconGrey: 'https://media.publit.io/file/AO3-Skins-App/twitter-like-grey.png',
+    logoGrey: 'https://media.publit.io/file/AO3-Skins-App/twitter-x-icon-grey.png',
   },
   instagram: {
-    headerGradient: 'https://i.ibb.co/instagram-gradient.png',
-    likeIcon: 'https://i.ibb.co/instagram-heart.png',
-    commentIcon: 'https://i.ibb.co/instagram-comment.png',
-    locationPin: createAssetUrl('instagram-locationPin.png'),
-    verifiedBadge: 'https://i.ibb.co/instagram-verified.png',
+    headerGradient: 'https://media.publit.io/file/AO3-Skins-App/instagram-logo.png',
+    likeIcon: 'https://media.publit.io/file/AO3-Skins-App/instagram-logo.png',
+    commentIcon: 'https://media.publit.io/file/AO3-Skins-App/instagram-logo.png',
+    locationPin: 'https://media.publit.io/file/AO3-Skins-App/instagram-locationPin.png',
+    verifiedBadge: 'https://media.publit.io/file/AO3-Skins-App/instagram-logo.png',
   },
   whatsapp: {
-    checkmarkSending: createAssetUrl('whatsapp-clockicon.png'),
-    checkmarkSent: createAssetUrl('whatsapp-checkmarkSent.png'),
-    checkmarkDelivered: createAssetUrl('whatsappcheckmarkDelivered.png'),
-    checkmarkRead: createAssetUrl('whatsapp-checkmarkRead.png'),
-    onlineIcon: 'https://i.ibb.co/whatsapp-online.png',
-    headerImage: createAssetUrl('whatapp-header.png'),
-    footerImage: createAssetUrl('whatsapp-footer.png'),
+    checkmarkSending: 'https://media.publit.io/file/AO3-Skins-App/whatsapp-clockicon.png',
+    checkmarkSent: 'https://media.publit.io/file/AO3-Skins-App/whatsapp-checkmarkSent.png',
+    checkmarkDelivered: 'https://media.publit.io/file/AO3-Skins-App/whatsappcheckmarkDelivered.png',
+    checkmarkRead: 'https://media.publit.io/file/AO3-Skins-App/whatsapp-checkmarkRead.png',
+    onlineIcon: 'https://media.publit.io/file/AO3-Skins-App/whatsapp-logo.png',
+    headerImage: 'https://media.publit.io/file/AO3-Skins-App/whatapp-header.png',
+    footerImage: 'https://media.publit.io/file/AO3-Skins-App/whatsapp-footer.png',
   },
   ios: {
-    messageIcon: 'https://i.ibb.co/ios-messages-icon.png',
-    bubbleTailBlue: 'https://i.ibb.co/ios-bubble-tail-blue.png',
-    bubbleTailGreen: 'https://i.ibb.co/ios-bubble-tail-green.png',
-    bubbleTailGrey: 'https://i.ibb.co/ios-bubble-tail-grey.png',
-    deliveredIcon: 'https://i.ibb.co/ios-delivered.png',
-    headerImage: createAssetUrl('imessage-header.png'),
-    footerImage: createAssetUrl('imessage-footer.jpg'),
+    messageIcon: 'https://media.publit.io/file/AO3-Skins-App/imessage-logo.png',
+    bubbleTailBlue: 'https://media.publit.io/file/AO3-Skins-App/imessage-logo.png',
+    bubbleTailGreen: 'https://media.publit.io/file/AO3-Skins-App/imessage-logo.png',
+    bubbleTailGrey: 'https://media.publit.io/file/AO3-Skins-App/imessage-logo.png',
+    deliveredIcon: 'https://media.publit.io/file/AO3-Skins-App/imessage-logo.png',
+    headerImage: 'https://media.publit.io/file/AO3-Skins-App/imessage-header.png',
+    footerImage: 'https://media.publit.io/file/AO3-Skins-App/imessage-footer.jpg',
   },
   discord: {
-    logo: '/assets/discord-logo.png',
-    hashtagIcon: 'https://i.ibb.co/discord-hashtag.png',
-    onlineStatus: 'https://i.ibb.co/discord-online.png',
+    logo: 'https://media.publit.io/file/AO3-Skins-App/discord-logo.png',
+    hashtagIcon: 'https://media.publit.io/file/AO3-Skins-App/discord-logo.png',
+    onlineStatus: 'https://media.publit.io/file/AO3-Skins-App/discord-logo.png',
   },
   google: {
-    logo: createAssetUrl('google-logo-long.png'),
-    searchIcon: createAssetUrl('google-search-glass.png'),
-    micIcon: createAssetUrl('google-mic-270775.png'),
-    lensIcon: createAssetUrl('google-camera-lens.png'),
-    clearIcon: createAssetUrl('google-clear-X.png'),
+    logo: 'https://media.publit.io/file/AO3-Skins-App/google-logo-long.png',
+    searchIcon: 'https://media.publit.io/file/AO3-Skins-App/google-search-glass.png',
+    micIcon: 'https://media.publit.io/file/AO3-Skins-App/google-mic-270775.png',
+    lensIcon: 'https://media.publit.io/file/AO3-Skins-App/google-search-glass.png',
+    clearIcon: 'https://media.publit.io/file/AO3-Skins-App/google-clear-X.png',
   },
   tinder: {
-    verifiedBadge: createAssetUrl('tinder-verified.png'),
-    rewindButton: createAssetUrl('tinder-rewind.png'),
-    passButton: createAssetUrl('tinder-pass.png'),
-    superLikeButton: createAssetUrl('tinder-superlike.png'),
-    likeButton: createAssetUrl('tinder-like.png'),
-    boostButton: createAssetUrl('tinder-boost.png'),
-    distancePin: createAssetUrl('tinder-distance-pin.png'),
-    infoButton: createAssetUrl('tinder-info.png'),
+    verifiedBadge: 'https://media.publit.io/file/AO3-Skins-App/tinder-logo.png',
+    rewindButton: 'https://media.publit.io/file/AO3-Skins-App/tinder-logo.png',
+    passButton: 'https://media.publit.io/file/AO3-Skins-App/tinder-logo.png',
+    superLikeButton: 'https://media.publit.io/file/AO3-Skins-App/tinder-logo.png',
+    likeButton: 'https://media.publit.io/file/AO3-Skins-App/tinder-logo.png',
+    boostButton: 'https://media.publit.io/file/AO3-Skins-App/tinder-logo.png',
+    distancePin: 'https://media.publit.io/file/AO3-Skins-App/tinder-logo.png',
+    infoButton: 'https://media.publit.io/file/AO3-Skins-App/tinder-logo.png',
   }
 };
 
 /**
- * Map of available local fallback assets
+ * Map of available local assets
  * These files exist in /public/assets/
  */
-export const LOCAL_ASSETS: Record<string, boolean> = {
+export const LOCAL_ASSETS_MAP: Record<string, boolean> = {
   // Twitter
   'twitter-verifiedBadge.png': true,
   'twitter-logo.png': true,
@@ -125,25 +133,15 @@ export const LOCAL_ASSETS: Record<string, boolean> = {
 };
 
 /**
- * Handle image load error by falling back to local asset
+ * Handle image load error - now just logs since we use local assets
  */
 export function handleImageError(
   event: React.SyntheticEvent<HTMLImageElement>,
   fallbackFilename?: string
 ): void {
   const img = event.currentTarget;
-  const currentSrc = img.src;
-  
-  // Avoid infinite loop - don't retry if already using local
-  if (currentSrc.startsWith('/assets/') || currentSrc.includes('localhost')) {
-    return;
-  }
-  
-  const filename = fallbackFilename || getFilenameFromUrl(currentSrc);
-  
-  if (LOCAL_ASSETS[filename]) {
-    img.src = getLocalFallback(filename);
-  }
+  console.warn(`Image failed to load: ${img.src}`);
+  // Since we're using local assets, no external fallback needed
 }
 
 /**

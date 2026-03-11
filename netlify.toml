@@ -7,8 +7,10 @@
 
 [build.environment]
   NEXT_TELEMETRY_DISABLED = "1"
+  # Set NEXT_PUBLIC_IMGBB_API_KEY in the Netlify dashboard UI (Environment variables section)
+  # Get a free API key at https://api.imgbb.com/
 
 [[headers]]
   for = "/*"
   [headers.values]
-    Content-Security-Policy = "img-src 'self' data: https://res.cloudinary.com https://media.publit.io; default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self'"
+    Content-Security-Policy = "img-src 'self' data: https://i.ibb.co https://ibb.co https://media.publit.io; default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self' https://api.imgbb.com"

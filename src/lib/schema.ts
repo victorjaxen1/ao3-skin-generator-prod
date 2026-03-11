@@ -1,3 +1,5 @@
+import { PLATFORM_ASSETS } from './platformAssets';
+
 export type Attachment = { type: 'image'; url: string; alt?: string };
 
 export interface TwitterCharacter {
@@ -6,6 +8,42 @@ export interface TwitterCharacter {
   handle: string;
   avatarUrl?: string;
   verified?: boolean;
+}
+
+/**
+ * Universal Character - Works across all templates
+ * Replaces template-specific character systems
+ */
+export interface UniversalCharacter {
+  id: string;
+  name: string;                 // Display name (used in all templates)
+  avatarUrl?: string;           // Profile picture URL
+  
+  // Platform-specific handles
+  twitterHandle?: string;       // @username for Twitter
+  phoneNumber?: string;         // For SMS/WhatsApp (optional)
+  email?: string;              // For email templates (future)
+  
+  // Metadata
+  verified?: boolean;           // Verified badge (Twitter, Instagram)
+  bio?: string;                // Short description
+  category?: 'modern' | 'diversity' | 'fantasy' | 'neutral' | 'age-varied';
+  
+  // Usage tracking
+  lastUsed?: string;           // ISO timestamp
+  usageCount: number;          // Analytics (defaults to 0)
+}
+
+/**
+ * WhatsApp Group Chat Participant
+ * Represents individual members in group conversations
+ */
+export interface GroupParticipant {
+  id: string;
+  name: string;                 // Participant display name
+  avatarUrl?: string;           // Optional profile picture
+  color: string;                // Hex color for name display (#FF5733)
+  phoneNumber?: string;         // Optional phone number
 }
 
 export interface Message {
@@ -17,6 +55,8 @@ export interface Message {
   outgoing: boolean; // true = author perspective sender bubble
   attachments?: Attachment[];
   roleColor?: string; // Discord role/name color
+  // WhatsApp Group Chat
+  participantId?: string; // ID of GroupParticipant (for group messages)
   // Chat-specific enhancements
   status?: 'sending' | 'sent' | 'delivered' | 'read'; // message delivery status
   reaction?: string; // emoji reaction to this message
@@ -50,6 +90,10 @@ export interface SkinSettings {
   maxWidthPx: number;
   useDarkNeutral: boolean;
   watermark: boolean;
+  
+  // UNIVERSAL CHARACTER LIBRARY (all templates)
+  universalCharacters?: UniversalCharacter[]; // Global character library
+  
   // Twitter specific settings
   twitterDisplayName?: string; // e.g., "John Doe"
   twitterHandle?: string; // e.g., "@johndoe"
@@ -60,6 +104,7 @@ export interface SkinSettings {
   twitterReplies?: number; // DEPRECATED: use per-tweet metrics instead
   twitterShowMetrics?: boolean;
   twitterTimestamp?: string; // full date/time line (e.g., "3:09 PM · 5 May 2014")
+  twitterDarkMode?: boolean; // Dark mode theme
   twitterThreadMode?: boolean; // Enable thread view with connecting lines
   twitterCharacterPresets?: TwitterCharacter[]; // Saved character profiles for quick access
   // Quote Tweet (embedded) optional block
@@ -130,6 +175,7 @@ export interface SkinSettings {
   chatContactName?: string; // "Conversation with..." header (shown at top)
   chatShowTyping?: boolean; // show typing indicator
   chatTypingName?: string; // who is typing (not needed for 1-on-1)
+  iosDarkMode?: boolean; // iOS dark mode theme
   iosMode?: 'imessage' | 'sms'; // iOS message type (blue vs green)
   iosShowReadReceipt?: boolean; // Show "Read" under last message
   iosShowHeader?: boolean; // Show "To:" label toggle
@@ -137,6 +183,10 @@ export interface SkinSettings {
   // iOS Authentic 1-on-1 System
   iosContactName?: string; // The other person's name (shown in header only)
   iosAutoAlternate?: boolean; // Auto-alternate between you and them
+  // iOS Group Chat
+  iosGroupMode?: boolean; // Enable group chat (shows sender names)
+  iosGroupName?: string; // Group chat name (e.g., "Family Chat")
+  iosGroupParticipants?: GroupParticipant[]; // Group members
   // iOS UI Elements (optional)
   iosShowStatusBar?: boolean; // Show status bar at top (time, signal, battery)
   iosStatusBarTime?: string; // Status bar time (default: "9:41")
@@ -149,12 +199,17 @@ export interface SkinSettings {
   androidStatusText?: string; // custom status text
   androidCheckmarks?: boolean; // show ✓✓ checkmarks
   androidWhatsAppMode?: boolean; // use authentic WhatsApp colors
+  androidDarkMode?: boolean; // Android/WhatsApp dark mode theme
   androidHeaderImageUrl?: string; // Header background image URL
   androidFooterImageUrl?: string; // Footer background image URL
   androidAvatarUrl?: string; // User's avatar image to overlay on header
   androidContactName?: string; // Contact name for header
   androidShowReadReceipt?: boolean; // Show read status
   androidAutoAlternate?: boolean; // Auto-alternate messages
+  // WhatsApp Group Chat
+  androidGroupMode?: boolean; // Enable group chat (shows sender names)
+  androidGroupName?: string; // Group chat name (e.g., "Work Team")
+  androidGroupParticipants?: GroupParticipant[]; // Group members
 }
 export interface SkinProject {
   id: string;
@@ -181,6 +236,7 @@ export const defaultProject = (): SkinProject => ({
     twitterReplies: 0,
     twitterShowMetrics: true,
     twitterTimestamp: '',
+    twitterDarkMode: false,
     twitterQuoteEnabled: false,
     twitterQuoteAvatar: '',
     twitterQuoteName: '',
@@ -242,6 +298,7 @@ export const defaultProject = (): SkinProject => ({
     chatContactName: '',
     chatShowTyping: false,
     chatTypingName: '',
+    iosDarkMode: false,
     iosMode: 'imessage',
     iosContactName: '',
     iosShowReadReceipt: true,
@@ -257,8 +314,9 @@ export const defaultProject = (): SkinProject => ({
     androidStatusText: 'online',
     androidCheckmarks: true,
     androidWhatsAppMode: true,
-    androidHeaderImageUrl: 'https://media.publit.io/file/AO3-Skins-App/whatapp-header.png',
-    androidFooterImageUrl: 'https://media.publit.io/file/AO3-Skins-App/whatsapp-footer.png',
+    androidDarkMode: false,
+    androidHeaderImageUrl: PLATFORM_ASSETS.whatsapp.headerImage,
+    androidFooterImageUrl: PLATFORM_ASSETS.whatsapp.footerImage,
     androidAvatarUrl: '',
     androidContactName: '',
     androidShowReadReceipt: true,
@@ -270,7 +328,7 @@ export const defaultProject = (): SkinProject => ({
     {
       id: 'default-msg-1',
       sender: 'You',
-      content: 'Where are you? i dont know but i know you are an idiot and i will mess you up if you dont keep quite',
+      content: 'Where are you? I\'m waiting at the cafe. See you soon.',
       outgoing: true,
       timestamp: '10:15',
       status: 'read'
@@ -278,7 +336,7 @@ export const defaultProject = (): SkinProject => ({
     {
       id: 'default-msg-2',
       sender: 'Alice',
-      content: 'On my way. lets see what you can actually do dickhead!!',
+      content: 'On my way — see you shortly!',
       outgoing: false,
       timestamp: '10:15'
     }

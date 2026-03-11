@@ -1,5 +1,5 @@
 import { SkinProject, Message } from './schema';
-import { sanitizeText, sanitizeUrl } from './sanitize';
+import { sanitizeText, sanitizeUrl, formatMessageText } from './sanitize';
 import { PLATFORM_ASSETS, FALLBACK_TEXT } from './platformAssets';
 
 function hexToRgba(hex: string, alpha: number): string {
@@ -9,6 +9,30 @@ function hexToRgba(hex: string, alpha: number): string {
   const g = (bigint >> 8) & 255;
   const b = bigint & 255;
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+/**
+ * Generates CSS for WhatsApp/iMessage-style text formatting
+ * Used in message bubbles across all templates
+ */
+function getTextFormattingCSS(isDark: boolean = false): string {
+  const codeBlockBg = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)';
+  const codeBorder = isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.1)';
+  const blockquoteBorder = isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.3)';
+  const blockquoteBg = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)';
+  
+  return `
+#workskin dd.bubble strong,#workskin dd.bubble b{font-weight:700;}
+#workskin dd.bubble em,#workskin dd.bubble i{font-style:italic;}
+#workskin dd.bubble s,#workskin dd.bubble strike,#workskin dd.bubble del{text-decoration:line-through;}
+#workskin dd.bubble code{font-family:'SF Mono','Menlo','Monaco','Consolas',monospace;font-size:0.9em;background:${codeBlockBg};padding:2px 5px;border-radius:4px;border:1px solid ${codeBorder};}
+#workskin dd.bubble pre{margin:8px 0;padding:0;}
+#workskin dd.bubble pre code{display:block;padding:8px 10px;white-space:pre-wrap;word-break:break-word;border-radius:6px;}
+#workskin dd.bubble blockquote{margin:6px 0;padding:4px 0 4px 10px;border-left:3px solid ${blockquoteBorder};background:${blockquoteBg};font-style:italic;}
+#workskin dd.bubble ul,#workskin dd.bubble ol{margin:6px 0;padding-left:20px;}
+#workskin dd.bubble li{margin:2px 0;}
+#workskin dd.bubble ul{list-style-type:disc;}
+#workskin dd.bubble ol{list-style-type:decimal;}`;
 }
 
 function applyBoldMarkup(raw: string): string {
@@ -52,10 +76,56 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
   const allMessages = options?.allMessages;
   const isReply = options?.isReply || false;
   
-  const sanitized = sanitizeText(msg.content);
+  // Use formatMessageText for rich formatting (bold, italic, strikethrough, code, lists, quotes)
+  const sanitized = formatMessageText(msg.content);
   const avatar = msg.avatarUrl ? `<img src="${sanitizeUrl(msg.avatarUrl)}" alt="${sanitizeText(msg.sender)} avatar" class="avatar" />` : '';
+  
+  // Group Chat: Show sender name with avatar/initials for incoming messages (WhatsApp & iOS)
+  const isGroupMode = (template === 'android' && project.settings.androidGroupMode) ||
+                       (template === 'ios' && project.settings.iosGroupMode);
+  
+  // Auto-match participantId if not set but we're in group mode
+  let participantId = msg.participantId;
+  const groupParticipants = template === 'android'
+    ? project.settings.androidGroupParticipants
+    : project.settings.iosGroupParticipants;
+  
+  if (isGroupMode && !msg.outgoing && !participantId && groupParticipants) {
+    // Try to match by sender name to participant name
+    const matchedParticipant = groupParticipants.find(
+      p => p.name.toLowerCase() === msg.sender.toLowerCase()
+    );
+    if (matchedParticipant) {
+      participantId = matchedParticipant.id;
+    }
+  }
+  
+  const showSenderName = isGroupMode && !msg.outgoing && participantId;
+  
+  let senderNameHTML = '';
+  if (showSenderName) {
+    // Find participant to get avatar and color
+    const participant = groupParticipants?.find(p => p.id === participantId);
+    
+    if (participant) {
+      // Build avatar or initials with inline styles for maximum specificity
+      let avatarHTML = '';
+      if (participant.avatarUrl) {
+        avatarHTML = `<img src="${sanitizeUrl(participant.avatarUrl)}" alt="${sanitizeText(participant.name)}" class="group-avatar" style="width:20px;height:20px;border-radius:50%;object-fit:cover;flex-shrink:0;display:block !important;" />`;
+      } else {
+        // Generate initials (first 2 chars of name)
+        const initials = participant.name.substring(0, 2).toUpperCase();
+        avatarHTML = `<div class="group-avatar-initials" style="width:20px;height:20px;border-radius:50%;display:flex !important;align-items:center;justify-content:center;font-size:8px;font-weight:700;flex-shrink:0;background-color:${participant.color}20;color:${participant.color};">${sanitizeText(initials)}</div>`;
+      }
+      
+      // Use roleColor from message or fall back to participant color
+      const displayColor = msg.roleColor || participant.color;
+      senderNameHTML = `<div class="group-sender-row" style="display:flex !important;align-items:center;gap:6px;margin-bottom:4px;visibility:visible !important;">${avatarHTML}<div class="group-sender" style="color: ${displayColor};">${sanitizeText(msg.sender)}</div></div>`;
+    }
+  }
+  
   // Only show sender name for templates that need it (not WhatsApp 1-on-1)
-  const who = (template === 'android') ? '' : `<dt class="sender">${msg.sender}</dt>`;
+  const who = (template === 'android' && !isGroupMode) ? '' : `<dt class="sender">${msg.sender}</dt>`;
   
   // iOS/Android grouping logic
   let isFirstInGroup = true;
@@ -90,7 +160,14 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
   }
 
   // Build the message bubble with text content
-  let bubble = `<dd class="bubble ${msg.outgoing?'out':'in'}">`;
+  const hasAttachment = (template === 'ios' || template === 'android') && msg.attachments && msg.attachments.length > 0;
+  const bubbleClasses = `bubble ${msg.outgoing?'out':'in'}${hasAttachment ? ' image-bubble' : ''}`;
+  let bubble = `<dd class="${bubbleClasses}">`;
+  
+  // Add group sender name INSIDE bubble (at top)
+  if (senderNameHTML) {
+    bubble += senderNameHTML;
+  }
   
   // Add message text if present
   if (sanitized && sanitized.trim()) {
@@ -155,7 +232,7 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
     
     // Use per-tweet verified status if custom identity, otherwise use main profile verified
     const isVerified = msg.useCustomIdentity ? (msg.verified || false) : (project.settings.twitterVerified || false);
-    const verified = isVerified ? `<img src="${PLATFORM_ASSETS.twitter.verifiedBadge}" alt="Verified" class="verified-badge" />` : '';
+    const verified = isVerified ? `<span class="verified-container"><img src="${PLATFORM_ASSETS.twitter.verifiedBadge}" alt="Verified" class="verified-badge" /></span>` : '';
     const timestampLine = project.settings.twitterTimestamp || (msg.timestamp ? msg.timestamp : '');
     
     // Build tweet image from attachments array
@@ -172,13 +249,20 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
     const views = msg.twitterViews;
     const bookmarks = msg.twitterBookmarks;
     
-    const metrics = project.settings.twitterShowMetrics ? `<div class="metrics">${replies ? `<span class="metric replies" title="Replies"><img src="${PLATFORM_ASSETS.twitter.replyIcon}" alt="" class="metric-icon" /><span class="metric-count">${formatNumber(replies)}</span></span>`:''}${retweets ? `<span class="metric retweets" title="Retweets"><img src="${PLATFORM_ASSETS.twitter.retweetIcon}" alt="" class="metric-icon" /><span class="metric-count">${formatNumber(retweets)}</span></span>`:''}${likes ? `<span class="metric likes" title="Likes"><img src="${PLATFORM_ASSETS.twitter.likeIcon}" alt="" class="metric-icon" /><span class="metric-count">${formatNumber(likes)}</span></span>`:''}${bookmarks ? `<span class="metric bookmarks" title="Bookmarks"><img src="${PLATFORM_ASSETS.twitter.bookmarkIcon}" alt="" class="metric-icon" /><span class="metric-count">${formatNumber(bookmarks)}</span></span>`:''}${views ? `<span class="metric views" title="Views"><img src="${PLATFORM_ASSETS.twitter.viewsIcon}" alt="" class="metric-icon" /><span class="metric-count">${formatNumber(views)}</span></span>`:''}</div>` : '';
+    // Use gray icons in dark mode
+    const isDarkMode = project.settings.twitterDarkMode;
+    const replyIcon = isDarkMode ? PLATFORM_ASSETS.twitter.replyIconGrey : PLATFORM_ASSETS.twitter.replyIcon;
+    const retweetIcon = isDarkMode ? PLATFORM_ASSETS.twitter.retweetIconGrey : PLATFORM_ASSETS.twitter.retweetIcon;
+    const likeIcon = isDarkMode ? PLATFORM_ASSETS.twitter.likeIconGrey : PLATFORM_ASSETS.twitter.likeIcon;
+    const xLogo = isDarkMode ? PLATFORM_ASSETS.twitter.logoGrey : PLATFORM_ASSETS.twitter.logo;
+    
+    const metrics = project.settings.twitterShowMetrics ? `<div class="metrics">${replies ? `<span class="metric replies" title="Replies"><img src="${replyIcon}" alt="" class="metric-icon" /><span class="metric-count">${formatNumber(replies)}</span></span>`:''}${retweets ? `<span class="metric retweets" title="Retweets"><img src="${retweetIcon}" alt="" class="metric-icon" /><span class="metric-count">${formatNumber(retweets)}</span></span>`:''}${likes ? `<span class="metric likes" title="Likes"><img src="${likeIcon}" alt="" class="metric-icon" /><span class="metric-count">${formatNumber(likes)}</span></span>`:''}${bookmarks ? `<span class="metric bookmarks" title="Bookmarks"><img src="${PLATFORM_ASSETS.twitter.bookmarkIcon}" alt="" class="metric-icon" /><span class="metric-count">${formatNumber(bookmarks)}</span></span>`:''}${views ? `<span class="metric views" title="Views"><img src="${PLATFORM_ASSETS.twitter.viewsIcon}" alt="" class="metric-icon" /><span class="metric-count">${formatNumber(views)}</span></span>`:''}</div>` : ''
     
     let quote = '';
     if (project.settings.twitterQuoteEnabled) {
       const qAvatar = project.settings.twitterQuoteAvatar ? `<img src="${sanitizeUrl(project.settings.twitterQuoteAvatar)}" alt="Quote avatar" class="quote-avatar" />` : '';
       const qHandle = project.settings.twitterQuoteHandle ? `@${sanitizeText(project.settings.twitterQuoteHandle.replace(/^@/, ''))}` : '';
-      const qVerified = project.settings.twitterQuoteVerified ? `<img src="${PLATFORM_ASSETS.twitter.verifiedBadge}" alt="Verified" class="quote-verified-badge" />` : '';
+      const qVerified = project.settings.twitterQuoteVerified ? `<span class="verified-container quote-verified-container"><img src="${PLATFORM_ASSETS.twitter.verifiedBadge}" alt="Verified" class="quote-verified-badge" /></span>` : '';
       const qText = sanitizeText(project.settings.twitterQuoteText || '');
       const qImage = project.settings.twitterQuoteImage ? `<img src="${sanitizeUrl(project.settings.twitterQuoteImage)}" alt="Quote image" class="quote-image" />` : '';
       quote = `<div class="quote"><div class="quote-head">${qAvatar}<span class="quote-name">${sanitizeText(project.settings.twitterQuoteName||'')}</span>${qVerified}<span class="quote-handle">${qHandle}</span></div><div class="quote-body">${highlightTwitterText(qText)}${qImage}</div></div>`;
@@ -205,13 +289,13 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
     // Check if this should be displayed as expanded view (clicked-into reply)
     if (msg.expandedView) {
       // Expanded view: avatar on left, larger text, no header/metrics, content indented
-      return `<div class="tweet expanded">${effectiveAvatar}<div class="expanded-content"><div class="expanded-name"><span class="name">${displayName}</span>${verified}</div><div class="expanded-handle">${handle}</div>${replyingTo}<div class="expanded-body">${bodyWithFormatting}${tweetImage}${quote}</div>${timestampLine ? `<div class="time-line">${timestampLine}</div>`:''}</div></div>`;
+      return `<div class="tweet expanded" data-message-id="${msg.id}">${effectiveAvatar}<div class="expanded-content"><div class="expanded-name"><span class="name">${displayName}</span>${verified}</div><div class="expanded-handle">${handle}</div>${replyingTo}<div class="expanded-body">${bodyWithFormatting}${tweetImage}${quote}</div>${timestampLine ? `<div class="time-line">${timestampLine}</div>`:''}</div></div>`;
     }
     
     // Add reply class if this is a threaded reply
     const tweetClass = isReply ? 'tweet reply' : 'tweet';
     
-    return `<div class="${tweetClass}">${effectiveAvatar}<div class="head"><div class="head-content"><div class="name-line"><span class="name">${displayName}</span>${verified}<span class="handle">${handle}</span><span class="follow-dot">·</span>${followBtn}</div></div><img src="${PLATFORM_ASSETS.twitter.logo}" alt="X" class="twitter-logo" /></div>${replyingTo}<div class="body">${bodyWithFormatting}${tweetImage}${quote}</div>${timestampLine ? `<div class="time-line">${timestampLine}</div>`:''}${metrics}</div>`;
+    return `<div class="${tweetClass}" data-message-id="${msg.id}"><div class="tweet-header">${effectiveAvatar}<div class="head"><div class="head-content"><div class="name-line"><span class="name">${displayName}</span>${verified}<span class="handle">${handle}</span><span class="follow-dot">·</span>${followBtn}<img src="${xLogo}" alt="X" class="twitter-logo" /></div></div></div></div>${replyingTo}<div class="body">${bodyWithFormatting}${tweetImage}${quote}</div>${timestampLine ? `<div class="time-line">${timestampLine}</div>`:''}${metrics}</div>`;
   }
   
   if (template === 'google') {
@@ -228,8 +312,8 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
     // Check if this message has an image
     const hasImage = msg.attachments && msg.attachments.length > 0 && msg.attachments[0].type === 'image';
     
-    // Build bubble with text content
-    let bubbleContent = sanitized;
+    // Build bubble with text content (add group sender name if applicable)
+    let bubbleContent = senderNameHTML ? senderNameHTML + sanitized : sanitized;
     
     // Add image inline if present
     if (hasImage) {
@@ -268,7 +352,7 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
     // Add reaction if present
     const reaction = msg.reaction ? `<span class="reaction">${msg.reaction}</span>` : '';
     
-    return `${timeBreak}<div class="${rowClass} ${groupClass}"><dl class="msg">${bubble}${reaction}${statusIndicator}</dl></div>`;
+    return `${timeBreak}<div class="${rowClass} ${groupClass}" data-message-id="${msg.id}"><dl class="msg">${bubble}${reaction}${statusIndicator}</dl></div>`;
   }
   
   // Android and other templates: show avatar and sender name (with grouping for Android)
@@ -281,8 +365,18 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
     
     let finalBubble = '';
     if (hasImage) {
-      // Build bubble with both text and image
-      let bubbleContent = sanitized;
+      // Build bubble with both text and image - INCLUDE senderNameHTML for group mode!
+      let bubbleContent = '';
+      
+      // Add group sender name at top of bubble (for group mode incoming messages)
+      if (senderNameHTML) {
+        bubbleContent += senderNameHTML;
+      }
+      
+      // Add message text
+      bubbleContent += sanitized;
+      
+      // Add image
       const imgUrl = sanitizeUrl(msg.attachments[0].url);
       bubbleContent += `<img src="${imgUrl}" alt="" class="message-image" />`;
       
@@ -296,16 +390,16 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
       
       finalBubble = `<dd class="bubble ${msg.outgoing?'out':'in'} image-bubble">${bubbleContent}</dd>`;
     } else {
-      // Use the text bubble already built
+      // Use the text bubble already built (already includes senderNameHTML)
       finalBubble = bubble;
     }
     
-    return `${timeBreak}<div class="${rowClass} ${groupClass}"><dl class="msg">${finalBubble}${statusIndicator}</dl></div>`;
+    return `${timeBreak}<div class="${rowClass} ${groupClass}" data-message-id="${msg.id}"><dl class="msg">${finalBubble}${statusIndicator}</dl></div>`;
   }
   
   // Other templates: basic row structure
   const rowClass = msg.outgoing ? 'row out' : 'row in';
-  return `${timeBreak}<div class="${rowClass}">${avatar}<dl class="msg">${who}${bubble}${statusIndicator}</dl></div>`;
+  return `${timeBreak}<div class="${rowClass}" data-message-id="${msg.id}">${avatar}<dl class="msg">${who}${bubble}${statusIndicator}</dl></div>`;
 }
 
 export function buildHTML(project: SkinProject, expandAllEmails = false): string {
@@ -356,7 +450,10 @@ export function buildHTML(project: SkinProject, expandAllEmails = false): string
       // Generate initials from name if no avatar
       const getInitials = (name: string) => {
         if (!name) return '?';
-        const words = name.trim().split(/\s+/);
+        // Remove emojis and special characters
+        const cleanName = name.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '').trim();
+        const words = cleanName.split(/\s+/).filter(w => w.length > 0);
+        if (words.length === 0) return '?';
         if (words.length === 1) return words[0].substring(0, 2).toUpperCase();
         return (words[0][0] + words[words.length - 1][0]).toUpperCase();
       };
@@ -368,7 +465,10 @@ export function buildHTML(project: SkinProject, expandAllEmails = false): string
       header = `<div class="android-header">${avatarOverlay}${nameOverlay}</div>`;
     } else if (!isIOS) {
       // Android without background image - show header ONLY if name or avatar exists
-      const contactName = s.chatContactName || s.androidContactName || '';
+      const isGroupMode = s.androidGroupMode;
+      const contactName = isGroupMode 
+        ? (s.androidGroupName || 'Group Chat')
+        : (s.chatContactName || s.androidContactName || '');
       const avatarUrl = s.instagramAvatarUrl || s.androidAvatarUrl || '';
       
       // Only show header if we have name or avatar
@@ -376,7 +476,10 @@ export function buildHTML(project: SkinProject, expandAllEmails = false): string
         // Generate initials from name if no avatar
         const getInitials = (name: string) => {
           if (!name) return '?';
-          const words = name.trim().split(/\s+/);
+          // Remove emojis and special characters
+          const cleanName = name.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '').trim();
+          const words = cleanName.split(/\s+/).filter(w => w.length > 0);
+          if (words.length === 0) return '?';
           if (words.length === 1) return words[0].substring(0, 2).toUpperCase();
           return (words[0][0] + words[words.length - 1][0]).toUpperCase();
         };
@@ -384,7 +487,15 @@ export function buildHTML(project: SkinProject, expandAllEmails = false): string
         const avatarOverlay = avatarUrl 
           ? `<img src="${sanitizeUrl(avatarUrl)}" alt="avatar" class="android-header-avatar" />` 
           : `<div class="android-header-avatar-placeholder">${getInitials(contactName)}</div>`;
-        const nameOverlay = contactName ? `<div class="android-header-name">${sanitizeText(contactName)}</div>` : '';
+        
+        // For group mode, show participant count
+        const participantCount = isGroupMode && s.androidGroupParticipants 
+          ? `<div class="android-header-subtitle">${s.androidGroupParticipants.length} participants</div>`
+          : '';
+        
+        const nameOverlay = contactName 
+          ? `<div class="android-header-name-wrapper"><div class="android-header-name">${sanitizeText(contactName)}</div>${participantCount}</div>` 
+          : '';
         header = `<div class="android-header">${avatarOverlay}${nameOverlay}</div>`;
       }
     } else {
@@ -422,12 +533,10 @@ export function buildHTML(project: SkinProject, expandAllEmails = false): string
       footer = `<div class="ios-input-bar"><span>📷</span><div class="input-placeholder">${sanitizeText(s.iosInputPlaceholder || 'iMessage')}</div><span>🎤</span></div>`;
     }
     
-    const watermark = `<div class="wm">(Created with AO3SkinGen)</div>`;
-    
     // Wrap messages in container for iOS and Android
     const messagesContainer = (isIOS || !isIOS) ? `<div class="chat-messages">${body}${typing}</div>` : `${body}${typing}`;
     
-    return `<div class="chat">${header}${messagesContainer}${footer}${watermark}</div>`;
+    return `<div class="chat">${header}${messagesContainer}${footer}</div>`;
   }
   
   if (project.template === 'google') {
@@ -486,8 +595,7 @@ export function buildHTML(project: SkinProject, expandAllEmails = false): string
     }).join('');
     
     const body = `<div class="${logoClass}">${logoHtml}</div><div class="search-wrap">${searchComponent}${tabs}${stats}${dym}${results}</div>`;
-    const watermark = s.watermark ? `<div class="wm">(Created with AO3SkinGen)</div>` : '';
-    return `<div class="chat">${body}${watermark}</div>`;
+    return `<div class="chat">${body}</div>`;
   }
   
   if (project.template === 'twitter') {
@@ -517,50 +625,75 @@ export function buildHTML(project: SkinProject, expandAllEmails = false): string
       
       // Render all top-level tweets and their threads
       const tweets = topLevelTweets.map(tweet => renderTweetThread(tweet)).join('');
-      const watermark = project.settings.watermark ? `<div class="wm">(Created with AO3SkinGen)</div>` : '';
-      return `<div class="chat tweets">${tweets}${watermark}</div>`;
+      return `<div class="chat tweets">${tweets}</div>`;
     } else {
       // Simple mode: each message becomes its own tweet
       const tweets = project.messages.map(m => msgHTML(m, 'twitter', project)).join('');
-      const watermark = project.settings.watermark ? `<div class="wm">(Created with AO3SkinGen)</div>` : '';
-      return `<div class="chat tweets">${tweets}${watermark}</div>`;
+      return `<div class="chat tweets">${tweets}</div>`;
     }
   }
 
   const body = project.messages.map(m => msgHTML(m, project.template, project)).join('');
-  const watermark = project.settings.watermark ? `<div class="wm">(Created with AO3SkinGen)</div>` : '';
-  return `<div class="chat">${body}${watermark}</div>`;
+  return `<div class="chat">${body}</div>`;
 }
 
-function buildIOSCSS(s: any, senderBg: string, recvBg: string, neutralBg: string, maxWidth: number): string {
-  const headerBg = s.iosHeaderImageUrl ? `background:url('${s.iosHeaderImageUrl}') no-repeat top center;background-size:100% auto;` : 'background:#007aff;';
-  const footerBg = s.iosFooterImageUrl ? `background:url('${s.iosFooterImageUrl}') no-repeat bottom center;background-size:100% auto;` : 'background:#f6f6f6;';
+function buildIOSCSS(s: SkinProject['settings'], senderBg: string, recvBg: string, neutralBg: string, maxWidth: number): string {
+  const isDark = s.iosDarkMode;
   
-  return `#workskin .chat{width:100%;max-width:${Math.min(maxWidth, 375)}px;min-width:320px;margin:0 auto;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;padding:0;background:#fff;}
+  // iOS Dark Mode color scheme
+  const chatBg = isDark ? '#000000' : '#fff';
+  const messagesBg = isDark ? '#000000' : '#fff';
+  const headerLabelBg = isDark ? '#1c1c1e' : '#fff';
+  const headerLabelColor = isDark ? '#8e8e93' : '#86868b';
+  const contactNameColor = isDark ? '#fff' : '#000';
+  const statusBarBg = isDark ? '#1c1c1e' : '#f6f6f6';
+  const statusBarColor = isDark ? '#fff' : '#000';
+  const statusBarBorder = isDark ? '#38383a' : '#e0e0e0';
+  const timeBreakColor = isDark ? '#8e8e93' : '#86868b';
+  const receiverBubbleBg = isDark ? '#262628' : recvBg;
+  const receiverTextColor = isDark ? '#fff' : '#000';
+  const receiverTimeColor = isDark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.55)';
+  const typingBubbleBg = isDark ? '#262628' : recvBg;
+  const inputBarBg = isDark ? '#1c1c1e' : '#f6f6f6';
+  const inputBarBorder = isDark ? '#38383a' : '#e0e0e0';
+  const inputFieldBg = isDark ? '#2c2c2e' : '#fff';
+  const inputFieldBorder = isDark ? '#48484a' : '#c7c7cc';
+  const inputPlaceholderColor = isDark ? '#636366' : '#86868b';
+  
+  const headerBg = s.iosHeaderImageUrl ? `background:url('${s.iosHeaderImageUrl}') no-repeat top center;background-size:100% auto;` : 'background:#007aff;';
+  const footerBg = s.iosFooterImageUrl ? `background:url('${s.iosFooterImageUrl}') no-repeat bottom center;background-size:100% auto;` : `background:${inputBarBg};`;
+  
+    return `/* Generated with AO3 Skin Generator - Free forever! Support: https://ao3skingenerator.com/donate */
+#workskin .chat{width:100%;max-width:${Math.min(maxWidth, 375)}px;min-width:320px;margin:0 auto;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;padding:0;background:${chatBg};}
 #workskin .ios-header{position:relative;${headerBg}height:65px;display:flex;align-items:center;padding:0;overflow:hidden;}
-#workskin .ios-header-avatar{position:absolute;left:65px;top:50%;transform:translateY(-50%);width:38px;height:38px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,255,255,0.3);}
-#workskin .ios-header-avatar-placeholder{position:absolute;left:65px;top:50%;transform:translateY(-50%);width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,0.25);color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;border:2px solid rgba(255,255,255,0.3);backdrop-filter:blur(10px);}
+#workskin .ios-header-avatar{position:absolute;left:65px;top:50%;transform:translateY(-50%);width:38px;height:38px;border-radius:50%;overflow:hidden;border:2px solid rgba(255,255,255,0.3);}
+#workskin .ios-header-avatar img{width:100%;height:100%;}
+#workskin .ios-header-avatar-placeholder{position:absolute;left:65px;top:50%;transform:translateY(-50%);width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,0.25);color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;border:2px solid rgba(255,255,255,0.3);}
 #workskin .ios-header-name{position:absolute;left:112px;right:65px;top:0;bottom:0;display:flex;align-items:center;font-size:15px;font-weight:600;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,0.4);line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:calc(100% - 177px);}
-#workskin .ios-status-bar{background:#f6f6f6;padding:6px 16px 4px 16px;display:flex;justify-content:space-between;align-items:center;font-size:14px;font-weight:600;color:#000;border-bottom:1px solid #e0e0e0;}
+#workskin .ios-status-bar{background:${statusBarBg};padding:6px 16px 4px 16px;display:flex;justify-content:space-between;align-items:center;font-size:14px;font-weight:600;color:${statusBarColor};border-bottom:1px solid ${statusBarBorder};}
 #workskin .ios-status-bar .time{flex:1;text-align:center;}
-#workskin .ios-status-bar .status-icons{display:flex;gap:4px;align-items:center;font-size:12px;}
-#workskin .chat-header{text-align:center;font-size:13px;color:#86868b;padding:8px 12px 6px 12px;margin-bottom:4px;font-weight:400;background:#fff;}
-#workskin .chat-header .to-label{font-weight:400;color:#86868b;margin-right:4px;}
-#workskin .chat-header .contact-name{font-weight:600;color:#000;display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-#workskin .chat-messages{padding:12px 8px;background:#fff;}
-#workskin .time-break{text-align:center;font-size:11px;color:#86868b;margin:12px 0 8px 0;font-weight:500;}
-#workskin .row{display:flex;gap:6px;margin:0;align-items:flex-end;flex-wrap:wrap;width:100%;}
+#workskin .ios-status-bar .status-icons{display:flex;align-items:center;font-size:12px;}
+#workskin .ios-status-bar .status-icons > *{margin-left:4px;}
+#workskin .ios-status-bar .status-icons > *:first-child{margin-left:0;}
+#workskin .chat-header{text-align:center;font-size:13px;color:${headerLabelColor};padding:8px 12px 6px 12px;margin-bottom:4px;font-weight:400;background:${headerLabelBg};}
+#workskin .chat-header .to-label{font-weight:400;color:${headerLabelColor};margin-right:4px;}
+#workskin .chat-header .contact-name{font-weight:600;color:${contactNameColor};display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#workskin .chat-messages{padding:12px 8px;background:${messagesBg};}
+#workskin .time-break{text-align:center;font-size:11px;color:${timeBreakColor};margin:12px 0 8px 0;font-weight:500;}
+#workskin .row{display:flex;margin:0 0 0 -6px;align-items:flex-end;flex-wrap:wrap;width:100%;}
+#workskin .row > *{margin-left:6px;}
 #workskin .row.single{margin:12px 0;}
 #workskin .row.first{margin:12px 0 2px 0;}
 #workskin .row.middle{margin:2px 0;}
 #workskin .row.last{margin:2px 0 12px 0;}
 #workskin .row.out{justify-content:flex-end;}
 #workskin .row.in{justify-content:flex-start;}
-#workskin img.avatar{width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;}
-#workskin dl.msg{margin:0;display:flex;flex-direction:column;gap:1px;}
+#workskin img.avatar{width:28px;height:28px;border-radius:50%;overflow:hidden;flex-shrink:0;}
+#workskin dl.msg{margin:0;display:flex;flex-direction:column;margin-top:-1px;}
+#workskin dl.msg > *{margin-top:1px;}
 #workskin .row.out dl.msg{align-items:flex-end;}
 #workskin .row.in dl.msg{align-items:flex-start;}
-#workskin dt.sender{font-size:11px;color:rgba(235,235,245,0.5);margin:6px 0 2px 36px;font-weight:500;max-width:calc(70% - 36px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#workskin dt.sender{font-size:11px;color:${isDark ? 'rgba(255,255,255,0.5)' : 'rgba(235,235,245,0.5)'};margin:6px 0 2px 36px;font-weight:500;max-width:calc(70% - 36px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 #workskin dd{margin:0;}
 #workskin dd.bubble{position:relative;display:inline-block;min-width:0;max-width:260px;padding:8px 12px;border-radius:18px;line-height:1.35;font-size:15px;white-space:normal;word-break:keep-all;overflow-wrap:anywhere;}
 #workskin dd.bubble.image-bubble{padding:8px 12px;max-width:60%;overflow:visible;}
@@ -572,154 +705,225 @@ function buildIOSCSS(s: any, senderBg: string, recvBg: string, neutralBg: string
 #workskin dd.bubble.out{background:${senderBg};color:#fff;border-bottom-right-radius:4px;}
 #workskin dd.bubble.out .bubble-tail{display:none;}
 #workskin dd.bubble.out.has-tail .bubble-tail-out{display:block;position:absolute;right:-8px;bottom:-1px;color:${senderBg};pointer-events:none;}
-#workskin dd.bubble.in{background:${recvBg};color:#000;border-bottom-left-radius:4px;}
+#workskin dd.bubble.in{background:${receiverBubbleBg};color:${receiverTextColor};border-bottom-left-radius:4px;}
 #workskin dd.bubble.in .bubble-tail{display:none;}
-#workskin dd.bubble.in.has-tail .bubble-tail-in{display:block;position:absolute;left:-8px;bottom:-1px;color:${recvBg};pointer-events:none;}
+#workskin dd.bubble.in.has-tail .bubble-tail-in{display:block;position:absolute;left:-8px;bottom:-1px;color:${receiverBubbleBg};pointer-events:none;}
 #workskin dd.bubble.out .time{display:block;font-size:11px;color:rgba(255,255,255,0.65);margin-top:6px;font-weight:400;}
-#workskin dd.bubble.in .time{display:block;font-size:11px;color:rgba(0,0,0,0.55);margin-top:6px;font-weight:400;}
-#workskin dd.bubble.image-bubble .time.image-time{position:absolute;bottom:8px;right:8px;margin:0;background:rgba(0,0,0,0.6);padding:2px 6px;border-radius:10px;font-size:11px;color:#fff;backdrop-filter:blur(4px);}
-#workskin dd.bubble .reaction{position:absolute;bottom:-10px;right:8px;background:rgba(44,44,46,0.95);border:1.5px solid rgba(255,255,255,0.1);border-radius:14px;padding:3px 8px;font-size:16px;box-shadow:0 2px 8px rgba(0,0,0,0.3);backdrop-filter:blur(10px);}
-#workskin dd.status-indicator{font-size:10px;color:rgba(235,235,245,0.45);text-align:right;margin:2px 10px 0 0;font-weight:400;}
+#workskin dd.bubble.in .time{display:block;font-size:11px;color:${receiverTimeColor};margin-top:6px;font-weight:400;}
+#workskin dd.bubble.image-bubble .time.image-time{position:absolute;bottom:8px;right:8px;margin:0;background:rgba(0,0,0,0.6);padding:2px 6px;border-radius:10px;font-size:11px;color:#fff;}
+#workskin dd.bubble .reaction{position:absolute;bottom:-10px;right:8px;background:rgba(44,44,46,0.95);border:1.5px solid rgba(255,255,255,0.1);border-radius:14px;padding:3px 8px;font-size:16px;box-shadow:0 2px 8px rgba(0,0,0,0.3);}
+#workskin dd.status-indicator{font-size:10px;color:${isDark ? 'rgba(255,255,255,0.45)' : 'rgba(235,235,245,0.45)'};text-align:right;margin:2px 10px 0 0;font-weight:400;}
 #workskin dd.attach{margin-top:2px;}
 #workskin img.attach-img{max-width:220px;border-radius:12px;display:block;}
-#workskin .row.typing{align-items:center;gap:6px;}
-#workskin .typing-bubble{background:${recvBg};padding:10px 14px;border-radius:18px;display:flex;gap:4px;align-items:center;border-bottom-left-radius:4px;}
-#workskin .typing-bubble .dot{width:8px;height:8px;background:rgba(235,235,245,0.6);border-radius:50%;animation:typing 1.4s infinite;}
+#workskin .row.typing{align-items:center;margin-left:-6px;}
+#workskin .row.typing > *{margin-left:6px;}
+#workskin .typing-bubble{background:${typingBubbleBg};padding:10px 14px;border-radius:18px;display:flex;align-items:center;border-bottom-left-radius:4px;}
+#workskin .typing-bubble > *{margin-left:4px;}
+#workskin .typing-bubble > *:first-child{margin-left:0;}
+#workskin .typing-bubble .dot{width:8px;height:8px;background:${isDark ? 'rgba(255,255,255,0.6)' : 'rgba(235,235,245,0.6)'};border-radius:50%;animation:typing 1.4s infinite;}
 #workskin .typing-bubble .dot:nth-child(2){animation-delay:0.2s;}
 #workskin .typing-bubble .dot:nth-child(3){animation-delay:0.4s;}
 @keyframes typing{0%,60%,100%{opacity:0.3;transform:translateY(0);}30%{opacity:1;transform:translateY(-4px);}}
-#workskin .typing-label{font-size:11px;color:rgba(235,235,245,0.5);font-weight:400;}
-#workskin .ios-footer{position:relative;${footerBg}height:47px;border-top:1px solid #e0e0e0;}
-#workskin .ios-input-bar{background:#f6f6f6;padding:8px 12px;border-top:1px solid #e0e0e0;display:flex;gap:8px;align-items:center;}
-#workskin .ios-input-bar .input-placeholder{flex:1;background:#fff;border:1px solid #c7c7cc;border-radius:18px;padding:8px 12px;font-size:14px;color:#86868b;}
-#workskin .wm{margin-top:16px;font-size:10px;opacity:0.4;text-align:center;color:#86868b;}
+#workskin .typing-label{font-size:11px;color:${isDark ? 'rgba(255,255,255,0.5)' : 'rgba(235,235,245,0.5)'};font-weight:400;}
+#workskin .ios-footer{position:relative;${footerBg}height:47px;border-top:1px solid ${inputBarBorder};}
+#workskin .ios-input-bar{background:${inputBarBg};padding:8px 12px;border-top:1px solid ${inputBarBorder};display:flex;align-items:center;}
+#workskin .ios-input-bar > *{margin-left:8px;}
+#workskin .ios-input-bar > *:first-child{margin-left:0;}
+#workskin .ios-input-bar .input-placeholder{flex:1;background:${inputFieldBg};border:1px solid ${inputFieldBorder};border-radius:18px;padding:8px 12px;font-size:14px;color:${inputPlaceholderColor};}
+#workskin dd.bubble .group-sender-row{display:flex !important;align-items:center;gap:6px;margin-bottom:4px;visibility:visible !important;opacity:1 !important;}
+#workskin dd.bubble.image-bubble .group-sender-row{display:flex !important;align-items:center;gap:6px;margin-bottom:6px;visibility:visible !important;opacity:1 !important;}
+#workskin dd.bubble .group-avatar{width:20px;height:20px;border-radius:50%;object-fit:cover;flex-shrink:0;display:block !important;}
+#workskin dd.bubble .group-avatar-initials{width:20px;height:20px;border-radius:50%;display:flex !important;align-items:center;justify-content:center;font-size:8px;font-weight:700;flex-shrink:0;}
+#workskin dd.bubble .group-sender{font-size:11px;font-weight:600;line-height:1.2;opacity:0.9;display:inline-block !important;}
+${getTextFormattingCSS(isDark)}
+#workskin .wm{margin-top:16px;font-size:10px;opacity:0.4;text-align:center;color:${timeBreakColor};}
 #workskin .visually-hidden{position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden;}`;
 }
 
-function buildAndroidCSS(s: any, senderBg: string, recvBg: string, neutralBg: string, maxWidth: number): string {
-  const headerBg = s.androidHeaderImageUrl ? `background:url('${s.androidHeaderImageUrl}') no-repeat top center;background-size:100% auto;` : 'background:#075e54;';
-  const footerBg = s.androidFooterImageUrl ? `background:url('${s.androidFooterImageUrl}') no-repeat bottom center;background-size:contain;` : 'background:#f0f0f0;';
+function buildAndroidCSS(s: SkinProject['settings'], senderBg: string, recvBg: string, neutralBg: string, maxWidth: number): string {
+  const isDark = s.androidDarkMode;
   
-  return `#workskin .chat{width:100%;max-width:${Math.min(maxWidth, 400)}px;min-width:320px;margin:0 auto;display:flex;flex-direction:column;font-family:${s.fontFamily};background:#ece5dd;padding:0;}
+  // WhatsApp dark theme colors
+  const chatBg = isDark ? '#0b141a' : '#ece5dd';
+  const headerBgColor = isDark ? '#1f2c34' : '#075e54';
+  const headerBg = s.androidHeaderImageUrl ? `background:url('${s.androidHeaderImageUrl}') no-repeat top center;background-size:100% auto;` : `background:${headerBgColor};`;
+  const footerBgColor = isDark ? '#1f2c34' : '#f0f0f0';
+  const footerBg = s.androidFooterImageUrl ? `background:url('${s.androidFooterImageUrl}') no-repeat bottom center;background-size:contain;` : `background:${footerBgColor};`;
+  const footerBorderColor = isDark ? '#2a3942' : '#d1d7db';
+  
+  // Bubble colors
+  const senderBubbleBg = isDark ? '#005c4b' : senderBg;
+  const receiverBubbleBg = isDark ? '#1f2c34' : recvBg;
+  const bubbleTextColor = isDark ? '#e9edef' : '#000';
+  const timeColor = isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.45)';
+  const senderNameColor = isDark ? 'rgba(255,255,255,0.7)' : 'rgba(100,100,100,0.8)';
+  const timeBreakColor = isDark ? '#8696a0' : '#667781';
+  const typingLabelColor = isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.6)';
+  const typingDotBg = isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)';
+  const avatarPlaceholderBg = isDark ? '#00a884' : '#128c7e';
+  const bubbleShadow = isDark ? '0 1px 2px rgba(0,0,0,0.3)' : '0 1px 2px rgba(0,0,0,0.1)';
+  
+    return `/* Generated with AO3 Skin Generator - Free forever! Support: https://ao3skingenerator.com/donate */
+#workskin .chat{width:100%;max-width:${Math.min(maxWidth, 400)}px;min-width:320px;margin:0 auto;display:flex;flex-direction:column;font-family:${s.fontFamily};background:${chatBg};padding:0;}
 #workskin .android-header{position:relative;${headerBg}height:60px;display:flex;align-items:center;padding:0;overflow:visible;}
-#workskin .android-header-avatar{position:absolute;left:60px;top:0;bottom:0;margin:auto 0;width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,255,255,0.2);}
-#workskin .android-header-avatar-placeholder{position:absolute;left:60px;top:0;bottom:0;margin:auto 0;width:40px;height:40px;border-radius:50%;background:#128c7e;display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;font-weight:600;border:2px solid rgba(255,255,255,0.2);}
+#workskin .android-header-avatar{position:absolute;left:60px;top:0;bottom:0;margin:auto 0;width:40px;height:40px;border-radius:50%;overflow:hidden;border:2px solid rgba(255,255,255,0.2);}
+#workskin .android-header-avatar img{width:100%;height:100%;}
+#workskin .android-header-avatar-placeholder{position:absolute;left:60px;top:0;bottom:0;margin:auto 0;width:40px;height:40px;border-radius:50%;background:${avatarPlaceholderBg};display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;font-weight:600;border:2px solid rgba(255,255,255,0.2);}
 #workskin .android-header-name{position:absolute;left:110px;right:60px;top:0;bottom:0;display:flex;align-items:center;font-size:16px;font-weight:600;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,0.3);line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:calc(100% - 170px);padding:4px 0;}
-#workskin .chat-header{padding:8px 12px;background:#075e54;color:#fff;margin-bottom:12px;}
+#workskin .android-header-name-wrapper{position:absolute;left:110px;right:60px;top:0;bottom:0;display:flex;flex-direction:column;justify-content:center;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,0.3);padding:4px 0;}
+#workskin .android-header-name-wrapper .android-header-name{position:static;font-size:16px;font-weight:600;line-height:1.4;padding:0;max-width:100%;overflow:visible;}
+#workskin .android-header-subtitle{font-size:12px;opacity:0.8;line-height:1.2;margin-top:2px;}
+#workskin .chat-header{padding:8px 12px;background:${headerBgColor};color:#fff;margin-bottom:12px;}
 #workskin .chat-header .contact-name{font-size:16px;font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;}
 #workskin .chat-header .status{font-size:12px;opacity:0.8;display:block;margin-top:2px;}
-#workskin .chat-messages{padding:12px 8px;background:#ece5dd;}
-#workskin .time-break{text-align:center;font-size:11px;color:#667781;margin:12px 0 8px 0;font-weight:500;}
-#workskin .row{display:flex;gap:6px;margin:0;align-items:flex-end;flex-wrap:wrap;width:100%;}
+#workskin .chat-messages{padding:12px 8px;background:${chatBg};}
+#workskin .time-break{text-align:center;font-size:11px;color:${timeBreakColor};margin:12px 0 8px 0;font-weight:500;}
+#workskin .row{display:flex;margin:0 0 0 -6px;align-items:flex-end;flex-wrap:wrap;width:100%;}
+#workskin .row > *{margin-left:6px;}
 #workskin .row.single{margin:12px 0;}
 #workskin .row.first{margin:12px 0 2px 0;}
 #workskin .row.middle{margin:2px 0;}
 #workskin .row.last{margin:2px 0 12px 0;}
 #workskin .row.out{justify-content:flex-end;}
 #workskin .row.in{justify-content:flex-start;}
-#workskin img.avatar{width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;}
-#workskin dl.msg{margin:0;display:flex;flex-direction:column;gap:1px;}
+#workskin img.avatar{width:32px;height:32px;border-radius:50%;overflow:hidden;flex-shrink:0;}
+#workskin dl.msg{margin:0;display:flex;flex-direction:column;margin-top:-1px;}
+#workskin dl.msg > *{margin-top:1px;}
 #workskin .row.out dl.msg{align-items:flex-end;}
 #workskin .row.in dl.msg{align-items:flex-start;}
-#workskin dt.sender{font-size:12px;color:rgba(100,100,100,0.8);margin:0 0 4px 8px;padding:4px 0;font-weight:600;max-width:calc(75% - 8px);overflow:visible;white-space:nowrap;line-height:1.4;}
+#workskin dt.sender{font-size:12px;color:${senderNameColor};margin:0 0 4px 8px;padding:4px 0;font-weight:600;max-width:calc(75% - 8px);overflow:visible;white-space:nowrap;line-height:1.4;}
 #workskin dd{margin:0;}
-#workskin dd.bubble{position:relative;display:inline-block;min-width:0;max-width:280px;padding:7px 10px;border-radius:8px;line-height:1.4;font-size:14px;box-shadow:0 1px 2px rgba(0,0,0,0.1);white-space:normal;word-break:keep-all;overflow-wrap:anywhere;}
+#workskin dd.bubble{position:relative;display:inline-block;min-width:0;max-width:280px;padding:7px 10px;border-radius:8px;line-height:1.4;font-size:14px;box-shadow:${bubbleShadow};white-space:normal;word-break:keep-all;overflow-wrap:anywhere;}
 #workskin dd.bubble.image-bubble{padding:7px 10px;max-width:70%;overflow:visible;margin-top:4px;}
 #workskin dd.bubble.image-bubble img.message-image{width:100%;height:auto;display:block;border-radius:6px;margin-top:6px;}
 #workskin dd.bubble.image-bubble.out{border-bottom-right-radius:2px;}
 #workskin dd.bubble.image-bubble.out img.message-image{border-bottom-right-radius:2px;}
 #workskin dd.bubble.image-bubble.in{border-bottom-left-radius:2px;}
 #workskin dd.bubble.image-bubble.in img.message-image{border-bottom-left-radius:2px;}
-#workskin dd.bubble.out{background:${senderBg};color:#000;border-top-right-radius:8px;border-bottom-right-radius:2px;border-bottom-left-radius:8px;border-top-left-radius:8px;}
-#workskin dd.bubble.in{background:${recvBg};color:#000;border-top-left-radius:8px;border-bottom-left-radius:2px;border-bottom-right-radius:8px;border-top-right-radius:8px;}
-#workskin dd.bubble .time{display:block;font-size:10px;color:rgba(0,0,0,0.45);margin-top:4px;text-align:right;font-weight:400;padding-right:20px;}
+#workskin dd.bubble.out{background:${senderBubbleBg};color:${bubbleTextColor};border-top-right-radius:8px;border-bottom-right-radius:2px;border-bottom-left-radius:8px;border-top-left-radius:8px;}
+#workskin dd.bubble.in{background:${receiverBubbleBg};color:${bubbleTextColor};border-top-left-radius:8px;border-bottom-left-radius:2px;border-bottom-right-radius:8px;border-top-right-radius:8px;}
+#workskin dd.bubble .group-sender-row{display:flex !important;align-items:center;gap:6px;margin-bottom:4px;visibility:visible !important;opacity:1 !important;}
+#workskin dd.bubble.image-bubble .group-sender-row{display:flex !important;align-items:center;gap:6px;margin-bottom:6px;visibility:visible !important;opacity:1 !important;}
+#workskin dd.bubble .group-avatar{width:20px;height:20px;border-radius:50%;object-fit:cover;flex-shrink:0;display:block !important;}
+#workskin dd.bubble .group-avatar-initials{width:20px;height:20px;border-radius:50%;display:flex !important;align-items:center;justify-content:center;font-size:8px;font-weight:700;flex-shrink:0;}
+#workskin dd.bubble .group-sender{font-size:11px;font-weight:600;line-height:1.2;opacity:0.9;display:inline-block !important;}
+#workskin dd.bubble .time{display:block;font-size:10px;color:${timeColor};margin-top:4px;text-align:right;font-weight:400;padding-right:20px;}
 #workskin dd.bubble.image-bubble .time.image-time{position:absolute;bottom:6px;right:8px;margin:0;background:rgba(0,0,0,0.5);padding:2px 6px;border-radius:8px;font-size:10px;color:#fff;padding-right:24px;}
 #workskin dd.bubble.out .check-icon{position:absolute;bottom:6px;right:6px;height:14px;width:auto;opacity:0.7;}
 #workskin dd.bubble.image-bubble.out .check-icon{bottom:8px;right:8px;z-index:1;}
 #workskin dd.bubble .reaction{position:absolute;bottom:-8px;left:8px;background:transparent;border:none;border-radius:0;padding:0;font-size:18px;box-shadow:none;}
-#workskin dd.status-indicator{font-size:10px;color:rgba(0,0,0,0.45);text-align:right;margin:2px 10px 0 0;font-weight:400;}
+#workskin dd.status-indicator{font-size:10px;color:${timeColor};text-align:right;margin:2px 10px 0 0;font-weight:400;}
 #workskin dd.attach{margin-top:4px;}
 #workskin img.attach-img{max-width:200px;border-radius:8px;display:block;}
-#workskin .row.typing{align-items:center;gap:6px;}
-#workskin .typing-bubble{background:${recvBg};padding:10px 14px;border-radius:8px;display:flex;gap:4px;align-items:center;box-shadow:0 1px 2px rgba(0,0,0,0.1);}
-#workskin .typing-bubble .dot{width:8px;height:8px;background:rgba(0,0,0,0.4);border-radius:50%;animation:typing 1.4s infinite;}
+#workskin .row.typing{align-items:center;margin-left:-6px;}
+#workskin .row.typing > *{margin-left:6px;}
+#workskin .typing-bubble{background:${receiverBubbleBg};padding:10px 14px;border-radius:8px;display:flex;align-items:center;box-shadow:${bubbleShadow};}
+#workskin .typing-bubble > *{margin-left:4px;}
+#workskin .typing-bubble > *:first-child{margin-left:0;}
+#workskin .typing-bubble .dot{width:8px;height:8px;background:${typingDotBg};border-radius:50%;animation:typing 1.4s infinite;}
 #workskin .typing-bubble .dot:nth-child(2){animation-delay:0.2s;}
 #workskin .typing-bubble .dot:nth-child(3){animation-delay:0.4s;}
 @keyframes typing{0%,60%,100%{opacity:0.3;}30%{opacity:1;}}
-#workskin .typing-label{font-size:11px;color:rgba(0,0,0,0.6);}
-#workskin .android-footer{position:relative;${footerBg}height:60px;border-top:1px solid #d1d7db;overflow:visible;background-position:center;}
-#workskin .wm{margin-top:12px;font-size:10px;opacity:0.5;text-align:center;}
+#workskin .typing-label{font-size:11px;color:${typingLabelColor};}
+#workskin .android-footer{position:relative;${footerBg}height:60px;border-top:1px solid ${footerBorderColor};overflow:visible;background-position:center;}
+${getTextFormattingCSS(isDark)}
+#workskin .wm{margin-top:12px;font-size:10px;opacity:0.5;text-align:center;color:${timeBreakColor};}
 #workskin .visually-hidden{position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden;}`;
 }
 
-function buildTwitterCSS(s: any, senderBg: string, maxWidth: number): string {
-  return `#workskin .chat{width:100%;max-width:${Math.min(maxWidth, 600)}px;min-width:320px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;margin:0 auto;box-sizing:border-box;}
-#workskin .tweets .tweet{background:#fff;border:1px solid #eff3f4;border-radius:16px;padding:12px 16px;margin:0 0 12px 0;position:relative;box-sizing:border-box;transition:background-color 0.2s;}
-#workskin .tweets .tweet:hover{background:#f7f9f9;}
+function buildTwitterCSS(s: SkinProject['settings'], senderBg: string, maxWidth: number): string {
+  const isDark = s.twitterDarkMode;
+  
+  // Color scheme
+  const bgColor = isDark ? '#15202b' : '#fff';
+  const bgHover = isDark ? '#1c2e3f' : '#f7f9f9';
+  const textPrimary = isDark ? '#e7e9ea' : '#0f1419';
+  const textSecondary = isDark ? '#8b98a5' : '#536471';
+  const borderColor = isDark ? '#38444d' : '#eff3f4';
+  const handleColor = isDark ? '#8b98a5' : '#71767b';
+  const quoteHover = isDark ? '#1c2e3f' : '#f7f9f9';
+  const replyLineColor = isDark ? '#38444d' : '#cfd9de';
+  
+  return `/* Generated with AO3 Skin Generator - Free forever! Support: https://ao3skingenerator.com/donate */
+#workskin .chat{width:550px;max-width:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;margin:0 auto;box-sizing:border-box;}
+#workskin .tweets .tweet{background:${bgColor};border:1px solid ${borderColor};border-radius:16px;padding:16px;margin:0 0 12px 0;position:relative;box-sizing:border-box;transition:background-color 0.2s;}
+#workskin .tweets .tweet:hover{background:${bgHover};}
 #workskin .tweets .tweet.reply{margin-left:44px;margin-top:-8px;}
-#workskin .tweets .tweet.reply::before{content:'';position:absolute;left:-32px;top:-8px;bottom:12px;width:2px;background:#cfd9de;}
-#workskin .tweets .tweet.reply::after{content:'';position:absolute;left:-32px;top:20px;width:20px;height:2px;background:#cfd9de;}
-#workskin .tweet img.avatar{width:40px;height:40px;border-radius:50%;float:left;margin:0 12px 0 0;object-fit:cover;}
-#workskin .tweet .head{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:4px;min-height:20px;gap:8px;}
-#workskin .tweet .head-content{flex:1;min-width:0;display:flex;align-items:flex-start;min-height:20px;padding-right:36px;}
-#workskin .tweet .name-line{display:flex;align-items:center;gap:4px;flex-wrap:wrap;line-height:20px;min-height:20px;}
-#workskin .tweet .name{font-weight:700;color:#0f1419;font-size:15px;line-height:20px;flex-shrink:0;}
-#workskin .tweet .verified-badge{width:18px;height:18px;flex-shrink:0;margin:0 2px;vertical-align:middle;}
-#workskin .tweet .handle{color:#71767b;font-weight:400;font-size:15px;line-height:20px;flex-shrink:0;white-space:nowrap;}
-#workskin .tweet .follow-dot{color:#71767b;margin:0 4px;flex-shrink:0;font-size:15px;line-height:20px;}
-#workskin .tweet .follow-btn{background:transparent;color:#1d9bf0;font-weight:700;font-size:15px;padding:0;border:none;cursor:pointer;flex-shrink:0;line-height:20px;}
+#workskin .tweets .tweet.reply::before{content:'';position:absolute;left:-32px;top:-8px;bottom:12px;width:2px;background:${replyLineColor};}
+#workskin .tweets .tweet.reply::after{content:'';position:absolute;left:-32px;top:20px;width:20px;height:2px;background:${replyLineColor};}
+#workskin .tweet-header{display:flex;align-items:flex-start;gap:12px;margin-bottom:12px;position:relative;}
+#workskin .tweet img.avatar{width:40px;height:40px;border-radius:50%;flex-shrink:0;}
+#workskin .tweet .head{flex:1;min-width:0;}
+#workskin .tweet .head-content{display:block;}
+#workskin .tweet .name-line{display:flex;align-items:center;line-height:20px;gap:4px;flex-wrap:nowrap;}
+#workskin .tweet .name{font-weight:700;color:${textPrimary};font-size:15px;line-height:20px;white-space:nowrap;}
+#workskin .tweet .verified-container{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;}
+#workskin .tweet .verified-badge{width:18px;height:18px;display:block;vertical-align:middle;}
+#workskin .tweet .handle{color:${handleColor};font-weight:400;font-size:15px;line-height:20px;white-space:nowrap;}
+#workskin .tweet .follow-dot{color:${handleColor};font-size:15px;line-height:20px;}
+#workskin .tweet .follow-btn{background:transparent;color:#1d9bf0;font-weight:700;font-size:15px;padding:0;border:none;cursor:pointer;line-height:20px;flex-shrink:0;white-space:nowrap;}
 #workskin .tweet .follow-btn:hover{color:#1a8cd8;text-decoration:underline;}
-#workskin .tweet .twitter-logo{width:20px;height:20px;flex-shrink:0;position:absolute;right:16px;top:12px;}
-#workskin .tweet .body{clear:both;margin-top:12px;font-size:15px;line-height:20px;color:#0f1419;word-wrap:break-word;white-space:pre-wrap;}
+#workskin .tweet .twitter-logo{width:20px;height:20px;display:block;vertical-align:middle;flex-shrink:0;}
+#workskin .tweet .body{margin-top:12px;font-size:15px;line-height:20px;color:${textPrimary};word-wrap:break-word;white-space:pre-wrap;}
 #workskin .tweet .body .hashtag{color:#1d9bf0;font-weight:400;}
 #workskin .tweet .body .mention{color:#1d9bf0;font-weight:400;}
-#workskin .tweet .tweet-image{width:100%;max-width:100%;height:auto;max-height:285px;object-fit:cover;border-radius:16px;margin-top:12px;border:1px solid #eff3f4;display:block;}
-#workskin .tweet .time-line{margin-top:16px;font-size:15px;color:#536471;padding-bottom:16px;border-bottom:1px solid #eff3f4;}
-#workskin .tweet .metrics{display:flex;gap:20px;padding:12px 0;font-size:14px;color:#536471;border-bottom:1px solid #eff3f4;align-items:center;}
-#workskin .tweet .metric{display:inline-flex;align-items:center;gap:4px;cursor:pointer;transition:color 0.2s;}
-#workskin .tweet .metric-icon{width:18.75px;height:18.75px;opacity:0.6;}
-#workskin .tweet .metric-count{color:#0f1419;font-weight:700;}
+#workskin .tweet .tweet-image{width:100%;max-width:100%;height:auto;max-height:285px;border-radius:16px;margin-top:12px;border:1px solid ${borderColor};display:block;}
+#workskin .tweet .time-line{margin-top:16px;font-size:15px;color:${textSecondary};padding-bottom:16px;border-bottom:1px solid ${borderColor};}
+#workskin .tweet .metrics{display:flex;padding:12px 0;font-size:14px;color:${textSecondary};border-bottom:1px solid ${borderColor};align-items:center;width:100%;gap:12px;}
+#workskin .tweet .metric{display:inline-flex;align-items:center;cursor:pointer;transition:color 0.2s;gap:6px;flex:1;}
+#workskin .tweet .metric:first-child{justify-content:flex-start;}
+#workskin .tweet .metric:last-child{justify-content:flex-end;}
+#workskin .tweet .metric-icon{width:20px;height:20px;display:block;flex-shrink:0;vertical-align:middle;}
+#workskin .tweet .metric-count{color:${textSecondary};font-weight:400;font-size:14px;line-height:20px;vertical-align:middle;}
 #workskin .tweet .metric:hover .metric-count{text-decoration:underline;}
 #workskin .tweet .metric.replies:hover{color:#1d9bf0;}
-#workskin .tweet .metric.replies:hover .metric-icon{opacity:1;}
+#workskin .tweet .metric.replies:hover .metric-icon{opacity:1;filter:none;}
 #workskin .tweet .metric.retweets:hover{color:#00ba7c;}
-#workskin .tweet .metric.retweets:hover .metric-icon{opacity:1;}
+#workskin .tweet .metric.retweets:hover .metric-icon{opacity:1;filter:none;}
 #workskin .tweet .metric.likes:hover{color:#f91880;}
-#workskin .tweet .metric.likes:hover .metric-icon{opacity:1;}
+#workskin .tweet .metric.likes:hover .metric-icon{opacity:1;filter:none;}
 #workskin .tweet .metric.bookmarks:hover{color:#1d9bf0;}
-#workskin .tweet .metric.bookmarks:hover .metric-icon{opacity:1;}
-#workskin .tweet .metric.views:hover{color:#536471;}
+#workskin .tweet .metric.bookmarks:hover .metric-icon{opacity:1;filter:none;}
+#workskin .tweet .metric.views:hover{color:${textSecondary};}
 #workskin .tweet .metric.views:hover .metric-icon{opacity:1;}
-#workskin .tweet .replying-to{font-size:13px;color:#536471;margin:8px 0 4px 0;line-height:16px;}
+#workskin .tweet .replying-to{font-size:13px;color:${textSecondary};margin:8px 0 4px 0;line-height:16px;}
 #workskin .tweet .replying-to .reply-handle{color:#1d9bf0;text-decoration:none;}
 #workskin .tweet .replying-to .reply-handle:hover{text-decoration:underline;}
-#workskin .tweet.expanded{padding:16px;display:flex;gap:12px;}
+#workskin .tweet.expanded{padding:16px;display:flex;margin-left:-12px;}
+#workskin .tweet.expanded > *{margin-left:12px;}
 #workskin .tweet.expanded .avatar{width:40px;height:40px;flex-shrink:0;margin:0;}
 #workskin .tweet.expanded .expanded-content{flex:1;min-width:0;}
-#workskin .tweet.expanded .expanded-name{display:flex;align-items:center;gap:4px;margin-bottom:2px;}
-#workskin .tweet.expanded .expanded-name .name{font-weight:700;color:#0f1419;font-size:20px;line-height:24px;}
+#workskin .tweet.expanded .expanded-name{display:flex;align-items:center;margin-bottom:2px;margin-left:-4px;}
+#workskin .tweet.expanded .expanded-name > *{margin-left:4px;}
+#workskin .tweet.expanded .expanded-name .name{font-weight:700;color:${textPrimary};font-size:20px;line-height:24px;}
 #workskin .tweet.expanded .expanded-name .verified-badge{width:20px;height:20px;}
-#workskin .tweet.expanded .expanded-handle{color:#536471;font-size:15px;line-height:20px;margin-bottom:4px;}
+
+#workskin .tweet.expanded .expanded-handle{color:${textSecondary};font-size:15px;line-height:20px;margin-bottom:4px;}
 #workskin .tweet.expanded .replying-to{margin:0 0 12px 0;}
-#workskin .tweet.expanded .expanded-body{font-size:23px;line-height:28px;color:#0f1419;word-wrap:break-word;white-space:pre-wrap;}
+#workskin .tweet.expanded .expanded-body{font-size:23px;line-height:28px;color:${textPrimary};word-wrap:break-word;white-space:pre-wrap;}
 #workskin .tweet.expanded .tweet-image{margin-top:16px;}
 #workskin .tweet.expanded .time-line{border:none;padding:0;margin-top:16px;}
-#workskin .tweet .quote{border:1px solid #eff3f4;border-radius:12px;padding:12px;margin-top:12px;transition:background-color 0.2s;cursor:pointer;}
-#workskin .tweet .quote:hover{background:#f7f9f9;}
-#workskin .tweet .quote-head{display:flex;align-items:center;gap:4px;font-size:14px;line-height:16px;margin-bottom:4px;}
-#workskin .tweet .quote-name{font-weight:700;color:#0f1419;}
-#workskin .tweet .quote-avatar{width:20px;height:20px;border-radius:50%;object-fit:cover;}
+#workskin .tweet .quote{border:1px solid ${borderColor};border-radius:12px;padding:12px;margin-top:12px;transition:background-color 0.2s;cursor:pointer;}
+#workskin .tweet .quote:hover{background:${quoteHover};}
+#workskin .tweet .quote-head{display:flex;align-items:center;font-size:14px;line-height:16px;margin-bottom:4px;margin-left:-4px;}
+#workskin .tweet .quote-head > *{margin-left:4px;}
+#workskin .tweet .quote-name{font-weight:700;color:${textPrimary};}
+#workskin .tweet .quote-avatar{width:20px;height:20px;border-radius:50%;overflow:hidden;}
+#workskin .tweet .quote-verified-container{display:inline-flex;align-items:center;margin-left:-2px;}
+#workskin .tweet .quote-verified-container > *{margin-left:2px;}
 #workskin .tweet .quote-verified-badge{width:16px;height:16px;display:inline-block;vertical-align:middle;}
-#workskin .tweet .quote-handle{color:#536471;font-weight:400;font-size:14px;}
-#workskin .tweet .quote-body{margin-top:4px;font-size:15px;line-height:20px;color:#0f1419;}
-#workskin .tweet .quote-image{width:100%;height:auto;border-radius:12px;margin-top:12px;border:1px solid #eff3f4;}
-#workskin .tweets .wm{margin-top:12px;font-size:10px;opacity:0.5;text-align:center;}
+
+#workskin .tweet .quote-handle{color:${textSecondary};font-weight:400;font-size:14px;}
+#workskin .tweet .quote-body{margin-top:4px;font-size:15px;line-height:20px;color:${textPrimary};}
+#workskin .tweet .quote-image{width:100%;height:auto;border-radius:12px;margin-top:12px;border:1px solid ${borderColor};}
+#workskin .tweets .wm{margin-top:12px;font-size:10px;opacity:0.5;text-align:center;color:${textSecondary};}
 #workskin .link{text-decoration:none;color:#1d9bf0;}
 #workskin .visually-hidden{position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden;}`;
 }
 
 function buildGoogleCSS(maxWidth: number): string {
-  return `#workskin .chat{width:100%;min-width:320px;max-width:${Math.min(maxWidth, 600)}px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;box-sizing:border-box;padding:20px 0;}
+  return `/* Generated with AO3 Skin Generator - Free forever! Support: https://ao3skingenerator.com/donate */
+#workskin .chat{width:100%;min-width:320px;max-width:${Math.min(maxWidth, 600)}px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;box-sizing:border-box;padding:20px 0;}
 #workskin .logo-container{text-align:center;margin:0 0 26px 0;padding:20px 0;}
 #workskin .google-logo-img{height:92px;width:auto;display:inline-block;}
 #workskin .logo{text-align:center;margin:0 0 24px 0;font-weight:400;font-size:48px;font-family:"Product Sans",Arial,sans-serif;line-height:1;letter-spacing:-0.5px;}
@@ -729,23 +933,32 @@ function buildGoogleCSS(maxWidth: number): string {
 #workskin .blue{color:#4285F4;}#workskin .red{color:#EA4335;}#workskin .yellow{color:#FBBC04;}#workskin .green{color:#34A853;}
 #workskin .search-wrap{margin-top:20px;max-width:584px;margin-left:auto;margin-right:auto;}
 #workskin .search-container{background:#fff;border:1px solid #dfe1e5;border-radius:24px;box-shadow:0 1px 6px rgba(32,33,36,0.28);overflow:hidden;}
-#workskin .search-container .search-bar{display:flex;align-items:center;padding:11px 14px 11px 16px;font-size:16px;color:#202124;line-height:1.5;border-bottom:1px solid #e8eaed;gap:8px;}
-#workskin .search-bar-solo{background:#fff;border:1px solid #dfe1e5;border-radius:24px;display:flex;align-items:center;padding:11px 14px 11px 16px;font-size:16px;color:#202124;line-height:1.5;box-shadow:0 1px 6px rgba(32,33,36,0.28);gap:8px;}
+#workskin .search-container .search-bar{display:flex;align-items:center;padding:11px 14px 11px 16px;font-size:16px;color:#202124;line-height:1.5;border-bottom:1px solid #e8eaed;}
+#workskin .search-container .search-bar > *{margin-left:8px;}
+#workskin .search-container .search-bar > *:first-child{margin-left:0;}
+#workskin .search-bar-solo{background:#fff;border:1px solid #dfe1e5;border-radius:24px;display:flex;align-items:center;padding:11px 14px 11px 16px;font-size:16px;color:#202124;line-height:1.5;box-shadow:0 1px 6px rgba(32,33,36,0.28);}
+#workskin .search-bar-solo > *{margin-left:8px;}
+#workskin .search-bar-solo > *:first-child{margin-left:0;}
 #workskin .search-icon-left{width:20px;height:20px;opacity:0.54;flex-shrink:0;}
 #workskin .search-text{flex:1;min-width:0;color:#202124;}
-#workskin .search-icons-right{display:flex;align-items:center;gap:12px;margin-left:auto;flex-shrink:0;}
+#workskin .search-icons-right{display:flex;align-items:center;margin-left:auto;flex-shrink:0;}
+#workskin .search-icons-right{margin-left:-12px;}
+#workskin .search-icons-right > *{margin-left:12px;}
 #workskin .search-icon-clear{width:14px;height:14px;opacity:0.54;cursor:pointer;flex-shrink:0;}
 #workskin .search-icon-clear:hover{opacity:0.87;}
 #workskin .search-icon-mic{width:18px;height:18px;cursor:pointer;flex-shrink:0;}
 #workskin .search-icon-lens{width:18px;height:18px;opacity:0.54;cursor:pointer;flex-shrink:0;}
 #workskin .search-icon-lens:hover{opacity:0.87;}
 #workskin .suggest-box{padding:8px 0;}
-#workskin .suggest-item{display:flex;align-items:center;gap:14px;padding:6px 16px;font-size:16px;line-height:1.5;color:#202124;cursor:pointer;}
+#workskin .suggest-item{display:flex;align-items:center;padding:6px 16px;font-size:16px;line-height:1.5;color:#202124;cursor:pointer;margin-left:-14px;}
+#workskin .suggest-item > *{margin-left:14px;}
 #workskin .suggest-item:hover{background:#f8f9fa;}
 #workskin .suggest-icon{width:20px;height:20px;opacity:0.54;flex-shrink:0;}
 #workskin .suggest-item b,#workskin .suggest-item strong{font-weight:700;color:#202124;}
-#workskin .search-tabs{display:flex;gap:0;border-bottom:1px solid #dadce0;margin:20px 0 0 0;padding:0;}
-#workskin .search-tabs .tab{padding:14px 12px;font-size:13px;color:#5f6368;cursor:pointer;border-bottom:3px solid transparent;display:flex;align-items:center;gap:8px;margin:0;}
+#workskin .search-tabs{display:flex;border-bottom:1px solid #dadce0;margin:20px 0 0 0;padding:0;}
+#workskin .search-tabs .tab{padding:14px 12px;font-size:13px;color:#5f6368;cursor:pointer;border-bottom:3px solid transparent;display:flex;align-items:center;margin:0 0 0 -8px;}
+#workskin .search-tabs .tab > *{margin-left:8px;}
+#workskin .search-tabs .tab > *{margin-left:8px;}
 #workskin .search-tabs .tab:first-child{margin-left:12px;}
 #workskin .search-tabs .tab:hover{color:#202124;}
 #workskin .search-tabs .tab.active{color:#1a73e8;border-bottom-color:#1a73e8;}

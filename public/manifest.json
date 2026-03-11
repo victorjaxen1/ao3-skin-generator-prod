@@ -1,0 +1,41 @@
+{
+  "name": "AO3 Skin Generator",
+  "short_name": "AO3 Skins",
+  "description": "Create custom AO3 workskins with Twitter, iOS, Android, and Google Search templates",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#3b82f6",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["productivity", "utilities"],
+  "shortcuts": [
+    {
+      "name": "New Twitter Skin",
+      "short_name": "Twitter",
+      "description": "Create a new Twitter/X template",
+      "url": "/?template=twitter",
+      "icons": [{ "src": "/icon-192.svg", "sizes": "192x192" }]
+    },
+    {
+      "name": "New iOS Skin",
+      "short_name": "iOS",
+      "description": "Create a new iOS iMessage template",
+      "url": "/?template=ios",
+      "icons": [{ "src": "/icon-192.svg", "sizes": "192x192" }]
+    }
+  ]
+}

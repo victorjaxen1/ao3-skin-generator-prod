@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Content Policy for AO3 Skin Generator - Guidelines for creating responsible content.">
+    <title>Content Policy - AO3 Skin Generator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
+    
+    <style>
+:root {
+--primary: #1a73e8;
+--primary-dark: #0d47a1;
+--primary-light: #8ab4f8;
+--primary-bg: #e8f0fe;
+--secondary: #34a853;
+--accent: #fbbc05;
+--danger: #ea4335;
+--text-dark: #202124;
+--text-gray: #5f6368;
+--text-light: #e8eaed;
+--bg-light: #f8f9fa;
+--border-light: #dadce0;
+--shadow-sm: 0 1px 2px rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15);
+--shadow-md: 0 2px 6px rgba(60,64,67,0.3), 0 1px 8px 1px rgba(60,64,67,0.15);
+--radius-sm: 4px;
+--radius-md: 8px;
+--content-max-width: 900px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Roboto', Arial, sans-serif; }
+body { color: var(--text-dark); line-height: 1.7; background: white; }
+h1, h2, h3 { font-family: 'Google Sans', 'Roboto', Arial, sans-serif; font-weight: 500; margin-bottom: 0.75em; line-height: 1.3; color: var(--text-dark); }
+h1 { font-size: clamp(2rem, 5vw, 2.5rem); font-weight: 700; margin-bottom: 1rem; }
+h2 { font-size: clamp(1.5rem, 4vw, 1.875rem); margin-top: 2.5rem; margin-bottom: 1rem; color: var(--primary); }
+h3 { font-size: clamp(1.25rem, 3vw, 1.5rem); margin-top: 2rem; margin-bottom: 0.75rem; }
+p { margin-bottom: 1.25em; font-size: 1rem; }
+ul, ol { margin-bottom: 1.25em; padding-left: 2rem; }
+li { margin-bottom: 0.5em; }
+a { color: var(--primary); text-decoration: none; }
+a:hover { color: var(--primary-dark); text-decoration: underline; }
+.container { width: 100%; max-width: var(--content-max-width); margin: 0 auto; padding: 0 clamp(1rem, 5vw, 2rem); }
+.btn { display: inline-block; padding: 12px 24px; border-radius: var(--radius-sm); font-family: 'Google Sans'; font-weight: 500; font-size: 16px; text-decoration: none; cursor: pointer; box-shadow: var(--shadow-sm); border: none; }
+.btn-primary { background-color: var(--primary); color: white; }
+.btn-primary:hover { background-color: var(--primary-dark); box-shadow: var(--shadow-md); text-decoration: none; }
+header { background-color: rgba(255, 255, 255, 0.98); position: sticky; top: 0; z-index: 1000; box-shadow: var(--shadow-sm); }
+.header-container { display: flex; justify-content: space-between; align-items: center; padding: 1rem clamp(1rem, 5vw, 2rem); }
+.logo { display: flex; align-items: center; text-decoration: none; color: var(--text-dark); }
+.logo svg { height: 32px; width: 32px; margin-right: 10px; }
+.logo-text { font-family: 'Google Sans'; font-size: 1.35rem; font-weight: 700; }
+.logo-text .highlight { color: var(--primary); }
+.page-header { background: linear-gradient(135deg, var(--primary-bg) 0%, #f8f9fa 100%); padding: clamp(3rem, 8vw, 4rem) 0 clamp(2rem, 6vw, 3rem); text-align: center; }
+.page-header h1 { margin-bottom: 0.5rem; }
+.page-header p { font-size: 1.1rem; color: var(--text-gray); max-width: 600px; margin: 0 auto; }
+.content-section { padding: clamp(3rem, 8vw, 4rem) 0; }
+.last-updated { display: inline-block; background: var(--bg-light); padding: 8px 16px; border-radius: var(--radius-sm); font-size: 0.9rem; color: var(--text-gray); margin-bottom: 2rem; border: 1px solid var(--border-light); }
+.info-box { background: var(--primary-bg); border-left: 4px solid var(--primary); padding: 1.5rem; border-radius: var(--radius-sm); margin: 2rem 0; }
+.warning-box { background: #fef5f5; border-left: 4px solid var(--danger); padding: 1.5rem; border-radius: var(--radius-sm); margin: 2rem 0; }
+.success-box { background: #f0fdf4; border-left: 4px solid var(--secondary); padding: 1.5rem; border-radius: var(--radius-sm); margin: 2rem 0; }
+.highlight-box { background: var(--bg-light); border: 1px solid var(--border-light); padding: 1.5rem; border-radius: var(--radius-md); margin: 1.5rem 0; }
+strong { font-weight: 500; color: var(--text-dark); }
+footer { background-color: var(--text-dark); color: white; padding: 3rem 0 1.5rem; margin-top: 4rem; }
+.footer-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 2rem; margin-bottom: 2rem; }
+.footer-col h3 { font-size: 1.1rem; margin-bottom: 1rem; color: white; }
+.footer-col ul { list-style: none; padding: 0; }
+.footer-col li { margin-bottom: 0.5rem; }
+.footer-col a { color: var(--text-light); text-decoration: none; font-size: 0.95rem; }
+.footer-col a:hover { color: white; text-decoration: underline; }
+.footer-bottom { text-align: center; padding-top: 1.5rem; border-top: 1px solid rgba(255, 255, 255, 0.1); }
+.footer-bottom p { color: var(--text-light); font-size: 0.9rem; margin-bottom: 0; }
+.footer-bottom a { color: var(--primary-light); }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="header-container">
+        <a href="https://ao3skingen.netlify.app" class="logo">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="12" y1="18" x2="12" y2="12"></line>
+            <line x1="9" y1="15" x2="15" y2="15"></line>
+          </svg>
+          <div class="logo-text">AO3 <span class="highlight">Skin Generator</span></div>
+        </a>
+        <a href="/" class="btn btn-primary" style="padding: 10px 20px; font-size: 15px;">Back to Generator</a>
+      </div>
+    </header>
+
+    <div class="page-header">
+      <div class="container">
+        <h1>📋 Content Policy</h1>
+        <p>Guidelines for responsible and ethical use of AO3 Skin Generator</p>
+      </div>
+    </div>
+
+    <main>
+      <section class="content-section">
+        <div class="container">
+          <div class="last-updated">
+            Last updated: December 1, 2025
+          </div>
+
+          <div class="info-box">
+            <p><strong>Our Mission:</strong> AO3 Skin Generator exists to help fanfiction writers create immersive social media AU (Alternate Universe) stories. We believe in the power of transformative fiction while recognizing our responsibility to prevent misuse.</p>
+          </div>
+
+          <h2>🎭 This Tool is for Fiction Only</h2>
+          <p>AO3 Skin Generator is designed exclusively for:</p>
+          <ul>
+            <li><strong>Fanfiction:</strong> Creative stories published on Archive of Our Own (AO3) and similar platforms</li>
+            <li><strong>Parody:</strong> Satirical or comedic content that is clearly fictional</li>
+            <li><strong>Roleplay:</strong> Collaborative storytelling between consenting participants</li>
+            <li><strong>Educational:</strong> Demonstrating how social media interfaces work</li>
+          </ul>
+
+          <div class="success-box">
+            <p><strong>✅ Good Use Example:</strong> Creating a Twitter thread for your OTP (One True Pairing) in a coffee shop AU where fictional characters have a cute exchange.</p>
+          </div>
+
+          <h2>🚫 Prohibited Uses</h2>
+          <p>The following uses of AO3 Skin Generator are <strong>strictly prohibited</strong>:</p>
+
+          <h3>1. Disinformation & Fake News</h3>
+          <ul>
+            <li>Creating fake tweets, messages, or posts designed to be mistaken for real content</li>
+            <li>Fabricating statements by public figures, celebrities, or politicians</li>
+            <li>Spreading false information about real events, people, or organizations</li>
+            <li>Creating content intended to manipulate public opinion or elections</li>
+          </ul>
+
+          <h3>2. Impersonation & Fraud</h3>
+          <ul>
+            <li>Impersonating real people without clear fictional framing</li>
+            <li>Creating fake verified accounts to deceive viewers</li>
+            <li>Using generated content for scams, phishing, or social engineering</li>
+            <li>Pretending generated content is real for any deceptive purpose</li>
+          </ul>
+
+          <h3>3. Harassment & Harm</h3>
+          <ul>
+            <li>Creating fake conversations to harass, bully, or defame individuals</li>
+            <li>Fabricating evidence for use in disputes or legal matters</li>
+            <li>Creating content that incites violence or hatred</li>
+            <li>Non-consensual intimate imagery (even if fictional)</li>
+          </ul>
+
+          <h3>4. Criminal Activity</h3>
+          <ul>
+            <li>Evidence tampering or fabrication</li>
+            <li>Blackmail or extortion using fake content</li>
+            <li>Any use that violates local, state, national, or international law</li>
+          </ul>
+
+          <div class="warning-box">
+            <p><strong>⚠️ Legal Warning:</strong> Creating fake social media content that damages someone's reputation may constitute defamation. Creating fake content to influence elections may violate election laws. We cooperate with law enforcement when required by law.</p>
+          </div>
+
+          <h2>🏷️ The "PARODY" Label</h2>
+          <p>To prevent misuse, all verified badges generated by this tool include a <strong>"PARODY" label</strong> that cannot be removed within the tool. This label:</p>
+          <ul>
+            <li>Clearly identifies the content as fictional/satirical</li>
+            <li>Protects you from accusations of impersonation</li>
+            <li>Helps readers understand the content is not real</li>
+            <li>Is required for responsible use of the verified badge feature</li>
+          </ul>
+          <p><strong>Deliberately removing the PARODY label</strong> (via external editing tools) and presenting the content as real is a violation of our Terms of Service and may expose you to legal liability.</p>
+
+          <h2>✅ Best Practices for Fanfiction</h2>
+          <p>When using AO3 Skin Generator for your stories:</p>
+          <ol>
+            <li><strong>Use fictional characters or clearly fictional versions of real people</strong> (RPF with appropriate tags)</li>
+            <li><strong>Tag appropriately on AO3:</strong> Use tags like "Social Media AU", "Fake Tweets", "Twitter Fic Format"</li>
+            <li><strong>Include author's notes</strong> clarifying that all social media content is fictional</li>
+            <li><strong>Don't share out of context:</strong> If sharing screenshots on social media, clearly label them as fiction</li>
+            <li><strong>Respect real people:</strong> Even in RPF, avoid content that could genuinely harm someone's reputation</li>
+          </ol>
+
+          <h2>🔍 How We Enforce This Policy</h2>
+          <p>While we cannot monitor all uses of generated content (it runs in your browser), we:</p>
+          <ul>
+            <li>Include the PARODY label on verified badges by default</li>
+            <li>Add watermarks to exported images (removable, but present by default)</li>
+            <li>Reserve the right to modify the tool to prevent misuse</li>
+            <li>Cooperate with legal authorities when presented with valid legal requests</li>
+            <li>May terminate access for users who violate this policy</li>
+          </ul>
+
+          <h2>📢 Reporting Misuse</h2>
+          <p>If you encounter content created with AO3 Skin Generator being used to spread disinformation or harm individuals:</p>
+          <ol>
+            <li>Report the content to the platform where it's being shared (Twitter, Facebook, etc.)</li>
+            <li>Contact us at <a href="mailto:hello@wordfokus.com">hello@wordfokus.com</a> with details</li>
+            <li>If it involves illegal activity, report to appropriate authorities</li>
+          </ol>
+
+          <h2>🤝 Our Commitment</h2>
+          <p>We are committed to:</p>
+          <ul>
+            <li>Supporting the fanfiction community's creative expression</li>
+            <li>Continuously improving safeguards against misuse</li>
+            <li>Listening to community feedback on policy improvements</li>
+            <li>Being transparent about how we handle policy violations</li>
+          </ul>
+
+          <div class="info-box" style="margin-top: 3rem;">
+            <p><strong>Questions?</strong> If you're unsure whether your intended use is appropriate, please contact us at <a href="mailto:hello@wordfokus.com">hello@wordfokus.com</a>. We're happy to help!</p>
+          </div>
+
+          <div class="highlight-box">
+            <p><strong>Related Documents:</strong></p>
+            <ul style="margin-bottom: 0;">
+              <li><a href="/terms-of-service.html">Terms of Service</a></li>
+              <li><a href="/privacy-policy.html">Privacy Policy</a></li>
+            </ul>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="container">
+        <div class="footer-grid">
+          <div class="footer-col">
+            <h3>Product</h3>
+            <ul>
+              <li><a href="/">Generator</a></li>
+              <li><a href="/#features">Features</a></li>
+              <li><a href="/#how-it-works">How It Works</a></li>
+            </ul>
+          </div>
+          
+          <div class="footer-col">
+            <h3>Legal</h3>
+            <ul>
+              <li><a href="/privacy-policy.html">Privacy Policy</a></li>
+              <li><a href="/terms-of-service.html">Terms of Service</a></li>
+              <li><a href="/content-policy.html">Content Policy</a></li>
+            </ul>
+          </div>
+          
+          <div class="footer-col">
+            <h3>Support</h3>
+            <ul>
+              <li><a href="https://ko-fi.com/ao3skingen">Support on Ko-fi</a></li>
+              <li><a href="https://wordfokus.com">WordFokus</a></li>
+            </ul>
+          </div>
+        </div>
+        
+        <div class="footer-bottom">
+          <p>
+            © 2025 AO3 Skin Generator. Built by the creator of <a href="https://wordfokus.com">WordFokus</a>.
+          </p>
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>

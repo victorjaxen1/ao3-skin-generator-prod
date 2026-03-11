@@ -1,18 +1,63 @@
 import React, { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/router';
-import { defaultProject, SkinProject } from '../lib/schema';
+import { defaultProject, SkinProject, UniversalCharacter, Message } from '../lib/schema';
 import { loadStoredProject, persistProject } from '../lib/storage';
 import { TEMPLATE_EXAMPLES } from '../lib/examples';
-import { EditorForm } from '../components/EditorForm';
-import { ExportPanel } from '../components/ExportPanel';
-import { SuccessModal } from '../components/SuccessModal';
 import { AboutSection } from '../components/AboutSection';
+import { CharacterLibrary } from '../components/CharacterLibrary';
+import { recordExport, recordPromptShown } from '../lib/donationPrompt';
+
+// Lazy load heavy components with loading states
+const EditorForm = dynamic(() => import('../components/EditorForm').then(mod => ({ default: mod.EditorForm })), {
+  ssr: false,
+  loading: () => (
+    <div className="h-64 flex items-center justify-center">
+      <div className="text-center">
+        <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-2"></div>
+        <p className="text-gray-500 text-sm">Loading editor...</p>
+      </div>
+    </div>
+  )
+});
+
+const ExportPanel = dynamic(() => import('../components/ExportPanel').then(mod => ({ default: mod.ExportPanel })), {
+  ssr: false,
+  loading: () => (
+    <div className="h-32 flex items-center justify-center">
+      <div className="text-center">
+        <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-green-600 mb-2"></div>
+        <p className="text-gray-500 text-sm">Loading export panel...</p>
+      </div>
+    </div>
+  )
+});
+
+const SuccessModal = dynamic(() => import('../components/SuccessModal').then(mod => ({ default: mod.SuccessModal })), {
+  ssr: false
+});
 
 // Disable SSR for PreviewPane to avoid CSS hydration issues
 const PreviewPane = dynamic(() => import('../components/PreviewPane').then(mod => ({ default: mod.PreviewPane })), {
   ssr: false,
-  loading: () => <div className="h-full flex items-center justify-center text-gray-500">Loading preview...</div>
+  loading: () => (
+    <div className="h-64 flex items-center justify-center">
+      <div className="text-center">
+        <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mb-2"></div>
+        <p className="text-gray-500 text-sm">Loading preview...</p>
+      </div>
+    </div>
+  )
+});
+
+// PWA Install Prompt - only loads in production
+const PWAInstallPrompt = dynamic(() => import('../components/PWAInstallPrompt'), {
+  ssr: false
+});
+
+// Welcome Modal - only loads client-side
+const WelcomeModal = dynamic(() => import('../components/WelcomeModal').then(mod => ({ default: mod.WelcomeModal })), {
+  ssr: false
 });
 
 export default function HomePage() {
@@ -28,12 +73,49 @@ export default function HomePage() {
   const [layout, setLayout] = useState<'tabs' | 'split'>('tabs'); // User can toggle layout preference
   const [saveStatus, setSaveStatus] = useState<'saved' | 'unsaved' | 'saving'>('saved');
   const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [successAction, setSuccessAction] = useState<'css' | 'html' | 'image'>('css');
+  const [successAction, setSuccessAction] = useState<'image' | 'ao3code'>('image');
+  
+  // Welcome modal state
+  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
+  
+  // Character library state
+  const [universalCharacters, setUniversalCharacters] = useState<UniversalCharacter[]>([]);
+  
+  // Click-to-edit navigation state
+  const [focusedMessageId, setFocusedMessageId] = useState<string | null>(null);
+  const [focusTrigger, setFocusTrigger] = useState(0); // Counter to force re-trigger even for same message
+  const [editModeEnabled, setEditModeEnabled] = useState(true); // Enable by default for convenience
+  
+  // Scroll position memory for mobile tabs
+  const [editScrollPos, setEditScrollPos] = useState(0);
+  const [previewScrollPos, setPreviewScrollPos] = useState(0);
   
   // Undo/Redo history
   const [history, setHistory] = useState<SkinProject[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const maxHistory = 50;
+
+  // Check if user has seen welcome modal
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const hasSeenWelcome = localStorage.getItem('ao3skin_welcome_seen');
+      if (!hasSeenWelcome && !router.query.template) {
+        // Small delay to avoid flash
+        setTimeout(() => setShowWelcomeModal(true), 500);
+      }
+      
+      // Load universal characters from localStorage
+      const storedChars = localStorage.getItem('ao3skin_universal_characters');
+      if (storedChars) {
+        try {
+          const parsed = JSON.parse(storedChars);
+          setUniversalCharacters(parsed);
+        } catch (err) {
+          console.error('Failed to parse stored characters:', err);
+        }
+      }
+    }
+  }, [router.query.template]);
 
   // Load from storage or URL template parameter
   useEffect(() => {
@@ -181,53 +263,272 @@ export default function HomePage() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [project, showCodeModal, activeView, history, historyIndex]);
 
+  // Handle tab switching with scroll memory (mobile)
+  const handleTabSwitch = (newView: 'edit' | 'preview') => {
+    // Save current scroll position
+    const currentScroll = window.scrollY;
+    if (activeView === 'edit') {
+      setEditScrollPos(currentScroll);
+    } else if (activeView === 'preview') {
+      setPreviewScrollPos(currentScroll);
+    }
+    
+    // Switch view
+    setActiveView(newView);
+  };
+
+  // Handle click-to-edit: click on preview message -> scroll to editor card
+  const handleMessageClick = (messageId: string) => {
+    // Switch to edit view if in tab mode
+    if (layout === 'tabs' && activeView !== 'edit') {
+      setActiveView('edit');
+    }
+    
+    // Clear first to ensure state change is detected (for clicking same message twice)
+    setFocusedMessageId(null);
+    
+    // Use requestAnimationFrame to ensure the null state is processed first
+    requestAnimationFrame(() => {
+      setFocusedMessageId(messageId);
+      setFocusTrigger(prev => prev + 1); // Increment to force re-trigger
+    });
+    
+    // Clear focus after animation completes (3 seconds)
+    setTimeout(() => {
+      setFocusedMessageId(null);
+    }, 3500);
+  };
+
+  // Restore scroll position after tab switch
+  useEffect(() => {
+    if (!isLoaded) return;
+    
+    // Small delay to allow DOM to update
+    setTimeout(() => {
+      if (activeView === 'edit' && editScrollPos > 0) {
+        window.scrollTo({ top: editScrollPos, behavior: 'smooth' });
+      } else if (activeView === 'preview' && previewScrollPos > 0) {
+        window.scrollTo({ top: previewScrollPos, behavior: 'smooth' });
+      }
+    }, 100);
+  }, [activeView]);
+
+  // Handle welcome modal template selection
+  const handleWelcomeTemplateSelect = (template: 'ios' | 'android' | 'twitter' | 'google') => {
+    const newProject = defaultProject();
+    newProject.template = template;
+    setProject(newProject);
+    setHistory([newProject]);
+    setHistoryIndex(0);
+  };
+
+  // Handle welcome modal example loading
+  const handleWelcomeExampleLoad = (example: SkinProject) => {
+    setProject(example);
+    setHistory([example]);
+    setHistoryIndex(0);
+  };
+
+  // Character library handlers
+  const saveCharactersToStorage = (characters: UniversalCharacter[]) => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('ao3skin_universal_characters', JSON.stringify(characters));
+    }
+  };
+
+  const handleAddCharacter = (character: UniversalCharacter) => {
+    const updated = [...universalCharacters, character];
+    setUniversalCharacters(updated);
+    saveCharactersToStorage(updated);
+  };
+
+  const handleUpdateCharacter = (id: string, updates: Partial<UniversalCharacter>) => {
+    const updated = universalCharacters.map(char =>
+      char.id === id ? { ...char, ...updates } : char
+    );
+    setUniversalCharacters(updated);
+    saveCharactersToStorage(updated);
+  };
+
+  const handleDeleteCharacter = (id: string) => {
+    const updated = universalCharacters.filter(char => char.id !== id);
+    setUniversalCharacters(updated);
+    saveCharactersToStorage(updated);
+  };
+
+  // Handle project changes (including template switching)
+  const handleProjectChange = (updatedProject: SkinProject) => {
+    setProject(updatedProject);
+  };
+
+  const handleQuickApplyCharacter = (character: UniversalCharacter) => {
+    // Template-specific character application
+    switch (project.template) {
+      case 'twitter':
+        // Add to Twitter character presets if not already there
+        const twitterPresets = project.settings.twitterCharacterPresets || [];
+        const existingChar = twitterPresets.find(c => 
+          c.name === character.name && c.handle === character.twitterHandle
+        );
+        
+        const newTwitterChar = !existingChar ? {
+          id: crypto.randomUUID(),
+          name: character.name,
+          handle: character.twitterHandle || character.name.toLowerCase().replace(/\s+/g, ''),
+          avatarUrl: character.avatarUrl || '',
+          verified: character.verified || false
+        } : null;
+        
+        // Create new tweet from this character
+        const newTweet: Message = {
+          id: crypto.randomUUID(),
+          sender: character.name,
+          twitterHandle: character.twitterHandle || character.name.toLowerCase().replace(/\s+/g, ''),
+          avatarUrl: character.avatarUrl,
+          verified: character.verified,
+          outgoing: false,
+          content: '',
+          timestamp: new Date().toISOString()
+        };
+        
+        // Update both presets and messages in one call
+        setProject({
+          ...project,
+          settings: {
+            ...project.settings,
+            twitterCharacterPresets: newTwitterChar 
+              ? [...twitterPresets, newTwitterChar]
+              : twitterPresets
+          },
+          messages: [...project.messages, newTweet]
+        });
+        break;
+        
+      case 'ios':
+      case 'android':
+        // Add new message with character as sender
+        const newMessage: Message = {
+          id: crypto.randomUUID(),
+          sender: character.name,
+          avatarUrl: character.avatarUrl,
+          content: '',
+          timestamp: new Date().toISOString(),
+          outgoing: false
+        };
+        
+        setProject({
+          ...project,
+          messages: [...project.messages, newMessage]
+        });
+        break;
+        
+      case 'google':
+        // For Google template, characters are just stored for reference
+        break;
+    }
+  };
+
   return (
     <main className="min-h-screen bg-gray-50">
-      {/* Header - Matching Landing Page */}
-      <div className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-3 sm:px-4 py-3">
+      {/* Welcome Modal */}
+      <WelcomeModal
+        show={showWelcomeModal}
+        onClose={() => setShowWelcomeModal(false)}
+        onSelectTemplate={handleWelcomeTemplateSelect}
+        onLoadExample={handleWelcomeExampleLoad}
+      />
+
+      {/* Header - Clean Material Design */}
+      <header className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
-            {/* Logo - Matching Landing Page */}
-            <a href="https://ao3skingen.wordfokus.com" className="flex items-center gap-2 sm:gap-3 text-gray-900 hover:opacity-80 transition-opacity">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-7 h-7 sm:w-9 sm:h-9">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                <polyline points="14 2 14 8 20 8"></polyline>
-                <line x1="12" y1="18" x2="12" y2="12"></line>
-                <line x1="9" y1="15" x2="15" y2="15"></line>
-              </svg>
-              <div className="flex items-baseline gap-1.5">
-                <span className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">AO3</span>
-                <span className="text-lg sm:text-xl md:text-2xl font-bold text-blue-600">Skin Generator</span>
+            {/* Logo */}
+            <a href="https://ao3skingen.wordfokus.com" className="flex items-center gap-2 text-gray-900 hover:opacity-80 transition-opacity">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-md">
+                <span className="text-white text-lg sm:text-xl">✨</span>
+              </div>
+              <div>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-base sm:text-lg font-bold text-gray-900">AO3</span>
+                  <span className="text-base sm:text-lg font-bold text-blue-600">SkinGen</span>
+                </div>
+                <span className="hidden sm:block text-[10px] text-gray-500 -mt-1">Social Media AU Generator</span>
               </div>
             </a>
 
-            {/* Right side - Tools */}
-            <div className="flex items-center gap-2 sm:gap-3">
-              {/* Ko-fi Support Button */}
-              <a
-                href="https://ko-fi.com/ao3skingen"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#FF5E5B] hover:bg-[#e54542] text-white text-xs font-semibold rounded-full shadow-sm hover:shadow transition-all transform hover:scale-105"
-                title="Support on Ko-fi"
+            {/* Center: Platform Selector */}
+            <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-lg p-1">
+              <button
+                onClick={() => handleProjectChange({ ...project, template: 'ios' })}
+                className={`px-2.5 py-1.5 text-base rounded transition-all ${
+                  project.template === 'ios'
+                    ? 'bg-gradient-to-br from-blue-500 to-blue-600 shadow-md scale-105'
+                    : 'hover:bg-gray-100'
+                }`}
+                title="iMessage"
               >
-                <span>☕</span>
-                <span className="hidden md:inline">Support</span>
-              </a>
+                📱
+              </button>
+              <button
+                onClick={() => handleProjectChange({ ...project, template: 'android' })}
+                className={`px-2.5 py-1.5 text-base rounded transition-all ${
+                  project.template === 'android'
+                    ? 'bg-gradient-to-br from-green-500 to-green-600 shadow-md scale-105'
+                    : 'hover:bg-gray-100'
+                }`}
+                title="WhatsApp"
+              >
+                💬
+              </button>
+              <button
+                onClick={() => handleProjectChange({ ...project, template: 'twitter' })}
+                className={`px-2.5 py-1.5 text-base rounded transition-all font-bold ${
+                  project.template === 'twitter'
+                    ? 'bg-gradient-to-br from-gray-800 to-black text-white shadow-md scale-105'
+                    : 'hover:bg-gray-100 text-gray-800'
+                }`}
+                title="Twitter/X"
+              >
+                𝕏
+              </button>
+              <button
+                onClick={() => handleProjectChange({ ...project, template: 'google' })}
+                className={`px-2.5 py-1.5 text-base rounded transition-all ${
+                  project.template === 'google'
+                    ? 'bg-gradient-to-br from-blue-500 via-red-500 to-yellow-500 shadow-md scale-105'
+                    : 'hover:bg-gray-100'
+                }`}
+                title="Google Search"
+              >
+                🔍
+              </button>
+            </div>
+
+            {/* Right: Actions */}
+            <div className="flex items-center gap-2">
+              {/* Character Library */}
+              <CharacterLibrary
+                characters={universalCharacters}
+                currentTemplate={project.template}
+                onAddCharacter={handleAddCharacter}
+                onUpdateCharacter={handleUpdateCharacter}
+                onDeleteCharacter={handleDeleteCharacter}
+                onQuickApply={handleQuickApplyCharacter}
+              />
               
-              {/* Auto-save indicator */}
-              <span className={`hidden md:inline-flex text-xs px-2 py-1 rounded-full transition-all ${
+              {/* Auto-save - Subtle */}
+              <span className={`hidden sm:inline-flex text-xs px-2 py-1 rounded-full transition-all ${
                 saveStatus === 'saving'
-                  ? 'bg-yellow-50 text-yellow-700'
+                  ? 'text-yellow-600'
                   : saveStatus === 'saved'
-                  ? 'bg-green-50 text-green-700'
-                  : 'bg-gray-100 text-gray-600'
+                  ? 'text-green-600'
+                  : 'text-gray-400'
               }`}>
-                {saveStatus === 'saving' ? '💾 Saving...' : saveStatus === 'saved' ? '✓ Saved' : 'Unsaved'}
+                {saveStatus === 'saving' ? '●' : saveStatus === 'saved' ? '✓' : '○'}
               </span>
               
-              {/* Undo/Redo buttons */}
-              <div className="hidden sm:flex items-center gap-1">
+              {/* Undo/Redo - More compact */}
+              <div className="hidden sm:flex items-center bg-gray-100 rounded-lg">
                 <button
                   onClick={() => {
                     if (historyIndex > 0) {
@@ -237,15 +538,16 @@ export default function HomePage() {
                     }
                   }}
                   disabled={historyIndex <= 0}
-                  className={`px-2 py-1 text-sm rounded border transition-all ${
+                  className={`px-2.5 py-1.5 text-sm rounded-l-lg transition-all ${
                     historyIndex > 0
-                      ? 'bg-white hover:bg-gray-50 text-gray-700 border-gray-300 cursor-pointer shadow-sm hover:shadow'
-                      : 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                      ? 'text-gray-700 hover:bg-gray-200'
+                      : 'text-gray-300 cursor-not-allowed'
                   }`}
                   title="Undo (Ctrl+Z)"
                 >
                   ↶
                 </button>
+                <div className="w-px h-4 bg-gray-300"></div>
                 <button
                   onClick={() => {
                     if (historyIndex < history.length - 1) {
@@ -255,110 +557,183 @@ export default function HomePage() {
                     }
                   }}
                   disabled={historyIndex >= history.length - 1}
-                  className={`px-2 py-1 text-sm rounded border transition ${
+                  className={`px-2.5 py-1.5 text-sm rounded-r-lg transition-all ${
                     historyIndex < history.length - 1
-                      ? 'bg-white hover:bg-gray-50 text-gray-700 border-gray-300 cursor-pointer'
-                      : 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                      ? 'text-gray-700 hover:bg-gray-200'
+                      : 'text-gray-300 cursor-not-allowed'
                   }`}
                   title="Redo (Ctrl+Shift+Z)"
                 >
                   ↷
                 </button>
               </div>
+
+              {/* Layout Toggle - Desktop */}
+              <button
+                onClick={() => setLayout(layout === 'tabs' ? 'split' : 'tabs')}
+                className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-all"
+                title={layout === 'tabs' ? 'Switch to split view' : 'Switch to tabbed view'}
+              >
+                {layout === 'tabs' ? '⬌' : '📑'}
+              </button>
+              
+              {/* Ko-fi - Compact pill */}
+              <a
+                href="https://ko-fi.com/ao3skingen"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hidden sm:inline-flex items-center gap-1 px-3 py-1.5 bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white text-xs font-semibold rounded-full shadow-sm hover:shadow transition-all"
+              >
+                ☕ <span className="hidden md:inline">Support</span>
+              </a>
             </div>
           </div>
           
-          {/* Secondary toolbar row */}
-          <div className="flex items-center gap-2 sm:gap-3 mt-3 pt-3 border-t border-gray-100">
-            <div className="flex items-center gap-2 sm:gap-3">
-              {/* Layout Toggle (Desktop) */}
+          {/* Mobile View Controls - Show only on mobile */}
+          <div className="flex md:hidden items-center justify-center gap-2 mt-3 pt-3 border-t border-gray-100">
+            <div className="flex items-center bg-gray-100 rounded-full p-1">
               <button
-                onClick={() => setLayout(layout === 'tabs' ? 'split' : 'tabs')}
-                className="hidden lg:flex items-center gap-2 px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50 transition-all"
-                title={layout === 'tabs' ? 'Switch to split view' : 'Switch to tabbed view'}
+                onClick={() => setMobile(true)}
+                className={`px-3 py-1 text-xs font-medium rounded-full transition-all ${
+                  mobile ? 'bg-white shadow-sm text-gray-900' : 'text-gray-600'
+                }`}
               >
-                {layout === 'tabs' ? '⬌ Split View' : '📑 Tabs'}
+                📱
               </button>
-              
-              {/* Preview Settings */}
-              <div className="flex gap-2 text-xs">
-                <label className="flex items-center gap-1 cursor-pointer text-gray-700">
-                  <input type="checkbox" checked={mobile} onChange={e=>setMobile(e.target.checked)} className="cursor-pointer" /> 
-                  📱
-                </label>
-                <label className="flex items-center gap-1 cursor-pointer text-gray-700">
-                  <input type="checkbox" checked={dark} onChange={e=>setDark(e.target.checked)} className="cursor-pointer" /> 
-                  🌙
-                </label>
-              </div>
+              <button
+                onClick={() => setMobile(false)}
+                className={`px-3 py-1 text-xs font-medium rounded-full transition-all ${
+                  !mobile ? 'bg-white shadow-sm text-gray-900' : 'text-gray-600'
+                }`}
+              >
+                🖥️
+              </button>
+              <button
+                onClick={() => setDark(!dark)}
+                className={`px-3 py-1 text-xs font-medium rounded-full transition-all ${
+                  dark ? 'bg-gray-800 text-white' : 'text-gray-600'
+                }`}
+              >
+                {dark ? '🌙' : '☀️'}
+              </button>
             </div>
           </div>
         </div>
-      </div>
+      </header>
 
-      {/* About Section - collapsed on mobile */}
-      <div className="max-w-7xl mx-auto px-3 sm:px-4 pt-3 sm:pt-6">
+      {/* About Section - Collapsible, below header */}
+      <div className="max-w-7xl mx-auto px-4 pt-4">
         <AboutSection />
       </div>
 
       {/* Main Content Area */}
       <div className="max-w-7xl mx-auto px-3 sm:px-4 py-3 sm:py-4 pb-32 sm:pb-36">
         {layout === 'split' ? (
-          /* Split View (Desktop) */
-          <div className="grid lg:grid-cols-2 gap-4 lg:gap-6">
-            <div className="bg-white border rounded-xl shadow-sm p-3 sm:p-4">
-              <EditorForm project={project} onChange={setProject} />
+          /* Split View (Desktop) - Improved layout */
+          <div className="grid lg:grid-cols-2 gap-6">
+            <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+              <div className="bg-gray-50 border-b border-gray-200 px-5 py-3 flex items-center gap-2">
+                <span className="text-lg">✏️</span>
+                <h2 className="font-semibold text-gray-800">Editor</h2>
+              </div>
+              <div className="p-5">
+                <EditorForm project={project} onChange={setProject} universalCharacters={universalCharacters} focusedMessageId={focusedMessageId} focusTrigger={focusTrigger} />
+              </div>
             </div>
-            <div className="bg-white border rounded-xl shadow-sm p-3 sm:p-4 sticky top-16 sm:top-20 h-fit max-h-[calc(100vh-5rem)] sm:max-h-[calc(100vh-6rem)] overflow-auto">
-              <PreviewPane project={project} mobile={mobile} dark={dark} />
+            <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden sticky top-20 h-fit max-h-[calc(100vh-6rem)]">
+              <div className="bg-gray-50 border-b border-gray-200 px-5 py-3 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">👁️</span>
+                  <h2 className="font-semibold text-gray-800">Live Preview</h2>
+                  {project.messages.length > 0 && (
+                    <span className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full font-medium">
+                      {project.messages.length} messages
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="p-5 overflow-auto max-h-[calc(100vh-10rem)]">
+                <PreviewPane 
+                  project={project} 
+                  mobile={mobile} 
+                  dark={dark} 
+                  onMessageClick={handleMessageClick}
+                  editModeEnabled={editModeEnabled}
+                />
+              </div>
             </div>
           </div>
         ) : (
           /* Tabbed View (Mobile-First) */
           <>
-            {/* Tab Navigation */}
-            <div className="bg-white border rounded-t-xl shadow-sm overflow-hidden mb-0">
-              <div className="flex">
+            {/* Tab Navigation - Pill Style - NOW STICKY */}
+            <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden mb-0 sticky top-[140px] sm:top-[100px] z-30">
+              <div className="flex p-1.5 bg-gray-100 rounded-t-2xl">
                 <button
-                  onClick={() => setActiveView('edit')}
-                  className={`flex-1 px-4 py-2.5 sm:px-6 sm:py-3 font-heading font-semibold text-sm sm:text-base transition-all ${
+                  onClick={() => handleTabSwitch('edit')}
+                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 font-semibold text-sm rounded-xl transition-all ${
                     activeView === 'edit'
-                      ? 'bg-primary text-white shadow-material-md'
-                      : 'bg-bg-light text-text-gray hover:bg-gray-100'
+                      ? 'bg-white text-gray-900 shadow-md'
+                      : 'text-gray-500 hover:text-gray-700'
                   }`}
                 >
-                  ✏️ Edit
+                  <span className="text-base">✏️</span>
+                  <span>Editor</span>
                 </button>
                 <button
-                  onClick={() => setActiveView('preview')}
-                  className={`flex-1 px-4 py-2.5 sm:px-6 sm:py-3 font-heading font-semibold text-sm sm:text-base transition-all ${
+                  onClick={() => handleTabSwitch('preview')}
+                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 font-semibold text-sm rounded-xl transition-all ${
                     activeView === 'preview'
-                      ? 'bg-primary text-white shadow-material-md'
-                      : 'bg-bg-light text-text-gray hover:bg-gray-100'
+                      ? 'bg-white text-gray-900 shadow-md'
+                      : 'text-gray-500 hover:text-gray-700'
                   }`}
                 >
-                  👁️ Preview
+                  <span className="text-base">👁️</span>
+                  <span>Preview</span>
+                  {project.messages.length > 0 && (
+                    <span className="bg-blue-100 text-blue-700 text-xs px-1.5 py-0.5 rounded-full font-medium">
+                      {project.messages.length}
+                    </span>
+                  )}
                 </button>
+              </div>
+
+              {/* Content */}
+              <div className="p-4 sm:p-5 min-h-[55vh] sm:min-h-[60vh]">
+                {activeView === 'edit' ? (
+                  <EditorForm project={project} onChange={setProject} universalCharacters={universalCharacters} focusedMessageId={focusedMessageId} focusTrigger={focusTrigger} />
+                ) : (
+                  <PreviewPane 
+                    project={project} 
+                    mobile={mobile} 
+                    dark={dark} 
+                    onMessageClick={handleMessageClick}
+                    editModeEnabled={editModeEnabled}
+                  />
+                )}
               </div>
             </div>
 
-            {/* Content */}
-            <div className="bg-white border border-t-0 rounded-b-xl shadow-sm p-3 sm:p-4 min-h-[50vh] sm:min-h-[60vh]">
-              {activeView === 'edit' ? (
-                <EditorForm project={project} onChange={setProject} />
-              ) : (
-                <PreviewPane project={project} mobile={mobile} dark={dark} />
-              )}
-            </div>
-
-            {/* Floating Quick Preview Button (when editing) */}
-            {activeView === 'edit' && (
+            {/* Bidirectional Floating Switch Buttons */}
+            {activeView === 'edit' && project.messages.length > 0 && (
               <button
-                onClick={() => setActiveView('preview')}
-                className="fixed bottom-[90px] right-4 sm:bottom-24 sm:right-6 bg-primary hover:bg-primary-dark text-white px-4 py-2.5 sm:px-5 sm:py-3 rounded-full shadow-material-lg hover:shadow-material-lg transition-all font-heading font-semibold text-sm sm:text-base z-[60] transform hover:scale-105"
+                onClick={() => handleTabSwitch('preview')}
+                className="lg:hidden fixed bottom-24 left-1/2 -translate-x-1/2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-full shadow-lg transition-all font-medium text-sm z-[55] flex items-center gap-2"
                 title="View your creation"
               >
-                👁️ Quick Preview
+                <span>👁️</span>
+                <span>See Preview</span>
+              </button>
+            )}
+            
+            {activeView === 'preview' && (
+              <button
+                onClick={() => handleTabSwitch('edit')}
+                className="lg:hidden fixed bottom-24 left-1/2 -translate-x-1/2 bg-gray-800 hover:bg-gray-900 text-white px-5 py-2.5 rounded-full shadow-lg transition-all font-medium text-sm z-[55] flex items-center gap-2"
+                title="Back to editor"
+              >
+                <span>✏️</span>
+                <span>Edit Messages</span>
               </button>
             )}
           </>
@@ -372,7 +747,13 @@ export default function HomePage() {
         setShowCodeModal={setShowCodeModal}
         onSuccess={(action) => {
           setSuccessAction(action);
-          setShowSuccessModal(true);
+          
+          // Use smart donation prompt logic
+          const shouldShow = recordExport();
+          if (shouldShow) {
+            recordPromptShown();
+            setShowSuccessModal(true);
+          }
         }}
       />
       
@@ -383,65 +764,76 @@ export default function HomePage() {
         actionType={successAction}
       />
 
-      {/* Footer */}
-      <footer className="mt-6 pb-32 sm:pb-36 bg-bg-light border-t border-border-light py-6 sm:py-8">
-        <div className="max-w-4xl mx-auto px-4 space-y-6">
-          {/* Main Message */}
-          <div className="text-center">
-            <p className="text-sm text-text-dark mb-1 font-heading">
-              <strong>Made with ❤️ by a writer, for writers</strong>
+      {/* Footer - Clean & Minimal */}
+      <footer className="mt-8 pb-32 bg-gray-50 border-t border-gray-200">
+        <div className="max-w-4xl mx-auto px-4 py-8 space-y-8">
+          
+          {/* Value Prop Banner */}
+          <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
+            <div className="flex flex-col sm:flex-row items-center gap-4 text-center sm:text-left">
+              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center text-2xl shadow-md">
+                ✨
+              </div>
+              <div className="flex-1">
+                <h3 className="font-bold text-gray-900 mb-1">Made by a writer, for writers</h3>
+                <p className="text-sm text-gray-600">
+                  No coding required. Mobile-tested. 100% free forever.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <a 
+                  href="https://ko-fi.com/ao3skingen" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-pink-500 to-rose-500 text-white rounded-xl font-semibold text-sm shadow-md hover:shadow-lg transition-all"
+                >
+                  ☕ Support
+                </a>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Links Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
+            <a href="https://github.com/victorjaxen1/ao3-skin-generator-prod" target="_blank" rel="noopener noreferrer" 
+               className="p-4 bg-white rounded-xl border border-gray-200 hover:border-gray-300 hover:shadow-sm transition-all group">
+              <span className="text-2xl block mb-1">📦</span>
+              <span className="text-xs text-gray-600 group-hover:text-gray-900 font-medium">GitHub</span>
+            </a>
+            <a href="https://github.com/victorjaxen1/ao3-skin-generator-prod/issues" target="_blank" rel="noopener noreferrer"
+               className="p-4 bg-white rounded-xl border border-gray-200 hover:border-gray-300 hover:shadow-sm transition-all group">
+              <span className="text-2xl block mb-1">🐛</span>
+              <span className="text-xs text-gray-600 group-hover:text-gray-900 font-medium">Report Bug</span>
+            </a>
+            <a href="/terms-of-service.html" target="_blank" rel="noopener noreferrer"
+               className="p-4 bg-white rounded-xl border border-gray-200 hover:border-gray-300 hover:shadow-sm transition-all group">
+              <span className="text-2xl block mb-1">📜</span>
+              <span className="text-xs text-gray-600 group-hover:text-gray-900 font-medium">Terms</span>
+            </a>
+            <a href="/privacy-policy.html" target="_blank" rel="noopener noreferrer"
+               className="p-4 bg-white rounded-xl border border-gray-200 hover:border-gray-300 hover:shadow-sm transition-all group">
+              <span className="text-2xl block mb-1">🔒</span>
+              <span className="text-xs text-gray-600 group-hover:text-gray-900 font-medium">Privacy</span>
+            </a>
+          </div>
+
+          {/* Disclaimer */}
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-center">
+            <p className="text-xs text-amber-800">
+              ⚠️ For <strong>fictional storytelling only</strong>. 
+              Creating content to impersonate real people or spread disinformation is prohibited.
             </p>
-            <p className="text-xs text-text-gray">
-              Because creating social media AUs shouldn't require a CS degree
-            </p>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex flex-wrap items-center justify-center gap-3">
-            <a 
-              href="https://ko-fi.com/ao3skingen" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary hover:bg-primary-dark text-white rounded-material-sm font-heading font-semibold shadow-material-md hover:shadow-material-lg transition-all transform hover:scale-105"
-            >
-              <span className="text-lg">☕</span>
-              Buy Me a Coffee
-            </a>
-            <a 
-              href="https://workspace.google.com/marketplace/app/wordfokus_free_ui_dark_mode_focus_writer/297087799172?flow_type=2"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-secondary hover:bg-green-700 text-white rounded-material-sm font-heading font-semibold shadow-material-md hover:shadow-material-lg transition-all transform hover:scale-105"
-            >
-              <span className="text-lg">✍️</span>
-              Try WordFokus
-              <span className="text-xs bg-white bg-opacity-20 px-2 py-0.5 rounded-full">FREE</span>
-            </a>
-          </div>
-
-          {/* Links */}
-          <div className="flex flex-wrap items-center justify-center gap-4 text-xs text-text-gray">
-            <a href="https://github.com/victorjaxen1/ao3-skin-generator-prod" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">
-              📦 GitHub
-            </a>
-            <span className="text-gray-400">•</span>
-            <a href="https://github.com/victorjaxen1/ao3-skin-generator-prod/issues" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">
-              🐛 Report Bug
-            </a>
-            <span className="text-gray-400">•</span>
-            <a href="https://ao3skingen.wordfokus.com/privacy-policy" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">
-              🔒 Privacy Policy
-            </a>
-            <span className="text-gray-400">•</span>
-            <span>Accessibility-first, media-query-free design for AO3</span>
-          </div>
-
-          {/* Credit */}
-          <div className="text-center text-xs text-text-gray">
-            © 2025 victorjaxen1 • Open Source • No tracking, no ads, no BS
+          {/* Copyright */}
+          <div className="text-center text-xs text-gray-400">
+            © 2025 victorjaxen1 • Open Source • No tracking, no ads
           </div>
         </div>
       </footer>
+
+      {/* PWA Install Prompt */}
+      <PWAInstallPrompt />
     </main>
   );
 }

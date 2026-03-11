@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { SkinProject, Message, TwitterCharacter } from '../lib/schema';
-import { uploadImage, ImageUploadError } from '../lib/imgur';
+import { SkinProject, Message, TwitterCharacter, UniversalCharacter } from '../lib/schema';
 import { useToast, ToastContainer } from './Toast';
 import { 
   loadCachedCharacters, 
@@ -21,10 +20,15 @@ const MAX_MESSAGES = 100;
 const MAX_CONTENT_LENGTH = 10000;
 const MAX_CHARACTERS = 50;
 
-interface Props { project: SkinProject; onChange: (p: SkinProject) => void; }
+interface Props { 
+  project: SkinProject; 
+  onChange: (p: SkinProject) => void; 
+  universalCharacters?: UniversalCharacter[];
+  focusedMessageId?: string | null;
+  focusTrigger?: number;
+}
 
-export const EditorForm: React.FC<Props> = ({ project, onChange }) => {
-  const [uploading, setUploading] = useState<string | null>(null);
+export const EditorForm: React.FC<Props> = ({ project, onChange, universalCharacters = [], focusedMessageId, focusTrigger }) => {
   const { toasts, removeToast, success, error, warning } = useToast();
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
@@ -44,6 +48,37 @@ export const EditorForm: React.FC<Props> = ({ project, onChange }) => {
   const [newContent, setNewContent] = useState('');
   const [newTimestamp, setNewTimestamp] = useState('');
   const [newReaction, setNewReaction] = useState('');
+  
+  // Google template: collapsible settings + compose mode
+  const [googleSettingsOpen, setGoogleSettingsOpen] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('ao3skin_google_settings_open');
+      return saved ? saved === 'true' : false; // Default: collapsed
+    }
+    return false;
+  });
+  
+  const [googleComposeMode, setGoogleComposeMode] = useState<'fast' | 'detailed'>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('ao3skin_google_compose_mode');
+      return (saved as 'fast' | 'detailed') || 'fast'; // Default: Fast Mode
+    }
+    return 'fast';
+  });
+  
+  // Save Google settings state to localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('ao3skin_google_settings_open', String(googleSettingsOpen));
+    }
+  }, [googleSettingsOpen]);
+  
+  // Save Google compose mode to localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('ao3skin_google_compose_mode', googleComposeMode);
+    }
+  }, [googleComposeMode]);
   const [newImageUrl, setNewImageUrl] = useState('');
   
   function update<K extends keyof SkinProject>(key: K, value: SkinProject[K]) {
@@ -205,185 +240,26 @@ export const EditorForm: React.FC<Props> = ({ project, onChange }) => {
     };
     update('messages', [...project.messages, newMsg]);
   }
-  
-  async function handleAvatarUpload(msgId: string, e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    
-    setUploading(msgId);
-    try {
-      const url = await uploadImage(file);
-      updateMsg(msgId, { avatarUrl: url });
-      success('Avatar uploaded successfully!');
-    } catch (err) {
-      if (err instanceof ImageUploadError) {
-        error(err.userMessage);
-      } else {
-        error('Failed to upload avatar. Please try again.');
-      }
-    } finally {
-      setUploading(null);
-    }
-  }
-
-  async function handleInstagramImageUpload(type: 'avatar' | 'image', e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    
-    const uploadId = project.template === 'android' ? 'whatsapp-avatar' : `instagram-${type}`;
-    setUploading(uploadId);
-    try {
-      const url = await uploadImage(file);
-      if (type === 'avatar') {
-        updateSettings('instagramAvatarUrl', url);
-        success('Profile photo uploaded successfully!');
-      } else {
-        updateSettings('instagramImageUrl', url);
-        success('Image uploaded successfully!');
-      }
-    } catch (err) {
-      if (err instanceof ImageUploadError) {
-        error(err.userMessage);
-      } else {
-        error('Failed to upload image. Please try again.');
-      }
-    } finally {
-      setUploading(null);
-    }
-  }
-
-  async function handleIOSImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    
-    setUploading('ios-avatar');
-    try {
-      const url = await uploadImage(file);
-      updateSettings('iosAvatarUrl', url);
-      success('Avatar uploaded successfully!');
-    } catch (err) {
-      if (err instanceof ImageUploadError) {
-        error(err.userMessage);
-      } else {
-        error('Failed to upload avatar. Please try again.');
-      }
-    } finally {
-      setUploading(null);
-    }
-  }
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      {/* Template Selector Header */}
-      <div className="bg-white border border-gray-200 rounded-xl p-4 sm:p-6 shadow-sm">
-        <h2 className="text-gray-900 text-base sm:text-lg font-bold mb-3 sm:mb-4 flex items-center gap-2">
-          <span>✨</span>
-          <span>Choose Your Template Style</span>
-        </h2>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4">
-          {/* iOS Template */}
-          <button
-            type="button"
-            onClick={() => update('template', 'ios')}
-            className={`flex flex-col items-center gap-2 sm:gap-3 p-3 sm:p-4 rounded-xl transition-all border-2 ${
-              project.template === 'ios'
-                ? 'bg-blue-50 border-blue-500 shadow-md'
-                : 'bg-white border-gray-200 hover:border-gray-300 hover:shadow-sm'
-            }`}
-          >
-            <div className={`text-3xl sm:text-5xl ${project.template === 'ios' ? '' : 'opacity-80'}`}>📱</div>
-            <div className="text-center">
-              <div className={`font-bold text-xs sm:text-sm ${project.template === 'ios' ? 'text-blue-600' : 'text-gray-700'}`}>
-                iOS iMessage
-              </div>
-              <div className={`text-xs ${project.template === 'ios' ? 'text-gray-600' : 'text-gray-500'}`}>
-                Blue bubbles
-              </div>
+      {/* Quick Start Templates - Always Visible Carousel */}
+      {getExampleNames(project.template).length > 0 && (
+        <div className="bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-2xl p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">⚡</span>
+              <h3 className="font-bold text-base text-gray-900">Quick Start Templates</h3>
+              <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full font-medium">
+                {getExampleNames(project.template).length} available
+              </span>
             </div>
-          </button>
-
-          {/* WhatsApp Template */}
-          <button
-            type="button"
-            onClick={() => update('template', 'android')}
-            className={`flex flex-col items-center gap-2 sm:gap-3 p-3 sm:p-4 rounded-xl transition-all border-2 ${
-              project.template === 'android'
-                ? 'bg-green-50 border-green-500 shadow-md'
-                : 'bg-white border-gray-200 hover:border-gray-300 hover:shadow-sm'
-            }`}
-          >
-            <div className={`text-3xl sm:text-5xl ${project.template === 'android' ? '' : 'opacity-80'}`}>💬</div>
-            <div className="text-center">
-              <div className={`font-bold text-xs sm:text-sm ${project.template === 'android' ? 'text-green-600' : 'text-gray-700'}`}>
-                WhatsApp
-              </div>
-              <div className={`text-xs ${project.template === 'android' ? 'text-gray-600' : 'text-gray-500'}`}>
-                Green bubbles
-              </div>
-            </div>
-          </button>
-
-          {/* Twitter Template */}
-          <button
-            type="button"
-            onClick={() => update('template', 'twitter')}
-            className={`flex flex-col items-center gap-2 sm:gap-3 p-3 sm:p-4 rounded-xl transition-all border-2 ${
-              project.template === 'twitter'
-                ? 'bg-blue-50 border-blue-500 shadow-md'
-                : 'bg-white border-gray-200 hover:border-gray-300 hover:shadow-sm'
-            }`}
-          >
-            <div className={`text-3xl sm:text-5xl ${project.template === 'twitter' ? '' : 'opacity-80'}`}>𝕏</div>
-            <div className="text-center">
-              <div className={`font-bold text-xs sm:text-sm ${project.template === 'twitter' ? 'text-blue-500' : 'text-gray-700'}`}>
-                Twitter/X
-              </div>
-              <div className={`text-xs ${project.template === 'twitter' ? 'text-gray-600' : 'text-gray-500'}`}>
-                Tweet posts
-              </div>
-            </div>
-          </button>
-
-          {/* Google Template */}
-          <button
-            type="button"
-            onClick={() => update('template', 'google')}
-            className={`flex flex-col items-center gap-2 sm:gap-3 p-3 sm:p-4 rounded-xl transition-all border-2 ${
-              project.template === 'google'
-                ? 'bg-blue-50 border-blue-500 shadow-md'
-                : 'bg-white border-gray-200 hover:border-gray-300 hover:shadow-sm'
-            }`}
-          >
-            <div className={`text-3xl sm:text-5xl ${project.template === 'google' ? '' : 'opacity-80'}`}>🔍</div>
-            <div className="text-center">
-              <div className={`font-bold text-xs sm:text-sm ${project.template === 'google' ? 'text-blue-600' : 'text-gray-700'}`}>
-                Google Search
-              </div>
-              <div className={`text-xs ${project.template === 'google' ? 'text-gray-600' : 'text-gray-500'}`}>
-                Search results
-              </div>
-            </div>
-          </button>
-        </div>
-        
-        {/* Example Gallery - Prominent Quick Win Section */}
-        {getExampleNames(project.template).length > 0 && (
-          <div className="mt-4 bg-gradient-to-br from-purple-50 to-blue-50 border-2 border-purple-300 rounded-lg p-4 shadow-sm">
-            {/* Prominent Header */}
-            <div className="flex items-start gap-3 mb-4">
-              <div className="text-3xl">⚡</div>
-              <div className="flex-1">
-                <h3 className="text-base sm:text-lg font-bold text-gray-900 mb-1">
-                  Quick Start: Load a Pre-Made Example
-                </h3>
-                <p className="text-sm text-gray-700">
-                  <strong>Save time!</strong> Start with a ready-made conversation, then customize it for your story.
-                </p>
-              </div>
-            </div>
-
-            {/* Example Cards - Always Visible */}
-            <div className="grid grid-cols-1 gap-3">
+            <span className="text-xs text-gray-500 hidden sm:block">Choose a template to get started →</span>
+          </div>
+          
+          {/* Horizontal Scrolling Carousel */}
+          <div className="overflow-x-auto -mx-2 px-2 pb-2 scrollbar-thin scrollbar-thumb-purple-300 scrollbar-track-transparent">
+            <div className="flex gap-3 min-w-max">
               {getExampleNames(project.template).map((example) => (
                 <button
                   key={example.id}
@@ -393,8 +269,8 @@ export const EditorForm: React.FC<Props> = ({ project, onChange }) => {
                     if (exampleProject) {
                       setConfirmModal({
                         isOpen: true,
-                        title: 'Load Example Template',
-                        message: `Load "${example.name}"? This will replace your current work.`,
+                        title: 'Load Template',
+                        message: `Load "${example.name}"? This replaces your current work.`,
                         onConfirm: () => {
                           onChange(exampleProject);
                           setConfirmModal(prev => ({ ...prev, isOpen: false }));
@@ -402,475 +278,78 @@ export const EditorForm: React.FC<Props> = ({ project, onChange }) => {
                       });
                     }
                   }}
-                  className="text-left p-4 bg-white border-2 border-purple-200 rounded-lg hover:border-purple-500 hover:shadow-md transition-all group"
+                  className="flex-shrink-0 w-64 sm:w-72 p-4 bg-white border-2 border-purple-200 rounded-xl hover:border-purple-400 hover:shadow-lg transition-all group/item text-left"
                 >
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-lg">📋</span>
-                    <span className="font-bold text-sm sm:text-base text-gray-900 group-hover:text-purple-700">
-                      {example.name}
-                    </span>
-                    <span className="ml-auto text-xs font-medium text-purple-600 group-hover:text-purple-700">
-                      Click to load →
-                    </span>
-                  </div>
-                  <div className="text-xs sm:text-sm text-gray-600 leading-relaxed">
-                    {example.description}
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 bg-gradient-to-br from-purple-400 to-blue-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <span className="text-xl">📋</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-sm text-gray-900 group-hover/item:text-purple-700 transition-colors mb-1">
+                        {example.name}
+                      </div>
+                      <p className="text-xs text-gray-600 line-clamp-2 leading-relaxed">
+                        {example.description}
+                      </p>
+                      <div className="mt-2 flex items-center gap-1 text-xs text-purple-600 font-medium opacity-0 group-hover/item:opacity-100 transition-opacity">
+                        <span>Load template</span>
+                        <span>→</span>
+                      </div>
+                    </div>
                   </div>
                 </button>
               ))}
             </div>
-
-            {/* Pro Tip */}
-            <div className="mt-4 bg-purple-100 border border-purple-300 rounded p-3 flex items-start gap-2">
-              <span className="text-base">💡</span>
-              <p className="text-xs sm:text-sm text-purple-900">
-                <strong>Pro tip:</strong> Examples include realistic messages, profile pictures, and timestamps. Just edit the text to match your fic!
-              </p>
-            </div>
           </div>
-        )}
-      </div>
-      {/* iOS iMessage Editor */}
-      {project.template === 'ios' && (
-        <IOSEditor project={project} onChange={onChange} />
-      )}
-      
-      {/* Old iOS section - TO BE REMOVED */}
-      {false && project.template === 'ios' && (
-        <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
-          {/* Tab Navigation */}
-          <div className="flex border-b bg-white">
-            <button
-              type="button"
-              onClick={() => setIosTab('phone')}
-              className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
-                iosTab === 'phone'
-                  ? 'bg-blue-500 text-white border-b-2 border-blue-600'
-                  : 'text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              📱 Phone Settings
-            </button>
-            <button
-              type="button"
-              onClick={() => setIosTab('messages')}
-              className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
-                iosTab === 'messages'
-                  ? 'bg-blue-500 text-white border-b-2 border-blue-600'
-                  : 'text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              💬 Messages
-            </button>
-          </div>
-
-          {/* Tab Content */}
-          <div className="p-4 space-y-4">
-            {iosTab === 'phone' ? (
-              /* PHONE SETTINGS TAB */
-              <div className="space-y-4">
-                <div className="bg-blue-100 border border-blue-300 rounded-lg p-3">
-                  <p className="text-xs text-blue-800">
-                    <span className="font-semibold">{project.settings.iosMode === 'sms' ? '💬 SMS Style' : '💬 iMessage Style'}</span><br/>
-                    <span className="text-[10px]">Set up your contact profile for authentic {project.settings.iosMode === 'sms' ? 'SMS' : 'iMessage'} conversations</span>
-                  </p>
-                </div>
-
-                <label className="flex flex-col text-sm">
-                  <span className="font-medium mb-2 text-gray-700">Message Type</span>
-                  <select 
-                    value={project.settings.iosMode || 'imessage'} 
-                    onChange={e => updateSettings('iosMode', e.target.value as 'imessage' | 'sms')} 
-                    className="border border-gray-300 px-3 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 text-base"
-                  >
-                    <option value="imessage">💙 iMessage (Blue bubbles)</option>
-                    <option value="sms">💚 SMS/Text (Green bubbles)</option>
-                  </select>
-                  <span className="text-[10px] text-gray-500 mt-1">Choose between iMessage or SMS style</span>
-                </label>
-
-                <label className="flex flex-col text-sm">
-                  <span className="font-medium mb-2 text-gray-700">Max Width</span>
-                  <input 
-                    type="number" 
-                    min={280} 
-                    max={600} 
-                    value={project.settings.maxWidthPx} 
-                    onChange={e => updateSettings('maxWidthPx', parseInt(e.target.value))} 
-                    className="border border-gray-300 px-3 py-2 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  />
-                  <span className="text-[10px] text-gray-500 mt-1">Conversation width in pixels (280-600px)</span>
-                </label>
-
-                <label className="flex flex-col text-sm">
-                  <span className="font-medium mb-2 text-gray-700">Display Name</span>
-                  <input 
-                    className="border border-gray-300 px-3 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
-                    value={project.settings.iosContactName || ''} 
-                    onChange={e => updateSettings('iosContactName', e.target.value)} 
-                    placeholder="John Doe" 
-                  />
-                  <span className="text-[10px] text-gray-500 mt-1">Shows in conversation header</span>
-                </label>
-
-                <label className="flex flex-col text-sm">
-                  <span className="font-medium mb-2 text-gray-700">Profile Picture</span>
-                  <div className="flex items-center gap-3">
-                    {project.settings.iosAvatarUrl && (
-                      <div className="relative">
-                        <img 
-                          src={project.settings.iosAvatarUrl} 
-                          alt="Profile" 
-                          className="w-16 h-16 rounded-full object-cover border-2 border-blue-500"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => updateSettings('iosAvatarUrl', '')}
-                          className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full text-xs hover:bg-red-600 transition flex items-center justify-center"
-                          title="Remove photo"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    )}
-                    <label className="cursor-pointer px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition text-sm font-medium">
-                      {uploading === 'ios-avatar' ? 'Uploading...' : project.settings.iosAvatarUrl ? 'Change Photo' : 'Upload Photo'}
-                      <input 
-                        type="file" 
-                        accept="image/*" 
-                        onChange={(e) => handleIOSImageUpload(e)} 
-                        className="hidden" 
-                        disabled={uploading === 'ios-avatar'} 
-                      />
-                    </label>
-                  </div>
-                  <span className="text-[10px] text-gray-500 mt-1">Recommended: Square image, 200x200px or larger</span>
-                </label>
-
-                <div className="border-t border-gray-200 pt-4 space-y-3">
-                  <h4 className="font-medium text-sm text-gray-700">Display Options</h4>
-                  
-                  <label className="flex items-start gap-3 text-sm">
-                    <input 
-                      type="checkbox" 
-                      checked={project.settings.iosShowHeader || false} 
-                      onChange={e => updateSettings('iosShowHeader', e.target.checked)} 
-                      className="mt-1"
-                    />
-                    <div className="flex-1">
-                      <span className="font-medium">Show "To: [Contact]" Header</span>
-                      <p className="text-[10px] text-gray-600">Display "To: [Name]" at the top of conversation</p>
-                    </div>
-                  </label>
-
-                  <label className="flex items-start gap-3 text-sm">
-                    <input 
-                      type="checkbox" 
-                      checked={project.settings.iosShowReadReceipt || false} 
-                      onChange={e => updateSettings('iosShowReadReceipt', e.target.checked)} 
-                      className="mt-1"
-                    />
-                    <div className="flex-1">
-                      <span className="font-medium">Show "Read" Status</span>
-                      <p className="text-[10px] text-gray-600">Display "Read" under the last outgoing message (like real iMessage)</p>
-                    </div>
-                  </label>
-
-                  <label className="flex items-start gap-3 text-sm">
-                    <input 
-                      type="checkbox" 
-                      checked={project.settings.chatShowTyping || false} 
-                      onChange={e => updateSettings('chatShowTyping', e.target.checked)} 
-                      className="mt-1"
-                    />
-                    <div className="flex-1">
-                      <span className="font-medium">Show Typing Indicator</span>
-                      <p className="text-[10px] text-gray-600">Animated "..." bubble at bottom of conversation</p>
-                      {project.settings.chatShowTyping && (
-                        <input 
-                          className="border border-gray-300 px-3 py-2 rounded-lg w-full mt-2 text-sm" 
-                          value={project.settings.chatTypingName || ''} 
-                          onChange={e => updateSettings('chatTypingName', e.target.value)} 
-                          placeholder="typing..."
-                        />
-                      )}
-                    </div>
-                  </label>
-                </div>
-
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-4">
-                  <p className="text-[10px] text-blue-700">
-                    💡 <strong>Next step:</strong> Switch to the <strong>Messages</strong> tab to start building your conversation!
-                  </p>
-                </div>
-              </div>
-            ) : (
-              /* MESSAGES TAB */
-              <div className="space-y-4">
-                {/* Quick Guide Card */}
-                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-                  <div className="flex items-start gap-3">
-                    <div className="text-2xl">💬</div>
-                    <div className="flex-1">
-                      <h3 className="font-bold text-sm text-blue-900 mb-1">Build Your {project.settings.iosMode === 'sms' ? 'SMS' : 'iMessage'} Conversation</h3>
-                      <p className="text-xs text-blue-700 leading-relaxed">
-                        Create realistic text message exchanges for your fic! Toggle between incoming and outgoing messages, add timestamps, reactions, and even images.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Fast Mode Composer */}
-                <div className="bg-white border-2 border-blue-300 rounded-xl shadow-md overflow-hidden">
-                  <div className="bg-blue-600 px-4 py-3">
-                    <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                      <span>⚡</span>
-                      <span>Fast Mode - Create Multiple Messages</span>
-                    </h4>
-                  </div>
-                  
-                  <div className="p-4 space-y-4">
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                      <p className="text-xs text-blue-800 leading-relaxed">
-                        <span className="font-bold">💡 How it works:</span> Type your conversation below - one message per line. Use any of these formats:
-                      </p>
-                      <div className="text-xs text-blue-700 mt-2 space-y-1">
-                        <p><code className="bg-blue-200 px-1 rounded">{'>'}</code> or <code className="bg-blue-200 px-1 rounded">Me:</code> for outgoing (blue bubbles)</p>
-                        <p><code className="bg-blue-200 px-1 rounded">{'<'}</code> or <code className="bg-blue-200 px-1 rounded">Them:</code> for incoming (gray bubbles)</p>
-                      </div>
-                      <p className="text-xs text-blue-700 mt-2">
-                        <span className="font-semibold">Example:</span><br/>
-                        <code className="text-[11px] bg-white px-2 py-1 rounded block mt-1 font-mono">{'> Hey! Are you coming?'}<br/>{'< Yeah! What time?'}<br/>{'Me: 8pm. Don\'t be late! 🎉'}</code>
-                      </p>
-                    </div>
-
-                    <textarea 
-                      id="ios-fast-mode-input"
-                      className="border-2 border-gray-300 w-full px-4 py-3 rounded-xl text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400 resize-none transition font-mono" 
-                      rows={10} 
-                      placeholder="> Hey! What's up?&#10;< Not much, you?&#10;Me: Want to grab coffee later?&#10;Them: Sure! Where?&#10;> That new place downtown&#10;< Perfect, see you at 3!"
-                    />
-
-                    <button 
-                      type="button" 
-                      onClick={() => {
-                        const fastInput = document.getElementById('ios-fast-mode-input') as HTMLTextAreaElement;
-                        const lines = fastInput?.value.split('\n').filter(line => line.trim());
-                        
-                        if (!lines || lines.length === 0) {
-                          error('Please enter at least one message');
-                          return;
-                        }
-                        
-                        const newMessages = lines.map(line => {
-                          const trimmed = line.trim();
-                          let outgoing = true;
-                          let content = trimmed;
-                          
-                          // Check for direction markers (support multiple formats)
-                          if (trimmed.startsWith('→') || trimmed.startsWith('>')) {
-                            outgoing = true;
-                            content = trimmed.substring(1).trim();
-                          } else if (trimmed.startsWith('←') || trimmed.startsWith('<')) {
-                            outgoing = false;
-                            content = trimmed.substring(1).trim();
-                          } else if (trimmed.toLowerCase().startsWith('me:') || trimmed.toLowerCase().startsWith('you:')) {
-                            outgoing = true;
-                            content = trimmed.substring(trimmed.indexOf(':') + 1).trim();
-                          } else if (trimmed.toLowerCase().startsWith('them:') || trimmed.toLowerCase().startsWith('contact:')) {
-                            outgoing = false;
-                            content = trimmed.substring(trimmed.indexOf(':') + 1).trim();
-                          }
-                          
-                          return {
-                            id: crypto.randomUUID(),
-                            sender: outgoing ? 'You' : 'Contact',
-                            content: content,
-                            outgoing: outgoing,
-                            timestamp: '',
-                          };
-                        });
-                        
-                        update('messages', [...project.messages, ...newMessages]);
-                        if (fastInput) fastInput.value = '';
-                        success(`Added ${lines.length} message${lines.length > 1 ? 's' : ''} to conversation!`);
-                      }}
-                      className="w-full px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition font-bold text-sm shadow-sm hover:shadow-md flex items-center justify-center gap-2"
-                    >
-                      <span>⚡</span>
-                      <span>Add All Messages to Conversation</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Message List - Redesigned */}
-                <div className="bg-white border-2 border-blue-300 rounded-xl shadow-md overflow-hidden">
-                  <div className="bg-blue-600 px-4 py-3 flex items-center justify-between">
-                    <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                      <span>💬</span>
-                      <span>Your Conversation</span>
-                      <span className="bg-white/20 px-2 py-0.5 rounded-full text-xs">{project.messages.length}</span>
-                    </h4>
-                    {project.messages.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (confirm('🗑️ Delete all messages from your conversation?')) {
-                            update('messages', []);
-                          }
-                        }}
-                        className="text-xs text-white hover:text-red-200 font-semibold bg-white/10 hover:bg-white/20 px-3 py-1 rounded-full transition"
-                      >
-                        🗑️ Clear All
-                      </button>
-                    )}
-                  </div>
-                  
-                  <div className="p-4">
-                    {project.messages.length === 0 ? (
-                      <div className="text-center py-12">
-                        <div className="text-5xl mb-3">📱</div>
-                        <p className="text-gray-400 text-sm font-medium">Your conversation is empty</p>
-                        <p className="text-gray-400 text-xs mt-1">Add your first message above to get started!</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
-                        {project.messages.map((m, idx) => (
-                          <div 
-                            key={m.id} 
-                            className={`border-2 rounded-xl p-4 space-y-3 transition-all hover:shadow-md ${
-                              m.outgoing 
-                                ? 'bg-blue-50 border-blue-300' 
-                                : 'bg-gray-50 border-gray-300'
-                            }`}
-                          >
-                            {/* Header */}
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <span className={`px-2 py-1 rounded-full text-xs font-bold ${
-                                  m.outgoing 
-                                    ? 'bg-blue-500 text-white' 
-                                    : 'bg-gray-500 text-white'
-                                }`}>
-                                  #{idx + 1}
-                                </span>
-                                <span className={`flex items-center gap-1 text-xs font-semibold ${
-                                  m.outgoing ? 'text-blue-700' : 'text-gray-700'
-                                }`}>
-                                  <span>{m.outgoing ? '📤' : '📥'}</span>
-                                  <span>{m.outgoing ? 'Outgoing' : 'Incoming'}</span>
-                                </span>
-                              </div>
-                              <button 
-                                type="button" 
-                                onClick={() => deleteMsg(m.id)} 
-                                className="text-red-500 hover:text-red-700 hover:bg-red-100 rounded-full w-7 h-7 flex items-center justify-center transition font-bold"
-                                title="Delete message"
-                              >
-                                ✕
-                              </button>
-                            </div>
-                            
-                            {/* Content */}
-                            {m.attachments?.[0]?.url ? (
-                              <div className="relative group">
-                                <img 
-                                  src={m.attachments[0].url} 
-                                  alt="Message" 
-                                  className="max-h-40 rounded-lg border-2 border-gray-300 shadow-sm mx-auto" 
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => updateMsg(m.id, {attachments: undefined})}
-                                  className="absolute top-2 right-2 bg-red-500 text-white px-2 py-1 rounded-full text-xs font-semibold hover:bg-red-600 transition shadow-md opacity-0 group-hover:opacity-100"
-                                >
-                                  ✕ Remove
-                                </button>
-                              </div>
-                            ) : (
-                              <textarea 
-                                className="bg-white border-2 border-gray-200 rounded-lg p-3 shadow-sm w-full text-sm text-gray-800 leading-relaxed resize-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400 transition hover:border-gray-300" 
-                                rows={3}
-                                value={m.content} 
-                                onChange={e => updateMsg(m.id, {content: e.target.value})}
-                                placeholder="Type message content..."
-                              />
-                            )}
-
-                            {/* Metadata */}
-                            <div className="grid grid-cols-2 gap-3">
-                              <div>
-                                <label className="block text-[10px] font-semibold text-gray-500 mb-1">⏰ TIME</label>
-                                <input 
-                                  className="border border-gray-300 px-2 py-1.5 rounded-lg w-full text-xs focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition" 
-                                  value={m.timestamp || ''} 
-                                  onChange={e => updateMsg(m.id, {timestamp: e.target.value})} 
-                                  placeholder="2:34 PM"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-[10px] font-semibold text-gray-500 mb-1">💝 REACTION</label>
-                                <select
-                                  className="border border-gray-300 px-2 py-1.5 rounded-lg w-full text-xs focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition"
-                                  value={m.reaction || ''}
-                                  onChange={e => updateMsg(m.id, {reaction: e.target.value || undefined})}
-                                  aria-label="Message reaction"
-                                >
-                                  <option value="">None</option>
-                                  <option value="❤️">❤️</option>
-                                  <option value="👍">👍</option>
-                                  <option value="👎">👎</option>
-                                  <option value="😂">😂</option>
-                                  <option value="😮">😮</option>
-                                  <option value="😢">😢</option>
-                                  <option value="❗">❗</option>
-                                  <option value="❓">❓</option>
-                                </select>
-                              </div>
-                            </div>
-
-                            {/* Direction Toggle */}
-                            <div className="flex items-center justify-between pt-2 border-t border-gray-200">
-                              <span className="text-xs font-semibold text-gray-600">Switch Direction:</span>
-                              <button
-                                type="button"
-                                onClick={() => updateMsg(m.id, {outgoing: !m.outgoing})}
-                                className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                                  m.outgoing 
-                                    ? 'bg-blue-500 text-white hover:bg-blue-600' 
-                                    : 'bg-gray-400 text-white hover:bg-gray-500'
-                                }`}
-                              >
-                                <span>{m.outgoing ? '📤' : '📥'}</span>
-                                <span>{m.outgoing ? 'Outgoing' : 'Incoming'}</span>
-                                <span>→</span>
-                                <span>{m.outgoing ? '📥' : '📤'}</span>
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
+          
+          {/* Mobile scroll hint */}
+          <div className="mt-2 text-center sm:hidden">
+            <span className="text-xs text-purple-600">← Swipe to see more →</span>
           </div>
         </div>
       )}
+
+      {/* iOS iMessage Editor */}
+      {project.template === 'ios' && (
+        <IOSEditor project={project} onChange={onChange} universalCharacters={universalCharacters} focusedMessageId={focusedMessageId} focusTrigger={focusTrigger} />
+      )}
+      
       {/* Android-specific options - handled by AndroidEditor component */}
       
       {project.template === 'android' && (
-        <AndroidEditor project={project} onChange={onChange} />
+        <AndroidEditor project={project} onChange={onChange} universalCharacters={universalCharacters} focusedMessageId={focusedMessageId} focusTrigger={focusTrigger} />
       )}
       
       {project.template === 'twitter' && (
-        <TwitterEditor project={project} onChange={onChange} />
+        <TwitterEditor project={project} onChange={onChange} focusedMessageId={focusedMessageId} focusTrigger={focusTrigger} />
       )}
 
       {project.template === 'google' && (
-        <div className="border border-gray-200 rounded-lg p-4 space-y-4 bg-white">
-          <h3 className="text-xs font-medium text-gray-900 uppercase tracking-wide">🔍 Google Search Creator</h3>
+        <div className="space-y-4">
+          {/* COLLAPSIBLE SETTINGS */}
+          <div className="border-2 border-green-200 rounded-xl p-4 bg-white shadow-sm">
+            <button
+              type="button"
+              onClick={() => setGoogleSettingsOpen(!googleSettingsOpen)}
+              className="w-full flex items-center justify-between text-left group"
+            >
+              <h3 className="text-sm font-bold text-gray-800 flex items-center gap-2">
+                <span>⚙️</span>
+                <span>Google Search Settings</span>
+              </h3>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500 group-hover:text-gray-700 transition">
+                  {googleSettingsOpen ? 'Click to hide' : 'Click to customize'}
+                </span>
+                <span className={`text-gray-400 transition-transform ${googleSettingsOpen ? 'rotate-180' : ''}`}>
+                  ▼
+                </span>
+              </div>
+            </button>
+
+            {googleSettingsOpen && (
+              <div className="mt-4 space-y-4 pt-4 border-t border-green-200 animate-fadeIn">
+          <h3 className="text-xs font-medium text-gray-900 uppercase tracking-wide sr-only">🔍 Google Search Creator</h3>
           
           {/* Max Width */}
           <label className="flex flex-col">
@@ -1019,13 +498,101 @@ export const EditorForm: React.FC<Props> = ({ project, onChange }) => {
               <span>Show watermark</span>
             </label>
           </div>
+              </div>
+            )}
+          </div>
 
-          {/* Search Results Section */}
-          <div className="border-t border-gray-200 pt-4 space-y-4">
-            <h4 className="text-xs font-medium text-gray-900 uppercase tracking-wide flex items-center gap-2">
-              <span>🔗</span>
-              <span>Search Results</span>
-            </h4>
+          {/* UNIFIED COMPOSE SECTION */}
+          <div className="space-y-4 border-2 border-blue-200 rounded-xl p-4 bg-white shadow-sm">
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <h4 className="text-sm font-bold text-gray-800 flex items-center gap-2">
+                <span>🔗</span>
+                <span>Add Search Results</span>
+              </h4>
+              
+              {/* Mode Toggle */}
+              <div className="flex items-center bg-gray-100 rounded-lg p-1">
+                <button
+                  type="button"
+                  onClick={() => setGoogleComposeMode('fast')}
+                  className={`px-3 py-1.5 text-xs font-medium rounded transition-all ${
+                    googleComposeMode === 'fast'
+                      ? 'bg-white shadow text-blue-600'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                  title="Quick result creation"
+                >
+                  ⚡ Fast Mode
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setGoogleComposeMode('detailed')}
+                  className={`px-3 py-1.5 text-xs font-medium rounded transition-all ${
+                    googleComposeMode === 'detailed'
+                      ? 'bg-white shadow text-blue-600'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                  title="Full form with all options"
+                >
+                  📝 Detailed
+                </button>
+              </div>
+            </div>
+
+            {/* Fast Mode - Simple Result */}
+            {googleComposeMode === 'fast' && (
+              <div className="space-y-3 animate-fadeIn">
+                <input 
+                  id="google-fast-title"
+                  className="w-full text-sm text-gray-900 bg-white p-3 rounded-lg border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 transition" 
+                  placeholder="Result title (e.g., Captain Jack Sparrow - Wikipedia)"
+                />
+                <input 
+                  id="google-fast-url"
+                  className="w-full text-sm text-gray-900 bg-white p-3 rounded-lg border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 transition font-mono" 
+                  placeholder="URL (e.g., https://en.wikipedia.org › wiki › Jack_Sparrow)"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const titleInput = document.getElementById('google-fast-title') as HTMLInputElement;
+                    const urlInput = document.getElementById('google-fast-url') as HTMLInputElement;
+                    
+                    const title = titleInput?.value.trim();
+                    const url = urlInput?.value.trim();
+                    
+                    if (!title || !url) {
+                      error('Please enter both title and URL');
+                      return;
+                    }
+                    
+                    const newResult = {
+                      id: crypto.randomUUID(),
+                      sender: '',
+                      content: title,
+                      outgoing: false,
+                      googleResultUrl: url,
+                      googleResultDescription: '',
+                    };
+                    
+                    update('messages', [...project.messages, newResult]);
+                    
+                    if (titleInput) titleInput.value = '';
+                    if (urlInput) urlInput.value = '';
+                    success('Result added!');
+                  }}
+                  className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition"
+                >
+                  🔍 Add Result
+                </button>
+              </div>
+            )}
+
+            {/* Detailed Mode - Full Result Composer */}
+            {googleComposeMode === 'detailed' && (
+              <div className="space-y-4 animate-fadeIn">
+          {/* Search Results Section - Content moved here */}
+          <div className="space-y-4">
 
             {/* Add Result Composer */}
             <div className="bg-gray-50 border border-gray-300 rounded-lg p-4 space-y-4">
@@ -1116,9 +683,15 @@ export const EditorForm: React.FC<Props> = ({ project, onChange }) => {
                       <button 
                         type="button" 
                         onClick={() => {
-                          if (confirm('Delete this result?')) {
-                            deleteMsg(result.id);
-                          }
+                          setConfirmModal({
+                            isOpen: true,
+                            title: 'Delete Result',
+                            message: 'Are you sure you want to delete this result?',
+                            onConfirm: () => {
+                              deleteMsg(result.id);
+                              setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                            },
+                          });
                         }}
                         className="text-red-600 hover:text-red-700 hover:bg-red-50 text-lg leading-none px-2 py-1 rounded transition"
                         title="Delete result"
@@ -1165,6 +738,9 @@ export const EditorForm: React.FC<Props> = ({ project, onChange }) => {
 
           <p className="text-xs text-gray-600 bg-blue-50 p-3 rounded border border-blue-200">
             💡 Tip: Most fics only need 1-3 search results. Keep it simple!</p>
+              </div>
+            )}
+          </div>
         </div>
       )}
       
@@ -1376,10 +952,12 @@ export const EditorForm: React.FC<Props> = ({ project, onChange }) => {
                     
                     <div className="flex gap-2 items-center">
                       <input className="border px-1 w-24" placeholder="time" value={m.timestamp||''} onChange={e=>updateMsg(m.id,{timestamp:e.target.value})} />
-                      <label className="text-xs cursor-pointer px-2 py-1 bg-gray-200 rounded hover:bg-gray-300">
-                        {uploading === m.id ? 'Uploading...' : 'Avatar'}
-                        <input type="file" accept="image/*" onChange={(e) => handleAvatarUpload(m.id, e)} className="hidden" disabled={uploading === m.id} />
-                      </label>
+                      <input 
+                        className="border px-2 py-1 text-xs flex-1" 
+                        placeholder="Paste avatar URL" 
+                        value={m.avatarUrl||''} 
+                        onChange={e => updateMsg(m.id, {avatarUrl: e.target.value})}
+                      />
                       {m.avatarUrl && <span className="text-xs text-green-600">✓</span>}
                       <button type="button" onClick={() => deleteMsg(m.id)} className="text-xs px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 ml-auto" title="Delete message">×</button>
                     </div>

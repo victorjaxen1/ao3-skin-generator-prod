@@ -7,6 +7,10 @@ const nextConfig = {
     // Strip console.* in production bundles, but keep console.error and console.warn
     removeConsole: process.env.NODE_ENV === 'production' ? { exclude: ['error', 'warn'] } : false,
   },
+  // Configure turbopack root to fix workspace detection warning
+  turbopack: {
+    root: __dirname,
+  },
   async headers() {
     // Production CSP is stricter - dev needs 'unsafe-eval' for hot reload
     const isDev = process.env.NODE_ENV !== 'production';
@@ -17,14 +21,16 @@ const nextConfig = {
       // Scripts: self + GA. Dev needs unsafe-eval for Next.js HMR
       // Note: 'unsafe-inline' required for GA gtag inline script and Next.js
       `script-src 'self' ${isDev ? "'unsafe-eval'" : ""} 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com`,
+      // Worker for service worker
+      "worker-src 'self' blob:",
       // Styles: self + inline (Tailwind) + Google Fonts
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       // Fonts: self + Google Fonts
       "font-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com data:",
-      // Images: self + data URIs + blob (canvas export) + Cloudinary + Publit.io
-      "img-src 'self' data: blob: https://res.cloudinary.com https://media.publit.io https://*.cloudinary.com",
-      // Connections: self + Cloudinary API + Google Analytics
-      "connect-src 'self' https://api.cloudinary.com https://www.google-analytics.com https://analytics.google.com https://*.google-analytics.com https://*.analytics.google.com",
+      // Images: self + data URIs + blob (canvas export) + Cloudinary + Publit.io + Imgur + ImgBB
+      "img-src 'self' data: blob: https://res.cloudinary.com https://media.publit.io https://*.cloudinary.com https://i.imgur.com https://*.imgur.com https://i.ibb.co",
+      // Connections: self + Cloudinary API + Cloudinary CDN + Google Analytics
+      "connect-src 'self' https://api.cloudinary.com https://res.cloudinary.com https://*.cloudinary.com https://www.google-analytics.com https://analytics.google.com https://*.google-analytics.com https://*.analytics.google.com",
       // Prevent framing (clickjacking protection)
       "frame-ancestors 'none'",
       // Block object/embed (Flash, etc.)
@@ -56,6 +62,35 @@ const nextConfig = {
         ],
       },
     ];
+  },
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'res.cloudinary.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'media.publit.io',
+      },
+      {
+        protocol: 'https',
+        hostname: '**.cloudinary.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'i.imgur.com',
+      },
+      {
+        protocol: 'https',
+        hostname: '**.imgur.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'i.ibb.co',
+      },
+    ],
+    formats: ['image/avif', 'image/webp'],
   },
 };
 module.exports = nextConfig;

@@ -1,4 +1,5 @@
 import { SkinProject } from './schema';
+import { PLATFORM_ASSETS } from './platformAssets';
 
 const KEY = 'ao3SkinProject';
 
@@ -78,15 +79,30 @@ export function loadStoredProject<T extends SkinProject>(fallback: () => T): T {
     // Merge with defaults to ensure new fields are present (like header/footer URLs)
     const defaults = fallback();
     
+    // Fix broken URLs from old versions - ALWAYS use CDN URL if it's not already correct
+    const fixAndroidHeaderUrl = (url: string | undefined) => {
+      // Always return correct CDN URL (whatapp-header.png - note the typo is intentional, that's the actual filename)
+      if (url === PLATFORM_ASSETS.whatsapp.headerImage) return url;
+      // Force correct URL for any other value (including broken URLs, undefined, etc.)
+      return PLATFORM_ASSETS.whatsapp.headerImage;
+    };
+    
+    const fixAndroidFooterUrl = (url: string | undefined) => {
+      // Always return correct CDN URL unless the URL is already the correct one
+      if (url === PLATFORM_ASSETS.whatsapp.footerImage) return url;
+      // Force correct URL for any other value
+      return PLATFORM_ASSETS.whatsapp.footerImage;
+    };
+    
     // Sanitize URL fields in settings
     const sanitizedSettings = {
       ...defaults.settings,
       ...parsed.settings,
-      // Ensure header/footer image URLs exist and are sanitized
+      // Ensure header/footer image URLs exist and are sanitized, fixing old broken URLs
       iosHeaderImageUrl: sanitizeStoredUrl(parsed.settings.iosHeaderImageUrl) || defaults.settings.iosHeaderImageUrl,
       iosFooterImageUrl: sanitizeStoredUrl(parsed.settings.iosFooterImageUrl) || defaults.settings.iosFooterImageUrl,
-      androidHeaderImageUrl: sanitizeStoredUrl(parsed.settings.androidHeaderImageUrl) || defaults.settings.androidHeaderImageUrl,
-      androidFooterImageUrl: sanitizeStoredUrl(parsed.settings.androidFooterImageUrl) || defaults.settings.androidFooterImageUrl,
+      androidHeaderImageUrl: fixAndroidHeaderUrl(parsed.settings.androidHeaderImageUrl),
+      androidFooterImageUrl: fixAndroidFooterUrl(parsed.settings.androidFooterImageUrl),
       iosAvatarUrl: sanitizeStoredUrl(parsed.settings.iosAvatarUrl),
       androidAvatarUrl: sanitizeStoredUrl(parsed.settings.androidAvatarUrl),
       instagramAvatarUrl: sanitizeStoredUrl(parsed.settings.instagramAvatarUrl),
