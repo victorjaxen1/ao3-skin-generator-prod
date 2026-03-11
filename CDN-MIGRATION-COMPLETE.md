@@ -1,6 +1,43 @@
-# CDN Migration Complete ✅
+# CDN Strategy — Current Status
 
-## Overview
+## ⚠️ Status Update — March 11, 2026
+
+The original Publit.io CDN strategy documented below was **reversed**. All platform icons
+and example avatars now load from `/public/assets/` (local files bundled with the app).
+
+### Why We Moved Back to Local Assets
+
+1. **The files already existed locally.** Everything in `public/assets/` was present and committed. The Publit.io CDN was a layer on top of files that were already being served locally — adding latency and an external dependency for no benefit.
+
+2. **The CDN paths were inconsistent.** Code referenced `media.publit.io/file/AO3-Skins-App/filename.png` but the files were actually at different paths on the CDN, causing silent 404s that only appeared as broken images in production (not caught locally).
+
+3. **`sunset-scene.png` never existed on the CDN**, causing the `twitter-media-image` demo template to always show a broken image. Replaced with `placehold.co`.
+
+4. **Dark-mode grey icon variants** (twitter-reply.png, twitter-retweet-grey.png, etc.) didn't exist at all — they were referenced but never uploaded. Resolved by falling back to the light versions until proper grey variants are created.
+
+### Current Asset Strategy
+
+| Asset type | Source | Notes |
+|-----------|--------|-------|
+| Platform icons (Twitter, WA, iMessage, etc.) | `/assets/*.png` | Local, always available, no CDN needed |
+| Example avatars (Jamie Chen, Alex Rivers, etc.) | `/assets/*.png` | Local |
+| Character bank avatars (30 presets) | `media.publit.io/file/AO3-Skins-App/avatars/` | Still CDN — these were actually uploaded there |
+| User-pasted images | Direct URL, `img-src https:` | Never proxied; user supplies the host |
+| ImgBB exports | `i.ibb.co` | Uploaded at export time only |
+
+### Files Changed (March 11, 2026)
+
+- `src/lib/platformAssets.ts` — all 20+ icon URLs changed from publit.io to `/assets/`
+- `src/lib/examples.ts` — `AVATAR_CDN` constant changed from publit.io to `/assets`; `sunset-scene.png` replaced with placehold.co
+
+---
+
+## Original Documentation (2024 — Historical Reference)
+
+> The content below describes the intended Publit.io CDN architecture as it was designed.
+> It is preserved for reference but does not reflect the current implementation.
+
+### Overview (Historical)
 Successfully migrated from Base64 embedding to Publit.io CDN-hosted approach for both platform assets and character avatars.
 
 ## What Changed

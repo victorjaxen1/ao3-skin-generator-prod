@@ -1,6 +1,143 @@
 # Changelog
 
-## December 17, 2025 - UX Overhaul Sprint 5 & Intelligent Caching
+## March 11, 2026 — Image Pipeline Overhaul, CSP Hardening & Production Stabilisation
+
+### 🏗️ Architecture: Image-Only Export Pipeline (ImgBB)
+
+**Problem:** The original export flow had a Cloudinary → Imgur → ZIP chain with multiple external dependencies, upload costs, and complex failure modes. Users found it confusing.
+
+**Solution:** Simplified to two buttons — *Download Image* and *Get AO3 Code* — using a silent ImgBB upload behind the scenes.
+
+**Files:**
+- `src/lib/imgbb.ts` *(new)* — ImgBB API upload with retry, timeout, base64 conversion
+- `src/components/ExportPanel.tsx` *(rewritten)* — two-button interface, auto-split at 15 messages, inline code modal
+- `src/components/IOSEditor.tsx`, `AndroidEditor.tsx`, `TwitterEditor.tsx` — Cloudinary removed
+- Deleted 11 obsolete files (Cloudinary helpers, ZIP generator, old modals)
+- `ProUpgradeModal.tsx` — Ko-fi link fixed, dead Gumroad removed
+- `package.json` — `jszip` dependency removed
+
+---
+
+### 🔗 URL Normalization Library
+
+**Problem:** Users copy share-page URLs (Google Drive, Dropbox, Imgur gallery, pCloud) that aren't direct image links.
+
+**Solution:** `src/lib/urlNormalize.ts` with synchronous client-side URL rewriting.
+
+| Input | Output |
+|-------|--------|
+| `drive.google.com/file/d/{ID}/...` | `lh3.googleusercontent.com/d/{ID}` |
+| `dropbox.com/...?dl=0` | `...?dl=1` |
+| `imgur.com/{ID}` | `i.imgur.com/{ID}.jpg` |
+| `pcloud.link/...?code={CODE}` | `api.pcloud.com/getpubthumb?code={CODE}&...` |
+| URL with `%20` in hostname | cleaned hostname, retried |
+
+**Warning system** — amber UI alert shown when URL is detected as ephemeral:
+- Discord CDN attachments (24h expiry)
+- DALL-E Azure blob (~2h expiry)
+- DeviantArt/WixMP `?token=` URLs
+- Generic `?token=` patterns
+
+**Integrated into:**
+- `AvatarSelector.tsx` — normalises on paste, shows ✅ confirmation when URL was converted
+- `IOSEditor.tsx`, `AndroidEditor.tsx` — normalises at Add Message click
+- `TwitterEditor.tsx` — normalises on image `onChange` / `onBlur`
+
+---
+
+### 🚀 CVE Fix — Next.js 16.0.5 → 16.1.6
+
+Netlify deploy blocked by CVE-2025-55182. Upgraded `next` and `eslint-config-next` to `16.1.6` with exact pinning.
+
+---
+
+### 🐛 Production Bug Fixes (Multiple Deploy Rounds)
+
+#### Round 1 — SW Precache Crash
+`/icon-192.png` and `/icon-512.png` in PRECACHE_ASSETS didn't exist (only `.svg` versions do). Removed from `public/sw.js`.
+
+#### Round 2 — CSP Too Restrictive (`connect-src`, `font-src`)
+**Root cause:** `connect-src 'self' https://api.imgbb.com` blocked SW `fetch()` calls to external image & font hosts.  
+**Mistake:** We added headers to `netlify.toml` only. The real CSP was in `next.config.js` `async headers()` which takes precedence with `@netlify/plugin-nextjs`.  
+**Fix:** Both files updated. `connect-src 'self' https:` and `font-src 'self' data: https://fonts.gstatic.com`.
+
+#### Round 3 — SW Intercepting Cross-Origin Fetches
+**Root cause:** The SW's cache-first strategy was calling `fetch(request)` for all external hostnames, including `media.publit.io` (Twitter icons) and `fonts.googleapis.com`, which hit `connect-src`.  
+**Fix:** Added `if (url.origin !== self.location.origin) return;` skip guard so external resources go directly through the browser (governed by `img-src`, which was already broad).
+
+#### Round 4 — SW `undefined` Response Crash
+`TypeError: Failed to convert value to 'Response'` — network-first `.catch()` returned `caches.match()` raw, which resolves to `undefined` when uncached.  
+**Fix:** `.catch(() => caches.match(request).then(cached => cached || new Response('', { status: 408 })))`
+
+#### Round 5 — Stale CSP Cached in SW (Multiple Hard-Reset Cycles)
+**Root cause:** `sw.js` was being HTTP-cached by Netlify's CDN, so browsers never received the updated SW with new cache names. The v1 cache contained old HTML responses with the old CSP baked into HTTP headers.  
+**Fixes applied in sequence:**
+1. Bumped cache names `v1` → `v3` in `sw.js`
+2. Added `[[headers]]` rule in `netlify.toml`: `Cache-Control: no-cache, no-store, must-revalidate` for `/sw.js`
+3. `skipWaiting()` + `clients.claim()` were already present — confirmed these are correct
+
+**Lesson:** Always serve `sw.js` with `no-cache` headers. HTTP-caching the SW file is a spec violation and a common production footgun. The SW manages its own asset caching — the file itself must always be re-fetched.
+
+#### Round 6 — `next.config.js` CSP Overriding `netlify.toml`
+**Root cause:** Every `netlify.toml` `[[headers]]` fix we applied was being silently ignored. The `async headers()` in `next.config.js` is embedded in the Next.js serverless handler and wins because it runs first.  
+**Fix:** Updated `next.config.js` CSP: `img-src https:`, `connect-src https:`. Also updated `images.remotePatterns` to `hostname: '**'`.  
+**Lesson:** With `@netlify/plugin-nextjs`, `next.config.js` headers take precedence. `netlify.toml` headers are useful as a secondary layer but cannot override Next.js built headers.
+
+#### Round 7 — `X-Content-Type-Options: nosniff` Blocking `/_next/static/` JS Files
+**Symptom:** `Refused to execute script from '.../_ssgManifest.js' because its MIME type ('text/plain') is not executable`.  
+**Root cause:** `next.config.js` headers applied `X-Content-Type-Options: nosniff` to `/:path*` — including `/_next/static/[BUILD_ID]/*.js`. Netlify served those files without an explicit `Content-Type` header; `nosniff` prevented the browser from treating them as JS.  
+**Side effect:** With manifest JS failing to execute, the Next.js client router never initialised, triggering `Invariant: attempted to hard navigate to the same URL` errors.  
+**Fix:** Changed `source` from `/:path*` to `/((?!_next).*)` — negative-lookahead excludes `_next/*` paths from all security headers.  
+**Lesson:** Security headers (especially `nosniff`) should only be applied to page-level responses. Next.js manages its own static asset content-types; adding response headers to `/_next/static/` breaks them.
+
+#### Round 8 — `next/image` Proxy Blocking User-Provided Images
+**Symptom:** All user-pasted images showed broken placeholder in preview despite `img-src https:` CSP.  
+**Root cause:** `next/image` without `unoptimized` rewrites `src` to `/_next/image?url=...&w=...` and proxies the fetch server-side through its image optimisation handler. This requires the hostname to be in `remotePatterns`. Even with `hostname: '**'`, the @netlify/plugin-nextjs serverless image handler has its own constraints.  
+**Fix:** `unoptimized` prop set to `true` (bare boolean shorthand) on every `<Image>` component that receives a user-supplied URL (avatars, attachments) — 12 instances across 5 files.  
+**Lesson:** `next/image` optimisation is for build-time known assets. For runtime user-provided URLs, always use `unoptimized` so the component renders a plain `<img>` directly.
+
+#### Round 9 — Platform Icons All 404ing / Demo Image Never Existed
+**Root cause 1:** `platformAssets.ts` pointed all icons at `media.publit.io/file/AO3-Skins-App/...` (Publit.io CDN). All the corresponding files existed in `public/assets/` but the code was using the CDN path.  
+**Root cause 2:** `sunset-scene.png` was referenced in the `twitter-media-image` demo template but was never uploaded to the CDN.  
+**Root cause 3:** `examples.ts` `AVATAR_CDN` constant pointed to publit.io; all those avatar files also existed locally in `public/assets/`.  
+**Fix:** 
+- All `PLATFORM_ASSETS` URLs switched to `/assets/filename.png` local paths
+- `AVATAR_CDN` in `examples.ts` changed to `/assets`
+- `sunset-scene.png` replaced with `https://placehold.co/600x338/dde8f0/778899?text=📷+Add+your+image`
+- `CDN-MIGRATION-COMPLETE.md` updated to reflect this reversal
+
+**Lesson:** Depend on local files for assets you control. CDN is appropriate for user-generated content, not for your own UI icons. Remove external CDN dependencies unless they provide an active benefit.
+
+---
+
+### 🔧 PWA Warnings Fixed
+
+- Added `<meta name="mobile-web-app-capable" content="yes">` alongside the Apple tag (`apple-mobile-web-app-capable` is deprecated)
+- `PWAInstallPrompt.tsx` — `e.preventDefault()` on `beforeinstallprompt` now only fires when we actually intend to show the custom install prompt (i.e. user hasn't dismissed within 7 days). Previously called unconditionally, suppressing Chrome's native mini-infobar even when our custom UI wouldn't show.
+
+---
+
+### 📦 Commits This Session (oldest → newest)
+
+| Hash | Summary |
+|------|---------|
+| `177af6e` | imgbb.ts + ExportPanel rewrite, ImgBB pipeline |
+| `6b5263a` | URL normalization library + AvatarSelector integration |
+| `c0aa013` | img-src CSP broadened, SW precache PNG crash fixed |
+| `957c63c` | connect-src/font-src broadened, cross-origin SW skip, undefined Response fix |
+| `c994b50` | SW cache bumped v1 → v3 to bust stale CSP cache |
+| `0cdd5b8` | sw.js served with no-cache headers |
+| `c1bfe13` | mobile-web-app-capable meta, install prompt fix |
+| `fd0400c` | next.config.js CSP broadened (was overriding netlify.toml) |
+| `ec966c7` | /_next/static excluded from nosniff header |
+| `948f4f9` | unoptimized=true on all user-provided image URLs |
+| `f9d609c` | platform assets → local /assets/, sunset-scene demo fixed |
+| `4d57253` | gstatic warning added (immediately reverted as unnecessary) |
+| `b5e8fbd` | gstatic warning removed — URL only needs to render once at export |
+
+---
+
+
 
 ### ✨ Unified UX Across All Templates - Collapsible Settings & Compose Modes
 - **Consistent Interface Pattern** - Applied to all 4 platform editors

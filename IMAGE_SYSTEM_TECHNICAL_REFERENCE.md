@@ -389,3 +389,106 @@ Detect platforms known to use expiring CDN tokens (Discord, DALL-E, DeviantArt w
 
 ### Step 5 â€” Pinterest Resolution (optional)
 Pinterest pin pages (`pinterest.com/pin/*`) are HTML pages, not images. Resolve them server-side by fetching the page and extracting the `og:image` meta tag (or use Pinterest's oEmbed API) to get the direct `i.pinimg.com` CDN URL.
+
+
+---
+
+## 15. AO3 SkinGen Adaptation Notes
+
+*Added March 11, 2026. Documents how the general pattern above was applied to AO3 SkinGen — and where it differs from the full WorldKonstruct proxy pipeline.*
+
+### Key Differences
+
+**No GAS/iframe sandbox constraint**
+AO3 SkinGen runs in a normal browser tab, not a Google Apps Script iframe. There is no
+`sandbox="allow-scripts"` CSP forcing you to convert images to `data:` URIs. A standard
+`img-src https:` CSP header is sufficient — user images load entirely client-side via
+normal `<img>` or `<Image>` tags pointing at the original URL.
+
+**No Supabase proxy needed**
+The full proxy pipeline (Edge Function ? base64 ? data URI) described in Sections 13–14
+is only necessary when `img-src` is locked down (e.g. GAS iframes, strict `img-src 'self'`).
+In AO3 SkinGen we broadened to `img-src 'self' data: blob: https:` and user images load
+directly. We do not proxy images server-side at all.
+
+**`unoptimized` is required for user runtime URLs with next/image**
+`next/image` routes `<Image src={userUrl}>` through a built-in proxy (`/_next/image?url=...`)
+which requires `remotePatterns` to whitelist each hostname. Even `{ hostname: '**' }` can
+have issues with the Netlify serverless adapter. The correct pattern for any user-supplied
+URL that isn't known at build time is to add the `unoptimized` prop, which serves the URL
+directly (behaves like a plain `<img>`) and bypasses the proxy entirely.
+
+---
+
+### The Header Precedence Trap
+
+With `@netlify/plugin-nextjs`, **`next.config.js` `async headers()` takes precedence over
+`netlify.toml [[headers]]`** for page responses. If you have CSP headers in both places they
+won't merge — next.config.js wins.
+
+**Investigation order when CSP seems stuck:**
+1. Check `next.config.js` `async headers()` — this is the source of truth
+2. `netlify.toml` only applies to paths not matched by next.config.js
+3. Verify deployment actually picked up the new next.config.js (check Netlify deploy logs)
+
+---
+
+### The `nosniff` + `/:path*` Antipattern
+
+Applying `X-Content-Type-Options: nosniff` to `source: '/:path*'` includes `/_next/static/`
+JavaScript bundles. When Netlify serves these with `Content-Type: text/plain` (which can
+happen under the Next.js adapter), the browser refuses to execute them, crashing the entire
+app with a MIME-type block error and a blank page.
+
+**Fix:** Set `source: '/((?!_next).*)'` to exclude the Next.js static asset directory.
+This regex matches everything except paths that begin with `_next`.
+
+---
+
+### Service Worker Pitfalls
+
+**`connect-src` governs SW `fetch()` calls, not `img-src`**
+When a Service Worker intercepts a navigation or fetch and calls `fetch(event.request)`, the
+resulting network request is governed by `connect-src`, not `img-src`. A narrow
+`connect-src 'self'` will block image fetches triggered by the SW even if `img-src https:`
+is wide open. Solution: `connect-src 'self' https:`.
+
+**Cross-origin SW fetch bypass**
+The SW must skip cross-origin requests and let them pass through to the network unmodified.
+Add an origin check at the top of the fetch handler: if the request URL's origin doesn't
+match `self.location.origin`, return immediately without calling `event.respondWith()`.
+Without this guard the SW intercepts third-party image loads, attempts to cache them, and
+often returns a broken/empty response.
+
+**`caches.match()` returns `undefined`, not `null`**
+The Web Cache API `caches.match(request)` resolves to `undefined` (not `null`) on a miss.
+Passing `undefined` to the `Response` constructor throws a TypeError in some browsers.
+Always provide a fallback: `.then(cached => cached || new Response('', { status: 408 }))`.
+
+**`sw.js` must be served with `no-cache` headers**
+If `sw.js` is HTTP-cached (even with a short max-age), users continue running the old
+Service Worker indefinitely — your CSP/cache-version fixes never reach them. Always serve
+`sw.js` with `Cache-Control: no-cache, no-store, must-revalidate`. The SW itself manages
+its own asset cache via the Cache Storage API.
+
+---
+
+### URL Normalization Summary (implemented in `src/lib/urlNormalize.ts`)
+
+The simpler normalization steps from Section 4 that proved sufficient for AO3 SkinGen:
+
+| Transform | Input example | Output |
+|-----------|--------------|--------|
+| Google Drive share URL | `drive.google.com/file/d/ID/view` | `drive.google.com/uc?export=download&id=ID` |
+| Dropbox share URL | `dropbox.com/s/...?dl=0` | same with `dl=1` |
+| Imgur gallery | `imgur.com/gallery/ID` or `imgur.com/ID` | `i.imgur.com/ID.jpg` |
+| pCloud | `pcloud.com/...` | extracted `psrvps.pcloud.com` direct link |
+
+Expiring URL warnings (amber UI notice, no blocking):
+- Discord CDN with `?ex=` / `?is=` / `?hm=` params
+- DALL-E Azure blob URLs
+- WixMP / DeviantArt token-bearing URLs
+- Generic `?token=` param
+
+`encrypted-tbn0.gstatic.com` Google thumbnail URLs: **no warning needed** — these only need
+to resolve at the single moment the CSS is exported, not persist long-term.
