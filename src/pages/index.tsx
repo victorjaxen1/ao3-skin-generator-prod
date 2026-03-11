@@ -47,6 +47,7 @@ export default function HomePage() {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successAction, setSuccessAction] = useState<'image' | 'ao3code'>('image');
   const [saveStatus, setSaveStatus] = useState<'saved' | 'unsaved' | 'saving'>('saved');
+  const [showCharacters, setShowCharacters] = useState(false);
 
   // Characters
   const [universalCharacters, setUniversalCharacters] = useState<UniversalCharacter[]>([]);
@@ -258,43 +259,25 @@ export default function HomePage() {
     setUniversalCharacters(u); saveChars(u);
   };
 
-  const handleQuickApplyCharacter = useCallback((character: UniversalCharacter) => {
+  const handleSetAsContact = useCallback((name: string, avatarUrl: string) => {
     switch (project.template) {
-      case 'twitter': {
-        const presets = project.settings.twitterCharacterPresets || [];
-        const exists = presets.find(c => c.name === character.name && c.handle === character.twitterHandle);
-        const newChar = !exists ? {
-          id: crypto.randomUUID(),
-          name: character.name,
-          handle: character.twitterHandle || character.name.toLowerCase().replace(/\s+/g, ''),
-          avatarUrl: character.avatarUrl || '',
-          verified: character.verified || false,
-        } : null;
-        const tweet: Message = {
-          id: crypto.randomUUID(), sender: character.name,
-          twitterHandle: character.twitterHandle || character.name.toLowerCase().replace(/\s+/g, ''),
-          avatarUrl: character.avatarUrl, verified: character.verified,
-          outgoing: false, content: '', timestamp: new Date().toISOString(),
-        };
-        setProject(prev => ({
-          ...prev,
-          settings: { ...prev.settings, twitterCharacterPresets: newChar ? [...presets, newChar] : presets },
-          messages: [...prev.messages, tweet],
-        }));
-        break;
-      }
       case 'ios':
-      case 'android': {
-        const msg: Message = {
-          id: crypto.randomUUID(), sender: character.name,
-          avatarUrl: character.avatarUrl, content: '',
-          timestamp: new Date().toISOString(), outgoing: false,
-        };
-        setProject(prev => ({ ...prev, messages: [...prev.messages, msg] }));
+        handleUpdateSettings('iosContactName', name);
+        handleUpdateSettings('iosAvatarUrl', avatarUrl);
         break;
-      }
+      case 'android':
+        handleUpdateSettings('androidContactName', name);
+        handleUpdateSettings('androidAvatarUrl', avatarUrl);
+        break;
+      case 'twitter':
+        handleUpdateSettings('twitterDisplayName', name);
+        handleUpdateSettings('twitterAvatarUrl', avatarUrl);
+        break;
+      case 'google':
+        handleUpdateSettings('googleQuery', name);
+        break;
     }
-  }, [project.template, project.settings.twitterCharacterPresets]);
+  }, [project.template, handleUpdateSettings]);
 
   // ── Render ───────────────────────────────────────────────────────────────
   // Derive the contact name from the correct per-template settings field
@@ -321,7 +304,7 @@ export default function HomePage() {
         onContactNameChange={(name) => handleUpdateSettings(contactNameKey as any, name)}
         onBack={() => setShowPicker(true)}
         onSettingsOpen={() => setShowSettings(true)}
-        onCharactersOpen={() => {/* CharacterLibrary is self-managing below */}}
+        onCharactersOpen={() => setShowCharacters(true)}
         template={project.template}
         saveStatus={saveStatus}
         messageCount={project.messages.length}
@@ -331,7 +314,7 @@ export default function HomePage() {
       <div className="flex-1 flex overflow-hidden">
         {/* Left / mobile-full: compose area */}
         <div className="flex-1 flex flex-col min-w-0">
-          <div className="flex-1 overflow-y-auto px-3 py-2 sm:px-4 sm:py-3">
+          <div className="flex-1 overflow-y-auto px-3 py-2 sm:px-4 sm:py-3 pb-32">
             <MessageTimeline
               messages={project.messages}
               template={project.template}
@@ -385,17 +368,17 @@ export default function HomePage() {
         />
       </div>
 
-      {/* ─── Character Library (self-managing trigger + panel) ─────── */}
-      <div className="fixed bottom-28 right-4 z-30 md:bottom-24">
-        <CharacterLibrary
-          characters={universalCharacters}
-          currentTemplate={project.template}
-          onAddCharacter={handleAddCharacter}
-          onUpdateCharacter={handleUpdateCharacter}
-          onDeleteCharacter={handleDeleteCharacter}
-          onQuickApply={handleQuickApplyCharacter}
-        />
-      </div>
+      {/* ─── Character Library ────────────────────────────────────── */}
+      <CharacterLibrary
+        isOpen={showCharacters}
+        onClose={() => setShowCharacters(false)}
+        characters={universalCharacters}
+        currentTemplate={project.template}
+        onAddCharacter={handleAddCharacter}
+        onUpdateCharacter={handleUpdateCharacter}
+        onDeleteCharacter={handleDeleteCharacter}
+        onSetAsContact={handleSetAsContact}
+      />
 
       {/* ─── Settings sheet ─────────────────────────────────────────── */}
       <SettingsSheet
@@ -425,16 +408,7 @@ export default function HomePage() {
         actionType={successAction}
       />
 
-      {/* ─── Footer (minimal) ───────────────────────────────────────── */}
-      <footer className="bg-stone-100 border-t border-stone-200 px-4 py-3 text-center text-[11px] text-stone-400">
-        <span>For fictional storytelling only.</span>
-        {' · '}
-        <a href="/terms-of-service.html" className="underline hover:text-stone-600">Terms</a>
-        {' · '}
-        <a href="/privacy-policy.html" className="underline hover:text-stone-600">Privacy</a>
-        {' · '}
-        <a href="https://ko-fi.com/ao3skingen" target="_blank" rel="noopener noreferrer" className="underline hover:text-stone-600">Support</a>
-      </footer>
+
     </div>
   );
 }
