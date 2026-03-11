@@ -9,10 +9,9 @@ interface Props {
 
 export const SuccessModal: React.FC<Props> = ({ show, onClose, actionType }) => {
   const [showSharePrompt, setShowSharePrompt] = useState(false);
-  
+
   useEffect(() => {
     if (show) {
-      // Show share prompt after 2 seconds
       const timer = setTimeout(() => setShowSharePrompt(true), 2000);
       return () => clearTimeout(timer);
     } else {
@@ -22,7 +21,6 @@ export const SuccessModal: React.FC<Props> = ({ show, onClose, actionType }) => 
 
   const handleDonationClick = () => {
     recordDonationClick();
-    // Link opens in new tab automatically
   };
 
   const handleDismissForever = () => {
@@ -32,159 +30,120 @@ export const SuccessModal: React.FC<Props> = ({ show, onClose, actionType }) => 
 
   if (!show) return null;
 
-  const getActionMessage = () => {
-    switch (actionType) {
-      case 'image':
-        return 'Image downloaded successfully! 🎉';
-      case 'ao3code':
-        return 'AO3 code copied! 🎉';
-      default:
-        return 'Success! 🎉';
-    }
-  };
+  const actionMessage =
+    actionType === 'image' ? 'Image saved!' :
+    actionType === 'ao3code' ? 'Code copied!' :
+    'Done!';
 
-  const estimatedTimeSaved = actionType === 'image' ? '2-3 hours' : '1-2 hours'; // ao3code also saves significant time
+  const estimatedTimeSaved = actionType === 'image' ? '2–3 hours' : '1–2 hours';
 
   return (
-    <div 
-      className="fixed inset-0 bg-black bg-opacity-40 z-[60] flex items-center justify-center p-4 animate-fade-in"
+    <div
+      className="fixed inset-0 bg-black/40 z-[60] flex items-center justify-center p-4 animate-fade-in"
       onClick={onClose}
     >
-      <div 
-        className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[85vh] overflow-y-auto p-6 animate-slide-up"
+      <div
+        className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[85vh] overflow-y-auto animate-slide-up"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Success Message */}
-        <div className="text-center mb-4">
-          <div className="text-5xl mb-3">✨</div>
-          <h3 className="text-xl font-heading font-bold text-text-dark mb-2">
-            {getActionMessage()}
-          </h3>
-          <p className="text-text-gray text-xs">
-            You just saved <strong className="text-primary">{estimatedTimeSaved}</strong> of manual CSS coding
+        {/* Success header */}
+        <div className="px-6 pt-6 pb-4 text-center">
+          <div className="text-4xl mb-3">✨</div>
+          <h3 className="text-lg font-bold text-stone-900">{actionMessage}</h3>
+          <p className="text-xs text-stone-500 mt-1">
+            You just saved <strong className="text-violet-600">{estimatedTimeSaved}</strong> of manual CSS coding
           </p>
         </div>
 
-        {/* Divider */}
-        <div className="border-t border-gray-200 my-4"></div>
-
-        {/* Support Section */}
-        <div className="bg-primary-bg rounded-material-lg p-5 mb-4 border border-primary-light">
-          <div className="text-center mb-4">
-            <p className="text-sm text-text-dark mb-3 font-heading">
+        <div className="px-6 pb-6 space-y-3">
+          {/* Ko-fi */}
+          <div className="bg-violet-50 border border-violet-200 rounded-2xl p-4 text-center">
+            <p className="text-sm text-stone-700 mb-3 leading-relaxed">
               <strong>Made by a writer, for writers.</strong><br />
-              This tool is 100% free. If it saved you time, consider buying me a coffee! ☕
+              100% free — if it saved you time, a coffee keeps the lights on! ☕
             </p>
-            <a 
-              href="https://ko-fi.com/ao3skingen" 
-              target="_blank" 
+            <a
+              href="https://ko-fi.com/ao3skingen"
+              target="_blank"
               rel="noopener noreferrer"
               onClick={handleDonationClick}
-              className="inline-flex items-center gap-2 px-6 py-3 bg-primary hover:bg-primary-dark text-white rounded-material-sm font-heading font-semibold shadow-material-md hover:shadow-material-lg transition-all transform hover:scale-105"
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold rounded-xl transition-all shadow-sm hover:shadow"
             >
-              <span className="text-xl">☕</span>
+              <span>☕</span>
               Support on Ko-fi
             </a>
-          </div>
-          
-          <div className="text-center text-xs text-text-gray border-t border-primary-light pt-3 mt-3">
-            Tips help me keep this free & add more templates (Discord, Instagram coming soon!)
-          </div>
-        </div>
-
-        {/* WordFokus Discovery Section */}
-        <div className="bg-green-50 rounded-material-lg p-5 mb-4 border border-green-200">
-          <div className="flex items-start gap-3">
-            <div className="text-3xl">✍️</div>
-            <div className="flex-1">
-              <h4 className="font-heading font-bold text-text-dark mb-1 flex items-center gap-2">
-                Writing your next fic?
-                <span className="text-xs bg-secondary text-white px-2 py-0.5 rounded-full">FREE</span>
-              </h4>
-              <p className="text-xs text-text-dark mb-3">
-                Try <strong>WordFokus</strong> — a clean, distraction-free writing tool I built for Google Docs. 
-                Focus mode, live word count, and a UI designed to get out of your way so you can write.
-              </p>
-              <a 
-                href="https://workspace.google.com/marketplace/app/wordfokus_free_ui_dark_mode_focus_writer/297087799172?flow_type=2"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 text-xs bg-secondary hover:bg-green-700 text-white px-4 py-2 rounded-material-sm font-heading font-semibold transition-all"
-              >
-                <span>🔗</span>
-                Get WordFokus (Google Workspace)
-              </a>
-            </div>
-          </div>
-        </div>
-
-        {/* Share Section (appears after 2s) */}
-        {showSharePrompt && (
-          <div className="bg-bg-light rounded-material-lg p-4 border border-border-light animate-fade-in">
-            <p className="text-xs text-text-dark text-center mb-3 font-heading">
-              <strong>Know other AO3 writers?</strong> Share this tool!
+            <p className="text-[11px] text-stone-400 mt-2.5">
+              Tips help me add Discord, Instagram &amp; more
             </p>
-            <div className="flex gap-2 justify-center">
-              <a
-                href={`https://twitter.com/intent/tweet?text=${encodeURIComponent('Just discovered this free AO3 Skin Generator for social media AUs! No coding required 🎨✨')}&url=${encodeURIComponent('https://ao3-skin-generator.netlify.app')}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-3 py-2 bg-primary hover:bg-primary-dark text-white text-xs rounded-material-sm transition-all shadow-material-sm"
-              >
-                🐦 Tweet
-              </a>
-              <a
-                href={`https://www.tumblr.com/widgets/share/tool?canonicalUrl=${encodeURIComponent('https://ao3-skin-generator.netlify.app')}&title=${encodeURIComponent('Free AO3 Skin Generator')}&caption=${encodeURIComponent('Create perfect social media AUs without coding!')}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs rounded-material-sm transition-all shadow-material-sm"
-              >
-                📝 Tumblr
-              </a>
+          </div>
+
+          {/* WordFokus */}
+          <div className="bg-green-50 border border-green-200 rounded-2xl p-4">
+            <div className="flex items-start gap-3">
+              <span className="text-2xl">✍️</span>
+              <div className="flex-1 min-w-0">
+                <h4 className="text-sm font-bold text-stone-900 flex items-center gap-1.5">
+                  Writing your next fic?
+                  <span className="text-[10px] bg-green-600 text-white px-1.5 py-0.5 rounded-full font-semibold">FREE</span>
+                </h4>
+                <p className="text-xs text-stone-600 mt-1 mb-2.5 leading-relaxed">
+                  <strong>WordFokus</strong> — distraction-free writing for Google Docs. Focus mode, live word count, stays out of your way.
+                </p>
+                <a
+                  href="https://workspace.google.com/marketplace/app/wordfokus_free_ui_dark_mode_focus_writer/297087799172?flow_type=2"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg font-semibold transition-all"
+                >
+                  Get WordFokus
+                </a>
+              </div>
             </div>
           </div>
-        )}
 
-        {/* Close Buttons */}
-        <div className="flex gap-2">
-          <button
-            onClick={onClose}
-            className="flex-1 mt-4 px-4 py-3 bg-bg-light hover:bg-gray-200 text-text-dark rounded-material-sm font-heading font-semibold transition-all shadow-material-sm"
-          >
-            Close
-          </button>
-          <button
-            onClick={handleDismissForever}
-            className="mt-4 px-4 py-3 bg-transparent hover:bg-gray-100 text-text-gray text-xs rounded-material-sm transition-all whitespace-nowrap"
-            title="Don't show this prompt again"
-          >
-            Don't show again
-          </button>
+          {/* Share (appears after 2s) */}
+          {showSharePrompt && (
+            <div className="bg-stone-50 border border-stone-200 rounded-2xl p-4 text-center animate-fade-in">
+              <p className="text-xs font-semibold text-stone-700 mb-2.5">Know other AO3 writers? Share this!</p>
+              <div className="flex gap-2 justify-center">
+                <a
+                  href={`https://twitter.com/intent/tweet?text=${encodeURIComponent('Just discovered this free AO3 Skin Generator for social media AUs! No coding required 🎨✨')}&url=${encodeURIComponent('https://ao3-skin-generator.netlify.app')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-2 bg-stone-800 hover:bg-stone-900 text-white text-xs rounded-lg font-semibold transition-all"
+                >
+                  Post on X
+                </a>
+                <a
+                  href={`https://www.tumblr.com/widgets/share/tool?canonicalUrl=${encodeURIComponent('https://ao3-skin-generator.netlify.app')}&title=${encodeURIComponent('Free AO3 Skin Generator')}&caption=${encodeURIComponent('Create perfect social media AUs without coding!')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-2 bg-violet-600 hover:bg-violet-700 text-white text-xs rounded-lg font-semibold transition-all"
+                >
+                  Share on Tumblr
+                </a>
+              </div>
+            </div>
+          )}
+
+          {/* Close row */}
+          <div className="flex gap-2 pt-1">
+            <button
+              onClick={onClose}
+              className="flex-1 px-4 py-2.5 bg-stone-100 hover:bg-stone-200 text-stone-800 text-sm font-semibold rounded-xl transition-all"
+            >
+              Close
+            </button>
+            <button
+              onClick={handleDismissForever}
+              className="px-4 py-2.5 text-stone-400 hover:text-stone-600 text-xs transition-colors whitespace-nowrap"
+              title="Don't show this prompt again"
+            >
+              Don't show again
+            </button>
+          </div>
         </div>
       </div>
-
-      <style jsx>{`
-        @keyframes fade-in {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        @keyframes slide-up {
-          from { 
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to { 
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        .animate-fade-in {
-          animation: fade-in 0.2s ease-out;
-        }
-        .animate-slide-up {
-          animation: slide-up 0.3s ease-out;
-        }
-      `}</style>
     </div>
   );
 };
