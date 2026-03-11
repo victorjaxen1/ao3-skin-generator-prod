@@ -6,7 +6,7 @@ import { CHARACTER_BANK } from './characterBank';
 // Writers can load these as starting points for quick wins
 
 // CDN base for character avatars (CHARACTER_BANK in characterBank.ts provides 30 pre-loaded options)
-const AVATAR_CDN = 'https://media.publit.io/file/AO3-Skins-App';
+const AVATAR_CDN = '/assets';
 
 export const TEMPLATE_EXAMPLES: Record<string, SkinProject[]> = {
   // ========== TWITTER/X EXAMPLES (3) ==========
@@ -193,7 +193,7 @@ export const TEMPLATE_EXAMPLES: Record<string, SkinProject[]> = {
           twitterLikes: 2431, 
           twitterRetweets: 128, 
           twitterReplies: 89, 
-          attachments: [{ type: 'image', url: 'https://media.publit.io/file/AO3-Skins-App/sunset-scene.png' }],
+          attachments: [{ type: 'image', url: 'https://placehold.co/600x338/dde8f0/778899?text=📷+Add+your+image' }],
           useCustomIdentity: true, 
           twitterHandle: 'jamiechen', 
           avatarUrl: `${AVATAR_CDN}/Jamie-Chen-avatar.png`, 
