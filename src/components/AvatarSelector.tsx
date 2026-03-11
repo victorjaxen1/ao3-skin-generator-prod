@@ -70,7 +70,7 @@ export const AvatarSelector: React.FC<Props> = ({
               width={32}
               height={32}
               className="object-cover"
-              unoptimized={customUrl.startsWith('data:')}
+              unoptimized
               onError={(e: any) => {
                 e.currentTarget.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="gray"%3E%3Ccircle cx="12" cy="12" r="10"/%3E%3C/svg%3E';
               }}
@@ -149,7 +149,7 @@ export const AvatarSelector: React.FC<Props> = ({
                       width={48}
                       height={48}
                       className="object-cover"
-                      unoptimized={char.url.startsWith('data:')}
+                      unoptimized
                       onError={(e: any) => {
                         e.currentTarget.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="gray"%3E%3Ccircle cx="12" cy="12" r="10"/%3E%3C/svg%3E';
                       }}

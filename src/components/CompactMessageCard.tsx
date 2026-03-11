@@ -125,7 +125,7 @@ export const CompactMessageCard: React.FC<CompactMessageCardProps> = ({
                 width={24}
                 height={24}
                 className="rounded-full object-cover border border-gray-200"
-                unoptimized={currentParticipant.avatarUrl.startsWith('data:')}
+                unoptimized
               />
             ) : currentParticipant ? (
               <div 
@@ -261,7 +261,7 @@ export const CompactMessageCard: React.FC<CompactMessageCardProps> = ({
                           width={24}
                           height={24}
                           className="rounded-full object-cover"
-                          unoptimized={currentParticipant.avatarUrl.startsWith('data:')}
+                          unoptimized
                         />
                       ) : (
                         <div 
@@ -324,7 +324,7 @@ export const CompactMessageCard: React.FC<CompactMessageCardProps> = ({
                         width={64}
                         height={64}
                         className="rounded object-cover border border-gray-300" 
-                        unoptimized={m.attachments![0].url.startsWith('data:')}
+                        unoptimized
                       />
                       <button
                         type="button"

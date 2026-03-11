@@ -233,7 +233,7 @@ export const TwitterEditor: React.FC<Props> = ({ project, onChange, focusedMessa
                           width={48}
                           height={48}
                           className="rounded-full object-cover border-2 border-purple-400 flex-shrink-0"
-                          unoptimized={char.avatarUrl.startsWith('data:')}
+                          unoptimized
                         />
                       ) : (
                         <div className="w-12 h-12 rounded-full bg-purple-200 flex items-center justify-center text-purple-700 font-bold text-sm flex-shrink-0">
@@ -857,7 +857,7 @@ export const TwitterEditor: React.FC<Props> = ({ project, onChange, focusedMessa
                       width={64}
                       height={64}
                       className="rounded-lg object-cover border-2 border-gray-300"
-                      unoptimized={newTweetImageUrl.startsWith('data:')}
+                      unoptimized
                     />
                   )}
                   <input 
@@ -1237,7 +1237,7 @@ export const TwitterEditor: React.FC<Props> = ({ project, onChange, focusedMessa
                                 width={16}
                                 height={16}
                                 className="rounded-full object-cover"
-                                unoptimized={char.avatarUrl.startsWith('data:')}
+                                unoptimized
                               />
                             ) : (
                               <div className="w-4 h-4 rounded-full bg-blue-500 flex items-center justify-center text-white text-[10px] font-medium">
@@ -1418,7 +1418,7 @@ export const TwitterEditor: React.FC<Props> = ({ project, onChange, focusedMessa
                                 width={128}
                                 height={128}
                                 className="rounded object-cover border border-gray-300"
-                                unoptimized={m.attachments[0].url.startsWith('data:')}
+                                unoptimized
                               />
                               <button
                                 type="button"

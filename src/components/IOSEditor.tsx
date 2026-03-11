@@ -176,7 +176,7 @@ export const IOSEditor: React.FC<Props> = ({ project, onChange, universalCharact
                       width={64}
                       height={64}
                       className="rounded-full object-cover border border-gray-300"
-                      unoptimized={project.settings.iosAvatarUrl.startsWith('data:')}
+                      unoptimized
                     />
                     <button
                       type="button"
@@ -338,7 +338,7 @@ export const IOSEditor: React.FC<Props> = ({ project, onChange, universalCharact
                                     width={32}
                                     height={32}
                                     className="rounded-full object-cover"
-                                    unoptimized={participant.avatarUrl.startsWith('data:')}
+                                    unoptimized
                                   />
                                 )}
                                 <div 

@@ -156,7 +156,7 @@ export const AndroidEditor: React.FC<Props> = ({ project, onChange, universalCha
                       width={64}
                       height={64}
                       className="rounded-full object-cover border-2 border-green-500"
-                      unoptimized={project.settings.instagramAvatarUrl.startsWith('data:')}
+                      unoptimized
                     />
                     <button
                       type="button"
@@ -265,7 +265,7 @@ export const AndroidEditor: React.FC<Props> = ({ project, onChange, universalCha
                                   width={32}
                                   height={32}
                                   className="rounded-full object-cover"
-                                  unoptimized={participant.avatarUrl.startsWith('data:')}
+                                  unoptimized
                                 />
                               )}
                               <div 
@@ -873,7 +873,7 @@ export const AndroidEditor: React.FC<Props> = ({ project, onChange, universalCha
                                 width={48}
                                 height={48}
                                 className="rounded-full object-cover border-2 border-purple-400 flex-shrink-0"
-                                unoptimized={character.avatarUrl.startsWith('data:')}
+                                unoptimized
                               />
                             ) : (
                               <div className="w-12 h-12 rounded-full bg-purple-200 flex items-center justify-center text-purple-700 font-bold text-sm flex-shrink-0">
