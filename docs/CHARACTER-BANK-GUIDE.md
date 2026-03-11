@@ -260,11 +260,96 @@ function avatarUrl(filename: string): string {
 
 ## Related Files
 
-- `src/lib/characterBank.ts` - Main bank definition
-- `src/lib/platformAssets.ts` - Platform icons/headers/footers
-- `src/lib/examples.ts` - Example templates using CHARACTER_BANK
-- `src/components/CharacterBank.tsx` - User-saved character management (different feature)
+- `src/lib/characterBank.ts` — Main preset bank definition
+- `src/lib/platformAssets.ts` — Platform icons/headers/footers  
+- `src/lib/examples.ts` — Example templates using CHARACTER_BANK
+- `src/components/CharacterLibrary.tsx` — Full character management UI (see below)
 
 ---
 
-**Note**: `CharacterBank.tsx` component is for **user-saved custom characters** (localStorage), while `characterBank.ts` is the **pre-built library** of 30 avatars. They serve different purposes.
+## CharacterLibrary Component (as of March 11, 2026)
+
+`src/components/CharacterLibrary.tsx` is the **controlled slide-in panel** for character management. It replaces the old self-managing floating-button implementation.
+
+### Props
+
+```typescript
+interface Props {
+  isOpen: boolean;                  // Controlled by parent
+  onClose: () => void;              // Parent closes the panel
+  characters: UniversalCharacter[]; // User's saved library
+  currentTemplate: 'ios' | 'android' | 'twitter' | 'google';
+  onAddCharacter: (c: UniversalCharacter) => void;
+  onUpdateCharacter: (id: string, updates: Partial<UniversalCharacter>) => void;
+  onDeleteCharacter: (id: string) => void;
+  onSetAsContact: (name: string, avatarUrl: string) => void; // ← key action
+}
+```
+
+### Opening the panel
+
+The panel is opened by the Characters icon in `WorkspaceHeader`. In `index.tsx`:
+
+```typescript
+const [showCharacters, setShowCharacters] = useState(false);
+
+// In WorkspaceHeader:
+onCharactersOpen={() => setShowCharacters(true)}
+
+// In JSX:
+<CharacterLibrary
+  isOpen={showCharacters}
+  onClose={() => setShowCharacters(false)}
+  characters={universalCharacters}
+  currentTemplate={project.template}
+  onAddCharacter={handleAddCharacter}
+  onUpdateCharacter={handleUpdateCharacter}
+  onDeleteCharacter={handleDeleteCharacter}
+  onSetAsContact={handleSetAsContact}
+/>
+```
+
+### What `onSetAsContact` does
+
+`handleSetAsContact` maps to the correct per-template settings fields:
+
+```typescript
+const handleSetAsContact = useCallback((name: string, avatarUrl: string) => {
+  switch (project.template) {
+    case 'ios':
+      handleUpdateSettings('iosContactName', name);
+      handleUpdateSettings('iosAvatarUrl', avatarUrl);
+      break;
+    case 'android':
+      handleUpdateSettings('androidContactName', name);
+      handleUpdateSettings('androidAvatarUrl', avatarUrl);
+      break;
+    case 'twitter':
+      handleUpdateSettings('twitterDisplayName', name);
+      handleUpdateSettings('twitterAvatarUrl', avatarUrl);
+      break;
+    case 'google':
+      handleUpdateSettings('googleQuery', name);
+      break;
+  }
+}, [project.template, handleUpdateSettings]);
+```
+
+After calling `onSetAsContact`, the component calls `onClose()` automatically.
+
+### Tabs
+
+**My Library** (default) — user's saved `UniversalCharacter[]`, sorted by `lastUsed` descending. Tap name to rename inline. "Set as contact" / "Set as tweeter" button applies and closes.
+
+**Browse** — presets from `CHARACTER_BANK`. Search + category filter pills. "Save to library" saves to the user's library. Already-saved presets show "✓ Saved" state (disabled button).
+
+### `setLabel` per platform
+
+```typescript
+const setLabel = currentTemplate === 'twitter' ? 'Set as tweeter' : 'Set as contact';
+```
+
+---
+
+**Note:** `CharacterLibrary.tsx` manages the UI for both user-saved characters **and** the preset bank browse experience. `characterBank.ts` is the static data source with the 30 preset `CharacterAvatar` objects. They are separate — the component imports and uses the data file.
+

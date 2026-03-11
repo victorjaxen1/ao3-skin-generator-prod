@@ -1,5 +1,101 @@
 # Changelog
 
+## March 11, 2026 — Apple-Style UI Redesign, CharacterLibrary Overhaul & Overlap Fixes
+
+### 🍎 Design System Unification — Stone / Violet Palette
+
+**Problem:** Accumulated inconsistency across components: undefined Tailwind class names (`text-text-gray`, `bg-primary-bg`, `rounded-material-lg`) that silently do nothing, leftover Material Design radius tokens, purple gradient buttons clashing with the stone palette, and `<style jsx>` blocks that plain Next.js silently ignores.
+
+**Solution:** Established a unified design system — `stone` neutrals throughout, `violet-600` as the single accent, `rounded-xl` / `rounded-2xl` for radii, standard Tailwind tokens only.
+
+#### Components Restyled / Rewritten
+
+**PreviewPane** — Removed internal redundant header bar; edit-mode hover ring changed to violet; container on stone palette.
+
+**ExportPanel** — Renamed buttons ("Download Image" → "Save Image", "Get AO3 Code" → "Copy for AO3"); emoji labels replaced with SVG icons; stone help panel; watermark colour fixed to `#7c3aed`.
+
+**PlatformPicker** — Violet icon badge on platform cards; removed `bg-white` card override; crisper descriptions; Privacy / Terms footer links added.
+
+**SettingsSheet** — Dynamic per-platform title: "iMessage settings", "WhatsApp settings", etc.
+
+**WorkspaceHeader** — "Twitter / X" → "X / Twitter" (correct brand order); "Google Search" → "Google".
+
+**SuccessModal (full rewrite)** — Removed all undefined token references (`text-text-gray`, `bg-primary-bg`, `rounded-material-lg`) that caused the modal to render completely unstyled. Converted to stone/violet system.
+
+**ProUpgradeModal (full rewrite)** — Header gradient `from-purple-600/to-indigo-600` → flat `bg-violet-600`; feature items `bg-violet-50`; Ko-fi button standardised to `bg-violet-600`; stone footer.
+
+---
+
+### 🎭 CharacterLibrary — Complete Rewrite
+
+**Problems with the old implementation:**
+
+1. **Self-managing component** — maintained its own internal `isOpen` state. The parent had declared `onCharactersOpen` in `WorkspaceHeader` but it was wired to `() => {/* CharacterLibrary is self-managing below */}` — a dead no-op. There was no way to open the panel programmatically.
+2. **Floating trigger pill fighting the export bar** — the trigger rendered at `fixed bottom-28 right-4`, directly overlapping the ExportPanel at `fixed bottom-0` (~116px tall). On mobile the trigger was unreachable.
+3. **`handleQuickApply` added blank messages** — clicking "Use" on a saved character called `handleQuickApplyCharacter`, which added a new message with empty `content`. It never touched the contact name or avatar in Settings. Completely wrong behaviour.
+4. **`<style jsx>` silently dropped** — plain Next.js (no `styled-jsx` package) ignores `<style jsx>` blocks entirely. The `slideInRight` keyframe animation never ran.
+5. **Old design tokens** — `bg-blue-50/border-blue-200` banner and `purple-600` gradient buttons inconsistent with new palette.
+
+**New `src/components/CharacterLibrary.tsx` (~283 lines):**
+- **Controlled component**: `isOpen: boolean` + `onClose: () => void` passed from parent.
+- **New prop**: `onSetAsContact: (name: string, avatarUrl: string) => void` — replaces the removed `onQuickApply`.
+- **My Library tab** (default): characters sorted by `lastUsed` descending, avatar thumbnail, tap-to-rename (click → inline `<input>`, Enter/blur to save), **"Set as contact"** / **"Set as tweeter"** button that calls `onSetAsContact` then `onClose()`, trash icon.
+- **Browse tab**: search input, category filter pills (all / modern / diversity / fantasy / age-varied / neutral), 3-column grid of presets, "Save to library" / "✓ Saved" state buttons.
+- `setLabel` adapts per platform: `"Set as tweeter"` for Twitter, `"Set as contact"` for everything else.
+- Uses inline `<style>` (not `<style jsx>`) for `slideInRight` keyframe — works in all React environments.
+- Backdrop overlay click dismisses the panel.
+
+---
+
+### 🔧 index.tsx — Wiring & Layout Fixes
+
+| Change | Before | After |
+|--------|--------|-------|
+| CharacterLibrary open state | Internal `isOpen`, no-op `onCharactersOpen` | `const [showCharacters, setShowCharacters]` + `onCharactersOpen={() => setShowCharacters(true)}` |
+| CharacterLibrary wrapper | `<div className="fixed bottom-28 right-4 z-30">` | Removed; `<CharacterLibrary>` is a plain sibling of `<SettingsSheet>` |
+| Message list scroll area | No bottom padding | `pb-32` — content no longer hidden behind ExportPanel |
+| Quick-apply handler | `handleQuickApplyCharacter` (added blank messages) | `handleSetAsContact` — updates the correct per-template settings key(s) |
+| Footer | Rendered in workspace view | Removed — was fully obscured by ExportPanel at `fixed bottom-0` |
+
+**`handleSetAsContact` mapping:**
+- `ios` → `iosContactName` + `iosAvatarUrl`
+- `android` → `androidContactName` + `androidAvatarUrl`
+- `twitter` → `twitterDisplayName` + `twitterAvatarUrl`
+- `google` → `googleQuery` (name only)
+
+---
+
+### 🐛 Mistakes & Lessons Learned
+
+#### Undefined Tailwind Tokens Are Invisible Failures
+Tokens like `text-text-gray` or `rounded-material-lg` that aren't in `tailwind.config` produce **zero build error, zero warning** — the class is simply ignored. Elements render unstyled. If a component looks visually broken and you can't tell why, audit every class name against the actual config.
+
+#### `<style jsx>` Is Ignored Without `styled-jsx`
+Plain Next.js does **not** include `styled-jsx` unless explicitly added as a package. `<style jsx>` blocks are silently dropped — no error, but the CSS never applies. For component-scoped keyframes, use a bare `<style>` tag (no `jsx` attribute), or add the keyframe to `globals.css`.
+
+#### PowerShell Heredoc Corrupts JSX Files
+JSX contains `<`, `>`, `"`, and `${...}` template expressions that interact badly with PowerShell `@'...'@` heredoc parsing. The heredoc appears to succeed but the file may be truncated or contain escaped garbage. **Use Python** (`open(..., 'w').write(...)`) to write large source files from the terminal — no character conflicts.
+
+#### `create_file` Cannot Overwrite Existing Files
+The tool rejects calls on files that already exist. For rewrites, use the terminal (Python/PowerShell) or `replace_string_in_file` for targeted edits.
+
+#### Self-Managing Panels Break Parent-Controlled UX
+When a panel manages its own open state internally, the parent loses control. Any button or hotkey in the parent that *should* open the panel has to be wired to a no-op. Panels/sheets/modals should always be **controlled**: `isOpen` + `onClose` passed from the parent that owns the open state.
+
+#### Fixed-Position Overlays Require Matching Scroll Padding
+ExportPanel is `fixed bottom-0` and ~116px tall. Without `pb-32` on the scroll area, the last message(s) were permanently hidden under it. Any `overflow-y-auto` container with a persistent fixed element sitting below it needs equivalent bottom padding.
+
+---
+
+### 📦 Commits
+
+| Hash | Summary |
+|------|---------|
+| `af51216` | feat: rewrite CharacterLibrary (controlled, set-as-contact) + fix export bar overlap |
+| *(preceding session)* | PreviewPane, ExportPanel, PlatformPicker, SettingsSheet, WorkspaceHeader, SuccessModal, ProUpgradeModal restyled to stone/violet system |
+
+---
+
 ## March 11, 2026 — Image Pipeline Overhaul, CSP Hardening & Production Stabilisation
 
 ### 🏗️ Architecture: Image-Only Export Pipeline (ImgBB)
