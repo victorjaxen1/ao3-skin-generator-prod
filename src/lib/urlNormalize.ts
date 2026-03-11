@@ -108,10 +108,6 @@ export function normalizeImageUrl(raw: string): string {
 
 const EXPIRING_PATTERNS: { pattern: RegExp; message: string }[] = [
   {
-    pattern: /encrypted-tbn\d*\.gstatic\.com/i,
-    message: '⚠️ This is a Google image search thumbnail — not the original image. It may disappear or change. Right-click the image in Google and choose "Open image in new tab", then paste that URL instead.',
-  },
-  {
     pattern: /cdn\.discordapp\.com\/attachments\//i,
     message: '⚠️ Discord attachment URLs expire in 24 hours. Right-click the image → "Copy image address" and re-host on imgbb.com for a permanent link.',
   },
