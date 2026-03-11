@@ -116,8 +116,15 @@ export const SettingsSheet: React.FC<Props> = ({
     ));
   };
 
+  const sheetTitle = {
+    ios: 'iMessage settings',
+    android: 'WhatsApp settings',
+    twitter: 'X / Twitter settings',
+    google: 'Google settings',
+  }[template] ?? 'Settings';
+
   return (
-    <BottomSheet isOpen={isOpen} onClose={onClose} title="Settings">
+    <BottomSheet isOpen={isOpen} onClose={onClose} title={sheetTitle}>
       <div className="divide-y divide-stone-100">
         {/* iOS Settings */}
         {template === 'ios' && (

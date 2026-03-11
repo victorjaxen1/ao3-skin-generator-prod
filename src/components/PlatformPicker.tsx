@@ -11,7 +11,7 @@ const PLATFORMS = [
   {
     id: 'ios' as const,
     name: 'iMessage',
-    description: 'Fake iPhone text conversation',
+    description: 'iPhone texts',
     emoji: '💬',
     color: 'bg-blue-50 border-blue-200 hover:border-blue-400',
     iconColor: 'text-blue-500',
@@ -19,23 +19,23 @@ const PLATFORMS = [
   {
     id: 'android' as const,
     name: 'WhatsApp',
-    description: 'Fake WhatsApp chat thread',
+    description: 'WhatsApp chat',
     emoji: '📱',
     color: 'bg-green-50 border-green-200 hover:border-green-400',
     iconColor: 'text-green-500',
   },
   {
     id: 'twitter' as const,
-    name: 'Twitter / X',
-    description: 'Fake tweet or thread',
+    name: 'X / Twitter',
+    description: 'Tweet or thread',
     emoji: '𝕏',
-    color: 'bg-stone-50 border-stone-200 hover:border-stone-400',
+    color: 'bg-stone-100 border-stone-200 hover:border-stone-400',
     iconColor: 'text-stone-800',
   },
   {
     id: 'google' as const,
-    name: 'Google Search',
-    description: 'Fake search results page',
+    name: 'Google',
+    description: 'Search results',
     emoji: '🔍',
     color: 'bg-amber-50 border-amber-200 hover:border-amber-400',
     iconColor: 'text-amber-500',
@@ -65,11 +65,14 @@ export const PlatformPicker: React.FC<Props> = ({ onSelectPlatform, onLoadExampl
     <div className="min-h-screen bg-stone-50 flex flex-col items-center justify-center px-4 py-12">
       {/* Logo & Title */}
       <div className="text-center mb-10">
+        <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-violet-600 mb-4 shadow-lg">
+          <span className="text-2xl">✦</span>
+        </div>
         <h1 className="text-3xl sm:text-4xl font-bold text-stone-900 tracking-tight">
           AO3 SkinGen
         </h1>
-        <p className="text-stone-500 mt-2 text-base sm:text-lg max-w-md mx-auto">
-          Create fake social media screenshots for your fanfics
+        <p className="text-stone-500 mt-2 text-sm sm:text-base max-w-xs mx-auto leading-relaxed">
+          Fake screenshots for your fanfics
         </p>
       </div>
 
@@ -79,7 +82,7 @@ export const PlatformPicker: React.FC<Props> = ({ onSelectPlatform, onLoadExampl
           <button
             key={platform.id}
             onClick={() => onSelectPlatform(platform.id)}
-            className={`group relative flex flex-col items-center justify-center p-6 sm:p-8 rounded-2xl border-2 bg-white transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 active:scale-[0.98] ${platform.color}`}
+            className={`group relative flex flex-col items-center justify-center p-6 sm:p-8 rounded-2xl border-2 transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 active:scale-[0.98] ${platform.color}`}
           >
             <span className={`text-3xl sm:text-4xl mb-3 ${platform.iconColor}`}>
               {platform.emoji}
@@ -115,9 +118,12 @@ export const PlatformPicker: React.FC<Props> = ({ onSelectPlatform, onLoadExampl
       )}
 
       {/* Footer */}
-      <div className="mt-12 text-center">
-        <p className="text-xs text-stone-400">
-          Free & open source · No account needed
+      <div className="mt-12 text-center space-y-1">
+        <p className="text-xs text-stone-400">Free &amp; open source · No account needed</p>
+        <p className="text-xs text-stone-300">
+          <a href="/privacy-policy.html" className="hover:text-stone-500 transition-colors">Privacy</a>
+          {' · '}
+          <a href="/terms-of-service.html" className="hover:text-stone-500 transition-colors">Terms</a>
         </p>
       </div>
     </div>

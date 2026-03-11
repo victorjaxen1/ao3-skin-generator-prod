@@ -57,8 +57,8 @@ export const WorkspaceHeader: React.FC<Props> = ({
   const templateLabels: Record<string, string> = {
     ios: 'iMessage',
     android: 'WhatsApp',
-    twitter: 'Twitter / X',
-    google: 'Google Search',
+    twitter: 'X / Twitter',
+    google: 'Google',
   };
 
   const displayName = contactName || templateLabels[template] || 'Untitled';
