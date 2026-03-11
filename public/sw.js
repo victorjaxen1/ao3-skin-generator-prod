@@ -51,6 +51,10 @@ self.addEventListener('fetch', (event) => {
   // Skip Chrome extensions and other protocols
   if (!url.protocol.startsWith('http')) return;
 
+  // Skip cross-origin requests — let the browser handle them directly
+  // (CSP blocks the SW from fetching arbitrary external URLs anyway)
+  if (url.origin !== self.location.origin) return;
+
   // Network-first strategy for HTML pages
   if (request.headers.get('accept')?.includes('text/html')) {
     event.respondWith(
@@ -110,7 +114,7 @@ self.addEventListener('fetch', (event) => {
         return response;
       })
       .catch(() => {
-        return caches.match(request);
+        return caches.match(request).then(cached => cached || new Response('', { status: 408, statusText: 'Network Error' }));
       })
   );
 });

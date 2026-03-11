@@ -13,4 +13,4 @@
 [[headers]]
   for = "/*"
   [headers.values]
-    Content-Security-Policy = "img-src 'self' data: blob: https:; default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self' https://api.imgbb.com"
+    Content-Security-Policy = "img-src 'self' data: blob: https:; default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https:"
