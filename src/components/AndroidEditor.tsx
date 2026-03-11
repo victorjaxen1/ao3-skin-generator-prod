@@ -148,10 +148,10 @@ export const AndroidEditor: React.FC<Props> = ({ project, onChange, universalCha
             <label className="flex flex-col text-sm">
               <span className="font-medium mb-2 text-gray-700">Profile Picture URL</span>
               <div className="flex items-center gap-3">
-                {project.settings.instagramAvatarUrl && (
+                {project.settings.androidAvatarUrl && (
                   <div className="relative">
                     <Image 
-                      src={project.settings.instagramAvatarUrl} 
+                      src={project.settings.androidAvatarUrl} 
                       alt="Profile" 
                       width={64}
                       height={64}
@@ -160,7 +160,7 @@ export const AndroidEditor: React.FC<Props> = ({ project, onChange, universalCha
                     />
                     <button
                       type="button"
-                      onClick={() => updateSettings('instagramAvatarUrl', '')}
+                      onClick={() => updateSettings('androidAvatarUrl', '')}
                       className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full text-xs hover:bg-red-600 transition flex items-center justify-center"
                       title="Remove photo"
                     >
@@ -170,8 +170,8 @@ export const AndroidEditor: React.FC<Props> = ({ project, onChange, universalCha
                 )}
                 <input 
                   className="flex-1 border-2 border-gray-300 px-3 py-2 rounded-lg focus:ring-2 focus:ring-green-500"
-                  value={project.settings.instagramAvatarUrl || ''}
-                  onChange={e => updateSettings('instagramAvatarUrl', e.target.value)}
+                  value={project.settings.androidAvatarUrl || ''}
+                  onChange={e => updateSettings('androidAvatarUrl', e.target.value)}
                   placeholder="Paste image URL"
                 />
 

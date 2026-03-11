@@ -259,8 +259,8 @@ async function renderChunk(project: SkinProject, scale: number): Promise<HTMLCan
   const captureWidth = captureArea.scrollWidth;
   const captureHeight = captureArea.scrollHeight;
 
-  const canvas = await html2canvas(captureArea, {
-    backgroundColor: '#ffffff',
+  const canvas = await (html2canvas as any)(captureArea, {
+    background: '#ffffff',
     scale,
     logging: false,
     useCORS: true,

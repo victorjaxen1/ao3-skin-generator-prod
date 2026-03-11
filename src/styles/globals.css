@@ -2,39 +2,28 @@
 @tailwind components;
 @tailwind utilities;
 
-/* AO3 SkinGen Design System - Google Material Inspired */
+/* AO3 SkinGen — Clean Design System */
 :root {
-  --primary: #1a73e8;
-  --primary-dark: #0d47a1;
-  --primary-light: #8ab4f8;
-  --primary-bg: #e8f0fe;
-  --secondary: #34a853;
-  --accent: #fbbc05;
-  --danger: #ea4335;
-  --text-dark: #202124;
-  --text-gray: #5f6368;
-  --text-light: #e8eaed;
-  --bg-light: #f8f9fa;
-  --border-light: #dadce0;
-  --shadow-sm: 0 1px 2px rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15);
-  --shadow-md: 0 2px 6px rgba(60,64,67,0.3), 0 1px 8px 1px rgba(60,64,67,0.15);
-  --shadow-lg: 0 4px 12px rgba(60,64,67,0.3), 0 1px 16px 2px rgba(60,64,67,0.15);
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 16px;
+  --accent: #7c3aed;         /* violet-600 */
+  --accent-hover: #6d28d9;   /* violet-700 */
+  --accent-light: #ede9fe;   /* violet-100 */
+  --danger: #ef4444;          /* red-500 */
+  --text-primary: #1c1917;    /* stone-900 */
+  --text-secondary: #78716c;  /* stone-500 */
+  --text-tertiary: #a8a29e;   /* stone-400 */
+  --bg-page: #fafaf9;         /* stone-50 */
+  --bg-card: #ffffff;
+  --border: #e7e5e4;          /* stone-200 */
+  --border-hover: #d6d3d1;    /* stone-300 */
 }
 
 html, body { 
   height: 100%; 
-  font-family: 'Inter', 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif;
-  color: var(--text-dark);
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  color: var(--text-primary);
+  background-color: var(--bg-page);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-}
-
-h1, h2, h3, h4, h5, h6 {
-  font-family: 'Inter', 'Roboto', -apple-system, sans-serif;
-  font-weight: 600;
 }
 
 /* Smooth transitions for interactive elements */
@@ -42,13 +31,13 @@ button, a, input, select, textarea {
   transition: all 0.15s ease-out;
 }
 
-/* Focus states - Material style */
+/* Focus states — accent ring */
 button:focus-visible, 
 a:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  outline: 2px solid var(--primary);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
@@ -59,32 +48,26 @@ textarea:focus-visible {
 }
 
 @keyframes slideUp {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(100%); }
   to { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes pulse-subtle {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.7; }
+@keyframes fadeOverlay {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 /* Click-to-edit: Message card focus animation */
 @keyframes message-focus-pulse {
-  0% { 
-    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
-  }
-  50% { 
-    box-shadow: 0 0 0 8px rgba(59, 130, 246, 0);
-  }
-  100% { 
-    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
-  }
+  0% { box-shadow: 0 0 0 0 rgba(124, 58, 237, 0.5); }
+  50% { box-shadow: 0 0 0 8px rgba(124, 58, 237, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(124, 58, 237, 0); }
 }
 
 .message-card-focused {
   animation: message-focus-pulse 1s ease-out 3;
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.05) 0%, rgba(147, 51, 234, 0.05) 100%) !important;
-  border-color: #3b82f6 !important;
+  background: rgba(124, 58, 237, 0.04) !important;
+  border-color: #7c3aed !important;
 }
 
 .animate-fadeIn {
@@ -92,13 +75,13 @@ textarea:focus-visible {
 }
 
 .animate-slideUp {
-  animation: slideUp 0.25s ease-out;
+  animation: slideUp 0.3s cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 /* Custom scrollbar for Webkit browsers */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -106,12 +89,12 @@ textarea:focus-visible {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 4px;
+  background: #d6d3d1;
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
+  background: #a8a29e;
 }
 
 /* Line clamp utility */

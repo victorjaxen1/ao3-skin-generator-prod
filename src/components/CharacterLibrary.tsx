@@ -112,12 +112,12 @@ export const CharacterLibrary: React.FC<Props> = ({
     return (
       <button
         onClick={() => setIsOpen(true)}
-        className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-lg transition-all font-medium text-sm shadow-md hover:shadow-lg"
+        className="flex items-center gap-2 px-3 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-full transition-all font-medium text-sm shadow-lg hover:shadow-xl"
       >
-        <span>📚</span>
-        <span className="hidden sm:inline">Character Presets</span>
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span className="hidden sm:inline">Characters</span>
         {characters.length > 0 && (
-          <span className="bg-white/30 text-white text-xs px-1.5 py-0.5 rounded-full font-bold">
+          <span className="bg-white/25 text-white text-xs px-1.5 py-0.5 rounded-full font-bold">
             {characters.length}
           </span>
         )}
@@ -136,14 +136,14 @@ export const CharacterLibrary: React.FC<Props> = ({
       {/* Slide-out Panel */}
       <div className="fixed right-0 top-0 bottom-0 w-full sm:max-w-2xl bg-white shadow-2xl z-[70] overflow-hidden animate-slideInRight flex flex-col">
         {/* Header */}
-        <div className="bg-gradient-to-r from-purple-600 via-pink-500 to-purple-600 text-white p-5 shadow-lg">
+        <div className="bg-violet-600 text-white p-5 shadow-lg">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
-              <span className="text-3xl">📚</span>
+              <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
               <div>
-                <h2 className="font-bold text-xl">Character Library</h2>
-                <p className="text-xs text-purple-100">
-                  Browse {CHARACTER_BANK.length} presets • {characters.length} saved
+                <h2 className="font-bold text-xl">Characters</h2>
+                <p className="text-xs text-violet-200">
+                  {CHARACTER_BANK.length} presets · {characters.length} saved
                 </p>
               </div>
             </div>
