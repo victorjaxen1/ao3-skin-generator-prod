@@ -40,7 +40,7 @@ export const BottomSheet: React.FC<Props> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50">
+    <div className="fixed inset-0 z-[60]">
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/30 backdrop-blur-[2px] animate-fade-overlay"
@@ -70,8 +70,8 @@ export const BottomSheet: React.FC<Props> = ({
           </div>
         )}
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4">
+        {/* Content — extra bottom padding so last item clears screen edge */}
+        <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4 pb-8">
           {children}
         </div>
       </div>

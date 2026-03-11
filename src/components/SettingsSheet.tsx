@@ -82,6 +82,62 @@ const TextRow: React.FC<{
   </div>
 );
 
+/** URL input with live thumbnail preview */
+const ImageUrlRow: React.FC<{
+  label: string;
+  value: string;
+  placeholder?: string;
+  onChange: (v: string) => void;
+}> = ({ label, value, placeholder, onChange }) => (
+  <div className="py-3">
+    <span className="text-sm font-medium text-stone-900 block mb-2">{label}</span>
+    <input
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder || 'https://...'}
+      className="w-full text-xs text-stone-700 bg-stone-100 border-0 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-violet-500"
+    />
+    {value && (
+      <img
+        src={value}
+        alt={label}
+        className="mt-2 h-14 w-auto rounded-lg border border-stone-200 object-cover"
+        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+      />
+    )}
+  </div>
+);
+
+/** Colour swatch + hex input */
+const ColorRow: React.FC<{
+  label: string;
+  sublabel?: string;
+  value: string;
+  onChange: (v: string) => void;
+}> = ({ label, sublabel, value, onChange }) => (
+  <div className="flex items-center justify-between py-3 gap-3">
+    <div className="min-w-0">
+      <span className="text-sm font-medium text-stone-900">{label}</span>
+      {sublabel && <p className="text-xs text-stone-500 mt-0.5">{sublabel}</p>}
+    </div>
+    <div className="flex items-center gap-2 flex-shrink-0">
+      <input
+        type="color"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-8 h-8 rounded-lg cursor-pointer border border-stone-200 p-0.5 bg-transparent"
+      />
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="#000000"
+        className="w-20 text-xs text-stone-700 bg-stone-100 border-0 rounded-lg px-2 py-1.5 focus:ring-2 focus:ring-violet-500 font-mono"
+      />
+    </div>
+  </div>
+);
+
 export const SettingsSheet: React.FC<Props> = ({
   isOpen,
   onClose,
@@ -197,6 +253,20 @@ export const SettingsSheet: React.FC<Props> = ({
               />
             </div>
 
+            <SectionDivider label="Background images" />
+            <ImageUrlRow
+              label="Header image"
+              value={settings.iosHeaderImageUrl || ''}
+              placeholder="Header background image URL"
+              onChange={(v) => onUpdateSettings('iosHeaderImageUrl', v)}
+            />
+            <ImageUrlRow
+              label="Footer image"
+              value={settings.iosFooterImageUrl || ''}
+              placeholder="Footer background image URL"
+              onChange={(v) => onUpdateSettings('iosFooterImageUrl', v)}
+            />
+
             <SectionDivider label="Group chat" />
             <ToggleRow
               label="Group chat mode"
@@ -268,6 +338,18 @@ export const SettingsSheet: React.FC<Props> = ({
               checked={settings.androidAutoAlternate !== false}
               onChange={(v) => onUpdateSettings('androidAutoAlternate', v)}
             />
+            <ColorRow
+              label="Sent bubble colour"
+              sublabel="Outgoing message background"
+              value={settings.senderColor || '#25D366'}
+              onChange={(v) => onUpdateSettings('senderColor', v)}
+            />
+            <ColorRow
+              label="Received bubble colour"
+              sublabel="Incoming message background"
+              value={settings.receiverColor || '#ffffff'}
+              onChange={(v) => onUpdateSettings('receiverColor', v)}
+            />
 
             <SectionDivider label="Display" />
             <ToggleRow
@@ -308,6 +390,20 @@ export const SettingsSheet: React.FC<Props> = ({
                 placeholder="Avatar image URL"
               />
             </div>
+
+            <SectionDivider label="Background images" />
+            <ImageUrlRow
+              label="Header image"
+              value={settings.androidHeaderImageUrl || ''}
+              placeholder="Header background image URL"
+              onChange={(v) => onUpdateSettings('androidHeaderImageUrl', v)}
+            />
+            <ImageUrlRow
+              label="Footer image"
+              value={settings.androidFooterImageUrl || ''}
+              placeholder="Footer background image URL"
+              onChange={(v) => onUpdateSettings('androidFooterImageUrl', v)}
+            />
 
             <SectionDivider label="Group chat" />
             <ToggleRow
