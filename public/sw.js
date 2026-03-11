@@ -3,8 +3,8 @@
  * Enables offline editing and caching of assets
  */
 
-const CACHE_NAME = 'ao3-skin-generator-v1';
-const RUNTIME_CACHE = 'ao3-runtime-v1';
+const CACHE_NAME = 'ao3-skin-generator-v3';
+const RUNTIME_CACHE = 'ao3-runtime-v3';
 
 // Assets to cache on install
 const PRECACHE_ASSETS = [
