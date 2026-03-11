@@ -27,10 +27,10 @@ const nextConfig = {
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       // Fonts: self + Google Fonts
       "font-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com data:",
-      // Images: self + data URIs + blob (canvas export) + Cloudinary + Publit.io + Imgur + ImgBB
-      "img-src 'self' data: blob: https://res.cloudinary.com https://media.publit.io https://*.cloudinary.com https://i.imgur.com https://*.imgur.com https://i.ibb.co",
-      // Connections: self + Cloudinary API + Cloudinary CDN + Google Analytics
-      "connect-src 'self' https://api.cloudinary.com https://res.cloudinary.com https://*.cloudinary.com https://www.google-analytics.com https://analytics.google.com https://*.google-analytics.com https://*.analytics.google.com",
+      // Images: any HTTPS source (user can paste images from anywhere)
+      "img-src 'self' data: blob: https:",
+      // Connections: any HTTPS (ImgBB upload + any image host the SW may fetch)
+      "connect-src 'self' https:",
       // Prevent framing (clickjacking protection)
       "frame-ancestors 'none'",
       // Block object/embed (Flash, etc.)
@@ -67,27 +67,7 @@ const nextConfig = {
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: 'res.cloudinary.com',
-      },
-      {
-        protocol: 'https',
-        hostname: 'media.publit.io',
-      },
-      {
-        protocol: 'https',
-        hostname: '**.cloudinary.com',
-      },
-      {
-        protocol: 'https',
-        hostname: 'i.imgur.com',
-      },
-      {
-        protocol: 'https',
-        hostname: '**.imgur.com',
-      },
-      {
-        protocol: 'https',
-        hostname: 'i.ibb.co',
+        hostname: '**',
       },
     ],
     formats: ['image/avif', 'image/webp'],
