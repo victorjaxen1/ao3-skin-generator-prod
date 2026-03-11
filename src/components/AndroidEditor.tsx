@@ -7,6 +7,7 @@ import { useConfirm } from './ConfirmModal';
 import { useProjectEditor } from '../hooks/useProjectEditor';
 import FastModeInput from './FastModeInput';
 import { CompactMessageCard } from './CompactMessageCard';
+import { normalizeImageUrl } from '../lib/urlNormalize';
 
 // Predefined color palette for participants
 const PARTICIPANT_COLORS = [
@@ -505,12 +506,12 @@ export const AndroidEditor: React.FC<Props> = ({ project, onChange, universalCha
                 id="whatsapp-message-image-url"
                 type="text"
                 className="flex-1 border-2 border-gray-300 px-3 py-2 rounded-lg focus:ring-2 focus:ring-green-500 text-sm" 
-                placeholder="Paste image URL or upload"
-                title="Upload images free at imgur.com or imgbb.com"
+                placeholder="Paste image URL from Imgur, ImgBB, Google Drive, etc."
+                title="Paste any image address — share-page URLs are auto-converted"
               />
 
             </div>
-            <p className="text-xs text-gray-500 mt-1">💡 Free hosting: <a href="https://imgur.com" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">imgur.com</a> or <a href="https://imgbb.com" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">imgbb.com</a></p>
+            <p className="text-xs text-gray-500 mt-1">💡 Paste from <a href="https://imgbb.com" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">ImgBB</a>, <a href="https://imgur.com" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">Imgur</a>, Google Drive, Dropbox, and more — share-page URLs converted automatically</p>
           </label>
 
           <button
@@ -524,7 +525,7 @@ export const AndroidEditor: React.FC<Props> = ({ project, onChange, universalCha
               const imageInput = document.getElementById('whatsapp-message-image-url') as HTMLInputElement;
               
               const content = messageInput?.value.trim();
-              const imageUrl = imageInput?.value.trim();
+              const imageUrl = normalizeImageUrl(imageInput?.value.trim() || '');
               
               if (!content && !imageUrl) {
                 error('Please enter message text or add an image');

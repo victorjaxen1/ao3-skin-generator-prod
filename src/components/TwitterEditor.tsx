@@ -10,6 +10,7 @@ import {
   updateCharacterInCache 
 } from '../lib/characterCache';
 import { useProjectEditor } from '../hooks/useProjectEditor';
+import { normalizeImageUrl } from '../lib/urlNormalize';
 
 interface Props { 
   project: SkinProject; 
@@ -862,9 +863,9 @@ export const TwitterEditor: React.FC<Props> = ({ project, onChange, focusedMessa
                   <input 
                     className="border-2 border-gray-300 px-3 py-2 rounded-lg text-sm flex-1 focus:ring-2 focus:ring-blue-500"
                     value={newTweetImageUrl}
-                    onChange={(e) => setNewTweetImageUrl(e.target.value)}
-                    placeholder="Paste image URL or upload"
-                    title="Upload images free at imgur.com or imgbb.com"
+                    onChange={(e) => setNewTweetImageUrl(normalizeImageUrl(e.target.value))}
+                    placeholder="Paste image URL — Imgur, ImgBB, Google Drive, Dropbox, etc."
+                    title="Share-page URLs are auto-converted to direct image links"
                   />
 
                   {newTweetImageUrl && (
@@ -1435,10 +1436,10 @@ export const TwitterEditor: React.FC<Props> = ({ project, onChange, focusedMessa
                           <div className="flex items-center gap-2">
                             <input 
                               className="flex-1 border border-gray-300 px-3 py-2 rounded text-sm focus:ring-2 focus:ring-blue-500"
-                              placeholder="Paste image URL (press Enter to add)"
-                              title="Upload images free at imgur.com or imgbb.com"
+                              placeholder="Paste image URL — Imgur, ImgBB, Google Drive, Dropbox (press Enter to add)"
+                              title="Share-page URLs are auto-converted to direct image links"
                               onBlur={(e) => {
-                                const url = e.target.value.trim();
+                                const url = normalizeImageUrl(e.target.value.trim());
                                 if (url) {
                                   updateMsg(m.id, {attachments: [{type: 'image', url}]});
                                   e.target.value = '';
@@ -1446,7 +1447,7 @@ export const TwitterEditor: React.FC<Props> = ({ project, onChange, focusedMessa
                               }}
                               onKeyDown={(e) => {
                                 if (e.key === 'Enter') {
-                                  const url = (e.target as HTMLInputElement).value.trim();
+                                  const url = normalizeImageUrl((e.target as HTMLInputElement).value.trim());
                                   if (url) {
                                     updateMsg(m.id, {attachments: [{type: 'image', url}]});
                                     (e.target as HTMLInputElement).value = '';

@@ -7,6 +7,7 @@
 import React, { useState } from 'react';
 import Image from 'next/image';
 import { CHARACTER_BANK, AVATAR_CATEGORIES } from '../lib/characterBank';
+import { normalizeImageUrl, getExpiringUrlWarning, wasNormalized } from '../lib/urlNormalize';
 
 interface Props {
   value?: string; // Current avatar URL
@@ -22,6 +23,8 @@ export const AvatarSelector: React.FC<Props> = ({
   const [isOpen, setIsOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string>('modern');
   const [customUrl, setCustomUrl] = useState(value);
+  const [expiringWarning, setExpiringWarning] = useState<string | null>(null);
+  const [normalizedFrom, setNormalizedFrom] = useState<string | null>(null);
 
   // Filter characters by active category
   const filteredCharacters = CHARACTER_BANK.filter(
@@ -30,13 +33,20 @@ export const AvatarSelector: React.FC<Props> = ({
 
   const handleSelectAvatar = (url: string) => {
     setCustomUrl(url);
+    setExpiringWarning(null);
+    setNormalizedFrom(null);
     onChange(url);
     setIsOpen(false);
   };
 
   const handleCustomUrlChange = (newUrl: string) => {
-    setCustomUrl(newUrl);
-    onChange(newUrl);
+    const normalized = normalizeImageUrl(newUrl);
+    const warning = getExpiringUrlWarning(newUrl);
+    const didNormalize = wasNormalized(newUrl, normalized);
+    setCustomUrl(normalized);
+    setExpiringWarning(warning);
+    setNormalizedFrom(didNormalize ? newUrl : null);
+    onChange(normalized);
   };
 
   return (
@@ -78,6 +88,20 @@ export const AvatarSelector: React.FC<Props> = ({
           {isOpen ? '✕ Close' : '🎭 Presets'}
         </button>
       </div>
+
+      {/* Normalized URL feedback */}
+      {normalizedFrom && (
+        <p className="text-xs text-green-700 mt-1 flex items-center gap-1">
+          <span>✅ URL converted to direct image link automatically.</span>
+        </p>
+      )}
+
+      {/* Expiring URL warning */}
+      {expiringWarning && (
+        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2 mt-1">
+          {expiringWarning}
+        </p>
+      )}
 
       {/* Character bank dropdown */}
       {isOpen && (
@@ -141,7 +165,7 @@ export const AvatarSelector: React.FC<Props> = ({
 
           {/* Custom URL hint */}
           <div className="px-3 py-2 bg-gray-50 border-t border-gray-200 text-xs text-gray-600">
-            💡 <strong>Tip:</strong> You can also paste any custom image URL above (Imgur, Imgbb, etc.)
+            💡 Paste a URL from <strong>Imgur</strong>, <strong>ImgBB</strong>, <strong>Google Drive</strong>, <strong>Dropbox</strong>, or any direct image link. Share-page URLs are converted automatically.
           </div>
         </div>
       )}
