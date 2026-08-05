@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/router';
 import { defaultProject, SkinProject, UniversalCharacter, Message } from '../lib/schema';
@@ -48,6 +48,7 @@ export default function HomePage() {
   const [successAction, setSuccessAction] = useState<'image' | 'ao3code'>('image');
   const [saveStatus, setSaveStatus] = useState<'saved' | 'unsaved' | 'saving'>('saved');
   const [showCharacters, setShowCharacters] = useState(false);
+  const [showMobilePreview, setShowMobilePreview] = useState(true);
 
   // Characters
   const [universalCharacters, setUniversalCharacters] = useState<UniversalCharacter[]>([]);
@@ -71,6 +72,35 @@ export default function HomePage() {
     if (stored) {
       try { setUniversalCharacters(JSON.parse(stored)); } catch { /* ignore */ }
     }
+    // Remember whether the mobile preview was collapsed.
+    if (localStorage.getItem('ao3skin_mobile_preview') === 'collapsed') {
+      setShowMobilePreview(false);
+    }
+  }, []);
+
+  // Keep the newest message in view as it's added, or the preview stops being
+  // a feedback loop — you type and your message lands below the fold.
+  const mobilePreviewRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const root = mobilePreviewRef.current;
+    if (!root || !showMobilePreview) return;
+    // PreviewPane scrolls in its own inner container, so find whichever
+    // element actually overflows rather than assuming it's the wrapper.
+    const scroller =
+      [root, ...Array.from(root.querySelectorAll<HTMLElement>('*'))].find(
+        el => el.scrollHeight > el.clientHeight + 1
+      ) ?? root;
+    scroller.scrollTop = scroller.scrollHeight;
+  }, [project.messages.length, showMobilePreview]);
+
+  const toggleMobilePreview = useCallback(() => {
+    setShowMobilePreview(prev => {
+      const next = !prev;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('ao3skin_mobile_preview', next ? 'expanded' : 'collapsed');
+      }
+      return next;
+    });
   }, []);
 
   // ── Mount: load project from storage or URL ─────────────────────────────
@@ -344,6 +374,57 @@ export default function HomePage() {
             />
           </div>
 
+          {/* ─── Mobile live preview (desktop uses the column on the right) ── */}
+          <div className="md:hidden flex flex-col flex-shrink-0 border-t border-stone-200 bg-white">
+            <button
+              type="button"
+              onClick={toggleMobilePreview}
+              aria-expanded={showMobilePreview}
+              aria-controls="mobile-preview-body"
+              className="flex items-center justify-between px-4 py-2 text-left"
+            >
+              <span className="text-xs font-medium text-stone-500 uppercase tracking-wide">
+                Preview
+              </span>
+              <span className="flex items-center gap-2">
+                {project.messages.length > 0 && (
+                  <span className="text-xs text-violet-600 font-medium">
+                    {project.messages.length} messages
+                  </span>
+                )}
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className={`text-stone-400 transition-transform ${showMobilePreview ? '' : 'rotate-180'}`}
+                >
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </span>
+            </button>
+
+            {showMobilePreview && (
+              <div
+                id="mobile-preview-body"
+                ref={mobilePreviewRef}
+                className="h-[38vh] min-h-[160px] overflow-y-auto border-t border-stone-100"
+              >
+                <PreviewPane
+                  project={project}
+                  mobile={true}
+                  dark={dark}
+                  onMessageClick={handleMessageClick}
+                  editModeEnabled={true}
+                />
+              </div>
+            )}
+          </div>
+
           {/* Compose bar */}
           <ComposeBar
             template={project.template}
@@ -375,14 +456,18 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* ─── Hidden preview for mobile export capture ───────────────── */}
-      <div className="md:hidden fixed -left-[9999px] top-0" aria-hidden="true">
-        <PreviewPane
-          project={project}
-          mobile={true}
-          dark={dark}
-        />
-      </div>
+      {/* ─── Hidden preview for mobile export capture ───────────────────
+          Only needed when the visible mobile preview is collapsed — export
+          measures #workskin, and rendering both would duplicate the work. */}
+      {!showMobilePreview && (
+        <div className="md:hidden fixed -left-[9999px] top-0" aria-hidden="true">
+          <PreviewPane
+            project={project}
+            mobile={true}
+            dark={dark}
+          />
+        </div>
+      )}
 
       {/* ─── Character Library ────────────────────────────────────── */}
       <CharacterLibrary
