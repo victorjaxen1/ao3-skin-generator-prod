@@ -8,7 +8,7 @@ test('VISUAL: landing then workspace', async ({ page }, testInfo) => {
     contentType: 'image/png',
   });
 
-  await page.getByRole('button', { name: /iMessage/ }).click();
+  await page.getByRole('button', { name: 'Start a blank iMessage conversation' }).click();
   await page.getByPlaceholder('Add a message…').waitFor();
   await page.waitForTimeout(500);
   await testInfo.attach('02-workspace.png', {

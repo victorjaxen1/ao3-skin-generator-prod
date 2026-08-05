@@ -210,6 +210,7 @@ export const ComposeBar: React.FC<Props> = ({
                 {/* File upload button */}
                 <label
                   title="Upload image"
+                  aria-label="Upload image"
                   className={`flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-lg border border-stone-200 cursor-pointer transition-colors ${
                     isUploadingImage
                       ? 'bg-violet-100 text-violet-400 cursor-not-allowed'
@@ -271,6 +272,7 @@ export const ComposeBar: React.FC<Props> = ({
                 />
                 <label
                   title="Upload image"
+                  aria-label="Upload image"
                   className={`flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-lg border border-stone-200 cursor-pointer transition-colors ${
                     isUploadingImage
                       ? 'bg-violet-100 text-violet-400 cursor-not-allowed'
@@ -347,6 +349,7 @@ export const ComposeBar: React.FC<Props> = ({
                 : 'bg-stone-100 text-stone-600'
             }`}
             title={isOutgoing ? 'Sending as: You' : 'Sending as: Them'}
+            aria-label={`Sending as ${isOutgoing ? 'You' : 'Them'} — tap to switch`}
           >
             {isOutgoing ? 'You' : 'Them'}
           </button>
@@ -387,6 +390,8 @@ export const ComposeBar: React.FC<Props> = ({
             showDetails ? 'bg-violet-100 text-violet-600' : 'bg-stone-100 text-stone-500 hover:bg-stone-200'
           }`}
           title="Add details (timestamp, image, etc.)"
+          aria-label="Add details (timestamp, image, etc.)"
+          aria-expanded={showDetails}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <line x1="12" y1="5" x2="12" y2="19" />
@@ -409,6 +414,7 @@ export const ComposeBar: React.FC<Props> = ({
         <button
           type="button"
           onClick={handleSend}
+          aria-label="Send message"
           disabled={!content.trim() && template !== 'google'}
           className={`flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full transition-colors ${
             content.trim()

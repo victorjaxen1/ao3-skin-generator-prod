@@ -29,7 +29,7 @@ test('TASK: cold start → iMessage with 2 messages → export', async ({ page }
   });
 
   // Step 1: choose platform
-  await page.getByRole('button', { name: /iMessage/ }).click();
+  await page.getByRole('button', { name: 'Start a blank iMessage conversation' }).click();
   steps++;
 
   const composer = page.getByPlaceholder('Add a message…');
@@ -69,7 +69,7 @@ test('TASK: cold start → iMessage with 2 messages → export', async ({ page }
 // ───────────────────────────────────────────────────────────────────────────
 test('FEEDBACK: preview visibility while composing', async ({ page }, testInfo) => {
   await page.goto('/');
-  await page.getByRole('button', { name: /iMessage/ }).click();
+  await page.getByRole('button', { name: 'Start a blank iMessage conversation' }).click();
 
   const composer = page.getByPlaceholder('Add a message…');
   await composer.fill('does this show up anywhere');
@@ -91,17 +91,16 @@ test('FEEDBACK: preview visibility while composing', async ({ page }, testInfo) 
 // ───────────────────────────────────────────────────────────────────────────
 // Task 3 — do template chips disclose their platform?
 // ───────────────────────────────────────────────────────────────────────────
-test('DISCLOSURE: template chip → platform is not announced', async ({ page }) => {
+test('DISCLOSURE: template chip announces its platform', async ({ page }) => {
   await page.goto('/');
 
-  const chip = page.getByRole('button', { name: 'Group Chat' });
+  const chip = page.getByRole('button', { name: /Group Chat/ });
   await expect(chip).toBeVisible();
 
-  // Nothing on the chip itself says which platform it will switch you to.
   const chipText = (await chip.textContent())?.trim();
-  const chipTitle = await chip.getAttribute('title');
+  const chipLabel = await chip.getAttribute('aria-label');
   log('chip label', chipText);
-  log('chip title attr', chipTitle ?? '(none)');
+  log('chip aria-label', chipLabel ?? '(none)');
 
   await chip.click();
 
@@ -115,7 +114,7 @@ test('DISCLOSURE: template chip → platform is not announced', async ({ page })
 // ───────────────────────────────────────────────────────────────────────────
 test('A11Y: icon-only controls lacking an accessible name', async ({ page }, testInfo) => {
   await page.goto('/');
-  await page.getByRole('button', { name: /iMessage/ }).click();
+  await page.getByRole('button', { name: 'Start a blank iMessage conversation' }).click();
   await expect(page.getByPlaceholder('Add a message…')).toBeVisible();
 
   const unnamed = await page.$$eval('button', (btns) =>
@@ -149,9 +148,9 @@ test('A11Y: icon-only controls lacking an accessible name', async ({ page }, tes
 // ───────────────────────────────────────────────────────────────────────────
 // Task 5 — how much of the AO3 payoff is hidden on arrival at export
 // ───────────────────────────────────────────────────────────────────────────
-test('DISCLOSURE: AO3 instructions are collapsed by default', async ({ page }) => {
+test('DISCLOSURE: AO3 instructions on arrival at export', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: /iMessage/ }).click();
+  await page.getByRole('button', { name: 'Start a blank iMessage conversation' }).click();
 
   const composer = page.getByPlaceholder('Add a message…');
   await composer.fill('test');

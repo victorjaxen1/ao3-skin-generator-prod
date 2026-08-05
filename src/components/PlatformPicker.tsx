@@ -5,6 +5,10 @@ import { TEMPLATE_EXAMPLES } from '../lib/examples';
 interface Props {
   onSelectPlatform: (template: 'ios' | 'android' | 'twitter' | 'google') => void;
   onLoadExample: (project: SkinProject) => void;
+  /** True when the user has work in progress that a selection would discard. */
+  hasWorkInProgress?: boolean;
+  /** Return to the workspace without changing anything. */
+  onCancel?: () => void;
 }
 
 const PLATFORMS = [
@@ -58,11 +62,50 @@ const EXAMPLE_LABELS: Record<string, string> = {
   'google-news-articles': 'News Articles',
 };
 
-export const PlatformPicker: React.FC<Props> = ({ onSelectPlatform, onLoadExample }) => {
-  const allExamples = Object.entries(TEMPLATE_EXAMPLES).flatMap(([, examples]) => examples);
+/** Display name for the platform a template belongs to. */
+const PLATFORM_NAME: Record<string, string> = {
+  ios: 'iMessage',
+  android: 'WhatsApp',
+  twitter: 'X / Twitter',
+  google: 'Google',
+};
+
+export const PlatformPicker: React.FC<Props> = ({
+  onSelectPlatform,
+  onLoadExample,
+  hasWorkInProgress = false,
+  onCancel,
+}) => {
+  // Both actions replace the current project outright, so confirm first when
+  // there is something to lose.
+  const confirmDiscard = () =>
+    !hasWorkInProgress ||
+    window.confirm('This replaces your current conversation. Continue?');
+
+  const handlePlatform = (id: 'ios' | 'android' | 'twitter' | 'google') => {
+    if (confirmDiscard()) onSelectPlatform(id);
+  };
+
+  const handleExample = (example: SkinProject) => {
+    if (confirmDiscard()) onLoadExample(example);
+  };
 
   return (
     <div className="min-h-screen bg-stone-50 flex flex-col items-center justify-center px-4 py-12">
+      {/* Every choice below replaces the current project, so when there is work
+          to lose give an explicit way back to it. */}
+      {hasWorkInProgress && onCancel && (
+        <button
+          onClick={onCancel}
+          className="mb-6 inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-violet-700 bg-violet-50 border border-violet-200 rounded-full hover:bg-violet-100 transition-colors"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+          Keep editing my conversation
+        </button>
+      )}
+
       {/* Logo & Title */}
       <div className="text-center mb-10">
         <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-violet-600 mb-4 shadow-lg">
@@ -81,7 +124,8 @@ export const PlatformPicker: React.FC<Props> = ({ onSelectPlatform, onLoadExampl
         {PLATFORMS.map((platform) => (
           <button
             key={platform.id}
-            onClick={() => onSelectPlatform(platform.id)}
+            onClick={() => handlePlatform(platform.id)}
+            aria-label={`Start a blank ${platform.name} conversation`}
             className={`group relative flex flex-col items-center justify-center p-6 sm:p-8 rounded-2xl border-2 transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 active:scale-[0.98] ${platform.color}`}
           >
             <span className={`text-3xl sm:text-4xl mb-3 ${platform.iconColor}`}>
@@ -97,22 +141,34 @@ export const PlatformPicker: React.FC<Props> = ({ onSelectPlatform, onLoadExampl
         ))}
       </div>
 
-      {/* Quick Start Templates */}
-      {allExamples.length > 0 && (
+      {/* Quick Start Templates — grouped, so a chip's platform is never a surprise */}
+      {Object.keys(TEMPLATE_EXAMPLES).length > 0 && (
         <div className="mt-10 w-full max-w-lg">
-          <p className="text-xs font-medium text-stone-400 uppercase tracking-wider mb-3 text-center">
+          <p className="text-xs font-medium text-stone-400 uppercase tracking-wider mb-4 text-center">
             Or start from a template
           </p>
-          <div className="flex flex-wrap justify-center gap-2">
-            {allExamples.map((example) => (
-              <button
-                key={example.id}
-                onClick={() => onLoadExample(example)}
-                className="px-3 py-1.5 text-xs font-medium text-stone-600 bg-white border border-stone-200 rounded-full hover:border-violet-400 hover:text-violet-700 hover:bg-violet-50 transition-all"
-              >
-                {EXAMPLE_LABELS[example.id] || example.id}
-              </button>
-            ))}
+          <div className="space-y-3">
+            {Object.entries(TEMPLATE_EXAMPLES).map(([platform, examples]) =>
+              examples.length === 0 ? null : (
+                <div key={platform}>
+                  <p className="text-[11px] font-semibold text-stone-400 mb-1.5 text-center">
+                    {PLATFORM_NAME[platform] || platform}
+                  </p>
+                  <div className="flex flex-wrap justify-center gap-2">
+                    {examples.map((example) => (
+                      <button
+                        key={example.id}
+                        onClick={() => handleExample(example)}
+                        aria-label={`${EXAMPLE_LABELS[example.id] || example.id} — ${PLATFORM_NAME[platform] || platform} template`}
+                        className="px-3 py-1.5 text-xs font-medium text-stone-600 bg-white border border-stone-200 rounded-full hover:border-violet-400 hover:text-violet-700 hover:bg-violet-50 transition-all"
+                      >
+                        {EXAMPLE_LABELS[example.id] || example.id}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )
+            )}
           </div>
         </div>
       )}

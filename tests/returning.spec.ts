@@ -8,7 +8,7 @@ import { test, expect } from '@playwright/test';
 test('RETURNING: saved work skips the picker', async ({ page }) => {
   // First visit — pick a platform and type something, which persists.
   await page.goto('/');
-  await page.getByRole('button', { name: /iMessage/ }).click();
+  await page.getByRole('button', { name: 'Start a blank iMessage conversation' }).click();
 
   const composer = page.getByPlaceholder('Add a message…');
   await composer.click();

@@ -49,6 +49,9 @@ export default function HomePage() {
   const [saveStatus, setSaveStatus] = useState<'saved' | 'unsaved' | 'saving'>('saved');
   const [showCharacters, setShowCharacters] = useState(false);
   const [showMobilePreview, setShowMobilePreview] = useState(true);
+  // True when the picker was reached from the workspace, i.e. there is work
+  // a selection would discard. On a first visit there is nothing to lose.
+  const [cameFromWorkspace, setCameFromWorkspace] = useState(false);
 
   // Characters
   const [universalCharacters, setUniversalCharacters] = useState<UniversalCharacter[]>([]);
@@ -204,6 +207,7 @@ export default function HomePage() {
     setHistory([p]);
     setHistoryIndex(0);
     setShowPicker(false);
+    setCameFromWorkspace(false);
   }, []);
 
   const handleLoadExample = useCallback((example: SkinProject) => {
@@ -211,6 +215,7 @@ export default function HomePage() {
     setHistory([example]);
     setHistoryIndex(0);
     setShowPicker(false);
+    setCameFromWorkspace(false);
   }, []);
 
   const handleMessageClick = useCallback((messageId: string) => {
@@ -332,6 +337,8 @@ export default function HomePage() {
       <PlatformPicker
         onSelectPlatform={handleSelectPlatform}
         onLoadExample={handleLoadExample}
+        hasWorkInProgress={cameFromWorkspace && project.messages.length > 0}
+        onCancel={() => { setCameFromWorkspace(false); setShowPicker(false); }}
       />
     );
   }
@@ -342,7 +349,7 @@ export default function HomePage() {
       <WorkspaceHeader
         contactName={displayContactName}
         onContactNameChange={(name) => handleUpdateSettings(contactNameKey as any, name)}
-        onBack={() => setShowPicker(true)}
+        onBack={() => { setCameFromWorkspace(true); setShowPicker(true); }}
         onSettingsOpen={() => setShowSettings(true)}
         onCharactersOpen={() => setShowCharacters(true)}
         template={project.template}

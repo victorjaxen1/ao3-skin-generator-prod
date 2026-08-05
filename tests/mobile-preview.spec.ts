@@ -12,7 +12,7 @@ const mobileOnly = ({ page }: { page: import('@playwright/test').Page }) =>
 test('MOBILE: preview is visible while composing', async ({ page }, testInfo) => {
   test.skip(mobileOnly({ page }), 'mobile viewports only');
   await page.goto('/');
-  await page.getByRole('button', { name: /iMessage/ }).click();
+  await page.getByRole('button', { name: 'Start a blank iMessage conversation' }).click();
 
   const composer = page.getByPlaceholder('Add a message…');
   await composer.click();
@@ -71,7 +71,7 @@ test('MOBILE: preview is visible while composing', async ({ page }, testInfo) =>
 test('MOBILE: preview collapses and the choice persists', async ({ page }) => {
   test.skip(mobileOnly({ page }), 'mobile viewports only');
   await page.goto('/');
-  await page.getByRole('button', { name: /iMessage/ }).click();
+  await page.getByRole('button', { name: 'Start a blank iMessage conversation' }).click();
 
   const toggle = page.getByRole('button', { name: /^Preview/ });
   await toggle.click();
@@ -79,6 +79,9 @@ test('MOBILE: preview collapses and the choice persists', async ({ page }) => {
   await expect(page.locator('#mobile-preview-body')).toHaveCount(0);
   console.log('  [MEASURE] collapsed: true');
 
+  // persistProject is debounced 500ms; reloading sooner loses the project and
+  // lands on the picker instead of the workspace.
+  await page.waitForTimeout(1200);
   await page.reload();
   await page.waitForLoadState('networkidle');
   const toggleAfter = page.getByRole('button', { name: /^Preview/ });
@@ -89,7 +92,7 @@ test('MOBILE: preview collapses and the choice persists', async ({ page }) => {
 test('MOBILE: tapping a preview message focuses it for editing', async ({ page }) => {
   test.skip(mobileOnly({ page }), 'mobile viewports only');
   await page.goto('/');
-  await page.getByRole('button', { name: /iMessage/ }).click();
+  await page.getByRole('button', { name: 'Start a blank iMessage conversation' }).click();
 
   const composer = page.getByPlaceholder('Add a message…');
   await composer.click();
@@ -108,7 +111,7 @@ test('MOBILE: tapping a preview message focuses it for editing', async ({ page }
 test('DESKTOP: right-hand preview column is unchanged', async ({ page }) => {
   test.skip(!mobileOnly({ page }), 'desktop viewports only');
   await page.goto('/');
-  await page.getByRole('button', { name: /iMessage/ }).click();
+  await page.getByRole('button', { name: 'Start a blank iMessage conversation' }).click();
   await page.getByPlaceholder('Add a message…').waitFor();
 
   // The mobile toggle must not appear on desktop.

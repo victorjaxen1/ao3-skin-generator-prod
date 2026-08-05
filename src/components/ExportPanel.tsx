@@ -405,7 +405,23 @@ export const ExportPanel: React.FC<Props> = ({
 
   useEffect(() => {
     setProStatus(getProStatus());
+    // Getting output into an AO3 work is the genuinely confusing part of this
+    // domain, so show the guidance to newcomers instead of hiding it behind a
+    // click. Once someone dismisses it, respect that.
+    try {
+      if (localStorage.getItem('ao3skin_help_dismissed') !== '1') setShowHelp(true);
+    } catch { /* ignore */ }
   }, []);
+
+  const toggleHelp = () => {
+    setShowHelp(prev => {
+      const next = !prev;
+      try {
+        if (!next) localStorage.setItem('ao3skin_help_dismissed', '1');
+      } catch { /* ignore */ }
+      return next;
+    });
+  };
 
   // Publish this bar's height so the layout can reserve space for it.
   // The bar is fixed-position, so without this it sits on top of the compose
@@ -548,7 +564,8 @@ export const ExportPanel: React.FC<Props> = ({
                 </button>
               )}
               <button
-                onClick={() => setShowHelp(!showHelp)}
+                onClick={toggleHelp}
+                aria-expanded={showHelp}
                 className={`text-[11px] px-2.5 py-1 rounded-lg font-medium transition-all ${
                   showHelp
                     ? 'bg-stone-800 text-white'

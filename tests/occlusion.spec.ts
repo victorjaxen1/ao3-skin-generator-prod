@@ -8,7 +8,7 @@ test('OCCLUSION: what covers the compose input, and at which viewport heights', 
 
   // The picker now gates the workspace for first-time visitors, so pick a
   // platform before the composer exists.
-  const picker = page.getByRole('button', { name: /iMessage/ });
+  const picker = page.getByRole('button', { name: 'Start a blank iMessage conversation' });
   if (await picker.isVisible().catch(() => false)) await picker.click();
   await page.getByPlaceholder('Add a message…').waitFor({ timeout: 15000 });
 
