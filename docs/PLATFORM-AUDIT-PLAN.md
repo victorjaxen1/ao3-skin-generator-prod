@@ -106,20 +106,37 @@ So on the Google workflow the button looks active, and clicking it does nothing 
 
 **Fix:** make the disabled condition `!content.trim()` for all templates. Verify no other template depended on the exception (none does — `ios`/`android` also require content or an image, `twitter` requires content).
 
-### 1.3 `allowTaint: true` will break export for pasted images — CRITICAL for §4
+### 1.3 Non-CORS images vanish from exports — MEDIUM (not a crash)
 
-[`src/components/ExportPanel.tsx:262-267`](../src/components/ExportPanel.tsx):
+[`src/components/ExportPanel.tsx:262-267`](../src/components/ExportPanel.tsx) sets `useCORS: true, allowTaint: true`.
 
-```ts
-const canvas = await html2canvas(captureArea, {
-  logging: false,
-  useCORS: true,
-  allowTaint: true,   // ← this
+**This was tested, not reasoned about.** See [`tests/cors-export.spec.ts`](../tests/cors-export.spec.ts), run against production with an image from `www.w3.org` (serves 200, sends no `Access-Control-Allow-Origin`):
+
+```
+Save Image result: DOWNLOAD          ← export SUCCEEDED
+canvas tainted (SecurityError): false
+console: blocked by CORS policy: No 'Access-Control-Allow-Origin' header
 ```
 
-`useCORS` and `allowTaint` pull in opposite directions. `allowTaint: true` permits drawing cross-origin images that have no CORS headers — which **taints** the canvas. A tainted canvas throws `SecurityError` from `canvas.toBlob()`, which is exactly what `canvasToBlob()` calls ([`src/components/ExportPanel.tsx:33-39`](../src/components/ExportPanel.tsx)).
+And the underlying mechanism, measured directly in the browser:
 
-Consequence: a user pastes an image URL from a host without CORS headers, sees it fine in the preview, then **both "Save Image" and "Copy for AO3" fail**. This is the single biggest risk in the "any image address" plan. Full treatment in §4.
+```
+crossOrigin='anonymous'  (what useCORS:true does) → image FAILED to load, canvas CLEAN
+no crossOrigin           (useCORS:false)          → loaded, canvas TAINTED (SecurityError)
+```
+
+So: because `useCORS: true` is set, html2canvas assigns `img.crossOrigin = 'anonymous'` to every cross-origin image ([`node_modules/html2canvas/dist/html2canvas.js:5735, 5762`](../node_modules/html2canvas/dist/html2canvas.js)). A host without CORS headers therefore **fails to load** rather than tainting. `allowTaint: true` is effectively **inert** in this configuration — it only matters when `useCORS` is false.
+
+**The actual failure mode is a preview/export mismatch, not a crash:**
+
+| | Preview | Export |
+|---|---|---|
+| App's own `<img>` (no `crossOrigin`) | ✅ image displays | — |
+| html2canvas (`crossOrigin='anonymous'`) | — | ❌ image silently missing |
+
+The user pastes a URL, sees the image perfectly, exports, and gets a **hole where the image was, with no warning.** Bad, but recoverable — and nothing like the hard failure I first described.
+
+**Action:** remove `allowTaint: true` for clarity (it does nothing here), and treat the missing-image problem as the real target — §4.3.
 
 ### 1.4 Dead settings — the user is being asked questions that do nothing
 
@@ -324,20 +341,53 @@ Measured CORS headers on common hosts (`curl -I`, run 2026-08-05):
 
 So "any image address" is **mostly** true for CORS, but Pinterest and ArtStation actively block hotlinking, and DeviantArt's `wixmp` URLs carry expiring tokens (already detected by `getExpiringUrlWarning`).
 
-**Three options, in order of preference:**
+**The fix already exists — reuse WorldKonstruct's.**
 
-**(a) Same-origin image proxy — recommended, makes the feature actually work.**
-Add a Netlify function (`netlify/functions/img-proxy.ts`) that fetches a remote URL server-side and re-serves it from your own origin with `Access-Control-Allow-Origin: *`. Rewrite `<img src>` through it at render time. Because it's same-origin, the canvas is never tainted, and hotlink blocking disappears (the request comes from your server, not the browser).
-Must-haves: allowlist `https:` only, cap response size (say 10MB), set a timeout, cache aggressively, and reject non-image content types. Without those you have built an open proxy.
+[`Example of Image Handling code/`](../Example%20of%20Image%20Handling%20code/) contains a working, production-proven solution: an image proxy that returns a **base64 `data:` URI** rather than a proxied stream. `urlNormalize.ts` in this repo was already adapted from that same reference.
 
-**(b) Set `allowTaint: false` and accept blanks.**
-One-line change at [`src/components/ExportPanel.tsx:267`](../src/components/ExportPanel.tsx). Export always succeeds; non-CORS images render blank in the output. Must be paired with a visible warning when a pasted URL's host is known-bad, or users will silently get holes in their exports.
+Why a data URI is the right answer here: a `data:` URI is same-origin by definition. It cannot taint a canvas, it needs no CORS headers, and it defeats hotlink blocking (the fetch happens server-side). One mechanism solves loading, CORS, and hotlinking at once.
 
-**(c) Status quo.** Export crashes on non-CORS images. Not acceptable given the product decision.
+[`Example of Image Handling code/image-proxy/index.ts`](../Example%20of%20Image%20Handling%20code/image-proxy/index.ts) is a Supabase Edge Function; port it to a Netlify function. It already implements the controls you need — copy them, don't reinvent:
 
-**Recommendation:** ship (b) immediately as a safety fix — it converts a hard crash into a degraded image — then build (a).
+- HTTPS-only upstream
+- SSRF protection (blocks `localhost`, `127.*`, `10.*`, `172.16-31.*`, `192.168.*`, `::1`, ULA IPv6, link-local `169.254.*`, and the GCP metadata host)
+- `Content-Type: image/*` enforcement
+- 8 MB size cap
+- A browser-like `User-Agent` to avoid bot-blocking
 
-Whichever you choose, **add a test**: paste a known non-CORS image URL, run both exports, assert they complete. This case is currently untested and is the most likely way to ship a regression.
+#### ⚠️ One critical adaptation — do not port the trigger as-is
+
+WorldKonstruct invoked the proxy from **`img.onerror`**. That was right for them: their constraint was a strict GAS iframe CSP (`img-src 'self' *.gstatic.com *.googleusercontent.com data:`), so blocked images *failed visibly* and `onerror` fired.
+
+**This app's CSP is permissive** (`img-src 'self' data: blob: https:` in [`netlify.toml`](../netlify.toml)). Remote images load fine. `onerror` **never fires** — and yet the export still drops them (§1.3).
+
+Porting the reactive pattern verbatim would therefore fix nothing. Different constraint, different trigger:
+
+| | WorldKonstruct | This app |
+|---|---|---|
+| Constraint | CSP blocks display | Canvas needs CORS for export |
+| Symptom | Image visibly fails | Image looks fine, vanishes on export |
+| Trigger that works | `img.onerror` | **Export time** — proxy before rasterising |
+
+**Where to hook it:** in `renderChunk()` ([`src/components/ExportPanel.tsx:78`](../src/components/ExportPanel.tsx)), after the off-screen clone is built and before `html2canvas` runs, walk the clone's `<img>` elements and replace any cross-origin `src` with a proxied data URI. Keep `onerror`-based recovery too if you like — it costs little and catches genuinely broken links — but it is not the fix.
+
+#### Do NOT store data URIs in the project
+
+Tempting shortcut: convert at paste time and store the data URI. **This will break saving.** [`src/lib/storage.ts:7`](../src/lib/storage.ts) caps stored projects at `MAX_STORAGE_SIZE = 500000` (500 KB), and `persistProject` silently refuses to save anything larger — a `console.warn` the user never sees ([`src/lib/storage.ts:130-133`](../src/lib/storage.ts)).
+
+Base64 inflates by ~33%, so a single 400 KB photo becomes ~533 KB and blows the cap on its own. Users would lose their whole project with no message.
+
+**Keep the remote URL in the project. Convert to a data URI only in the export pipeline, transiently.**
+
+(Separately: that silent 500 KB failure is worth fixing regardless — a project with several image URLs and a long conversation could hit it. Surface an error when a save is refused.)
+
+#### Optional extras from the reference worth taking
+
+- **Pinterest resolution** (§5 of the reference): `pinterest.com/pin/*` pages aren't images. Resolve server-side via the `og:image` meta tag to get the direct `i.pinimg.com` URL. This plus the proxy makes Pinterest work despite its 403 hotlink block.
+- **`%20` hostname cleanup**: already ported into [`src/lib/urlNormalize.ts`](../src/lib/urlNormalize.ts) as `cleanHostEncoding`.
+- **Initials fallback**: WorldKonstruct renders coloured initials when everything fails. [`src/components/AvatarSelector.tsx`](../src/components/AvatarSelector.tsx) could use the same idea.
+
+**Add a test regardless.** [`tests/cors-export.spec.ts`](../tests/cors-export.spec.ts) already covers the "export doesn't crash" half. Extend it to assert the image is actually *present* in the exported PNG once the proxy lands — that's the part that's broken today.
 
 ### 4.4 Keep imgbb — it is not replaceable by pasted URLs
 
@@ -356,12 +406,12 @@ Each phase should be its own PR, green tests before merge.
 
 | Phase | Work | Why this order |
 |---|---|---|
-| **1** | §1.1 upload errors, §1.2 dead Google button, §4.3(b) `allowTaint: false` | Small, safe, fixes user-visible breakage immediately |
+| **1** | §1.1 upload errors, §1.2 dead Google button, drop the inert `allowTaint` | Small, safe, fixes user-visible breakage immediately |
 | **2** | §4.1 Cloudinary removal, §4.2 shared `ImageUrlInput` | Clears the decks for image work; no behaviour risk |
 | **3** | §1.4 dead settings, §6 options triage | Biggest intuitiveness win per line changed |
 | **4** | §3.3 Twitter identity model | Highest-value single fix, but needs a migration path — do it with full attention |
 | **5** | §3.1–3.4 remaining per-platform items | Now the noise is gone and findings are real |
-| **6** | §4.3(a) image proxy | Largest new surface; needs its own review |
+| **6** | §4.3 image proxy (port from the WorldKonstruct reference) | Largest new surface; needs its own review |
 | **7** | §1.6 schema cleanup | Pure housekeeping, do it last |
 
 ---
@@ -396,7 +446,7 @@ Contact name (header + settings) on iMessage and WhatsApp · Search query (heade
 - [ ] Every remaining control visibly changes the preview. No control does nothing.
 - [ ] Every label is comprehensible to a non-technical fanfic writer; placeholders show real examples.
 - [ ] Image URL paste, file upload, bad URL, and hotlink-blocked URL each produce a clear outcome — never a silent failure.
-- [ ] **Both exports succeed with a pasted cross-origin image present.** This is the regression to guard hardest.
+- [ ] **Both exports succeed with a pasted cross-origin image present, and the image is actually visible in the output.** Export already survives (verified); the image being *present* is the part that needs fixing and guarding.
 - [ ] `npx playwright test` green, with new tests covering upload error display and cross-origin export.
 - [ ] No Cloudinary references remain in code, env files, docs, or the Netlify dashboard.
 - [ ] Per-platform audit tables (§2) filled in and attached to the PR.
