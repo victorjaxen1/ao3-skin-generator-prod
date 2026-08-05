@@ -51,6 +51,16 @@ function sanitizeMessage(msg: unknown): { id: string; sender: string; content: s
   };
 }
 
+/**
+ * Whether a project was actually saved by a previous session.
+ * Distinct from loadStoredProject(), which falls back to the seeded default —
+ * callers can't tell a returning visitor from a first-time one by its result.
+ */
+export function hasStoredProject(): boolean {
+  if (typeof window === 'undefined') return false;
+  try { return !!localStorage.getItem(KEY); } catch { return false; }
+}
+
 export function loadStoredProject<T extends SkinProject>(fallback: () => T): T {
   if (typeof window === 'undefined') return fallback();
   try {

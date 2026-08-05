@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/router';
 import { defaultProject, SkinProject, UniversalCharacter, Message } from '../lib/schema';
-import { loadStoredProject, persistProject } from '../lib/storage';
+import { loadStoredProject, persistProject, hasStoredProject } from '../lib/storage';
 import { TEMPLATE_EXAMPLES } from '../lib/examples';
 import { CharacterLibrary } from '../components/CharacterLibrary';
 import { recordExport, recordPromptShown } from '../lib/donationPrompt';
@@ -79,6 +79,7 @@ export default function HomePage() {
 
     let initial: SkinProject = defaultProject();
     let fromTemplate = false;
+    let returning = false;
 
     // Check URL for template param
     let templateId = router.query.template as string;
@@ -91,6 +92,7 @@ export default function HomePage() {
       const found = all.find(ex => ex.id === templateId);
       if (found) { initial = found; fromTemplate = true; }
     } else {
+      returning = hasStoredProject();
       initial = loadStoredProject(defaultProject);
     }
 
@@ -99,8 +101,10 @@ export default function HomePage() {
     setHistoryIndex(0);
     setIsLoaded(true);
 
-    // Skip the picker if we loaded real content
-    if (fromTemplate || initial.messages.length > 0) {
+    // Skip the picker only for a template link or genuinely saved work.
+    // defaultProject() ships with seed messages, so a length check alone would
+    // hide the picker from every first-time visitor.
+    if (fromTemplate || (returning && initial.messages.length > 0)) {
       setShowPicker(false);
     }
 
@@ -287,6 +291,12 @@ export default function HomePage() {
     : 'googleQuery';
   const displayContactName = (project.settings as any)[contactNameKey] || '';
 
+  // Hold the first paint until storage has been read, so returning visitors
+  // don't see the picker flash past before it's dismissed.
+  if (!isLoaded) {
+    return <div className="min-h-screen bg-stone-50" aria-busy="true" />;
+  }
+
   if (showPicker) {
     return (
       <PlatformPicker
@@ -311,10 +321,16 @@ export default function HomePage() {
       />
 
       {/* ─── Main content ───────────────────────────────────────────── */}
-      <div className="flex-1 flex overflow-hidden">
+      {/* Bottom padding reserves room for the fixed export bar, which would
+          otherwise cover the compose input. ExportPanel publishes its own
+          measured height as --export-bar-h. */}
+      <div
+        className="flex-1 flex overflow-hidden"
+        style={{ paddingBottom: 'var(--export-bar-h, 0px)' }}
+      >
         {/* Left / mobile-full: compose area */}
         <div className="flex-1 flex flex-col min-w-0">
-          <div className="flex-1 overflow-y-auto px-3 py-2 sm:px-4 sm:py-3 pb-32">
+          <div className="flex-1 overflow-y-auto px-3 py-2 sm:px-4 sm:py-3 pb-4">
             <MessageTimeline
               messages={project.messages}
               template={project.template}

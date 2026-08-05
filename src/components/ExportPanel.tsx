@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { SkinProject } from '../lib/schema';
 import { buildCSS, buildHTML } from '../lib/generator';
 import { getProStatus, getProFeatures, ProStatus } from '../lib/proFeatures';
@@ -391,6 +391,7 @@ export const ExportPanel: React.FC<Props> = ({
   setShowCodeModal,
   onSuccess,
 }) => {
+  const barRef = useRef<HTMLDivElement>(null);
   const [showHelp, setShowHelp] = useState(false);
   const [showProModal, setShowProModal] = useState(false);
   const [proStatus, setProStatus] = useState<ProStatus>({ isPro: false });
@@ -404,6 +405,28 @@ export const ExportPanel: React.FC<Props> = ({
 
   useEffect(() => {
     setProStatus(getProStatus());
+  }, []);
+
+  // Publish this bar's height so the layout can reserve space for it.
+  // The bar is fixed-position, so without this it sits on top of the compose
+  // input. Height is measured rather than hard-coded because the help panel
+  // expands it.
+  useEffect(() => {
+    const el = barRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const publish = () => {
+      document.documentElement.style.setProperty(
+        '--export-bar-h',
+        `${Math.ceil(el.getBoundingClientRect().height)}px`
+      );
+    };
+    publish();
+    const ro = new ResizeObserver(publish);
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      document.documentElement.style.removeProperty('--export-bar-h');
+    };
   }, []);
 
   const skipWatermark = getProFeatures().watermarkFree;
@@ -486,7 +509,10 @@ export const ExportPanel: React.FC<Props> = ({
       {/* ------------------------------------------------------------------ */}
       {/* Sticky bottom bar                                                   */}
       {/* ------------------------------------------------------------------ */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-stone-200 shadow-[0_-4px_24px_rgba(0,0,0,0.08)] z-50">
+      <div
+        ref={barRef}
+        className="fixed bottom-0 left-0 right-0 bg-white border-t border-stone-200 shadow-[0_-4px_24px_rgba(0,0,0,0.08)] z-50"
+      >
         <div className="max-w-4xl mx-auto px-4 py-3">
 
           {/* Quality + help row */}
