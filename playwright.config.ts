@@ -19,8 +19,15 @@ export default defineConfig({
   // `npx playwright install` cannot fetch the bundled binary. Override with
   // UX_CHANNEL=chrome if Edge is unavailable.
   projects: [
+    // Pure logic, no browser and no server. Fast enough to run on every save:
+    //   npx playwright test --project=unit
+    {
+      name: 'unit',
+      testMatch: '**/*.unit.spec.ts',
+    },
     {
       name: 'desktop',
+      testIgnore: '**/*.unit.spec.ts',
       use: {
         ...devices['Desktop Chrome'],
         channel: process.env.UX_CHANNEL || 'msedge',
@@ -29,6 +36,7 @@ export default defineConfig({
     },
     {
       name: 'mobile',
+      testIgnore: '**/*.unit.spec.ts',
       use: {
         ...devices['Pixel 7'],
         channel: process.env.UX_CHANNEL || 'msedge',
