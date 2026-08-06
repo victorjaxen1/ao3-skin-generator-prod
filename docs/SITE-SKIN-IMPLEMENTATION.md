@@ -6,8 +6,10 @@
 codebase. This plan keeps their product thinking and replaces their
 architecture with ours.
 
-Every AO3 rule below was verified against otwarchive source, not folklore.
-Citations at the end.
+**Revision 2 — 6 Aug 2026.** Every rule below was re-verified against
+otwarchive `master`, including — for the first time — AO3's *own default
+stylesheets*, not just its sanitizer. That reading changed the compiler spec
+substantially; §4 and §4b are the parts that moved. Citations at the end.
 
 ---
 
@@ -36,8 +38,8 @@ Decisions already made:
 | Existing | Used for | Note |
 | --- | --- | --- |
 | `SettingsSheet` row primitives | The four control groups | **Extract first** — see §2 |
-| `ExportPanel` code-modal (lines ~633-701) | Export dialog | Textarea + copy + how-to accordion is already the right shape |
-| `Toast` / `useToast` | Copy confirmation, contrast warnings | |
+| `ExportPanel` code-modal (lines ~674-742) | Export dialog | Textarea + copy + how-to accordion is already the right shape |
+| `Toast` / `useToast` | Copy confirmation | |
 | `storage.ts` patterns incl. `PersistResult` | Persistence with visible failure | New key, same discipline |
 | `index.tsx` undo/redo + 500ms debounced save | Editor state | Copy the pattern, not the file |
 | `PlatformPicker` card layout | Template gallery | |
@@ -45,7 +47,7 @@ Decisions already made:
 
 ### Do not reuse
 
-`generator.ts` (269 rules, all `#workskin`-scoped for rasterising),
+`generator.ts` (1025 lines, all `#workskin`-scoped for rasterising),
 `ExportPanel`'s render path, `imgbb.ts`, `imageProxy.ts`, `proFeatures.ts`.
 None of it applies to emitting CSS text. Resist the urge to make
 `buildCSS()` serve both.
@@ -61,6 +63,9 @@ them to `src/components/SettingsRows.tsx` and import from both sheets.
 Do this as its own commit, with no behaviour change, so the diff stays
 readable. `ToggleRow` is already `role="switch"` with `aria-checked`, so the
 site-skin editor inherits working accessibility and testable selectors.
+
+`LinesRow` and `ImageUrlRow` stay in `SettingsSheet.tsx` — they pull in
+`ImageUrlInput`, which the site-skin editor has no use for.
 
 ---
 
@@ -103,24 +108,91 @@ while the three-letter `gap` does not. Our lint reproduces this faithfully and
 `tests/ao3-css.unit.spec.ts` pins it, with a comment telling future readers not
 to "fix" it — tightening our check would reject CSS AO3 actually accepts.
 
-### Values
+### Values — three branches, not one
 
-`VALUE_REGEX` accepts transform functions, `url()`, `color-stop()`, colors
-(hex/named/`rgba()`/`hsla()`), numbers with units, plain keywords (`[a-z\-]+`),
-shape functions, filter functions, `drop-shadow()`, and `var()`.
+`sanitize_css_declaration_value` picks a branch **in this order**, and only the
+last two ever reach `VALUE_REGEX`. An earlier draft of this document treated
+`VALUE_REGEX` as universal. It is not, and the difference decides whether every
+template we ship is legal.
 
-**`color-mix()` is not in that list.** The prototype's preview leans on it
-heavily. Resolve every mix to a literal hex before emitting — the prototype's
-`mixHex()` already does this and should be ported as-is.
+1. **`property == "font-family"`** → `sanitize_css_font`. Each comma-separated
+   name, after downcasing and stripping `!important`, must match
+   `^('?[a-z0-9\- ]+'?|"?[a-z0-9\- ]+"?)$`.
+   - `'Palatino Linotype', Palatino, serif` ✅ — quotes, spaces and digits are fine.
+   - A name containing a **period** (`"Foo.Bar"`), a slash, or an underscore ✗.
+   - Never emit the **`font` shorthand**: it misses this branch, goes to the
+     token path, and `'Palatino Linotype'` fails there.
+2. **`property == "content"`** → `sanitize_css_content`: one fully-quoted
+   string, a legal `url()`, or `none`. `var()` is rejected first.
+   - **`content: "❦"` is safe.** The branch never consults `VALUE_REGEX`, so
+     non-ASCII inside the quotes is irrelevant. The earlier draft flagged this
+     as an unknown to probe manually; it is settled, and pinned by a test.
+3. **Everything else** → `VALUE_REGEX`, which must match the *whole* stripped
+   value as `^(VALUE_REGEX,?\s*)+$`. It admits transform functions, `url()`,
+   `color-stop()`, colors (`#[0-9a-f]{3,6}`/named/`rgba()`/`hsla()`), numbers
+   with units, bare keywords (`[a-z\-]+`), shape/filter/`drop-shadow()`
+   functions, and `var()`.
+   Shorthand properties take the token path first (split on space/comma, each
+   token sanitized separately), which is why `border: 1px solid #4f4571` works.
+
+**`color-mix()` is in none of those.** The prototype's preview leans on it
+heavily. Resolve every mix to a literal 6-digit hex before emitting — the
+prototype's `mixHex()` already does this and is ported to `colors.ts`.
+
+Numbers are `-?\.?\d{1,3}\.?\d{0,3}`, which *looks* like a three-digit cap and
+is not: the dot between the two digit runs is optional, so `1000` matches as
+`100` + `0`. Do not tighten our check to three digits. We emit `999px` for
+pill tags by convention, not necessity.
 
 ### Other hard rules
 
 - `@font-face` is rejected outright.
-- `!important` is always permitted.
-- `url()` is allowed only on `background`, `background-image`, `border`,
-  `border-image`, `list-style`, `list-style-image`, restricted to
-  jpg/jpeg/png/gif on an allowlisted TLD. **v1 emits no `url()` at all.**
+- `!important` is always permitted, and is stripped before value checks.
 - `var()` is rejected inside `content`.
+- A rule set whose declarations are *all* dropped is an error
+  (`:no_rules_for_selectors`), not a silent no-op. Never emit an empty rule.
+
+### 3a. Image addresses — the rule that decides whether banners work
+
+**Revision 3 reverses this document's earlier "v1 emits no `url()` at all".**
+Reading three published skins (§11) made the case: a header banner is the one
+change that makes a skin feel like a *fandom's* rather than a recolour, and it
+is one declaration, not an architecture. The v1 line was drawn out of caution,
+not necessity.
+
+`url()` is permitted on `background`, `background-image`, `border`,
+`border-image`, `list-style`, `list-style-image` — and only if the address
+satisfies `URI_REGEX`:
+
+```text
+(\/images | https?://\w[\w\-.]+\.(TLD)) / [\w\-./]* [\w-] \.(jpg|jpeg|png|gif)
+```
+
+Three consequences, all of which our validator now reports in plain language
+*before* the user pastes into AO3:
+
+1. **No query strings.** `?` is not in `[\w\-./]`, so the match stops early,
+   the closing quote never lines up, and AO3 refuses the whole skin. This
+   kills Discord CDN, Google Drive and Dropbox links — which is where fandom
+   actually keeps its images.
+2. **jpg/jpeg/png/gif only.** No webp, no svg, no avif. Most modern CDNs serve
+   webp by default.
+3. **The TLD list is an old ICANN snapshot.** No `app`, `dev`, `xyz`, `art`,
+   `pics` — and no `moe`, so `files.catbox.moe` cannot be used. `io`, `cc` and
+   `co` are present, so `github.io`, `postimg.cc` and `ibb.co` all work.
+
+> **Correction to revision 2.** `tests/ao3-css.unit.spec.ts` asserted that
+> `background-image: url(x.png)` and `content: url(x.png)` were safe. Both are
+> refused: a relative address has neither a scheme nor an allowlisted domain.
+> The earlier lint only checked *which property* carried the `url()`, never the
+> address inside it, so the tests encoded the gap rather than catching it.
+> `/images/...` — AO3's own assets — is the one relative form that works.
+
+**This validator is the feature, not the constraint.** Every published skin
+hands the user a Pastebin and wishes them luck; AO3's own response to a bad
+address is "your skin could not be saved", after they have left the app.
+Saying "Discord links won't work, use imgur" at the moment of pasting is
+something no competitor does.
 
 ### @media is not CSS here
 
@@ -139,11 +211,35 @@ all screen handheld speech print braille embossed projection tty tv
 second skin with `(prefers-color-scheme: dark)` set, combined via AO3's parent
 skin mechanism — a v2 conversation, not a compiler feature.
 
+### 3b. Our CSS is an *addition*, not a replacement
+
+`Skin::ROLES` shows users exactly two roles: `user` ("add on to archive skin",
+the default) and `override` ("replace archive skin entirely"). At role `user`,
+`Skin#get_style` emits AO3's default stylesheets **and then ours**.
+
+Two consequences, and they drive everything in §4b:
+
+- **Source order favours us on ties, specificity does not.** AO3's defaults are
+  full of ID- and class-scoped rules — `#dashboard.own`, `#header .heading a`,
+  `.blurb h4 a:link`, `h1,…,h6,.heading`. A bare `body {…}` or `h1 {…}` from us
+  loses to those outright. **Every declaration the compiler emits carries
+  `!important`.** This is not defensive clutter; without it roughly half the
+  skin silently does nothing on a real page.
+- **AO3's defaults are still there, including the ones we did not think about**
+  — a red tiled background image on `#footer`, `color: #fff` on footer text, a
+  grey gradient on header dropdowns. §4 lists the ones that actually bite.
+
+The export dialog must tell the user to leave the skin type on **"add on to
+archive skin"**. Choosing "replace archive skin entirely" strips AO3's layout
+CSS and our skin becomes unstyled HTML.
+
 ---
 
 ## 4. Defects in the prototype — do not port these
 
-Found by reading `compileSkin()` against AO3's real templates.
+4.1–4.3 were found by reading `compileSkin()` against AO3's templates.
+4.4–4.8 were found by reading it against AO3's *stylesheets*, and 4.4 is the
+one that would have shipped a visibly broken skin.
 
 **4.1 The drop cap lands on summaries and notes, not just the chapter.**
 `#workskin p:first-of-type::first-letter` (prototype line 533).
@@ -153,9 +249,10 @@ page. Inside `#workskin` that is the summary blockquote, the chapter notes, and
 every chapter body — so a decorative capital appears three or four times on a
 normal work page.
 
-Narrow it to the chapter text container. Note that AO3 renders chapter text as
-`div.userstuff.module` for multi-chapter works but plain `div.userstuff` for
-the single-chapter path, so `#chapters .userstuff` is the pragmatic target:
+Narrow it to the chapter text container. `works/show.html.erb` renders
+`div.userstuff.module` per chapter for multi-chapter works and a bare
+`div.userstuff` on the single-chapter path, both inside `#chapters`, so
+`#chapters .userstuff` covers both:
 
 ```css
 #chapters .userstuff p:first-of-type::first-letter { … }
@@ -167,57 +264,143 @@ shipping** — multi-chapter and single-chapter both.
 > **Correction to an earlier draft of this document.** It claimed `#workskin`
 > exists only on works that already have a work skin, making these selectors
 > dead. That was wrong: `app/views/works/show.html.erb` renders
-> `<div id="workskin">` unconditionally — the template comment reads "BEGIN
-> section where work skin applies." Site-skin rules targeting `#workskin` do
-> apply on every work page. The defect is the `:first-of-type` scope above.
+> `<div id="work-skin" class="wrapper"><div id="workskin">` unconditionally.
+> Site-skin rules targeting `#workskin` do apply on every work page. The defect
+> is the `:first-of-type` scope above.
 
 **4.2 "Page" colour is overridden by "Cards".** `#main` appears in two rules
 with `background-color: … !important` — first `bg`, later `surface`. Equal
 specificity, later wins, so the Page control only affects `body` and
-`#outer.wrapper`. That violates the blueprint's own §5 rule that every control
-must have a visible effect. §6 gives each selector exactly one owner.
+`#outer.wrapper`. §4b gives each selector exactly one owner.
+
+Verified upside: **AO3's default sets no background on `#main` at all**
+(`05-region-main.css` sets only font-size, line-height, margin, padding,
+min-height). Leaving `#main` unowned is therefore safe — `body` shows through,
+which is exactly what the Page control should mean.
 
 **4.3 Font size compounds.** `font-size: N%` is set on `body`, `#outer.wrapper`
 *and* `#main` in one rule. Nested percentages multiply. Set the scale once, on
-`body`.
+`body`; AO3's own `#header`/`#main` `0.875em` then scales with it.
+
+**4.4 The header is accent text on an accent background.** The prototype emits
+`#header { background-color: accent }` and, separately,
+`a, a:link, a:visited { color: accent !important }`. `#header`'s links are
+`a`. The site navigation is therefore invisible on every page.
+
+The prototype's own preview hides this: its mock header hard-codes
+`color: white` (line 116) while its export does not emit any header text
+colour. This is precisely the two-renderings-that-disagree failure §5 exists to
+prevent, and it is why the mock DOM must be driven by the exported CSS.
+
+Fix: derive a header foreground from the accent (`readableOn(accent)`) and own
+`#header`'s text and links with it. See §4b.
+
+**4.5 The heading font never applies.** The prototype emits
+`h1, h2, h3, h4, h5, h6 { font-family: … }` at specificity (0,0,1).
+`02-elements.css` has `h1, h2, h3, h4, h5, h6, .heading { font-family: Georgia, serif }`,
+which matches every AO3 heading through the `.heading` compound at (0,1,0) and
+wins. Mirror AO3's own selector — include `.heading` — and use `!important`.
+
+**4.6 The footer keeps its red tiled texture.**
+`#footer { background: #900 url("/images/skins/textures/tiles/red-ao3.png") }`.
+A `background-color` alone leaves the image on top of it. Emit
+`background-image: none` on `#footer`. AO3 also hard-codes `color: #fff` on
+`#footer`, `#footer a`, `#footer button` and `#footer .heading`, so the footer
+needs an explicit foreground or it is white-on-cream on every light theme.
+
+**4.7 The dashboard resists a background.**
+`#dashboard.own { background: transparent }` at (0,1,1) beats a plain
+`#dashboard` rule. `!important` settles it. `#dashboard a, #dashboard span`
+also hard-code `color: #111`; the `a` is covered by the global link rule, the
+`span` — AO3 uses it for the non-link current item — is not.
+
+**4.8 System messages become unreadable on dark themes.**
+`.notice` and friends set a pale blue background but no colour, so they inherit
+the body text colour. Cream-on-pale-blue. One fixed rule pins them back to
+`#2a2a2a`. Their backgrounds stay untouched: blue/yellow/red is AO3's
+meaning-carrying colour code, not decoration. `.error` and `.alert.flash`
+already carry their own `#900` and are left alone.
+
+**Not a defect, but dropped: `.listbox li.blurb`.** The prototype pairs every
+`li.blurb` selector with it. `11-group-listbox.css` sets only `display` and
+`box-shadow` there, so `li.blurb` alone already reaches those blurbs. Redundant.
 
 ---
 
 ## 4b. Region ownership — the compiler spec
 
-Every selector below has **exactly one** owning control. This is what stops
-defect 4.2 recurring. If you need a selector to react to two controls, that is
-a design conversation, not a second `!important`.
+Every selector below has **exactly one** owning control, and every declaration
+is emitted with `!important` (§3b). This is what stops defect 4.2 recurring. If
+you need a selector to react to two controls, that is a design conversation,
+not a second `!important`.
+
+Derived values, all resolved to literal 6-digit hex before emission:
+
+| Name | Formula | Why |
+| --- | --- | --- |
+| `headerFg` | `readableOn(accent)` | fixes 4.4 |
+| `headerDeep` | `mixHex(accent, '#000000', 0.75)` | header border, dropdown panel |
+| `border` | `mixHex(accent, surface, 0.27)` | card edges |
+| `tagBorder` | `mixHex(accent, surface, 0.45)` | tag edges |
 
 | Control | Owns | Emit |
 | --- | --- | --- |
 | `colors.background` | `body` | `background-color` |
-| `colors.surface` | `li.blurb`, `#dashboard`, `#workskin`, `#footer` | `background-color` |
-| `colors.text` | `body` | `color` (cards inherit) |
-| `colors.accent` | `#header` | `background-color`, `border-color` |
+| `colors.text` | `body` | `color` |
+| `colors.surface` | `li.blurb`, `#dashboard`, `#workskin` | `background-color`, `color` |
+| `colors.surface` | `#footer` | `background-color`, `background-image: none`, `color` — 4.6 |
+| `colors.text` | `#footer .heading`, `#footer button`, `#dashboard span` | `color` — 4.6, 4.7 |
+| `colors.accent` | `#header` | `background-color`, `border-color` (`headerDeep`) |
+| derived `headerFg` | `#header`, `#header a`, `#header a:visited`, `#header .heading a`, `#header .heading` | `color` — 4.4 |
+| derived `headerDeep` | `#header .menu`, `#header .menu li`, `#small_login`, and the four hover/open selectors | `background-color`, `background-image: none`, `color: headerFg` |
 | `colors.accent` | `a`, `a:link`, `a:visited`, `a.tag` | `color` |
-| `colors.accent` | `h1`–`h6` inside `#main` | `color` |
-| derived border | `li.blurb`, `#dashboard`, `#workskin`, `a.tag` | `border-color` — `mixHex(accent, surface, 0.27)` |
-| `typography.headingFont` | `#header .heading`, `h1`–`h6` | `font-family` |
-| `typography.bodyFont` | `body` | `font-family` |
+| `colors.accent` | `h1`–`h6` and `.heading` inside `#main` | `color` |
+| `colors.accent` | `a.tag:hover` | `background-color`, `color: headerFg` |
+| derived `border` | `li.blurb`, `#dashboard`, `#workskin` | `border-color` |
+| derived `border` | `#dashboard .current` | `background-color` |
+| `typography.headingFont` | `h1`–`h6`, `.heading` | `font-family` — 4.5 |
+| `typography.bodyFont` | `body`, `blockquote`, `address` | `font-family` |
 | `typography.baseFontScale` | `body` **only** | `font-size` as a percentage |
 | `shape.cardRadius` | `li.blurb`, `#dashboard`, `#workskin` | `border-radius` |
-| `shape.tagStyle` | `a.tag` | `border-radius` |
+| `shape.tagStyle` | `a.tag` | `border`, `border-radius`, `padding` |
+| `header.bannerUrl` | `#header` | `background-image`, `-position`, `-repeat`, `-size` |
+| `header.bannerHeight` | `#header .heading` | `height` — AO3's header is two lines tall; without this there is nowhere for a banner to show |
+| `header.hideLogo` | `#header .logo` | `display: none` |
+| `header.textShadow` | `#header .heading a`, `#header .primary a` | `text-shadow`, using `headerShadow` |
 | `details.divider` | `#chapters .userstuff hr` | `border-top`, `::after` glyph |
 | `details.dropCap` | `#chapters .userstuff p:first-of-type::first-letter` | `float`, `font-size`, `color` |
+| *(fixed, uncontrolled)* | `.notice`, `.comment_notice`, `.kudos_notice`, `ul.notes` | `color: #2a2a2a` — 4.8 |
 
-**Deliberately unowned: `#main`.** The prototype painted it twice. Leaving it
-transparent lets the page colour show through everywhere it should, and keeps
-"Cards" meaning cards. Do not add a `#main` background.
+The banner sits on `#header` **with the accent still underneath it**, so a slow
+or dead image degrades to the theme colour rather than to white.
 
-Colour derivations resolve to literal hex before emission — `color-mix()` is
-not in AO3's value grammar and the lint rejects it.
+`header.textShadow` and `header.textColor` are both emitted only when a banner
+is present. Over a flat header the foreground is derived from the accent and
+contrasts by construction, so a glow would be a control with no visible effect
+and `textColor: 'auto'` is not a guess. Over an image it *is* a guess — we
+cannot measure the brightness of a photograph — which is exactly why the
+override has to exist. Without it, a dark banner under a light accent leaves
+the title unreadable and the only other lever is the accent, which would
+repaint every link on the site.
+
+`blockquote, pre, address` carry AO3's own `font:` shorthand, which beats
+inheritance from `body` — hence the explicit `blockquote, address` selector for
+the body font. `pre` is left alone deliberately: code should stay monospace.
+
+**Deliberately unowned: `#main`.** The prototype painted it twice. AO3's
+default paints it not at all (4.2), so leaving it transparent lets the page
+colour show through everywhere it should, and keeps "Cards" meaning cards.
+Do not add a `#main` background.
+
+**Deliberately unowned: system message backgrounds** (4.8), `#dashboard a:hover`
+and `.flash`/`.error` colours. All are either meaning-carrying or not
+representable in the mock DOM — see §10.
 
 ---
 
 ## 5. Architecture
 
-```
+```text
 src/pages/site-skin.tsx              route: gallery ⇄ editor
 src/components/siteSkin/
   TemplateGallery.tsx                cards + mood filters
@@ -230,8 +413,9 @@ src/lib/siteSkin/
   templates.ts                       launch catalog
   compile.ts                         theme → CSS
   ao3Css.ts                          allowlist + lint  ← the safety layer
-  mockPage.ts                        AO3-shaped mock markup, 3 states
-  colors.ts                          mixHex, luminance, contrast, autoFix
+  ao3Properties.ts                   copied allowlist data
+  mockPage.ts                        AO3-shaped mock markup + base CSS, 3 states
+  colors.ts                          mixHex, luminance, contrast, readableOn, autoFix
   storage.ts                         key: ao3SiteSkinTheme
 ```
 
@@ -242,11 +426,21 @@ Pages Router, matching the rest of the app. Ignore the blueprint's
 
 Compiled site-skin CSS targets `body`, `#header`, `#main`. Our current
 `PreviewPane` injects a `<style>` tag straight into the page, which is only
-safe because all 269 generator rules are `#workskin`-scoped. Doing that here
+safe because the generator's rules are all `#workskin`-scoped. Doing that here
 would restyle our own application.
 
-Use `<iframe srcdoc>` with `sandbox=""` (no scripts needed). Isolation is
-total, and the preview becomes honest.
+Use `<iframe srcdoc>`. Use `sandbox="allow-same-origin"` — **not** `sandbox=""`.
+Scripts stay blocked either way, which is the isolation that matters, but
+same-origin lets the parent reach `contentDocument` and patch a single
+`<style>` element's `textContent` as the user drags a colour picker. With
+`sandbox=""` every keystroke reloads the document: the preview flickers and the
+reading pane jumps back to the top on every change. Regenerate `srcdoc` only
+when the preview *state* changes; fall back to regenerating it if
+`contentDocument` is unreachable.
+
+The page's CSP (`next.config.js`) is inherited by `srcdoc` frames. It permits
+`style-src 'unsafe-inline'` and the preview loads no external resources, so
+nothing more is needed.
 
 ### One stylesheet, one truth
 
@@ -257,11 +451,19 @@ export is the CSS that renders the preview*.
 The prototype does not do this: its preview is driven by `--p-*` custom
 properties while its export is a separately-built string. Two renderings that
 can silently disagree is the precise failure this project just spent an audit
-removing from the image pipeline. Do not reintroduce it.
+removing from the image pipeline — and defect 4.4 is what it costs.
 
 Consequence: `compile(theme)` has one output, used by both. If a control has no
 visible effect in the preview, it has no effect on AO3 either — the blueprint's
 §5 rule becomes structurally enforced instead of aspirational.
+
+**The second stylesheet in the iframe is AO3's, not ours.** `mockPage.ts` also
+exports `AO3_BASE_CSS`, a transcribed subset of AO3's default sheets: the rules
+our skin has to fight (`#footer`'s red tile, `.heading`'s Georgia,
+`#dashboard.own`'s red bars, `a { color: #900 }`, `.landmark`'s invisibility).
+It is loaded *before* the compiled skin, exactly as AO3 loads it (§3b), and it
+is **never** part of the export. Without it the preview is unstyled HTML and
+every specificity bug in §4 stays invisible until a user hits it.
 
 ### 5b. The mock DOM
 
@@ -270,108 +472,38 @@ Transcribed from otwarchive's templates (`layouts/application`,
 `works/show`, `works/_preface`, `chapters/_chapter`). Class names are AO3's, not
 ours — that is the entire point. Fill with the prototype's sample fic copy.
 
-**Shell, wrapping all three states:**
+Shell for all three states:
 
-```html
-<body class="logged-in">
-  <div id="outer" class="wrapper">
-    <header id="header" class="region">
-      <h1 class="heading"><a href="#">Archive of Our Own</a></h1>
-      <ul class="primary navigation actions">
-        <li class="dropdown"><a href="#">Fandoms</a></li>
-        <li class="dropdown"><a href="#">Browse</a></li>
-        <li class="search"><a href="#">Search</a></li>
-      </ul>
-    </header>
-    <div id="inner" class="wrapper">
-      <!-- #dashboard sits here, in the dashboard state only -->
-      <div id="main" class="region"><!-- state content --></div>
-    </div>
-    <div id="footer" class="region">
-      <ul class="navigation actions"><li class="module group"><a href="#">About</a></li></ul>
-    </div>
-  </div>
-</body>
+```text
+body.logged-in > #outer.wrapper > ( #header.region,
+                                    #inner.wrapper > [ #dashboard, ] #main.region,
+                                    #footer.region )
 ```
 
-**Browse — inside `#main`:**
+The Browse state carries three blurbs (one long summary, one short, to test
+wrapping), a `.notice`, and **one `li.dropdown.open` with its `.menu` panel
+rendered** — that last is what makes the header dropdown rules in §4b
+previewable rather than a leap of faith.
 
-```html
-<h2 class="heading">Works in your favourite fandom</h2>
-<ol class="work index group">
-  <li id="work_1" class="work blurb group" role="article">
-    <div class="header module">
-      <h4 class="heading">
-        <a href="#">The Cartographer's Impossible Map</a> by <a rel="author" href="#">inkandstarlight</a>
-      </h4>
-      <h5 class="fandoms heading">
-        <span class="landmark">Fandoms:</span> <a class="tag" href="#">Original Work</a>
-      </h5>
-      <p class="datetime">06 Aug 2026</p>
-    </div>
-    <ul class="tags commas">
-      <li class="relationships"><a class="tag" href="#">Mara/Court Messenger</a></li>
-      <li class="freeforms"><a class="tag" href="#">Slow Burn</a></li>
-      <li class="freeforms"><a class="tag" href="#">Happy Ending</a></li>
-    </ul>
-    <blockquote class="userstuff summary">
-      <p>Mara discovers a map that redraws itself whenever someone tells a lie.</p>
-    </blockquote>
-    <dl class="stats">
-      <dt class="words">Words:</dt><dd class="words">12,842</dd>
-      <dt class="chapters">Chapters:</dt><dd class="chapters">1/1</dd>
-    </dl>
-  </li>
-  <!-- two more blurbs: one long summary, one very short, to test wrapping -->
-</ol>
-```
-
-**Reading — inside `#main`.** Note the real nesting; the drop cap and divider
-selectors in §4b depend on it:
+The Reading state uses the real nesting, which the §4b drop-cap and divider
+selectors depend on:
 
 ```html
 <div class="work">
   <div id="work-skin" class="wrapper">
     <div id="workskin">
-      <div class="preface group">
-        <h2 class="title heading">The Cartographer's Impossible Map</h2>
-        <h3 class="byline heading"><a rel="author" href="#">inkandstarlight</a></h3>
-        <div class="summary module">
-          <h3 class="heading">Summary:</h3>
-          <blockquote class="userstuff"><p>A map that lies.</p></blockquote>
-        </div>
-      </div>
+      <div class="preface group">…summary blockquote…</div>
       <div id="chapters" role="article">
         <div class="chapter" id="chapter-1">
-          <div class="chapter preface group"><h3 class="title">Chapter 1</h3></div>
           <div class="userstuff module" role="article">
-            <h3 class="landmark heading">Chapter Text</h3>
-            <p>The map began lying on a Tuesday…</p>
-            <hr />
-            <p>By noon, the palace messenger had arrived…</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
+            <p>…</p><hr /><p>…</p>
 ```
 
-Keep the summary blockquote in this state. It is how a reviewer sees at a
-glance whether the drop cap has escaped its container (defect 4.1).
+Keep the summary blockquote. It is how a reviewer sees at a glance whether the
+drop cap has escaped its container (defect 4.1).
 
-**Dashboard — `#dashboard` as a sibling of `#main` inside `#inner`:**
-
-```html
-<div id="dashboard" class="region own" role="navigation">
-  <h4 class="landmark heading">Your account</h4>
-  <ul class="navigation actions">
-    <li><a href="#">Profile</a></li>
-    <li><a href="#">Works</a></li>
-    <li><a href="#">Bookmarks</a></li>
-  </ul>
-</div>
-```
+The Dashboard state puts `#dashboard.region.own` as a sibling of `#main` inside
+`#inner`, and includes a `<span>` current item (4.7) alongside the links.
 
 ---
 
@@ -381,40 +513,78 @@ glance whether the drop cap has escaped its container (defect 4.1).
 // src/lib/siteSkin/theme.ts
 export interface SiteSkinTheme {
   schemaVersion: 1;
-  meta: { id: string; name: string; category: 'dark'|'light'|'minimal'|'decorative' };
+  meta: {
+    id: string;
+    name: string;
+    category: 'dark' | 'light' | 'minimal' | 'decorative';
+    moods: readonly ('dark' | 'light' | 'minimal' | 'decorative')[];
+  };
   colors: { background: string; surface: string; text: string; accent: string };
   typography: { headingFont: string; bodyFont: string; baseFontScale: number };
-  shape: { cardRadius: string; tagStyle: 'pill'|'label'|'plain' };
+  shape: { cardRadius: string; tagStyle: 'pill' | 'label' | 'plain' };
+  header: {
+    bannerUrl: string;                 // '' = none; validated against §3a
+    bannerHeight: string;
+    hideLogo: boolean;
+    textShadow: boolean;
+    textColor: 'auto' | 'light' | 'dark';
+  };
   details: { divider: boolean; dropCap: boolean };
 }
 ```
+
+`header.bannerUrl` is the only free-text field in the product and the only one
+AO3 can refuse, so it is validated in three places against the same rule: as
+the user types, at the storage boundary (`validateTheme` drops an address that
+would fail, rather than letting a stored theme block export for no visible
+reason), and in `lintAo3Css`, which makes the export dialog the last line of
+defence.
+
+`category` is the single badge on a card; `moods` is what the filter chips
+match. They are separate because eight of the prototype's twelve templates are
+honestly two things at once — Moonlit Library is dark *and* decorative — and
+collapsing that to one value makes the filters lie.
 
 Separate from `SkinProject`. Separate localStorage key. The two products never
 share a settings object — that is the mistake the platform audit just spent
 ~60 deleted fields undoing.
 
 Fonts are a fixed list of web-safe stacks (no `@font-face`, so no webfonts).
-Always emit a fallback stack.
+Always emit a fallback stack, and keep every family name inside
+`[a-z0-9\- ]` (§3).
 
 ---
 
 ## 7. Build order
 
-| Phase | Deliverable | Done when |
+| Phase | Deliverable | Status |
 | --- | --- | --- |
-| ~~1~~ | ~~`ao3Properties.ts` + `ao3Css.ts` + unit tests~~ | ✅ **Done** — see below |
-| 0 | Extract `SettingsRows.tsx` | Existing settings sheet unchanged, tests green |
-| 2 | `theme.ts`, `colors.ts`, `compile.ts`, 2 reference themes | Compiled output passes lint |
-| 3 | `mockPage.ts` + `SkinPreview.tsx`, 3 states | Real AO3 selectors, iframe isolated |
-| 4 | `ThemeEditor.tsx`, four control groups + contrast | Every control visibly changes the preview |
-| 5 | `TemplateGallery.tsx` + full catalog | Distinct at thumbnail size |
-| 6 | `ExportSkinDialog.tsx` + picker card + route | Copy works, instructions correct |
-| 7 | A11y, tests, **manual AO3 save of every template** | See §8 |
+| 1 | `ao3Properties.ts` + `ao3Css.ts` + unit tests | ✅ built, then hardened with the font-family and value-grammar branches of §3 |
+| 0 | Extract `SettingsRows.tsx` | ✅ five row primitives shared; `LinesRow`/`ImageUrlRow` left behind |
+| 2 | `theme.ts`, `colors.ts`, `compile.ts`, 12 templates | ✅ every template's output passes lint |
+| 3 | `mockPage.ts` + `SkinPreview.tsx`, 3 states | ✅ real AO3 selectors, iframe isolated, AO3's base CSS loaded first |
+| 4 | `ThemeEditor.tsx`, four control groups + contrast | ✅ two readability checks, each with its own fix |
+| 5 | `TemplateGallery.tsx` | ✅ mood chips, thumbnails share `derive()` with the compiler |
+| 6 | `ExportSkinDialog.tsx` + picker card + route | ✅ copy blocked while the lint fails |
+| 7 | A11y, tests, **manual AO3 save of every template** | ⬜ **the remaining gate** — see §8 |
+| 8 | Header banners, hide-logo, URL validator, 4 banner-ready presets | ✅ 16 templates; see §3a and §11 |
 
-Start the catalog from the prototype's 12 templates — they are well chosen and
-already carry exactly our field set.
+### What still needs a human
 
-### Phase 1 is already built
+- **Save all twelve templates on AO3.** The sanitizer is the only authority,
+  and our lint is a model of it. Until that checklist is filled in, "AO3-safe"
+  is a well-tested prediction rather than an observation.
+- **Check the drop cap and divider on a real work**, single-chapter *and*
+  multi-chapter. §4.1 is the one selector whose scope our mock can only
+  approximate.
+- Known rough edge: on a phone the preview scrolls sideways rather than
+  scaling AO3's desktop layout down to fit. It is usable; it is not elegant.
+  Scaling was left out rather than added untested at the end.
+
+The catalog is the prototype's 12 templates — they are well chosen and already
+carry exactly our field set.
+
+### Phase 1 is already built, and was extended by this revision
 
 The safety layer is the piece where being wrong is silent and expensive, so it
 ships with this document rather than being described by it:
@@ -423,10 +593,15 @@ ships with this document rather than being described by it:
 | --- | --- |
 | `src/lib/siteSkin/ao3Properties.ts` | AO3's 181 properties and 20 shorthands, copied verbatim from `config.yml`, dated |
 | `src/lib/siteSkin/ao3Css.ts` | `isPropertyAllowed()`, `lintAo3Css()`, `isAo3Safe()` |
-| `tests/ao3-css.unit.spec.ts` | 39 tests |
+| `tests/ao3-css.unit.spec.ts` | the pinned rules |
 
-Run it with `npx playwright test --project=unit` — no browser, no server, ~4s.
-The `unit` project was added to `playwright.config.ts` for exactly this.
+Revision 2 adds the two value branches the first pass missed (§3): a
+`font-family` check mirroring `sanitize_css_font`, and a `VALUE_REGEX`
+approximation for everything else, so an illegal font name or a four-digit
+pixel value is caught at build time rather than by AO3.
+
+Run it with `npx playwright test --project=unit` — no browser, no server.
+The `unit` project exists in `playwright.config.ts` for exactly this.
 
 Writing the tests caught two errors in an earlier draft of this document
 (`grid-template-columns` is allowed, and `content: url()` is allowed because
@@ -440,20 +615,32 @@ as the specification.
 Automatable, and therefore required:
 
 - **Allowlist unit tests** — `ao3Css.ts` against the verified property rules,
-  including the substring quirks (`column-gap` ✅, `gap` ❌).
-- **Compile snapshot per template** — catches accidental property drift.
-- **Lint every template's output** — no template ships that cannot pass AO3.
-- **Contrast tests** — the WCAG ratio maths, plus the "Fix text color" action.
+  including the substring quirks (`column-gap` ✅, `gap` ❌) and the three
+  value branches.
+- **Lint every template's compiled output** — no template ships that cannot
+  pass AO3.
+- **Ownership assertions** — one owner per selector. Assert that `#main` never
+  receives a background, that `font-size` appears exactly once, and that every
+  emitted declaration carries `!important`. These are the three defects of §4
+  turned into tests.
+- **Contrast tests** — the WCAG ratio maths, plus the "Fix text colour" action.
 - **Playwright**: gallery → editor → each preview state → export → copy.
   Follow `tests/settings-render.spec.ts`: assert the compiled CSS actually
   contains the changed value, not merely that a control moved.
+
+Note that `playwright.config.ts` points the browser projects at the deployed
+site. Run the site-skin browser spec against a local build with
+`UX_BASE_URL=http://localhost:3000 npx playwright test --project=desktop
+tests/site-skin.spec.ts` while `npm run dev` is up. The unit project needs
+neither.
 
 Not automatable, and therefore a release gate:
 
 - **Save every launch template on AO3 by hand** and confirm it applies. AO3's
   sanitizer is the only authority. Record results in a checklist.
-- Specifically probe: `content: "❦"` (non-ASCII in `content` may not survive
-  `VALUE_REGEX`) and the `.userstuff` selectors from §4.1.
+- Specifically probe: the `#chapters .userstuff` selectors from §4.1 on both a
+  single-chapter and a multi-chapter work, and the header dropdown from §4.4
+  with a real logged-in account.
 
 ---
 
@@ -464,10 +651,16 @@ sanitizer safety with contrast. They are unrelated:
 
 - **AO3-safe** — does the compiled CSS pass our allowlist lint? Blocks export.
 - **Readability** — does text meet contrast against page and cards? Warns,
-  offers "Fix text color", never blocks.
+  offers a direct fix, never blocks.
 
 A user should never be told their skin is unsafe because it is low-contrast, or
 safe because it is readable.
+
+Readability checks two things, not one. Text against page and cards is the
+obvious one. **Accent against cards** is the one the prototype misses: every
+link, tag and heading on the page is accent-coloured, so a dark accent on a
+dark surface makes the archive unusable while the text check stays green. Each
+warning carries its own one-click fix.
 
 ---
 
@@ -475,20 +668,88 @@ safe because it is readable.
 
 Before adding a control, the blueprint's §19 test still applies, plus one of
 ours: **it must be expressible in the allowlist and visible in the mock DOM.**
-If it cannot be previewed honestly, it cannot ship.
+If it cannot be previewed honestly, it cannot ship. This rule is what put the
+open header dropdown and the `#dashboard span` into the mock instead of letting
+their rules ship unverified — and what keeps `#dashboard a:hover` out.
 
 Explicitly out of v1: work skins, raw CSS editing, webfonts, `@media`
-variants, background images, sharing, accounts.
+variants, sharing, accounts. (Background images moved *in* — see §3a and §11.)
+
+---
+
+## 11. What the published skins taught us
+
+Three site skins distributed as AO3 works, read against the sanitizer:
+
+| | Shape | Install |
+| --- | --- | --- |
+| [Hello Kitty](https://archiveofourown.org/works/56749162) (e_o_n_s) | One file on Pastebin | copy → paste |
+| [Mha Site Skins](https://archiveofourown.org/works/74457591) (Mylover) | ~100 hand-written lines in the chapter text | copy → paste |
+| [Rosé Pine](https://archiveofourown.org/works/69993411) (BlackBatCat) | 4,544 lines / 104KB on GitHub, forked from `neos` by ZerafinaCSS | **six skins, chained by hand** |
+
+**Adopted.**
+
+- **Header banners and a hidden logo** — MHA's whole identity is
+  `#header { background-image: url(…tumblr…jpg) }`, `#header .heading { height: 15em }`
+  and `visibility: hidden` on the logo. One declaration each; see §3a and §4b.
+- **Aesthetic presets tuned for a banner**, not fandom-named ones. MHA
+  hotlinks what is almost certainly somebody's fan art. That is one reader's
+  choice for their own browser; shipping it as a product feature would make us
+  the distributor of both a trademark and an artwork. **We ship no images.**
+  The fandom specificity comes from the address the user pastes.
+
+**Deliberately not adopted.**
+
+- **Rosé Pine's parent-skin chain.** Base (structure, all `var(--bg5)`) →
+  theme (`:root` colours only) → tag mod → tablet → mobile → a chaining skin
+  whose CSS body is the placeholder `.rose-pine {opacity: 1;}` purely so AO3
+  accepts it. It is how they get responsive breakpoints and automatic
+  light/dark, and it confirms our §3 reading that `@media` lives on the skin
+  record. It also turns one-click copy into a six-skin manual install, which
+  is the opposite of the three-minute promise. If we ever do it, the
+  complexity belongs entirely in the export dialog.
+- **Their surface area.** 4,544 lines against our ~130. AO3 permits far more
+  than we use — flexbox (29 `display:flex` in Rosé Pine, plus `order`,
+  `align-items`, `justify-content`), gradients, attribute selectors like
+  `[class^=relationship]` for colouring tags by type, and full icon-sprite
+  replacement via `url()`. Chasing it means becoming a page builder and §10
+  stops holding.
+
+**Worth taking next, in this order.** Tag colours *by type* — the
+`--tag-fandom-bg` / `--tag-warning-bg` / `--tag-character-bg` family is the
+most-requested AO3 customisation, it is semantic rather than decorative, and
+it is previewable in the Browse mock. Then `.site-skin-metadata { content: "…" }`,
+which is how Rosé Pine smuggles attribution past a sanitizer that strips
+comments — our own header comment is deleted the moment a user submits.
+
+**One divergence to keep in view.** Rosé Pine relies on 8-digit hex
+(`#89797925`) in shadows. That appears to pass AO3 only by accident — the
+regex matches `#897979` and then `25` as a bare keyword. Our lint rejects it,
+which makes us *stricter* than AO3, against the "never tighten" rule of §3. It
+does not bite while we emit no alpha colours, but it is a known gap.
+
+**Where we already win.** Every one of these is copy-paste-and-hope. Rosé Pine
+ships ~20 static PNG previews because it has no other way to show you, and its
+own instructions tell users to keep a master copy in Notepad *because AO3
+mangles the CSS on save*. We are the master copy: the theme lives in storage
+and is regenerated, never hand-edited.
 
 ---
 
 ## Sources
 
-AO3 rules verified against otwarchive `master`:
+AO3 rules verified against otwarchive `master`, 6 August 2026:
 
-- [`lib/css_cleaner.rb`](https://github.com/otwcode/otwarchive/blob/master/lib/css_cleaner.rb) — `legal_property?`, `legal_shorthand_property?`, `VALUE_REGEX`, `@font-face` rejection, `url()` gating
+- [`lib/css_cleaner.rb`](https://github.com/otwcode/otwarchive/blob/master/lib/css_cleaner.rb) — `legal_property?`, `legal_shorthand_property?`, `sanitize_css_declaration_value` branch order, `sanitize_css_font`, `sanitize_css_content`, `VALUE_REGEX`, `@font-face` rejection, `url()` gating
 - [`config/config.yml`](https://github.com/otwcode/otwarchive/blob/master/config/config.yml) — `SUPPORTED_CSS_PROPERTIES`, `SUPPORTED_CSS_SHORTHAND_PROPERTIES`, `SUPPORTED_CSS_KEYWORDS`, `SUPPORTED_EXTERNAL_URLS`
-- [`app/models/skin.rb`](https://github.com/otwcode/otwarchive/blob/master/app/models/skin.rb) — `MEDIA` whitelist, `clean_css` pipeline
+- [`app/models/skin.rb`](https://github.com/otwcode/otwarchive/blob/master/app/models/skin.rb) — `MEDIA` and `ROLES` whitelists, `get_style` load order, unprefixed `clean_css_code`
+- [`app/views/works/show.html.erb`](https://github.com/otwcode/otwarchive/blob/master/app/views/works/show.html.erb) — `#work-skin` → `#workskin` → `#chapters` → `.userstuff` nesting
+- `public/stylesheets/site/2.0/*` — the default skin our CSS is layered on top
+  of. `01-core`, `02-elements`, `03-region-header`, `04-region-dashboard`,
+  `05-region-main`, `06-region-footer`, `10-types-groups`, `11-group-listbox`,
+  `13-group-blurb`, `14-group-preface`, `21-userstuff`, `22-system-messages`.
+  §4.4–4.8 all come from this directory; it is the part the first revision
+  never read.
 
-Re-verify before Phase 1 — AO3 changes these lists, and a stale allowlist is
-worse than none.
+Re-verify before each release — AO3 changes these lists, and a stale allowlist
+is worse than none.

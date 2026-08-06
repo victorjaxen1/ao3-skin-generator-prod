@@ -82,6 +82,48 @@ export const AO3_URL_PROPERTIES: readonly string[] = [
 ];
 
 /**
+ * File extensions AO3 will load through url(). ArchiveConfig
+ * SUPPORTED_EXTERNAL_URLS. Note what is absent: webp, svg, avif. Twitter,
+ * Discord and most modern CDNs serve webp by default, so this is the second
+ * most common reason a pasted banner is refused.
+ */
+export const AO3_IMAGE_EXTENSIONS: readonly string[] = ['jpg', 'jpeg', 'png', 'gif'];
+
+/**
+ * The TLDs AO3 will load an image from, copied verbatim from TOP_LEVEL_DOMAINS
+ * in lib/css_cleaner.rb (an ICANN snapshot that has not been refreshed in
+ * years).
+ *
+ * This is DATA, not judgement, and the omissions are the point. There is no
+ * `app`, `dev`, `xyz`, `art`, `gallery`, `pics`, `space`, `link`, `page` or
+ * `cloud` — and no `moe`, which is why files.catbox.moe, a fandom staple,
+ * cannot be used. `io` and `cc` and `co` are present, so github.io, postimg.cc
+ * and ibb.co all work.
+ */
+export const AO3_TLDS: readonly string[] = [
+  'ac', 'ad', 'ae', 'aero', 'af', 'ag', 'ai', 'al', 'am', 'an', 'ao', 'aq', 'ar', 'arpa',
+  'as', 'asia', 'at', 'au', 'aw', 'ax', 'az', 'ba', 'bb', 'bd', 'be', 'bf', 'bg', 'bh',
+  'bi', 'biz', 'bj', 'bm', 'bn', 'bo', 'br', 'bs', 'bt', 'bv', 'bw', 'by', 'bz', 'ca',
+  'cat', 'cc', 'cd', 'cf', 'cg', 'ch', 'ci', 'ck', 'cl', 'cm', 'cn', 'co', 'com', 'coop',
+  'cr', 'cu', 'cv', 'cx', 'cy', 'cz', 'de', 'dj', 'dk', 'dm', 'do', 'dz', 'ec', 'edu',
+  'ee', 'eg', 'er', 'es', 'et', 'eu', 'fi', 'fj', 'fk', 'fm', 'fo', 'fr', 'ga', 'gb',
+  'gd', 'ge', 'gf', 'gg', 'gh', 'gi', 'gl', 'gm', 'gn', 'gov', 'gp', 'gq', 'gr', 'gs',
+  'gt', 'gu', 'gw', 'gy', 'hk', 'hm', 'hn', 'hr', 'ht', 'hu', 'id', 'ie', 'il', 'im',
+  'in', 'info', 'int', 'io', 'iq', 'ir', 'is', 'it', 'je', 'jm', 'jo', 'jobs', 'jp',
+  'ke', 'kg', 'kh', 'ki', 'km', 'kn', 'kp', 'kr', 'kw', 'ky', 'kz', 'la', 'lb', 'lc',
+  'li', 'lk', 'lr', 'ls', 'lt', 'lu', 'lv', 'ly', 'ma', 'mc', 'md', 'me', 'mg', 'mh',
+  'mil', 'mk', 'ml', 'mm', 'mn', 'mo', 'mobi', 'mp', 'mq', 'mr', 'ms', 'mt', 'mu',
+  'museum', 'mv', 'mw', 'mx', 'my', 'mz', 'na', 'name', 'nc', 'ne', 'net', 'nf', 'ng',
+  'ni', 'nl', 'no', 'np', 'nr', 'nu', 'nz', 'om', 'org', 'pa', 'pe', 'pf', 'pg', 'ph',
+  'pk', 'pl', 'pm', 'pn', 'pr', 'pro', 'ps', 'pt', 'pw', 'py', 'qa', 're', 'ro', 'rs',
+  'ru', 'rw', 'sa', 'sb', 'sc', 'sd', 'se', 'sg', 'sh', 'si', 'sj', 'sk', 'sl', 'sm',
+  'sn', 'so', 'sr', 'st', 'su', 'sv', 'sy', 'sz', 'tc', 'td', 'tel', 'tf', 'tg', 'th',
+  'tj', 'tk', 'tl', 'tm', 'tn', 'to', 'tp', 'tr', 'travel', 'tt', 'tv', 'tw', 'tz',
+  'ua', 'ug', 'uk', 'us', 'uy', 'uz', 'va', 'vc', 've', 'vg', 'vi', 'vn', 'vu', 'wf',
+  'ws', 'xn', 'xxx', 'ye', 'yt', 'za', 'zm', 'zw',
+];
+
+/**
  * Media values AO3 allows — chosen in AO3's own skin form, NOT written as
  * @media blocks in the CSS. See Skin::MEDIA.
  */

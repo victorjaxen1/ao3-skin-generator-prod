@@ -1,4 +1,5 @@
 import React from 'react';
+import Link from 'next/link';
 import { SkinProject } from '../lib/schema';
 import { TEMPLATE_EXAMPLES } from '../lib/examples';
 
@@ -139,6 +140,40 @@ export const PlatformPicker: React.FC<Props> = ({
             </span>
           </button>
         ))}
+      </div>
+
+      {/* A second product, not a fifth platform. It emits CSS you paste into
+          AO3's preferences rather than an image you paste into a chapter, so
+          it sits apart from the four conversation cards rather than among
+          them — picking it by mistake would be a confusing detour. */}
+      <div className="mt-4 w-full max-w-lg">
+        <Link
+          href="/site-skin"
+          className="group flex items-center gap-4 p-4 rounded-2xl border-2 border-violet-200 bg-violet-50 hover:border-violet-400 hover:shadow-lg hover:-translate-y-0.5 transition-all"
+        >
+          <span className="text-3xl flex-shrink-0">🎨</span>
+          <span className="min-w-0">
+            <span className="block text-sm sm:text-base font-semibold text-stone-900">
+              Site skin
+            </span>
+            <span className="block text-xs text-stone-500 mt-0.5 leading-snug">
+              Restyle AO3 itself — colours, fonts and cards, for your own browsing
+            </span>
+          </span>
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="ml-auto flex-shrink-0 text-violet-400 group-hover:text-violet-600 transition-colors"
+          >
+            <path d="M9 18l6-6-6-6" />
+          </svg>
+        </Link>
       </div>
 
       {/* Quick Start Templates — grouped, so a chip's platform is never a surprise */}

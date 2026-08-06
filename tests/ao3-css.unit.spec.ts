@@ -96,10 +96,21 @@ test.describe('value rules', () => {
   });
 
   test('allows url() only on the six permitted properties', () => {
-    expect(isAo3Safe('#main { background-image: url(x.png); }')).toBe(true);
-    expect(isAo3Safe('#main { content: url(x.png); }')).toBe(true); // content allows url()
-    const bad = lintAo3Css('#main { cursor: url(x.png); }');
+    const img = 'https://i.imgur.com/abc123.png';
+    expect(isAo3Safe(`#main { background-image: url("${img}"); }`)).toBe(true);
+    expect(isAo3Safe(`#main { content: url("${img}"); }`)).toBe(true); // content allows url()
+    const bad = lintAo3Css(`#main { cursor: url("${img}"); }`);
     expect(bad.some(x => x.kind === 'banned_value_for_property')).toBe(true);
+  });
+
+  test('a relative url() is refused — AO3 requires a full address', () => {
+    // An earlier version of this test asserted `url(x.png)` was fine. It is
+    // not: URI_REGEX demands either a scheme and an allowlisted domain, or a
+    // path beginning /images (AO3's own assets). The property gate alone was
+    // never the whole rule, and the address grammar is the part that bites.
+    expect(isAo3Safe('#main { background-image: url(x.png); }')).toBe(false);
+    expect(isAo3Safe('#main { content: url(x.png); }')).toBe(false);
+    expect(isAo3Safe('#main { background-image: url("/images/skins/tile.png"); }')).toBe(true);
   });
 
   test('content must be one fully-quoted string, url(), or none', () => {
