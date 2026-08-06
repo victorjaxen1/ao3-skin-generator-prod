@@ -1,8 +1,15 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { SkinSettings, GroupParticipant } from '../lib/schema';
 import { AvatarSelector } from './AvatarSelector';
 import { ImageUrlInput } from './ImageUrlInput';
 import BottomSheet from './BottomSheet';
+import {
+  ToggleRow,
+  SectionDivider,
+  SelectRow,
+  TextRow,
+  AdvancedSection,
+} from './SettingsRows';
 
 interface Props {
   isOpen: boolean;
@@ -11,80 +18,6 @@ interface Props {
   settings: SkinSettings;
   onUpdateSettings: <K extends keyof SkinSettings>(key: K, value: SkinSettings[K]) => void;
 }
-
-// Reusable row components
-const ToggleRow: React.FC<{
-  label: string;
-  sublabel?: string;
-  checked: boolean;
-  onChange: (v: boolean) => void;
-}> = ({ label, sublabel, checked, onChange }) => (
-  <div className="flex items-center justify-between py-3">
-    <div>
-      <span className="text-sm font-medium text-stone-900">{label}</span>
-      {sublabel && <p className="text-xs text-stone-500 mt-0.5">{sublabel}</p>}
-    </div>
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      onClick={() => onChange(!checked)}
-      className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${
-        checked ? 'bg-violet-600' : 'bg-stone-300'
-      }`}
-    >
-      <span
-        className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
-          checked ? 'translate-x-5' : 'translate-x-0'
-        }`}
-      />
-    </button>
-  </div>
-);
-
-const SectionDivider: React.FC<{ label: string }> = ({ label }) => (
-  <div className="pt-4 pb-1">
-    <span className="text-[11px] font-semibold text-stone-400 uppercase tracking-wider">{label}</span>
-  </div>
-);
-
-const SelectRow: React.FC<{
-  label: string;
-  value: string;
-  options: { value: string; label: string }[];
-  onChange: (v: string) => void;
-}> = ({ label, value, options, onChange }) => (
-  <div className="flex items-center justify-between py-3">
-    <span className="text-sm font-medium text-stone-900">{label}</span>
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="text-sm text-stone-700 bg-stone-100 border-0 rounded-lg px-3 py-1.5 cursor-pointer focus:ring-2 focus:ring-violet-500"
-    >
-      {options.map((opt) => (
-        <option key={opt.value} value={opt.value}>{opt.label}</option>
-      ))}
-    </select>
-  </div>
-);
-
-const TextRow: React.FC<{
-  label: string;
-  value: string;
-  placeholder?: string;
-  onChange: (v: string) => void;
-}> = ({ label, value, placeholder, onChange }) => (
-  <div className="flex items-center justify-between py-3 gap-3">
-    <span className="text-sm font-medium text-stone-900 shrink-0">{label}</span>
-    <input
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-      className="text-sm text-stone-700 bg-stone-100 border-0 rounded-lg px-3 py-1.5 w-full max-w-[180px] text-right focus:ring-2 focus:ring-violet-500"
-    />
-  </div>
-);
 
 /** Multi-line text, one entry per line. */
 const LinesRow: React.FC<{
@@ -124,35 +57,6 @@ const ImageUrlRow: React.FC<{
     />
   </div>
 );
-
-/**
- * Collapsed by default. Everything in here has a sensible default and most
- * people never need to open it — the point is that it stops competing for
- * attention with the settings that are the reason to use the tool.
- */
-const AdvancedSection: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="pt-2">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        aria-expanded={open}
-        className="w-full flex items-center justify-between py-3 text-left"
-      >
-        <span className="text-[11px] font-semibold text-stone-400 uppercase tracking-wider">
-          Advanced
-        </span>
-        <span className={`text-stone-400 transition-transform ${open ? 'rotate-180' : ''}`}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="6 9 12 15 18 9" />
-          </svg>
-        </span>
-      </button>
-      {open && <div className="divide-y divide-stone-100 pb-2">{children}</div>}
-    </div>
-  );
-};
 
 export const SettingsSheet: React.FC<Props> = ({
   isOpen,
