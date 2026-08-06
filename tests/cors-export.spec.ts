@@ -2,16 +2,28 @@ import { test, expect } from '@playwright/test';
 
 /**
  * Does a cross-origin image WITHOUT CORS headers break export?
- * w3.org serves 200 with no Access-Control-Allow-Origin — the exact case
- * that would taint a canvas if html2canvas loaded it without crossOrigin.
+ *
+ * This redirects to fastly.picsum.photos, which serves 200 with no
+ * Access-Control-Allow-Origin. The browser displays it happily, but
+ * html2canvas requests it with crossOrigin='anonymous', so without the export
+ * proxy it fails to load and leaves a hole in the PNG.
  */
-const NO_CORS_IMAGE = 'https://www.w3.org/Icons/w3c_home.png';
+const NO_CORS_IMAGE = 'https://picsum.photos/id/237/80/80.jpg';
 
-test('EXPORT: non-CORS image — does Save Image survive?', async ({ page }) => {
+test('EXPORT: non-CORS image survives, and is actually in the output', async ({ page }) => {
   const pageErrors: string[] = [];
   page.on('pageerror', (e) => pageErrors.push(e.message));
   page.on('console', (m) => {
     if (m.type() === 'error') pageErrors.push(`console: ${m.text()}`);
+  });
+
+  // The export pipeline routes cross-origin images through the proxy so they
+  // rasterise as same-origin data URIs. Watch for that happening.
+  const proxied: { url: string; status: number }[] = [];
+  page.on('response', async (res) => {
+    if (res.url().includes('/api/image-proxy')) {
+      proxied.push({ url: res.url(), status: res.status() });
+    }
   });
 
   await page.goto('/');
@@ -19,7 +31,7 @@ test('EXPORT: non-CORS image — does Save Image survive?', async ({ page }) => 
 
   // Open the detail tray and paste the image URL.
   await page.getByRole('button', { name: /Add details/ }).click();
-  await page.getByPlaceholder('Image URL').fill(NO_CORS_IMAGE);
+  await page.getByLabel('Image address for this message').fill(NO_CORS_IMAGE);
 
   const composer = page.getByPlaceholder('Add a message…');
   await composer.fill('image test');
@@ -28,7 +40,7 @@ test('EXPORT: non-CORS image — does Save Image survive?', async ({ page }) => 
   // Confirm the image actually rendered in the preview (i.e. it loaded at all).
   const imgState = await page.evaluate(async (url) => {
     const imgs = Array.from(document.querySelectorAll('img'));
-    const target = imgs.find((i) => i.src.includes('w3c_home'));
+    const target = imgs.find((i) => i.src.includes('picsum'));
     if (!target) return 'not found in DOM';
     return `complete=${target.complete} naturalWidth=${target.naturalWidth}`;
   }, NO_CORS_IMAGE);
@@ -48,8 +60,19 @@ test('EXPORT: non-CORS image — does Save Image survive?', async ({ page }) => 
 
   const tainted = pageErrors.some((e) => /SecurityError|tainted|insecure/i.test(e));
   console.log(`  [MEASURE] canvas tainted (SecurityError seen): ${tainted}`);
+  console.log(`  [MEASURE] proxy calls: ${JSON.stringify(proxied)}`);
 
   expect(result, 'export should produce a download').toBe('DOWNLOAD');
+
+  // Export surviving was never the hard part — the image being *present* is.
+  // A host with no Access-Control-Allow-Origin must have gone through the
+  // proxy, or html2canvas left a hole where the image should be.
+  expect(proxied.length, 'cross-origin image should be proxied before rasterising')
+    .toBeGreaterThan(0);
+  expect(proxied.every((p) => p.status === 200), 'proxy should succeed').toBe(true);
+
+  // And the user must not have been told an image was dropped.
+  await expect(page.getByText(/couldn't be included/i)).toHaveCount(0);
 });
 
 test('EXPORT: direct canvas taint check for both configs', async ({ page }) => {

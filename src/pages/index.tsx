@@ -46,7 +46,8 @@ export default function HomePage() {
   const [showCodeModal, setShowCodeModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successAction, setSuccessAction] = useState<'image' | 'ao3code'>('image');
-  const [saveStatus, setSaveStatus] = useState<'saved' | 'unsaved' | 'saving'>('saved');
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'unsaved' | 'saving' | 'failed'>('saved');
+  const [saveError, setSaveError] = useState('');
   const [showCharacters, setShowCharacters] = useState(false);
   const [showMobilePreview, setShowMobilePreview] = useState(true);
   // True when the picker was reached from the workspace, i.e. there is work
@@ -149,8 +150,9 @@ export default function HomePage() {
     if (!isLoaded) return;
     setSaveStatus('saving');
     const timer = setTimeout(() => {
-      persistProject(project);
-      setSaveStatus('saved');
+      const result = persistProject(project);
+      setSaveStatus(result.ok ? 'saved' : 'failed');
+      setSaveError(result.ok ? '' : result.message || '');
       if (historyIndex === -1 || JSON.stringify(project) !== JSON.stringify(history[historyIndex])) {
         const next = history.slice(0, historyIndex + 1);
         next.push(project);
@@ -318,11 +320,32 @@ export default function HomePage() {
     }
   }, [project.template, handleUpdateSettings]);
 
+  // The compose bar's "posting as" list. Template presets were previously the
+  // only source, so the feature existed only if you happened to load one of
+  // three starter templates — the Character Library writes somewhere else
+  // entirely. Both feed it now.
+  const twitterCharacters = React.useMemo(() => {
+    const presets = project.settings.twitterCharacterPresets || [];
+    const fromLibrary = universalCharacters
+      .filter(c => !presets.some(p => p.name === c.name))
+      .map(c => ({
+        id: c.id,
+        name: c.name,
+        handle: (c.twitterHandle || c.name.toLowerCase().replace(/\s+/g, '')).replace(/^@/, ''),
+        avatarUrl: c.avatarUrl,
+        verified: c.verified,
+      }));
+    return [...presets, ...fromLibrary];
+  }, [project.settings.twitterCharacterPresets, universalCharacters]);
+
   // ── Render ───────────────────────────────────────────────────────────────
   // Derive the contact name from the correct per-template settings field
+  // The header title edits one field per template — the one that names the
+  // thing on screen. Twitter uses the display name rather than the handle:
+  // the handle is still in Settings, and a tweet leads with the name.
   const contactNameKey = project.template === 'ios' ? 'iosContactName'
     : project.template === 'android' ? 'androidContactName'
-    : project.template === 'twitter' ? 'twitterHandle'
+    : project.template === 'twitter' ? 'twitterDisplayName'
     : 'googleQuery';
   const displayContactName = (project.settings as any)[contactNameKey] || '';
 
@@ -357,6 +380,14 @@ export default function HomePage() {
         messageCount={project.messages.length}
       />
 
+      {/* A refused save means this work disappears on reload, so it is worth
+          interrupting for rather than logging to a console nobody opens. */}
+      {saveStatus === 'failed' && saveError && (
+        <div role="alert" className="bg-amber-50 border-b border-amber-200 px-4 py-2">
+          <p className="text-xs text-amber-900 max-w-screen-xl mx-auto">{saveError}</p>
+        </div>
+      )}
+
       {/* ─── Main content ───────────────────────────────────────────── */}
       {/* Bottom padding reserves room for the fixed export bar, which would
           otherwise cover the compose input. ExportPanel publishes its own
@@ -371,6 +402,7 @@ export default function HomePage() {
             <MessageTimeline
               messages={project.messages}
               template={project.template}
+              settings={project.settings}
               focusedMessageId={focusedMessageId}
               focusTrigger={focusTrigger}
               onUpdateMessage={handleUpdateMessage}
@@ -437,7 +469,7 @@ export default function HomePage() {
             template={project.template}
             settings={project.settings}
             onAddMessage={handleAddMessage}
-            twitterCharacters={project.settings.twitterCharacterPresets}
+            twitterCharacters={twitterCharacters}
           />
         </div>
 

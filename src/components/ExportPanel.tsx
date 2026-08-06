@@ -5,6 +5,7 @@ import { getProStatus, getProFeatures, ProStatus } from '../lib/proFeatures';
 import { ProUpgradeModal } from './ProUpgradeModal';
 import { useToast, ToastContainer } from './Toast';
 import { uploadToImgBB, ImageUploadError } from '../lib/imgbb';
+import { inlineCrossOriginImages, FailedImage } from '../lib/imageProxy';
 
 interface Props {
   project: SkinProject;
@@ -74,13 +75,17 @@ function applyWatermark(canvas: HTMLCanvasElement, skipWatermark: boolean): HTML
 // Accepts a (possibly message-sliced) project copy; never touches the live DOM.
 // ---------------------------------------------------------------------------
 
-async function renderChunk(project: SkinProject, scale: number): Promise<HTMLCanvasElement> {
+async function renderChunk(
+  project: SkinProject,
+  scale: number,
+  onImageWarning?: (failed: FailedImage[]) => void
+): Promise<HTMLCanvasElement> {
   if (typeof window === 'undefined') throw new Error('Cannot render on server side');
 
   const html2canvas = (await import('html2canvas')).default;
 
   const css = buildCSS(project);
-  const html = buildHTML(project, true);
+  const html = buildHTML(project);
 
   const templateDefaults: Record<SkinProject['template'], number> = {
     ios: 375,
@@ -238,9 +243,15 @@ async function renderChunk(project: SkinProject, scale: number): Promise<HTMLCan
       (el as HTMLElement).style.cssText +=
         ';position:absolute;left:60px;top:50%;transform:translateY(-50%);margin:0;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;padding-bottom:11px';
     });
-    clone.querySelectorAll('.android-header-name').forEach(el => {
+    // The name now always sits inside a wrapper alongside a subtitle ("online"
+    // or the participant count), so the wrapper is what needs positioning —
+    // pinning the name itself would stack it on top of the subtitle.
+    clone.querySelectorAll('.android-header-name-wrapper').forEach(el => {
       (el as HTMLElement).style.cssText +=
-        ';position:absolute;left:110px;top:50%;transform:translateY(-50%) translateY(-6px);margin:0;display:flex;align-items:center;line-height:1.2';
+        ';position:absolute;left:110px;top:50%;transform:translateY(-50%);margin:0;display:flex;flex-direction:column;justify-content:center;line-height:1.2';
+    });
+    clone.querySelectorAll('.android-header-name-wrapper .android-header-name').forEach(el => {
+      (el as HTMLElement).style.cssText += ';position:static;margin:0;line-height:1.3';
     });
     clone.querySelectorAll('dd.bubble.out,dd.bubble.in').forEach(el => {
       (el as HTMLElement).style.cssText +=
@@ -254,6 +265,12 @@ async function renderChunk(project: SkinProject, scale: number): Promise<HTMLCan
     });
   }
 
+  // Swap remote images for same-origin data URIs before rasterising. Without
+  // this, html2canvas requests them with crossOrigin='anonymous' and any host
+  // that doesn't send CORS headers drops out of the PNG silently.
+  const unconvertible = await inlineCrossOriginImages(clone);
+  if (unconvertible.length > 0) onImageWarning?.(unconvertible);
+
   await waitForImages(clone);
 
   const captureWidth = captureArea.scrollWidth;
@@ -263,8 +280,11 @@ async function renderChunk(project: SkinProject, scale: number): Promise<HTMLCan
     background: '#ffffff',
     scale,
     logging: false,
+    // useCORS makes html2canvas set crossOrigin='anonymous' on every image, so
+    // a host without CORS headers fails to load rather than tainting. That
+    // makes allowTaint inert here — omitted rather than left as a misleading
+    // no-op. Cross-origin images are proxied to data: URIs before this runs.
     useCORS: true,
-    allowTaint: true,
     width: captureWidth,
     height: captureHeight,
     windowWidth: captureWidth,
@@ -297,12 +317,13 @@ const CHUNK_SIZE = 15;
 async function renderAllChunks(
   project: SkinProject,
   scale: number,
-  onProgress?: (rendered: number, total: number) => void
+  onProgress?: (rendered: number, total: number) => void,
+  onImageWarning?: (failed: FailedImage[]) => void
 ): Promise<HTMLCanvasElement[]> {
   const messages = project.messages;
 
   if (messages.length === 0) {
-    return [await renderChunk(project, scale)];
+    return [await renderChunk(project, scale, onImageWarning)];
   }
 
   const chunks: (typeof messages)[] = [];
@@ -313,7 +334,7 @@ async function renderAllChunks(
   const canvases: HTMLCanvasElement[] = [];
   for (let i = 0; i < chunks.length; i++) {
     const chunkProject: SkinProject = { ...project, messages: chunks[i] };
-    const canvas = await renderChunk(chunkProject, scale);
+    const canvas = await renderChunk(chunkProject, scale, onImageWarning);
     canvases.push(canvas);
     onProgress?.(i + 1, chunks.length);
   }
@@ -327,9 +348,10 @@ async function renderAllChunks(
 async function exportAsImage(
   project: SkinProject,
   scale: number,
-  skipWatermark: boolean
+  skipWatermark: boolean,
+  onImageWarning?: (failed: FailedImage[]) => void
 ): Promise<void> {
-  const canvas = await renderChunk(project, scale);
+  const canvas = await renderChunk(project, scale, onImageWarning);
   const watermarked = applyWatermark(canvas, skipWatermark);
   const blob = await canvasToBlob(watermarked);
   const url = URL.createObjectURL(blob);
@@ -348,15 +370,19 @@ async function exportAsAO3(
   project: SkinProject,
   scale: number,
   skipWatermark: boolean,
-  onProgress: (stage: string, current: number, total: number) => void
+  onProgress: (stage: string, current: number, total: number) => void,
+  onImageWarning?: (failed: FailedImage[]) => void
 ): Promise<string> {
   const totalChunks = Math.max(1, Math.ceil((project.messages.length || 1) / CHUNK_SIZE));
 
   onProgress('Rendering', 0, totalChunks);
 
-  const canvases = await renderAllChunks(project, scale, (rendered) => {
-    onProgress('Rendering', rendered, totalChunks);
-  });
+  const canvases = await renderAllChunks(
+    project,
+    scale,
+    (rendered) => onProgress('Rendering', rendered, totalChunks),
+    onImageWarning
+  );
 
   const watermarked = canvases.map(c => applyWatermark(c, skipWatermark));
   const blobs = await Promise.all(watermarked.map(canvasToBlob));
@@ -447,13 +473,27 @@ export const ExportPanel: React.FC<Props> = ({
 
   const skipWatermark = getProFeatures().watermarkFree;
 
+  // An image the proxy can't fetch is missing from the PNG. That used to
+  // happen silently — the preview looked right and the export had a hole.
+  const warnAboutImages = (failed: FailedImage[]) => {
+    const count = failed.length;
+    const subject = count === 1 ? "One image couldn't be included" : `${count} images couldn't be included`;
+    // The server's reason is more use than a guess: "too many at once" and
+    // "that host blocks downloads" call for completely different responses.
+    const reason = failed[0]?.reason || '';
+    const advice = /too many/i.test(reason)
+      ? reason
+      : `${reason} Try saving the image and using the upload button instead.`;
+    showError(`${subject} — ${advice}`);
+  };
+
   // --- Download Image ---
   const handleDownloadImage = async () => {
     if (isExporting) return;
     setIsExporting(true);
     setProgressLabel('Rendering...');
     try {
-      await exportAsImage(project, exportScale, skipWatermark);
+      await exportAsImage(project, exportScale, skipWatermark, warnAboutImages);
       success('Downloaded!');
       onSuccess?.('image');
       if (typeof window !== 'undefined' && (window as any).gtag) {
@@ -486,7 +526,8 @@ export const ExportPanel: React.FC<Props> = ({
         skipWatermark,
         (stage, current, total) => {
           setProgressLabel(total <= 1 ? `${stage}...` : `${stage} ${current}/${total}`);
-        }
+        },
+        warnAboutImages
       );
       setAo3Code(code);
       setShowCodeModal(true);

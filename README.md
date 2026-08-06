@@ -15,7 +15,7 @@ Generate highlightable, accessible chat scenes and social media mockups for Arch
 
 ### Key Features
 
-- **🚀 Cloudinary Upload** - Auto-upload images for perfect layout with minimal code (see [setup guide](./CLOUDINARY-SETUP.md))
+- **🖼 Paste any image address** - Google Images, Imgur, Wikimedia and the rest; share-page links are converted to direct links, and images are embedded server-side at export so they survive CORS and hotlink blocking
 - **👥 Group Chat (iOS & WhatsApp)** - Multi-participant conversations with avatars and colored names
   - Automatic participant matching by sender name
   - Avatar images or colored initial placeholders
@@ -64,33 +64,40 @@ Generate highlightable, accessible chat scenes and social media mockups for Arch
 
 ```bash
 npm install
+cp .env.example .env.local   # then add NEXT_PUBLIC_IMGBB_API_KEY
 npm run dev
 # Visit http://localhost:3000
 ```
 
+Without `NEXT_PUBLIC_IMGBB_API_KEY` the file-upload buttons and "Copy for AO3"
+report that uploading is not configured. Everything else works. The value lives
+in the Netlify dashboard under Site settings → Environment variables; it is a
+publishable key, inlined into the browser bundle at build time.
+
 ## How to Use on AO3
 
-### Option 1: Cloudinary Upload (Recommended) ⚡
+### Copy for AO3 (recommended)
 
-**Benefits**: Perfect layout, simple code, no CSS headaches!
+1. Build your conversation in the generator
+2. Click **Copy for AO3**
 
-1. **Setup** (one-time): Follow instructions in [CLOUDINARY-SETUP.md](./CLOUDINARY-SETUP.md)
-2. Create your scene in the generator
-3. Enable **"Use Cloudinary"** mode at the bottom
-4. Click **Generate Code** (cloud icon)
-5. Copy the simplified CSS and HTML
-6. Paste into AO3 (CSS in Work Skin, HTML in chapter)
+It renders your conversation, uploads the picture, and hands you an `<img>` tag
+to paste into AO3's HTML editor. **No work skin setup needed.**
 
-**Result**: Just a few lines of code instead of 200+ lines. The image looks exactly like your download!
+### Save Image
 
-### Option 2: Traditional CSS/HTML
+Click **Save Image** for a PNG on your device — for Tumblr, Twitter, or anywhere
+outside AO3.
 
-1. Create your scene in the generator
-2. Click **Export** -> Copy CSS
-3. Create a Work Skin on AO3, paste CSS
-4. Copy HTML -> Paste into your chapter
+### Images inside a conversation
 
-**Note**: May have spacing/layout issues due to AO3's CSS restrictions. Use Cloudinary mode for best results!
+Paste any image address (Google Images, Imgur, Wikimedia, Tumblr…), or upload a
+file. Share-page links from Google Drive, Dropbox and Imgur are converted to
+direct image links automatically.
+
+At export time the app fetches each pasted address server-side and embeds it in
+the picture. That is what makes hosts without CORS headers — and hotlink-blocked
+hosts like Pinterest — appear in the output instead of silently vanishing.
 
 ## Tech Stack
 
@@ -100,7 +107,7 @@ npm run dev
 - **Tailwind CSS** - Utility-first styling
 - **DOMPurify** - XSS protection
 - **html2canvas** - Client-side image export
-- **Cloudinary** - Optional image hosting
+- **ImgBB** - Image hosting for uploads and the AO3 export
 - **PWA** - Offline support with service worker
 - **Next.js Image** - Automatic image optimization (AVIF/WebP)
 - **Virtual Scrolling** - Performance for 1000+ message lists

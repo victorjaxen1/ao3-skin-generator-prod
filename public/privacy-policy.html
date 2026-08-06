@@ -147,11 +147,11 @@ h2 { margin-top: 2rem; }
       <section class="content-section">
         <div class="container">
           <div class="last-updated">
-            Last updated: November 27, 2025
+            Last updated: August 6, 2026
           </div>
 
           <div class="info-box">
-            <p><strong>TL;DR:</strong> Your work stays on your device. We don't collect, store, or sell your creative content. We use Google Analytics to understand how people use the tool (anonymously), and we use Cloudinary for temporary image hosting if you choose to upload avatars. That's it.</p>
+            <p><strong>TL;DR:</strong> Your work stays on your device. We don't collect, store, or sell your creative content. We use Google Analytics to understand how people use the tool (anonymously), and we use ImgBB for image hosting when you upload an image or export your work. That's it.</p>
           </div>
 
           <h2>1. Introduction</h2>
@@ -162,7 +162,8 @@ h2 { margin-top: 2rem; }
           
           <h3>2.1 Information You Provide Directly</h3>
           <p><strong>Creative Content:</strong> All text, styling, and configurations you create in the generator are stored locally in your browser using localStorage. We never transmit this data to our servers.</p>
-          <p><strong>Images You Upload:</strong> If you choose to upload avatar images or attachments, these are sent to Cloudinary (a third-party image hosting service) using their unsigned upload feature. We do not store these images on our servers.</p>
+          <p><strong>Images You Upload:</strong> If you choose to upload an image, or use "Copy for AO3" (which needs a public link to the finished picture), the image is sent to ImgBB, a third-party image hosting service. Images hosted there are publicly accessible to anyone with the link. We do not store these images on our servers.</p>
+          <p><strong>Image Addresses You Paste:</strong> When you export, any image address you have pasted is fetched by our server so the picture can be embedded directly in the exported file. The address and the image pass through our server at that moment; neither is stored afterwards.</p>
 
           <h3>2.2 Information Collected Automatically</h3>
           <p><strong>Analytics Data:</strong> We use Google Analytics to understand how visitors interact with our service. This includes:</p>
@@ -189,7 +190,7 @@ h2 { margin-top: 2rem; }
           <ul>
             <li><strong>Improve the service:</strong> Analytics help us understand which features are popular and where users encounter issues</li>
             <li><strong>Fix bugs:</strong> Error tracking helps us identify and resolve technical problems</li>
-            <li><strong>Provide the service:</strong> Image uploads via Cloudinary enable avatar and attachment functionality</li>
+            <li><strong>Provide the service:</strong> Image hosting via ImgBB enables uploads and the "Copy for AO3" export</li>
             <li><strong>Make strategic decisions:</strong> Usage patterns inform which features to build next</li>
           </ul>
 
@@ -205,7 +206,7 @@ h2 { margin-top: 2rem; }
           </ul>
 
           <h3>4.2 Third-Party Services</h3>
-          <p><strong>Cloudinary:</strong> Uploaded images are stored on Cloudinary's servers. They are publicly accessible via URL. Cloudinary's privacy policy applies to these uploads: <a href="https://cloudinary.com/privacy" target="_blank" rel="noopener noreferrer">https://cloudinary.com/privacy</a></p>
+          <p><strong>ImgBB:</strong> Uploaded images and exported pictures are stored on ImgBB's servers. They are publicly accessible via URL. ImgBB's privacy policy applies to these uploads: <a href="https://imgbb.com/privacy" target="_blank" rel="noopener noreferrer">https://imgbb.com/privacy</a></p>
           <p><strong>Google Analytics:</strong> Analytics data is processed by Google. Google's privacy policy applies: <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer">https://policies.google.com/privacy</a></p>
 
           <h3>4.3 Security Measures</h3>
@@ -246,7 +247,7 @@ h2 { margin-top: 2rem; }
           <ul>
             <li>Your locally-stored data never leaves your device</li>
             <li>Google Analytics data is processed according to Google's international data transfer policies</li>
-            <li>Cloudinary image uploads may be stored on servers in various regions</li>
+            <li>ImgBB image uploads may be stored on servers in various regions</li>
           </ul>
 
           <h2>9. Changes to This Privacy Policy</h2>

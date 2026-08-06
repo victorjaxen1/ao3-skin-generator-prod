@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { SkinSettings, GroupParticipant } from '../lib/schema';
 import { AvatarSelector } from './AvatarSelector';
+import { ImageUrlInput } from './ImageUrlInput';
 import BottomSheet from './BottomSheet';
 
 interface Props {
@@ -25,8 +26,11 @@ const ToggleRow: React.FC<{
     </div>
     <button
       type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
       onClick={() => onChange(!checked)}
-      className={`relative w-11 h-6 rounded-full transition-colors ${
+      className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${
         checked ? 'bg-violet-600' : 'bg-stone-300'
       }`}
     >
@@ -82,7 +86,28 @@ const TextRow: React.FC<{
   </div>
 );
 
-/** URL input with live thumbnail preview */
+/** Multi-line text, one entry per line. */
+const LinesRow: React.FC<{
+  label: string;
+  sublabel?: string;
+  value: string[];
+  placeholder?: string;
+  onChange: (v: string[]) => void;
+}> = ({ label, sublabel, value, placeholder, onChange }) => (
+  <div className="py-3">
+    <span className="text-sm font-medium text-stone-900 block">{label}</span>
+    {sublabel && <p className="text-xs text-stone-500 mt-0.5 mb-2">{sublabel}</p>}
+    <textarea
+      value={(value || []).join('\n')}
+      onChange={(e) => onChange(e.target.value.split('\n'))}
+      placeholder={placeholder}
+      rows={3}
+      className="w-full text-xs text-stone-700 bg-stone-100 border-0 rounded-lg px-3 py-2 focus:ring-2 focus:ring-violet-500 resize-none"
+    />
+  </div>
+);
+
+/** URL input with preview, normalisation and expiry warnings. */
 const ImageUrlRow: React.FC<{
   label: string;
   value: string;
@@ -91,52 +116,43 @@ const ImageUrlRow: React.FC<{
 }> = ({ label, value, placeholder, onChange }) => (
   <div className="py-3">
     <span className="text-sm font-medium text-stone-900 block mb-2">{label}</span>
-    <input
+    <ImageUrlInput
       value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder || 'https://...'}
-      className="w-full text-xs text-stone-700 bg-stone-100 border-0 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-violet-500"
+      onChange={onChange}
+      ariaLabel={label}
+      placeholder={placeholder || 'Paste an image address'}
     />
-    {value && (
-      <img
-        src={value}
-        alt={label}
-        className="mt-2 h-14 w-auto rounded-lg border border-stone-200 object-cover"
-        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-      />
-    )}
   </div>
 );
 
-/** Colour swatch + hex input */
-const ColorRow: React.FC<{
-  label: string;
-  sublabel?: string;
-  value: string;
-  onChange: (v: string) => void;
-}> = ({ label, sublabel, value, onChange }) => (
-  <div className="flex items-center justify-between py-3 gap-3">
-    <div className="min-w-0">
-      <span className="text-sm font-medium text-stone-900">{label}</span>
-      {sublabel && <p className="text-xs text-stone-500 mt-0.5">{sublabel}</p>}
+/**
+ * Collapsed by default. Everything in here has a sensible default and most
+ * people never need to open it — the point is that it stops competing for
+ * attention with the settings that are the reason to use the tool.
+ */
+const AdvancedSection: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="pt-2">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        className="w-full flex items-center justify-between py-3 text-left"
+      >
+        <span className="text-[11px] font-semibold text-stone-400 uppercase tracking-wider">
+          Advanced
+        </span>
+        <span className={`text-stone-400 transition-transform ${open ? 'rotate-180' : ''}`}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </span>
+      </button>
+      {open && <div className="divide-y divide-stone-100 pb-2">{children}</div>}
     </div>
-    <div className="flex items-center gap-2 flex-shrink-0">
-      <input
-        type="color"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-8 h-8 rounded-lg cursor-pointer border border-stone-200 p-0.5 bg-transparent"
-      />
-      <input
-        type="text"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="#000000"
-        className="w-20 text-xs text-stone-700 bg-stone-100 border-0 rounded-lg px-2 py-1.5 focus:ring-2 focus:ring-violet-500 font-mono"
-      />
-    </div>
-  </div>
-);
+  );
+};
 
 export const SettingsSheet: React.FC<Props> = ({
   isOpen,
@@ -210,62 +226,23 @@ export const SettingsSheet: React.FC<Props> = ({
             <SectionDivider label="Display" />
             <ToggleRow
               label="Read receipt"
+              sublabel={'Shows "Read" under your last message'}
               checked={settings.iosShowReadReceipt !== false}
               onChange={(v) => onUpdateSettings('iosShowReadReceipt', v)}
             />
-            <ToggleRow
-              label="Delivered indicator"
-              checked={settings.iosShowDelivered || false}
-              onChange={(v) => onUpdateSettings('iosShowDelivered', v)}
-            />
-            <ToggleRow
-              label="Status bar"
-              sublabel="Time, signal, battery at top"
-              checked={settings.iosShowStatusBar || false}
-              onChange={(v) => onUpdateSettings('iosShowStatusBar', v)}
-            />
-            {settings.iosShowStatusBar && (
-              <TextRow
-                label="Status bar time"
-                value={settings.iosStatusBarTime || '9:41'}
-                onChange={(v) => onUpdateSettings('iosStatusBarTime', v)}
-              />
-            )}
-            <ToggleRow
-              label="Input bar"
-              checked={settings.iosShowInputBar || false}
-              onChange={(v) => onUpdateSettings('iosShowInputBar', v)}
-            />
 
             <SectionDivider label="Contact" />
-            <TextRow
-              label="Contact name"
-              value={settings.iosContactName || ''}
-              placeholder="Their name"
-              onChange={(v) => onUpdateSettings('iosContactName', v)}
-            />
             <div className="py-3">
-              <span className="text-sm font-medium text-stone-900 block mb-2">Contact avatar</span>
+              <span className="text-sm font-medium text-stone-900 block mb-2">Contact photo</span>
+              <p className="text-xs text-stone-500 -mt-1.5 mb-2">
+                Their name is the title at the top of the screen — tap it to change.
+              </p>
               <AvatarSelector
                 value={settings.iosAvatarUrl || ''}
                 onChange={(v) => onUpdateSettings('iosAvatarUrl', v)}
-                placeholder="Avatar image URL"
+                placeholder="Paste an image address, or pick a preset"
               />
             </div>
-
-            <SectionDivider label="Background images" />
-            <ImageUrlRow
-              label="Header image"
-              value={settings.iosHeaderImageUrl || ''}
-              placeholder="Header background image URL"
-              onChange={(v) => onUpdateSettings('iosHeaderImageUrl', v)}
-            />
-            <ImageUrlRow
-              label="Footer image"
-              value={settings.iosFooterImageUrl || ''}
-              placeholder="Footer background image URL"
-              onChange={(v) => onUpdateSettings('iosFooterImageUrl', v)}
-            />
 
             <SectionDivider label="Group chat" />
             <ToggleRow
@@ -316,6 +293,7 @@ export const SettingsSheet: React.FC<Props> = ({
                 </div>
               </>
             )}
+
           </>
         )}
 
@@ -324,86 +302,51 @@ export const SettingsSheet: React.FC<Props> = ({
           <>
             <SectionDivider label="Appearance" />
             <ToggleRow
-              label="WhatsApp style"
-              checked={settings.androidWhatsAppMode !== false}
-              onChange={(v) => onUpdateSettings('androidWhatsAppMode', v)}
-            />
-            <ToggleRow
               label="Dark mode"
               checked={settings.androidDarkMode || false}
               onChange={(v) => onUpdateSettings('androidDarkMode', v)}
             />
             <ToggleRow
               label="Auto-alternate senders"
+              sublabel="Automatically switch between You and Them"
               checked={settings.androidAutoAlternate !== false}
               onChange={(v) => onUpdateSettings('androidAutoAlternate', v)}
-            />
-            <ColorRow
-              label="Sent bubble colour"
-              sublabel="Outgoing message background"
-              value={settings.senderColor || '#25D366'}
-              onChange={(v) => onUpdateSettings('senderColor', v)}
-            />
-            <ColorRow
-              label="Received bubble colour"
-              sublabel="Incoming message background"
-              value={settings.receiverColor || '#ffffff'}
-              onChange={(v) => onUpdateSettings('receiverColor', v)}
             />
 
             <SectionDivider label="Display" />
             <ToggleRow
               label="Online status"
+              sublabel="The line under their name in the header"
               checked={settings.androidShowStatus !== false}
               onChange={(v) => onUpdateSettings('androidShowStatus', v)}
             />
-            {settings.androidShowStatus && (
+            {settings.androidShowStatus !== false && (
               <TextRow
                 label="Status text"
                 value={settings.androidStatusText || 'online'}
+                placeholder="online"
                 onChange={(v) => onUpdateSettings('androidStatusText', v)}
               />
             )}
             <ToggleRow
               label="Checkmarks"
+              sublabel="The ✓✓ delivery ticks on your messages"
               checked={settings.androidCheckmarks !== false}
               onChange={(v) => onUpdateSettings('androidCheckmarks', v)}
             />
-            <ToggleRow
-              label="Read receipt"
-              checked={settings.androidShowReadReceipt !== false}
-              onChange={(v) => onUpdateSettings('androidShowReadReceipt', v)}
-            />
 
             <SectionDivider label="Contact" />
-            <TextRow
-              label="Contact name"
-              value={settings.androidContactName || ''}
-              placeholder="Their name"
-              onChange={(v) => onUpdateSettings('androidContactName', v)}
-            />
             <div className="py-3">
               <span className="text-sm font-medium text-stone-900 block mb-2">Profile picture</span>
+              <p className="text-xs text-stone-500 -mt-1.5 mb-2">
+                Their name is the title at the top of the screen — tap it to change.
+              </p>
               <AvatarSelector
                 value={settings.androidAvatarUrl || ''}
                 onChange={(v) => onUpdateSettings('androidAvatarUrl', v)}
-                placeholder="Avatar image URL"
+                placeholder="Paste an image address, or pick a preset"
               />
             </div>
-
-            <SectionDivider label="Background images" />
-            <ImageUrlRow
-              label="Header image"
-              value={settings.androidHeaderImageUrl || ''}
-              placeholder="Header background image URL"
-              onChange={(v) => onUpdateSettings('androidHeaderImageUrl', v)}
-            />
-            <ImageUrlRow
-              label="Footer image"
-              value={settings.androidFooterImageUrl || ''}
-              placeholder="Footer background image URL"
-              onChange={(v) => onUpdateSettings('androidFooterImageUrl', v)}
-            />
 
             <SectionDivider label="Group chat" />
             <ToggleRow
@@ -454,6 +397,7 @@ export const SettingsSheet: React.FC<Props> = ({
                 </div>
               </>
             )}
+
           </>
         )}
 
@@ -462,15 +406,9 @@ export const SettingsSheet: React.FC<Props> = ({
           <>
             <SectionDivider label="Profile" />
             <TextRow
-              label="Display name"
-              value={settings.twitterDisplayName || ''}
-              placeholder="John Doe"
-              onChange={(v) => onUpdateSettings('twitterDisplayName', v)}
-            />
-            <TextRow
               label="Handle"
               value={settings.twitterHandle || ''}
-              placeholder="@johndoe"
+              placeholder="johndoe"
               onChange={(v) => onUpdateSettings('twitterHandle', v)}
             />
             <ToggleRow
@@ -479,11 +417,14 @@ export const SettingsSheet: React.FC<Props> = ({
               onChange={(v) => onUpdateSettings('twitterVerified', v)}
             />
             <div className="py-3">
-              <span className="text-sm font-medium text-stone-900 block mb-2">Avatar</span>
+              <span className="text-sm font-medium text-stone-900 block mb-2">Profile picture</span>
+              <p className="text-xs text-stone-500 -mt-1.5 mb-2">
+                The display name is the title at the top of the screen — tap it to change.
+              </p>
               <AvatarSelector
                 value={settings.twitterAvatarUrl || ''}
                 onChange={(v) => onUpdateSettings('twitterAvatarUrl', v)}
-                placeholder="Avatar image URL"
+                placeholder="Paste an image address, or pick a preset"
               />
             </div>
 
@@ -515,28 +456,47 @@ export const SettingsSheet: React.FC<Props> = ({
             <SectionDivider label="Quote tweet" />
             <ToggleRow
               label="Enable quote tweet"
+              sublabel="Embed another post inside yours"
               checked={settings.twitterQuoteEnabled || false}
               onChange={(v) => onUpdateSettings('twitterQuoteEnabled', v)}
             />
             {settings.twitterQuoteEnabled && (
               <>
                 <TextRow
-                  label="Quote name"
+                  label="Quoted name"
                   value={settings.twitterQuoteName || ''}
                   placeholder="Quoted User"
                   onChange={(v) => onUpdateSettings('twitterQuoteName', v)}
                 />
                 <TextRow
-                  label="Quote handle"
+                  label="Quoted handle"
                   value={settings.twitterQuoteHandle || ''}
-                  placeholder="@quoteduser"
+                  placeholder="quoteduser"
                   onChange={(v) => onUpdateSettings('twitterQuoteHandle', v)}
                 />
+                <ToggleRow
+                  label="Quoted account verified"
+                  checked={settings.twitterQuoteVerified || false}
+                  onChange={(v) => onUpdateSettings('twitterQuoteVerified', v)}
+                />
                 <TextRow
-                  label="Quote text"
+                  label="Quoted text"
                   value={settings.twitterQuoteText || ''}
                   placeholder="Original tweet text"
                   onChange={(v) => onUpdateSettings('twitterQuoteText', v)}
+                />
+                <div className="py-3">
+                  <span className="text-sm font-medium text-stone-900 block mb-2">Quoted profile picture</span>
+                  <AvatarSelector
+                    value={settings.twitterQuoteAvatar || ''}
+                    onChange={(v) => onUpdateSettings('twitterQuoteAvatar', v)}
+                    placeholder="Paste an image address, or pick a preset"
+                  />
+                </div>
+                <ImageUrlRow
+                  label="Image in the quoted post"
+                  value={settings.twitterQuoteImage || ''}
+                  onChange={(v) => onUpdateSettings('twitterQuoteImage', v)}
                 />
               </>
             )}
@@ -547,48 +507,38 @@ export const SettingsSheet: React.FC<Props> = ({
         {template === 'google' && (
           <>
             <SectionDivider label="Search" />
-            <TextRow
-              label="Search query"
-              value={settings.googleQuery || ''}
-              placeholder="captain jack sparrow"
-              onChange={(v) => onUpdateSettings('googleQuery', v)}
-            />
+            <p className="text-xs text-stone-500 pb-3">
+              What was searched for is the title at the top of the screen — tap it
+              to change.
+            </p>
             <SelectRow
-              label="Engine variant"
+              label="Search engine"
               value={settings.googleEngineVariant || 'google'}
               options={[
-                { value: 'google', label: 'Google (Modern)' },
-                { value: 'google-old', label: 'Google (Classic)' },
-                { value: 'naver', label: 'Naver' },
+                { value: 'google', label: 'Google' },
+                { value: 'google-old', label: 'Google (older look)' },
+                { value: 'naver', label: 'Naver (Korean)' },
               ]}
               onChange={(v) => onUpdateSettings('googleEngineVariant', v as 'google' | 'google-old' | 'naver')}
+            />
+            <LinesRow
+              label="Autocomplete suggestions"
+              sublabel="One per line — shown in the dropdown under the search box"
+              value={settings.googleSuggestions || []}
+              placeholder={'captain jack sparrow actor\ncaptain jack sparrow quotes'}
+              onChange={(v) => onUpdateSettings('googleSuggestions', v)}
             />
 
             <SectionDivider label="Display" />
             <ToggleRow
-              label="Show stats bar"
-              sublabel="Results count and time"
+              label="Show results bar"
+              sublabel='The "About 24,000,000 results" line'
               checked={settings.googleShowStats !== false}
               onChange={(v) => onUpdateSettings('googleShowStats', v)}
             />
-            {settings.googleShowStats && (
-              <>
-                <TextRow
-                  label="Results count"
-                  value={settings.googleResultsCount || ''}
-                  placeholder="About 24,040,000,000 results"
-                  onChange={(v) => onUpdateSettings('googleResultsCount', v)}
-                />
-                <TextRow
-                  label="Results time"
-                  value={settings.googleResultsTime || ''}
-                  placeholder="0.56 seconds"
-                  onChange={(v) => onUpdateSettings('googleResultsTime', v)}
-                />
-              </>
-            )}
             <ToggleRow
               label="Did you mean"
+              sublabel="Show a spelling correction above the results"
               checked={settings.googleShowDidYouMean || false}
               onChange={(v) => onUpdateSettings('googleShowDidYouMean', v)}
             />
@@ -600,31 +550,96 @@ export const SettingsSheet: React.FC<Props> = ({
                 onChange={(v) => onUpdateSettings('googleDidYouMean', v)}
               />
             )}
+
           </>
         )}
 
-        {/* Shared Settings */}
-        <SectionDivider label="Advanced" />
-        <div className="flex items-center justify-between py-3 gap-3">
-          <span className="text-sm font-medium text-stone-900">Max width</span>
-          <div className="flex items-center gap-2">
-            <input
-              type="range"
-              min={280}
-              max={600}
-              value={settings.maxWidthPx}
-              onChange={(e) => onUpdateSettings('maxWidthPx', parseInt(e.target.value))}
-              className="w-24 accent-violet-600"
-            />
-            <span className="text-xs text-stone-500 w-10 text-right">{settings.maxWidthPx}px</span>
+        {/* One Advanced section, not two — the platform-specific rows and the
+            shared ones live together so there is a single place to look. */}
+        <AdvancedSection>
+          {template === 'ios' && (
+            <>
+              <ToggleRow
+                label="Phone status bar"
+                sublabel="Time, signal and battery across the top"
+                checked={settings.iosShowStatusBar || false}
+                onChange={(v) => onUpdateSettings('iosShowStatusBar', v)}
+              />
+              <ToggleRow
+                label="Typing bar"
+                sublabel="The message box along the bottom"
+                checked={settings.iosShowInputBar || false}
+                onChange={(v) => onUpdateSettings('iosShowInputBar', v)}
+              />
+              <ImageUrlRow
+                label="Header background"
+                value={settings.iosHeaderImageUrl || ''}
+                onChange={(v) => onUpdateSettings('iosHeaderImageUrl', v)}
+              />
+              <ImageUrlRow
+                label="Footer background"
+                value={settings.iosFooterImageUrl || ''}
+                onChange={(v) => onUpdateSettings('iosFooterImageUrl', v)}
+              />
+            </>
+          )}
+
+          {template === 'android' && (
+            <>
+              <ImageUrlRow
+                label="Header background"
+                value={settings.androidHeaderImageUrl || ''}
+                onChange={(v) => onUpdateSettings('androidHeaderImageUrl', v)}
+              />
+              <ImageUrlRow
+                label="Footer background"
+                value={settings.androidFooterImageUrl || ''}
+                onChange={(v) => onUpdateSettings('androidFooterImageUrl', v)}
+              />
+            </>
+          )}
+
+          {template === 'google' && (
+            <>
+              {/* Left blank, these read as plausible numbers derived from the
+                  query — which is all anyone wanted from them. */}
+              <TextRow
+                label="Results count"
+                value={settings.googleResultsCount || ''}
+                placeholder="Auto"
+                onChange={(v) => onUpdateSettings('googleResultsCount', v)}
+              />
+              <TextRow
+                label="Search time"
+                value={settings.googleResultsTime || ''}
+                placeholder="Auto"
+                onChange={(v) => onUpdateSettings('googleResultsTime', v)}
+              />
+            </>
+          )}
+
+          <div className="flex items-center justify-between py-3 gap-3">
+            <span className="text-sm font-medium text-stone-900">Width</span>
+            <div className="flex items-center gap-2">
+              <input
+                type="range"
+                min={280}
+                max={600}
+                aria-label="Width in pixels"
+                value={settings.maxWidthPx}
+                onChange={(e) => onUpdateSettings('maxWidthPx', parseInt(e.target.value))}
+                className="w-24 accent-violet-600"
+              />
+              <span className="text-xs text-stone-500 w-10 text-right">{settings.maxWidthPx}px</span>
+            </div>
           </div>
-        </div>
-        <ToggleRow
-          label="Watermark"
-          sublabel="Remove with Pro"
-          checked={settings.watermark !== false}
-          onChange={(v) => onUpdateSettings('watermark', v)}
-        />
+          <ToggleRow
+            label="Watermark"
+            sublabel="Remove with Pro"
+            checked={settings.watermark !== false}
+            onChange={(v) => onUpdateSettings('watermark', v)}
+          />
+        </AdvancedSection>
       </div>
     </BottomSheet>
   );

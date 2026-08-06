@@ -39,6 +39,30 @@ function applyBoldMarkup(raw: string): string {
   return raw.replace(/\*([^*]+)\*/g, '<b>$1</b>');
 }
 
+/**
+ * Plausible "About N results (T seconds)" for a query.
+ *
+ * Derived from the query so it stays put while you edit everything else, and
+ * so two different searches don't claim the identical result count.
+ */
+export function generateSearchStats(query: string): { count: string; time: string } {
+  let hash = 2166136261;
+  const seed = query.trim().toLowerCase() || 'search';
+  for (let i = 0; i < seed.length; i++) {
+    hash ^= seed.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  // The hash is 32-bit, so this spans roughly 1.2M–2.1B results — the range
+  // Google reports for anything from a niche phrase to a common one.
+  const positive = Math.abs(hash);
+  const count = 1_200_000 + positive;
+  const seconds = (20 + (positive % 75)) / 100; // 0.20–0.94s
+  return {
+    count: `About ${count.toLocaleString('en-US')} results`,
+    time: `${seconds.toFixed(2)} seconds`,
+  };
+}
+
 function highlightHashtags(text: string): string {
   return text.replace(/(#\w+)/g, '<span class="hashtag">$1</span>');
 }
@@ -208,12 +232,27 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
   const atts = (msg.attachments||[]).map(a => `<dd class="attach"><span class="visually-hidden">Image:</span><img src="${sanitizeUrl(a.url)}" alt="${sanitizeText(a.alt||'')}" class="attach-img"/></dd>`).join('');
   
   if (template === 'twitter') {
-    // Advanced tweet: optional quote tweet embed
-    // For Tweet 2+, use custom identity if toggled, otherwise inherit from first message
+    // Identity is resolved here, at render time.
+    //
+    // It used to be copied onto each tweet when the tweet was written, so
+    // renaming yourself in Settings left every existing tweet showing the old
+    // name — the settings field looked global but only affected future tweets.
+    // Now a tweet uses the account identity unless it explicitly opts out via
+    // useCustomIdentity, which is what the multi-character presets do.
+    //
+    // Projects saved before this carry a name on each message and nothing in
+    // settings, so the stamped value stays the fallback and they render
+    // unchanged.
     const firstMsg = project.messages[0];
     const useMainIdentity = !msg.useCustomIdentity;
-    const displayName = useMainIdentity && firstMsg ? firstMsg.sender : msg.sender;
-    const displayAvatar = useMainIdentity && firstMsg?.avatarUrl ? firstMsg.avatarUrl : msg.avatarUrl;
+    const settingsName = (project.settings.twitterDisplayName || '').trim();
+    const settingsAvatar = (project.settings.twitterAvatarUrl || '').trim();
+    const displayName = useMainIdentity
+      ? (settingsName || msg.sender || firstMsg?.sender || 'User')
+      : (msg.sender || settingsName || 'User');
+    const displayAvatar = useMainIdentity
+      ? (settingsAvatar || msg.avatarUrl || firstMsg?.avatarUrl)
+      : msg.avatarUrl;
     
     // Determine if this is a reply
     const isReply = !!msg.parentId;
@@ -402,116 +441,81 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
   return `${timeBreak}<div class="${rowClass}" data-message-id="${msg.id}">${avatar}<dl class="msg">${who}${bubble}${statusIndicator}</dl></div>`;
 }
 
-export function buildHTML(project: SkinProject, expandAllEmails = false): string {
+export function buildHTML(project: SkinProject): string {
   // iOS and Android templates with enhanced features
   if (project.template === 'ios' || project.template === 'android') {
     const s = project.settings;
     const isIOS = project.template === 'ios';
     
-    // iOS Header with background image and overlays
+    // Header.
+    //
+    // This used to be a five-way branch on (platform × has-background-image),
+    // duplicating the initials helper and diverging on which settings each
+    // branch honoured. Both platforms ship with a default header image, so the
+    // image branches were the live ones — and they were the branches missing
+    // group names and online status. The trailing `else` was unreachable
+    // outright, which is why the status bar never rendered at all.
+    //
+    // Same data in every case now; the background image only changes what sits
+    // behind it.
+    const getInitials = (name: string) => {
+      if (!name) return '?';
+      // Emoji in a name produce a garbled monogram
+      const cleanName = name.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '').trim();
+      const words = cleanName.split(/\s+/).filter(w => w.length > 0);
+      if (words.length === 0) return '?';
+      if (words.length === 1) return words[0].substring(0, 2).toUpperCase();
+      return (words[0][0] + words[words.length - 1][0]).toUpperCase();
+    };
+
+    const statusBar = isIOS && s.iosShowStatusBar
+      ? `<div class="ios-status-bar"><span class="signal">📶</span><span class="time">${sanitizeText(s.iosStatusBarTime || '9:41')}</span><span class="status-icons">🔋</span></div>`
+      : '';
+
     let header = '';
-    if (isIOS && s.iosHeaderImageUrl) {
-      // iOS with background image - ALWAYS show header div for background image
+    if (isIOS) {
+      const contactName = s.iosGroupMode
+        ? (s.iosGroupName || 'Group Chat')
+        : (s.iosContactName || s.chatContactName || '');
       const avatarUrl = s.iosAvatarUrl || '';
-      const contactName = s.iosContactName || '';
-      
-      // Always render header div (background image needs the container)
-      const avatarOverlay = avatarUrl ? `<img src="${sanitizeUrl(avatarUrl)}" alt="avatar" class="ios-header-avatar" />` : '';
-      const nameOverlay = contactName ? `<div class="ios-header-name">${sanitizeText(contactName)}</div>` : '';
-      header = `<div class="ios-header">${avatarOverlay}${nameOverlay}</div>`;
-    } else if (isIOS) {
-      // iOS without background image - show header ONLY if name or avatar exists
-      const contactName = s.iosContactName || s.chatContactName || '';
-      const avatarUrl = s.iosAvatarUrl || '';
-      
-      // Only show header if we have name or avatar
-      if (contactName || avatarUrl) {
-        // Generate initials from name if no avatar
-        const getInitials = (name: string) => {
-          if (!name) return '?';
-          const words = name.trim().split(/\s+/);
-          if (words.length === 1) return words[0].substring(0, 2).toUpperCase();
-          return (words[0][0] + words[words.length - 1][0]).toUpperCase();
-        };
-        
-        const avatarOverlay = avatarUrl 
-          ? `<img src="${sanitizeUrl(avatarUrl)}" alt="avatar" class="ios-header-avatar" />` 
+
+      // A background image needs its container even with nothing to overlay.
+      if (s.iosHeaderImageUrl || contactName || avatarUrl) {
+        const avatarOverlay = avatarUrl
+          ? `<img src="${sanitizeUrl(avatarUrl)}" alt="avatar" class="ios-header-avatar" />`
           : (contactName ? `<div class="ios-header-avatar-placeholder">${getInitials(contactName)}</div>` : '');
-        const nameOverlay = contactName ? `<div class="ios-header-name">${sanitizeText(contactName)}</div>` : '';
-        
+        const nameOverlay = contactName
+          ? `<div class="ios-header-name">${sanitizeText(contactName)}</div>`
+          : '';
         header = `<div class="ios-header">${avatarOverlay}${nameOverlay}</div>`;
       }
-    } else if (!isIOS && s.androidHeaderImageUrl) {
-      // Android Header with background image - ALWAYS show header div for background image
-      const contactName = s.chatContactName || s.androidContactName || '';
-      const avatarUrl = s.instagramAvatarUrl || s.androidAvatarUrl || '';
-      
-      // Always render header div (background image needs the container)
-      // Generate initials from name if no avatar
-      const getInitials = (name: string) => {
-        if (!name) return '?';
-        // Remove emojis and special characters
-        const cleanName = name.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '').trim();
-        const words = cleanName.split(/\s+/).filter(w => w.length > 0);
-        if (words.length === 0) return '?';
-        if (words.length === 1) return words[0].substring(0, 2).toUpperCase();
-        return (words[0][0] + words[words.length - 1][0]).toUpperCase();
-      };
-      
-      const avatarOverlay = avatarUrl 
-        ? `<img src="${sanitizeUrl(avatarUrl)}" alt="avatar" class="android-header-avatar" />` 
-        : (contactName ? `<div class="android-header-avatar-placeholder">${getInitials(contactName)}</div>` : '');
-      const nameOverlay = contactName ? `<div class="android-header-name">${sanitizeText(contactName)}</div>` : '';
-      header = `<div class="android-header">${avatarOverlay}${nameOverlay}</div>`;
-    } else if (!isIOS) {
-      // Android without background image - show header ONLY if name or avatar exists
+    } else {
       const isGroupMode = s.androidGroupMode;
-      const contactName = isGroupMode 
+      const contactName = isGroupMode
         ? (s.androidGroupName || 'Group Chat')
         : (s.chatContactName || s.androidContactName || '');
-      const avatarUrl = s.instagramAvatarUrl || s.androidAvatarUrl || '';
-      
-      // Only show header if we have name or avatar
-      if (contactName || avatarUrl) {
-        // Generate initials from name if no avatar
-        const getInitials = (name: string) => {
-          if (!name) return '?';
-          // Remove emojis and special characters
-          const cleanName = name.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '').trim();
-          const words = cleanName.split(/\s+/).filter(w => w.length > 0);
-          if (words.length === 0) return '?';
-          if (words.length === 1) return words[0].substring(0, 2).toUpperCase();
-          return (words[0][0] + words[words.length - 1][0]).toUpperCase();
-        };
-        
-        const avatarOverlay = avatarUrl 
-          ? `<img src="${sanitizeUrl(avatarUrl)}" alt="avatar" class="android-header-avatar" />` 
-          : `<div class="android-header-avatar-placeholder">${getInitials(contactName)}</div>`;
-        
-        // For group mode, show participant count
-        const participantCount = isGroupMode && s.androidGroupParticipants 
-          ? `<div class="android-header-subtitle">${s.androidGroupParticipants.length} participants</div>`
+      const avatarUrl = s.androidAvatarUrl || '';
+
+      if (s.androidHeaderImageUrl || contactName || avatarUrl) {
+        const avatarOverlay = avatarUrl
+          ? `<img src="${sanitizeUrl(avatarUrl)}" alt="avatar" class="android-header-avatar" />`
+          : (contactName ? `<div class="android-header-avatar-placeholder">${getInitials(contactName)}</div>` : '');
+
+        // Group chats show the member count where a 1-on-1 shows "online".
+        const subtitleText = isGroupMode && s.androidGroupParticipants?.length
+          ? `${s.androidGroupParticipants.length} participants`
+          : (s.androidShowStatus !== false ? (s.androidStatusText || 'online') : '');
+        const subtitle = subtitleText
+          ? `<div class="android-header-subtitle">${sanitizeText(subtitleText)}</div>`
           : '';
-        
-        const nameOverlay = contactName 
-          ? `<div class="android-header-name-wrapper"><div class="android-header-name">${sanitizeText(contactName)}</div>${participantCount}</div>` 
+
+        const nameOverlay = contactName
+          ? `<div class="android-header-name-wrapper"><div class="android-header-name">${sanitizeText(contactName)}</div>${subtitle}</div>`
           : '';
         header = `<div class="android-header">${avatarOverlay}${nameOverlay}</div>`;
       }
-    } else {
-      // Fallback: iOS Status Bar (optional)
-      const statusBar = isIOS && s.iosShowStatusBar 
-        ? `<div class="ios-status-bar"><span class="signal">📶</span><span class="time">${s.iosStatusBarTime || '9:41'}</span><span class="status-icons">🔋</span></div>`
-        : '';
-      
-      // Contact header with "To:" prefix if enabled
-      const contactName = isIOS ? s.iosContactName : s.androidContactName;
-      const contactHeader = contactName
-        ? `<div class="chat-header">${isIOS && s.iosShowHeader ? '<span class="to-label">To: </span>' : ''}<span class="contact-name">${sanitizeText(contactName)}</span>${!isIOS && s.androidShowStatus ? `<span class="status">${sanitizeText(s.androidStatusText||'Online')}</span>` : ''}</div>`
-        : '';
-      
-      header = `${statusBar}${contactHeader}`;
     }
+    header = `${statusBar}${header}`;
     
     // Messages
     const body = (isIOS || !isIOS) 
@@ -571,9 +575,14 @@ export function buildHTML(project: SkinProject, expandAllEmails = false): string
     // Tabs (All, Images, Videos, News, etc.)
     const tabs = `<div class="search-tabs"><span class="tab active"><img src="${PLATFORM_ASSETS.google.searchIcon}" alt="" class="tab-icon" />All</span><span class="tab">Images</span><span class="tab">Videos</span><span class="tab">News</span><span class="tab">Maps</span><span class="tab">More</span></div>`;
     
-    // Result statistics (only if enabled)
-    const stats = s.googleShowStats && (s.googleResultsCount || s.googleResultsTime)
-      ? `<p class="search-stats">${sanitizeText(`${s.googleResultsCount||''}${s.googleResultsCount&&s.googleResultsTime? ' ' : ''}${s.googleResultsTime ? '('+s.googleResultsTime+')':''}`)}</p>`
+    // Result statistics. Pure flavour, so they are derived from the query
+    // rather than asked for — a user who cares can still override either in
+    // Advanced settings.
+    const autoStats = generateSearchStats(s.googleQuery || '');
+    const resultsCount = s.googleResultsCount || autoStats.count;
+    const resultsTime = s.googleResultsTime || autoStats.time;
+    const stats = s.googleShowStats !== false
+      ? `<p class="search-stats">${sanitizeText(`${resultsCount} (${resultsTime})`)}</p>`
       : '';
     
     // Did you mean correction (only if enabled)

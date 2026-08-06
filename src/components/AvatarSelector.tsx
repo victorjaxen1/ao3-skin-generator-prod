@@ -7,7 +7,7 @@
 import React, { useState } from 'react';
 import Image from 'next/image';
 import { CHARACTER_BANK, AVATAR_CATEGORIES } from '../lib/characterBank';
-import { normalizeImageUrl, getExpiringUrlWarning, wasNormalized } from '../lib/urlNormalize';
+import { ImageUrlInput } from './ImageUrlInput';
 
 interface Props {
   value?: string; // Current avatar URL
@@ -22,9 +22,6 @@ export const AvatarSelector: React.FC<Props> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string>('modern');
-  const [customUrl, setCustomUrl] = useState(value);
-  const [expiringWarning, setExpiringWarning] = useState<string | null>(null);
-  const [normalizedFrom, setNormalizedFrom] = useState<string | null>(null);
 
   // Filter characters by active category
   const filteredCharacters = CHARACTER_BANK.filter(
@@ -32,76 +29,30 @@ export const AvatarSelector: React.FC<Props> = ({
   );
 
   const handleSelectAvatar = (url: string) => {
-    setCustomUrl(url);
-    setExpiringWarning(null);
-    setNormalizedFrom(null);
     onChange(url);
     setIsOpen(false);
   };
 
-  const handleCustomUrlChange = (newUrl: string) => {
-    const normalized = normalizeImageUrl(newUrl);
-    const warning = getExpiringUrlWarning(newUrl);
-    const didNormalize = wasNormalized(newUrl, normalized);
-    setCustomUrl(normalized);
-    setExpiringWarning(warning);
-    setNormalizedFrom(didNormalize ? newUrl : null);
-    onChange(normalized);
-  };
-
   return (
     <div className="relative">
-      {/* Input with avatar preview */}
-      <div className="flex gap-2">
-        <input 
-          type="text"
-          className="border border-gray-200 px-2 py-1 rounded flex-1 text-xs focus:ring-2 focus:ring-purple-400" 
-          value={customUrl}
-          onChange={(e) => handleCustomUrlChange(e.target.value)}
-          placeholder={placeholder}
-        />
-        
-        {/* Preview thumbnail */}
-        {customUrl && (
-          <div className="w-8 h-8 rounded-full overflow-hidden border-2 border-gray-200 flex-shrink-0">
-            <Image 
-              src={customUrl} 
-              alt="Avatar preview"
-              width={32}
-              height={32}
-              className="object-cover"
-              unoptimized
-              onError={(e: any) => {
-                e.currentTarget.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="gray"%3E%3Ccircle cx="12" cy="12" r="10"/%3E%3C/svg%3E';
-              }}
-            />
-          </div>
-        )}
-        
-        {/* Toggle button */}
-        <button
-          type="button"
-          onClick={() => setIsOpen(!isOpen)}
-          className="px-3 py-1 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded text-xs font-medium transition-colors flex-shrink-0"
-          title="Browse 30 preset avatars"
-        >
-          {isOpen ? '✕ Close' : '🎭 Presets'}
-        </button>
-      </div>
-
-      {/* Normalized URL feedback */}
-      {normalizedFrom && (
-        <p className="text-xs text-green-700 mt-1 flex items-center gap-1">
-          <span>✅ URL converted to direct image link automatically.</span>
-        </p>
-      )}
-
-      {/* Expiring URL warning */}
-      {expiringWarning && (
-        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2 mt-1">
-          {expiringWarning}
-        </p>
-      )}
+      <ImageUrlInput
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        previewShape="circle"
+        ariaLabel="Avatar image address"
+        trailing={
+          <button
+            type="button"
+            onClick={() => setIsOpen(!isOpen)}
+            aria-expanded={isOpen}
+            className="px-3 py-2 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-lg text-xs font-medium transition-colors flex-shrink-0"
+            title="Browse 30 preset avatars"
+          >
+            {isOpen ? '✕ Close' : '🎭 Presets'}
+          </button>
+        }
+      />
 
       {/* Character bank dropdown */}
       {isOpen && (
@@ -136,7 +87,7 @@ export const AvatarSelector: React.FC<Props> = ({
                   type="button"
                   onClick={() => handleSelectAvatar(char.url)}
                   className={`flex flex-col items-center p-2 rounded-lg border-2 transition-all hover:border-purple-400 hover:bg-purple-50 ${
-                    customUrl === char.url 
+                    value === char.url
                       ? 'border-purple-500 bg-purple-50' 
                       : 'border-gray-200 bg-white'
                   }`}

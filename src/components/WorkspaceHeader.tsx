@@ -7,7 +7,7 @@ interface Props {
   onSettingsOpen: () => void;
   onCharactersOpen: () => void;
   template: 'ios' | 'android' | 'twitter' | 'google';
-  saveStatus: 'saved' | 'unsaved' | 'saving';
+  saveStatus: 'saved' | 'unsaved' | 'saving' | 'failed';
   messageCount: number;
 }
 
@@ -61,6 +61,23 @@ export const WorkspaceHeader: React.FC<Props> = ({
     google: 'Google',
   };
 
+  // This one field edits a different setting per platform. Calling it all
+  // "contact name" made the Google case read as a person's name when it is
+  // the search query, and the Twitter case as a name when it is the handle.
+  const fieldLabels: Record<string, string> = {
+    ios: 'Contact name',
+    android: 'Contact name',
+    twitter: 'Display name',
+    google: 'Search query',
+  };
+  const fieldPlaceholders: Record<string, string> = {
+    ios: 'Their name, e.g. Steve',
+    android: 'Their name, e.g. Steve',
+    twitter: 'Their name, e.g. Nat Romanoff',
+    google: 'What was searched for',
+  };
+
+  const fieldLabel = fieldLabels[template] || 'Name';
   const displayName = contactName || templateLabels[template] || 'Untitled';
 
   return (
@@ -88,14 +105,15 @@ export const WorkspaceHeader: React.FC<Props> = ({
               onBlur={handleSave}
               onKeyDown={handleKeyDown}
               className="text-sm font-semibold text-center text-stone-900 bg-stone-100 rounded-lg px-3 py-1 w-full max-w-[200px] border-0 outline-none focus:ring-2 focus:ring-violet-500"
-              placeholder="Contact name..."
+              placeholder={fieldPlaceholders[template]}
+              aria-label={fieldLabel}
             />
           ) : (
             <button
               onClick={() => setIsEditing(true)}
               className="flex items-center gap-1.5 text-sm font-semibold text-stone-900 hover:text-violet-700 transition-colors truncate max-w-[200px]"
-              title="Tap to rename"
-              aria-label={`Rename contact, currently ${displayName}`}
+              title={`Tap to edit ${fieldLabel.toLowerCase()}`}
+              aria-label={`Edit ${fieldLabel.toLowerCase()}, currently ${displayName}`}
             >
               <span className="truncate">{displayName}</span>
               {saveStatus === 'unsaved' && (
@@ -103,6 +121,12 @@ export const WorkspaceHeader: React.FC<Props> = ({
               )}
               {saveStatus === 'saving' && (
                 <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-pulse flex-shrink-0" />
+              )}
+              {saveStatus === 'failed' && (
+                <span
+                  className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0"
+                  title="Not saved"
+                />
               )}
             </button>
           )}

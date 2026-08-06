@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Message, SkinSettings, GroupParticipant, TwitterCharacter } from '../lib/schema';
 import { normalizeImageUrl } from '../lib/urlNormalize';
-import { uploadToImgBB } from '../lib/imgbb';
+import { ImageUrlInput } from './ImageUrlInput';
 
 interface Props {
   template: 'ios' | 'android' | 'twitter' | 'google';
@@ -24,26 +24,14 @@ export const ComposeBar: React.FC<Props> = ({
   const [imageUrl, setImageUrl] = useState('');
   const [status, setStatus] = useState<'sent' | 'delivered' | 'read'>('sent');
   const [participantId, setParticipantId] = useState('');
-  const [twitterCharIndex, setTwitterCharIndex] = useState(0);
+  // '' means "post as the account itself", i.e. follow the Twitter settings.
+  const [twitterCharId, setTwitterCharId] = useState('');
 
   // Google-specific
   const [googleUrl, setGoogleUrl] = useState('');
   const [googleDesc, setGoogleDesc] = useState('');
-  const [isUploadingImage, setIsUploadingImage] = useState(false);
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
-
-  const handleImageFileUpload = async (file: File) => {
-    setIsUploadingImage(true);
-    try {
-      const url = await uploadToImgBB(file);
-      setImageUrl(url);
-    } catch {
-      // Upload failed – user can paste URL manually
-    } finally {
-      setIsUploadingImage(false);
-    }
-  };
 
   // Auto-resize textarea
   useEffect(() => {
@@ -87,21 +75,23 @@ export const ComposeBar: React.FC<Props> = ({
     } else if (template === 'twitter') {
       if (!trimmedContent) return;
       const chars = twitterCharacters || [];
-      const activeChar = chars[twitterCharIndex] || chars[0];
+      const activeChar = twitterCharId ? chars.find(c => c.id === twitterCharId) : undefined;
+      // Only a character preset pins an identity to the tweet. Without one the
+      // tweet is left unstamped so it follows the account settings, and
+      // renaming yourself later updates tweets you have already written.
       const msg: Message = {
         id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        sender: activeChar?.name || settings.twitterDisplayName || 'User',
+        sender: '',
         content: trimmedContent,
         outgoing: true,
         timestamp: timestamp || undefined,
-        twitterHandle: activeChar?.handle || settings.twitterHandle,
-        verified: activeChar?.verified ?? settings.twitterVerified,
-        avatarUrl: activeChar?.avatarUrl || settings.twitterAvatarUrl,
-        twitterLikes: 0,
-        twitterRetweets: 0,
-        twitterReplies: 0,
-        twitterViews: 0,
-        twitterBookmarks: 0,
+        ...(activeChar && {
+          sender: activeChar.name,
+          useCustomIdentity: true,
+          twitterHandle: activeChar.handle,
+          verified: activeChar.verified,
+          avatarUrl: activeChar.avatarUrl,
+        }),
       };
       if (normalizedImage) {
         msg.attachments = [{ type: 'image', url: normalizedImage }];
@@ -163,156 +153,93 @@ export const ComposeBar: React.FC<Props> = ({
     }
   };
 
+  // Mirror exactly what handleSend() will accept, so the button is never
+  // enabled for a click that silently does nothing. iOS/Android allow an
+  // image with no text; the other two require text.
+  const canSend =
+    template === 'ios' || template === 'android'
+      ? Boolean(content.trim() || imageUrl.trim())
+      : Boolean(content.trim());
+
   const placeholders: Record<string, string> = {
     ios: 'Add a message…',
     android: 'Add a message…',
     twitter: 'What\'s happening?',
-    google: 'Search result title…',
+    google: 'Title of the search result…',
   };
+
+  // Google isn't a conversation — you are adding a result to a page, not
+  // sending a message to anyone. A send arrow labelled "Send message" was
+  // describing the wrong mental model.
+  const isResultList = template === 'google';
+  const sendLabel = isResultList ? 'Add result' : 'Send message';
+  const detailsLabel = isResultList
+    ? 'Add link and description'
+    : 'Add details (timestamp, image, etc.)';
 
   return (
     <div className="border-t border-stone-200 bg-white">
       {/* Detail Tray */}
       {showDetails && (
-        <div className="px-4 py-3 border-b border-stone-100 bg-stone-50/50 animate-fade-in space-y-3">
+        // Capped and scrollable: warnings and previews can appear here, and
+        // without a ceiling they push the send button behind the fixed export
+        // bar on a phone.
+        <div className="px-4 py-3 border-b border-stone-100 bg-stone-50/50 animate-fade-in space-y-3 max-h-[32vh] overflow-y-auto">
           {(template === 'ios' || template === 'android') && (
             <>
+              {/* One row, not three. The tray sits above a fixed export bar
+                  on a phone, and every extra row pushes the send button
+                  underneath it. */}
               <div className="flex gap-2">
                 <input
                   value={timestamp}
                   onChange={(e) => setTimestamp(e.target.value)}
-                  placeholder="Timestamp (e.g., 10:15)"
-                  className="flex-1 text-xs bg-white border border-stone-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                  placeholder="Time, e.g. 10:15"
+                  aria-label="Timestamp"
+                  className="flex-1 min-w-0 text-xs bg-white border border-stone-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                />
+                <input
+                  value={reaction}
+                  onChange={(e) => setReaction(e.target.value)}
+                  placeholder="❤️"
+                  aria-label="Reaction emoji"
+                  className="w-14 flex-shrink-0 text-xs bg-white border border-stone-200 rounded-lg px-2 py-2 text-center focus:ring-2 focus:ring-violet-500"
                 />
                 <select
                   value={status}
                   onChange={(e) => setStatus(e.target.value as 'sent' | 'delivered' | 'read')}
-                  className="text-xs bg-white border border-stone-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-violet-500"
+                  aria-label="Delivery status"
+                  className="flex-shrink-0 text-xs bg-white border border-stone-200 rounded-lg px-2 py-2 focus:ring-2 focus:ring-violet-500"
                 >
                   <option value="sent">Sent</option>
                   <option value="delivered">Delivered</option>
                   <option value="read">Read</option>
                 </select>
               </div>
-              <div className="flex gap-2">
-                <input
-                  value={reaction}
-                  onChange={(e) => setReaction(e.target.value)}
-                  placeholder="Reaction emoji"
-                  className="w-24 text-xs bg-white border border-stone-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-violet-500"
-                />
-                <input
-                  value={imageUrl}
-                  onChange={(e) => setImageUrl(e.target.value)}
-                  placeholder="Image URL"
-                  className="flex-1 text-xs bg-white border border-stone-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-violet-500"
-                />
-                {/* File upload button */}
-                <label
-                  title="Upload image"
-                  aria-label="Upload image"
-                  className={`flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-lg border border-stone-200 cursor-pointer transition-colors ${
-                    isUploadingImage
-                      ? 'bg-violet-100 text-violet-400 cursor-not-allowed'
-                      : 'bg-stone-50 text-stone-500 hover:bg-violet-50 hover:text-violet-600 hover:border-violet-300'
-                  }`}
-                >
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    disabled={isUploadingImage}
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) handleImageFileUpload(file);
-                      e.target.value = '';
-                    }}
-                  />
-                  {isUploadingImage ? (
-                    <svg className="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" strokeOpacity="0.3"/><path d="M12 2a10 10 0 0 1 10 10"/></svg>
-                  ) : (
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-                  )}
-                </label>
-              </div>
-              {/* Image preview */}
-              {imageUrl && (
-                <div className="flex items-center gap-2">
-                  <img
-                    src={imageUrl}
-                    alt="Preview"
-                    className="h-16 w-auto rounded-lg border border-stone-200 object-cover"
-                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                  />
-                  <button
-                    onClick={() => setImageUrl('')}
-                    className="text-xs text-stone-400 hover:text-red-500 transition-colors"
-                  >
-                    Remove
-                  </button>
-                </div>
-              )}
+              <ImageUrlInput
+                value={imageUrl}
+                onChange={setImageUrl}
+                ariaLabel="Image address for this message"
+                placeholder="Paste an image address (optional)"
+              />
             </>
           )}
 
           {template === 'twitter' && (
             <div className="space-y-2">
-              <div className="flex gap-2">
-                <input
-                  value={timestamp}
-                  onChange={(e) => setTimestamp(e.target.value)}
-                  placeholder="Timestamp"
-                  className="flex-1 text-xs bg-white border border-stone-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-violet-500"
-                />
-                <input
-                  value={imageUrl}
-                  onChange={(e) => setImageUrl(e.target.value)}
-                  placeholder="Image URL"
-                  className="flex-1 text-xs bg-white border border-stone-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-violet-500"
-                />
-                <label
-                  title="Upload image"
-                  aria-label="Upload image"
-                  className={`flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-lg border border-stone-200 cursor-pointer transition-colors ${
-                    isUploadingImage
-                      ? 'bg-violet-100 text-violet-400 cursor-not-allowed'
-                      : 'bg-stone-50 text-stone-500 hover:bg-violet-50 hover:text-violet-600 hover:border-violet-300'
-                  }`}
-                >
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    disabled={isUploadingImage}
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) handleImageFileUpload(file);
-                      e.target.value = '';
-                    }}
-                  />
-                  {isUploadingImage ? (
-                    <svg className="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" strokeOpacity="0.3"/><path d="M12 2a10 10 0 0 1 10 10"/></svg>
-                  ) : (
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-                  )}
-                </label>
-              </div>
-              {imageUrl && (
-                <div className="flex items-center gap-2">
-                  <img
-                    src={imageUrl}
-                    alt="Preview"
-                    className="h-16 w-auto rounded-lg border border-stone-200 object-cover"
-                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                  />
-                  <button
-                    onClick={() => setImageUrl('')}
-                    className="text-xs text-stone-400 hover:text-red-500 transition-colors"
-                  >
-                    Remove
-                  </button>
-                </div>
-              )}
+              <input
+                value={timestamp}
+                onChange={(e) => setTimestamp(e.target.value)}
+                placeholder="Timestamp, e.g. 2:14 PM"
+                aria-label="Timestamp"
+                className="w-full text-xs bg-white border border-stone-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-violet-500"
+              />
+              <ImageUrlInput
+                value={imageUrl}
+                onChange={setImageUrl}
+                ariaLabel="Image address for this post"
+                placeholder="Paste an image address (optional)"
+              />
             </div>
           )}
 
@@ -355,15 +282,19 @@ export const ComposeBar: React.FC<Props> = ({
           </button>
         )}
 
-        {/* Character selector (Twitter) */}
-        {template === 'twitter' && twitterCharacters && twitterCharacters.length > 1 && (
+        {/* Who is posting (Twitter). The account itself is the default; the
+            other entries come from saved characters and template presets. */}
+        {template === 'twitter' && twitterCharacters && twitterCharacters.length > 0 && (
           <select
-            value={twitterCharIndex}
-            onChange={(e) => setTwitterCharIndex(Number(e.target.value))}
-            className="flex-shrink-0 text-xs bg-stone-100 border-0 rounded-full px-2.5 py-1.5 focus:ring-2 focus:ring-violet-500 max-w-[100px]"
+            value={twitterCharId}
+            onChange={(e) => setTwitterCharId(e.target.value)}
+            aria-label="Posting as"
+            title="Posting as"
+            className="flex-shrink-0 text-xs bg-stone-100 border-0 rounded-full px-2.5 py-1.5 focus:ring-2 focus:ring-violet-500 max-w-[120px]"
           >
-            {twitterCharacters.map((c, i) => (
-              <option key={c.id} value={i}>{c.name}</option>
+            <option value="">{settings.twitterDisplayName || 'Me'}</option>
+            {twitterCharacters.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
         )}
@@ -389,8 +320,8 @@ export const ComposeBar: React.FC<Props> = ({
           className={`flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full transition-colors ${
             showDetails ? 'bg-violet-100 text-violet-600' : 'bg-stone-100 text-stone-500 hover:bg-stone-200'
           }`}
-          title="Add details (timestamp, image, etc.)"
-          aria-label="Add details (timestamp, image, etc.)"
+          title={detailsLabel}
+          aria-label={detailsLabel}
           aria-expanded={showDetails}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -414,18 +345,26 @@ export const ComposeBar: React.FC<Props> = ({
         <button
           type="button"
           onClick={handleSend}
-          aria-label="Send message"
-          disabled={!content.trim() && template !== 'google'}
+          aria-label={sendLabel}
+          title={sendLabel}
+          disabled={!canSend}
           className={`flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full transition-colors ${
-            content.trim()
+            canSend
               ? 'bg-violet-600 text-white hover:bg-violet-700'
               : 'bg-stone-200 text-stone-400'
           }`}
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="22" y1="2" x2="11" y2="13" />
-            <polygon points="22 2 15 22 11 13 2 9 22 2" />
-          </svg>
+          {isResultList ? (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+          ) : (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="22" y1="2" x2="11" y2="13" />
+              <polygon points="22 2 15 22 11 13 2 9 22 2" />
+            </svg>
+          )}
         </button>
       </div>
     </div>

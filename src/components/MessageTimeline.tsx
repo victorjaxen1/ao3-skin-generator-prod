@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Message } from '../lib/schema';
-import { uploadToImgBB } from '../lib/imgbb';
+import { Message, SkinSettings } from '../lib/schema';
+import { ImageUrlInput } from './ImageUrlInput';
 
 interface Props {
   messages: Message[];
   template: 'ios' | 'android' | 'twitter' | 'google';
+  settings: SkinSettings;
   focusedMessageId?: string | null;
   focusTrigger?: number;
   onUpdateMessage: (id: string, updates: Partial<Message>) => void;
@@ -70,6 +71,7 @@ const MessageMenu: React.FC<{
 export const MessageTimeline: React.FC<Props> = ({
   messages,
   template,
+  settings,
   focusedMessageId,
   focusTrigger,
   onUpdateMessage,
@@ -80,20 +82,7 @@ export const MessageTimeline: React.FC<Props> = ({
 }) => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
-  const [uploadingId, setUploadingId] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-
-  const handleImageFileForMessage = async (msgId: string, file: File) => {
-    setUploadingId(msgId);
-    try {
-      const url = await uploadToImgBB(file);
-      onUpdateMessage(msgId, { attachments: [{ type: 'image', url }] });
-    } catch {
-      // Upload failed – user can paste a URL manually
-    } finally {
-      setUploadingId(null);
-    }
-  };
 
   // Scroll to focused message
   useEffect(() => {
@@ -112,13 +101,18 @@ export const MessageTimeline: React.FC<Props> = ({
 
   // Empty state
   if (messages.length === 0) {
+    const emptyState = {
+      ios: { icon: '💬', text: 'Add your first message below' },
+      android: { icon: '💬', text: 'Add your first message below' },
+      twitter: { icon: '🐦', text: 'Write your first post below' },
+      google: { icon: '🔍', text: 'Add your first search result below' },
+    }[template];
+
     return (
       <div className="flex-1 flex items-center justify-center px-6">
         <div className="text-center">
-          <span className="text-4xl block mb-3">💬</span>
-          <p className="text-sm text-stone-500">
-            Add your first message below
-          </p>
+          <span className="text-4xl block mb-3">{emptyState.icon}</span>
+          <p className="text-sm text-stone-500">{emptyState.text}</p>
           <p className="text-xs text-stone-400 mt-1">↓</p>
         </div>
       </div>
@@ -126,7 +120,14 @@ export const MessageTimeline: React.FC<Props> = ({
   }
 
   const getSenderLabel = (msg: Message) => {
-    if (template === 'twitter') return msg.twitterHandle ? `@${msg.twitterHandle}` : msg.sender;
+    if (template === 'twitter') {
+      // Mirror how the generator resolves identity, or a tweet that follows the
+      // account settings would be listed here under a name nothing renders.
+      const handle = msg.useCustomIdentity ? msg.twitterHandle : settings.twitterHandle;
+      if (handle) return `@${handle.replace(/^@/, '')}`;
+      const name = msg.useCustomIdentity ? msg.sender : settings.twitterDisplayName;
+      return name || 'You';
+    }
     if (template === 'google') return msg.googleResultUrl || msg.content;
     return msg.outgoing ? 'You' : msg.sender;
   };
@@ -265,23 +266,57 @@ export const MessageTimeline: React.FC<Props> = ({
                         className="text-xs bg-white border border-stone-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-violet-500"
                       />
                       <input
-                        value={msg.twitterHandle || ''}
-                        onChange={(e) => onUpdateMessage(msg.id, { twitterHandle: e.target.value })}
+                        value={
+                          (msg.useCustomIdentity ? msg.twitterHandle : settings.twitterHandle) || ''
+                        }
+                        // Editing the handle on one post is what "this post is
+                        // by someone else" means, so it opts the post out of
+                        // the account identity rather than being ignored.
+                        onChange={(e) =>
+                          onUpdateMessage(msg.id, {
+                            twitterHandle: e.target.value,
+                            useCustomIdentity: true,
+                            sender: msg.sender || settings.twitterDisplayName || '',
+                          })
+                        }
                         placeholder="@handle"
+                        aria-label="Handle for this post"
                         className="text-xs bg-white border border-stone-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-violet-500"
                       />
                       <input
                         type="number"
+                        min={0}
                         value={msg.twitterLikes ?? 0}
                         onChange={(e) => onUpdateMessage(msg.id, { twitterLikes: parseInt(e.target.value) || 0 })}
                         placeholder="Likes"
+                        aria-label="Likes"
                         className="text-xs bg-white border border-stone-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-violet-500"
                       />
                       <input
                         type="number"
+                        min={0}
                         value={msg.twitterRetweets ?? 0}
                         onChange={(e) => onUpdateMessage(msg.id, { twitterRetweets: parseInt(e.target.value) || 0 })}
                         placeholder="Retweets"
+                        aria-label="Retweets"
+                        className="text-xs bg-white border border-stone-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-violet-500"
+                      />
+                      <input
+                        type="number"
+                        min={0}
+                        value={msg.twitterReplies ?? 0}
+                        onChange={(e) => onUpdateMessage(msg.id, { twitterReplies: parseInt(e.target.value) || 0 })}
+                        placeholder="Replies"
+                        aria-label="Replies"
+                        className="text-xs bg-white border border-stone-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-violet-500"
+                      />
+                      <input
+                        type="number"
+                        min={0}
+                        value={msg.twitterViews ?? 0}
+                        onChange={(e) => onUpdateMessage(msg.id, { twitterViews: parseInt(e.target.value) || 0 })}
+                        placeholder="Views"
+                        aria-label="Views"
                         className="text-xs bg-white border border-stone-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-violet-500"
                       />
                     </>
@@ -308,63 +343,16 @@ export const MessageTimeline: React.FC<Props> = ({
 
                 {/* Image attachment — iOS / Android / Twitter */}
                 {template !== 'google' && (
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-2">
-                      <input
-                        value={msg.attachments?.[0]?.url || ''}
-                        onChange={(e) => onUpdateMessage(msg.id, {
-                          attachments: e.target.value ? [{ type: 'image', url: e.target.value }] : [],
-                        })}
-                        placeholder="Image URL (optional)"
-                        className="flex-1 text-xs bg-white border border-stone-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-violet-500"
-                      />
-                      {/* File upload button */}
-                      <label
-                        title="Upload image"
-                        className={`flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg border border-stone-200 cursor-pointer transition-colors ${
-                          uploadingId === msg.id
-                            ? 'bg-violet-100 text-violet-500 cursor-not-allowed'
-                            : 'bg-stone-50 text-stone-500 hover:bg-violet-50 hover:text-violet-600 hover:border-violet-300'
-                        }`}
-                      >
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          disabled={uploadingId === msg.id}
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) handleImageFileForMessage(msg.id, file);
-                            e.target.value = '';
-                          }}
-                        />
-                        {uploadingId === msg.id ? (
-                          <svg className="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" strokeOpacity="0.3"/><path d="M12 2a10 10 0 0 1 10 10"/></svg>
-                        ) : (
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-                        )}
-                      </label>
-                      {/* Remove button */}
-                      {msg.attachments?.[0]?.url && (
-                        <button
-                          onClick={() => onUpdateMessage(msg.id, { attachments: [] })}
-                          title="Remove image"
-                          className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg border border-stone-200 bg-stone-50 text-stone-400 hover:bg-red-50 hover:text-red-500 hover:border-red-200 transition-colors"
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                        </button>
-                      )}
-                    </div>
-                    {/* Thumbnail preview */}
-                    {msg.attachments?.[0]?.url && (
-                      <img
-                        src={msg.attachments[0].url}
-                        alt="Attachment preview"
-                        className="max-h-28 w-auto rounded-lg border border-stone-200 object-cover"
-                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                      />
-                    )}
-                  </div>
+                  <ImageUrlInput
+                    value={msg.attachments?.[0]?.url || ''}
+                    onChange={(url) =>
+                      onUpdateMessage(msg.id, {
+                        attachments: url ? [{ type: 'image', url }] : [],
+                      })
+                    }
+                    ariaLabel="Image address for this message"
+                    placeholder="Paste an image address (optional)"
+                  />
                 )}
               </div>
             )}

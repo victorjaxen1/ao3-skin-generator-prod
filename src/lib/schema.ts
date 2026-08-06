@@ -25,7 +25,7 @@ export interface UniversalCharacter {
   email?: string;              // For email templates (future)
   
   // Metadata
-  verified?: boolean;           // Verified badge (Twitter, Instagram)
+  verified?: boolean;           // Verified badge (Twitter)
   bio?: string;                // Short description
   category?: 'modern' | 'diversity' | 'fantasy' | 'neutral' | 'age-varied';
   
@@ -54,7 +54,7 @@ export interface Message {
   timestamp?: string;
   outgoing: boolean; // true = author perspective sender bubble
   attachments?: Attachment[];
-  roleColor?: string; // Discord role/name color
+  roleColor?: string; // Overrides the participant colour for this sender's name
   // WhatsApp Group Chat
   participantId?: string; // ID of GroupParticipant (for group messages)
   // Chat-specific enhancements
@@ -124,53 +124,6 @@ export interface SkinSettings {
   googleShowDidYouMean?: boolean; // toggle for correction
   googleDidYouMean?: string; // correction term (Captain Jack Sparrow)
   googleEngineVariant?: 'google' | 'google-old' | 'naver';
-  // Note specific settings
-  noteStyle?: 'system' | 'document' | 'letter' | 'simple'; // different note types
-  noteAlignment?: 'center' | 'left' | 'right';
-  // Email specific settings
-  emailFrom?: string;
-  emailTo?: string;
-  emailSubject?: string;
-  emailBody?: string;
-  emailDate?: string;
-  emailCC?: string;
-  emailStyle?: 'gmail' | 'outlook' | 'apple'; // email client style
-  emailThreadMode?: boolean; // show as email thread instead of single email
-  // Tinder Profile Settings
-  datingProfileName?: string;
-  datingProfileAge?: string;
-  datingProfileBio?: string;
-  datingProfilePhoto?: string;
-  datingProfileDistance?: string; // e.g., "2 kilometers away"
-  datingProfileLocation?: string; // e.g., "Lives in Paris"
-  datingProfileInterests?: string[]; // Passions tags
-  datingProfileJob?: string; // e.g., "Software Engineer at Google"
-  datingProfileEducation?: string; // e.g., "Harvard University"
-  datingProfileHeight?: string; // e.g., "175 cm"
-  datingProfileVerified?: boolean; // blue checkmark
-  datingShowActionButtons?: boolean; // show like/pass/super like buttons
-  datingLookingFor?: string; // e.g., "Long-term partner", "Something casual"
-  // Sticky Note specific settings
-  stickyNoteColor?: 'yellow' | 'pink' | 'blue' | 'green'; // post-it colors
-  stickyNoteText?: string;
-  stickyNoteHandwriting?: boolean; // use handwriting-style font
-  // Instagram specific
-  instagramUsername?: string; // direct username field (not override)
-  instagramAvatarUrl?: string; // dedicated avatar for post
-  instagramImageUrl?: string; // main post image
-  instagramCaption?: string; // post caption text
-  instagramLocation?: string; // location tag (e.g., "Paris, France")
-  instagramShowLikes?: boolean; // toggle to show likes
-  instagramLikes?: number;
-  instagramShowComments?: boolean; // toggle to show comment count
-  instagramCommentsCount?: number;
-  instagramTimestamp?: string; // natural language: "2 hours ago", "May 5"
-  // Discord specific
-  discordChannelName?: string;
-  discordServerName?: string; // new: server context
-  discordShowHeader?: boolean;
-  discordDarkMode?: boolean;
-  discordRolePresets?: Array<{name: string; color: string}>; // new: save common roles
   // iOS/Android chat enhancements
   chatContactName?: string; // "Conversation with..." header (shown at top)
   chatShowTyping?: boolean; // show typing indicator
@@ -178,8 +131,6 @@ export interface SkinSettings {
   iosDarkMode?: boolean; // iOS dark mode theme
   iosMode?: 'imessage' | 'sms'; // iOS message type (blue vs green)
   iosShowReadReceipt?: boolean; // Show "Read" under last message
-  iosShowHeader?: boolean; // Show "To:" label toggle
-  iosShowDelivered?: boolean; // Show "Delivered" indicator
   // iOS Authentic 1-on-1 System
   iosContactName?: string; // The other person's name (shown in header only)
   iosAutoAlternate?: boolean; // Auto-alternate between you and them
@@ -198,13 +149,11 @@ export interface SkinSettings {
   androidShowStatus?: boolean; // "Online" / "Last seen"
   androidStatusText?: string; // custom status text
   androidCheckmarks?: boolean; // show ✓✓ checkmarks
-  androidWhatsAppMode?: boolean; // use authentic WhatsApp colors
   androidDarkMode?: boolean; // Android/WhatsApp dark mode theme
   androidHeaderImageUrl?: string; // Header background image URL
   androidFooterImageUrl?: string; // Footer background image URL
   androidAvatarUrl?: string; // User's avatar image to overlay on header
   androidContactName?: string; // Contact name for header
-  androidShowReadReceipt?: boolean; // Show read status
   androidAutoAlternate?: boolean; // Auto-alternate messages
   // WhatsApp Group Chat
   androidGroupMode?: boolean; // Enable group chat (shows sender names)
@@ -247,54 +196,12 @@ export const defaultProject = (): SkinProject => ({
     googleQuery: '',
     googleSuggestions: [],
     googleShowStats: true,
-    googleResultsCount: 'About 24,040,000,000 results',
-    googleResultsTime: '0.56 seconds',
+    // Left empty so the generator derives plausible values from the query.
+    googleResultsCount: '',
+    googleResultsTime: '',
     googleShowDidYouMean: false,
     googleDidYouMean: '',
     googleEngineVariant: 'google',
-    emailFrom: 'sender@example.com',
-    emailTo: 'recipient@example.com',
-    emailSubject: 'Re: Important Update',
-    emailBody: 'Hi there,\n\nThank you for your message. I wanted to follow up on our previous conversation...\n\nBest regards,\nSender Name',
-    emailDate: 'Nov 22, 2025, 3:14 PM',
-    emailCC: '',
-    emailStyle: 'gmail',
-    emailThreadMode: false,
-    datingProfileName: 'Alex',
-    datingProfileAge: '28',
-    datingProfileBio: 'Love coffee, hiking, and good books 📚☕🏔️',
-    datingProfilePhoto: '',
-    datingProfileDistance: '2 kilometers away',
-    datingProfileLocation: '',
-    datingProfileInterests: ['Music', 'Travel', 'Photography'],
-    datingProfileJob: '',
-    datingProfileEducation: '',
-    datingProfileHeight: '',
-    datingProfileVerified: false,
-    datingShowActionButtons: true,
-    datingLookingFor: '',
-    stickyNoteColor: 'yellow',
-    stickyNoteText: 'Don\'t forget!',
-    stickyNoteHandwriting: true,
-    instagramUsername: '',
-    instagramAvatarUrl: '',
-    instagramImageUrl: '',
-    instagramCaption: '',
-    instagramLocation: '',
-    instagramShowLikes: false,
-    instagramLikes: 0,
-    instagramShowComments: false,
-    instagramCommentsCount: 0,
-    instagramTimestamp: '',
-    discordChannelName: 'general',
-    discordServerName: '',
-    discordShowHeader: true,
-    discordDarkMode: true,
-    discordRolePresets: [
-      { name: 'Admin', color: '#ED4245' },
-      { name: 'Moderator', color: '#5865F2' },
-      { name: 'Member', color: '#B9BBBE' }
-    ],
     chatContactName: '',
     chatShowTyping: false,
     chatTypingName: '',
@@ -313,13 +220,11 @@ export const defaultProject = (): SkinProject => ({
     androidShowStatus: true,
     androidStatusText: 'online',
     androidCheckmarks: true,
-    androidWhatsAppMode: true,
     androidDarkMode: false,
     androidHeaderImageUrl: PLATFORM_ASSETS.whatsapp.headerImage,
     androidFooterImageUrl: PLATFORM_ASSETS.whatsapp.footerImage,
     androidAvatarUrl: '',
     androidContactName: '',
-    androidShowReadReceipt: true,
     androidAutoAlternate: true,
     twitterDisplayName: '',
     twitterAvatarUrl: '',

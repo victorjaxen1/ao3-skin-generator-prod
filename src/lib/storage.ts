@@ -115,11 +115,9 @@ export function loadStoredProject<T extends SkinProject>(fallback: () => T): T {
       androidFooterImageUrl: fixAndroidFooterUrl(parsed.settings.androidFooterImageUrl),
       iosAvatarUrl: sanitizeStoredUrl(parsed.settings.iosAvatarUrl),
       androidAvatarUrl: sanitizeStoredUrl(parsed.settings.androidAvatarUrl),
-      instagramAvatarUrl: sanitizeStoredUrl(parsed.settings.instagramAvatarUrl),
       twitterAvatarUrl: sanitizeStoredUrl(parsed.settings.twitterAvatarUrl),
       twitterQuoteAvatar: sanitizeStoredUrl(parsed.settings.twitterQuoteAvatar),
       twitterQuoteImage: sanitizeStoredUrl(parsed.settings.twitterQuoteImage),
-      instagramImageUrl: sanitizeStoredUrl(parsed.settings.instagramImageUrl),
     };
     
     return {
@@ -133,14 +131,47 @@ export function loadStoredProject<T extends SkinProject>(fallback: () => T): T {
   }
 }
 
-export function persistProject(project: SkinProject) {
-  try { 
-    const json = JSON.stringify(project);
-    // Don't persist if too large
-    if (json.length > MAX_STORAGE_SIZE) {
-      console.warn('Project too large to persist');
-      return;
-    }
-    localStorage.setItem(KEY, json); 
-  } catch { /* ignore */ }
+export interface PersistResult {
+  ok: boolean;
+  /** Present only when ok is false. Safe to show to the user as-is. */
+  message?: string;
+  reason?: 'too-large' | 'unavailable';
+}
+
+/**
+ * Save the project to localStorage.
+ *
+ * Returns a result rather than failing quietly: a refused save means the work
+ * is gone on the next reload, and a console warning nobody reads is not a way
+ * to tell someone that.
+ */
+export function persistProject(project: SkinProject): PersistResult {
+  let json: string;
+  try {
+    json = JSON.stringify(project);
+  } catch {
+    return { ok: false, reason: 'unavailable', message: "This project can't be saved." };
+  }
+
+  if (json.length > MAX_STORAGE_SIZE) {
+    return {
+      ok: false,
+      reason: 'too-large',
+      message:
+        'This project is too large to save automatically. Export it now — shortening long messages or removing a few images will let saving resume.',
+    };
+  }
+
+  try {
+    localStorage.setItem(KEY, json);
+    return { ok: true };
+  } catch {
+    // Quota exceeded, or storage blocked (private browsing, cookies off).
+    return {
+      ok: false,
+      reason: 'unavailable',
+      message:
+        "Your browser wouldn't let this be saved, so it won't be here when you come back. Export before you close the tab.",
+    };
+  }
 }
