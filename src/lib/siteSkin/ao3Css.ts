@@ -38,7 +38,20 @@ export type ViolationKind =
   | 'banned_value_for_property'
   | 'font_face'
   | 'media_block'
-  | 'empty_rule';
+  | 'empty_rule'
+  | 'work_skin_custom_property'
+  | 'work_skin_var'
+  | 'work_skin_position_fixed';
+
+/**
+ * Work skins are checked by `WorkSkin#clean_css`, which layers three extra
+ * refusals on top of everything a site skin must satisfy — and, separately,
+ * prefixes every selector with `#workskin`.
+ *
+ * Custom properties and var() are the surprising ones: both are perfectly
+ * legal in a site skin and neither is allowed here.
+ */
+export type SkinMode = 'site' | 'work';
 
 export interface Violation {
   kind: ViolationKind;
@@ -131,6 +144,39 @@ const AO3_TOKEN = new RegExp(
 
 function isLegalToken(token: string): boolean {
   return AO3_TOKEN.test(token.trim());
+}
+
+/**
+ * Split a value the way AO3's `tokenize_and_sanitize_css_value` does: on
+ * whitespace and commas, but **not inside parentheses**.
+ *
+ * The distinction is the whole game for functions that take a comma-separated
+ * argument list. `rgba(255, 255, 255, 0.5)` is one token to AO3 and is legal.
+ * Splitting naively on commas turns it into `rgba(255`, `255`, `255`, `0.5)`,
+ * none of which parse — so a naive splitter rejects colours AO3 happily
+ * accepts. Being stricter than the archive is the one failure mode this file
+ * must not have: it blocks working CSS and the user has no way to tell we are
+ * the ones who are wrong.
+ */
+function tokenizeValue(value: string): string[] {
+  const tokens: string[] = [];
+  let buffer = '';
+  let depth = 0;
+
+  for (const ch of value) {
+    if (ch === '(') depth++;
+    if (ch === ')') depth = Math.max(0, depth - 1);
+
+    if (depth === 0 && /[\s,]/.test(ch)) {
+      if (buffer) tokens.push(buffer);
+      buffer = '';
+      continue;
+    }
+    buffer += ch;
+  }
+
+  if (buffer) tokens.push(buffer);
+  return tokens;
 }
 
 /* ── Image URLs ────────────────────────────────────────────────────────────
@@ -330,10 +376,7 @@ function checkValue(property: string, value: string): Violation | null {
   // Everything else meets the value grammar. AO3 tokenises on spaces and
   // commas and sanitises each token, so we do the same; a value is legal only
   // if every token is.
-  const bad = v
-    .split(/[\s,]+/)
-    .filter(Boolean)
-    .find(token => !isLegalToken(token));
+  const bad = tokenizeValue(v).find(token => !isLegalToken(token));
 
   if (bad !== undefined) {
     return {
@@ -353,7 +396,7 @@ function checkValue(property: string, value: string): Violation | null {
  * ourselves, so it does not need to survive hostile input — it needs to be
  * obvious enough that a reader can confirm it matches AO3's rules.
  */
-export function lintAo3Css(css: string): Violation[] {
+export function lintAo3Css(css: string, mode: SkinMode = 'site'): Violation[] {
   const violations: Violation[] = [];
 
   if (/@font-face/i.test(css)) {
@@ -396,6 +439,37 @@ export function lintAo3Css(css: string): Violation[] {
       const property = declaration.slice(0, idx).trim().toLowerCase();
       const value = declaration.slice(idx + 1).replace(/!important\s*$/i, '').trim();
 
+      // Work-skin-only refusals, from WorkSkin#clean_css. Each is checked
+      // before the shared rules because each is a hard stop that the shared
+      // rules would wave through — a custom property and a var() are both
+      // perfectly legal in a site skin.
+      if (mode === 'work') {
+        if (isCustomProperty(property)) {
+          violations.push({
+            kind: 'work_skin_custom_property',
+            subject: property,
+            message: `Work skins cannot define custom properties. "${property}" (in ${selector}) is fine in a site skin but rejected here.`,
+          });
+          continue;
+        }
+        if (/\bvar\b/i.test(value)) {
+          violations.push({
+            kind: 'work_skin_var',
+            subject: property,
+            message: `Work skins cannot use var(). Resolve "${property}" (in ${selector}) to a literal value.`,
+          });
+          continue;
+        }
+        if (property === 'position' && value.toLowerCase() === 'fixed') {
+          violations.push({
+            kind: 'work_skin_position_fixed',
+            subject: property,
+            message: `Work skins cannot use position: fixed (in ${selector}) — it would let a work escape its own page region.`,
+          });
+          continue;
+        }
+      }
+
       if (!isPropertyAllowed(property)) {
         violations.push({
           kind: property.startsWith('--') ? 'invalid_custom_property_name' : 'banned_property',
@@ -428,6 +502,6 @@ export function lintAo3Css(css: string): Violation[] {
 }
 
 /** Convenience for the export gate. */
-export function isAo3Safe(css: string): boolean {
-  return lintAo3Css(css).length === 0;
+export function isAo3Safe(css: string, mode: SkinMode = 'site'): boolean {
+  return lintAo3Css(css, mode).length === 0;
 }

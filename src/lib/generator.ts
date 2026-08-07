@@ -258,7 +258,7 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
     const isReply = !!msg.parentId;
     
     // Override avatar if using main identity
-    const effectiveAvatar = displayAvatar ? `<img src="${sanitizeUrl(displayAvatar)}" alt="Avatar" class="avatar" />` : '';
+    const effectiveAvatar = displayAvatar ? `<img src="${sanitizeUrl(displayAvatar)}" alt="Avatar" class="avatar" width="40" height="40" />` : '';
     
     // Handle logic: if using custom identity and has custom handle, use it; otherwise generate from name or use main handle
     const handle = msg.useCustomIdentity 
@@ -271,7 +271,7 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
     
     // Use per-tweet verified status if custom identity, otherwise use main profile verified
     const isVerified = msg.useCustomIdentity ? (msg.verified || false) : (project.settings.twitterVerified || false);
-    const verified = isVerified ? `<span class="verified-container"><img src="${PLATFORM_ASSETS.twitter.verifiedBadge}" alt="Verified" class="verified-badge" /></span>` : '';
+    const verified = isVerified ? `<span class="verified-container"><img src="${PLATFORM_ASSETS.twitter.verifiedBadge}" alt="Verified" class="verified-badge" width="18" height="18" /></span>` : '';
     const timestampLine = project.settings.twitterTimestamp || (msg.timestamp ? msg.timestamp : '');
     
     // Build tweet image from attachments array
@@ -295,13 +295,26 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
     const likeIcon = isDarkMode ? PLATFORM_ASSETS.twitter.likeIconGrey : PLATFORM_ASSETS.twitter.likeIcon;
     const xLogo = isDarkMode ? PLATFORM_ASSETS.twitter.logoGrey : PLATFORM_ASSETS.twitter.logo;
     
-    const metrics = project.settings.twitterShowMetrics ? `<div class="metrics">${replies ? `<span class="metric replies" title="Replies"><img src="${replyIcon}" alt="" class="metric-icon" /><span class="metric-count">${formatNumber(replies)}</span></span>`:''}${retweets ? `<span class="metric retweets" title="Retweets"><img src="${retweetIcon}" alt="" class="metric-icon" /><span class="metric-count">${formatNumber(retweets)}</span></span>`:''}${likes ? `<span class="metric likes" title="Likes"><img src="${likeIcon}" alt="" class="metric-icon" /><span class="metric-count">${formatNumber(likes)}</span></span>`:''}${bookmarks ? `<span class="metric bookmarks" title="Bookmarks"><img src="${PLATFORM_ASSETS.twitter.bookmarkIcon}" alt="" class="metric-icon" /><span class="metric-count">${formatNumber(bookmarks)}</span></span>`:''}${views ? `<span class="metric views" title="Views"><img src="${PLATFORM_ASSETS.twitter.viewsIcon}" alt="" class="metric-icon" /><span class="metric-count">${formatNumber(views)}</span></span>`:''}</div>` : ''
+    // Build the metric chips first, and only wrap them if there are any. An
+    // empty `.metrics` still carries 12px of padding and a bottom border, so
+    // emitting it when every count is blank produces two horizontal rules with
+    // nothing between them — which is what an unconfigured tweet looked like,
+    // in the image export as well as on AO3.
+    const metricChips = project.settings.twitterShowMetrics ? [
+      replies ? `<span class="metric replies" title="Replies"><img src="${replyIcon}" alt="" class="metric-icon" width="20" height="20" /> <span class="metric-count">${formatNumber(replies)}</span></span>`:'',
+      retweets ? `<span class="metric retweets" title="Retweets"><img src="${retweetIcon}" alt="" class="metric-icon" width="20" height="20" /> <span class="metric-count">${formatNumber(retweets)}</span></span>`:'',
+      likes ? `<span class="metric likes" title="Likes"><img src="${likeIcon}" alt="" class="metric-icon" width="20" height="20" /> <span class="metric-count">${formatNumber(likes)}</span></span>`:'',
+      bookmarks ? `<span class="metric bookmarks" title="Bookmarks"><img src="${PLATFORM_ASSETS.twitter.bookmarkIcon}" alt="" class="metric-icon" width="20" height="20" /> <span class="metric-count">${formatNumber(bookmarks)}</span></span>`:'',
+      views ? `<span class="metric views" title="Views"><img src="${PLATFORM_ASSETS.twitter.viewsIcon}" alt="" class="metric-icon" width="20" height="20" /> <span class="metric-count">${formatNumber(views)}</span></span>`:'',
+    ].filter(Boolean).join(' ') : '';
+    const hasMetrics = metricChips.length > 0;
+    const metrics = hasMetrics ? `<div class="metrics">${metricChips}</div>` : '';
     
     let quote = '';
     if (project.settings.twitterQuoteEnabled) {
       const qAvatar = project.settings.twitterQuoteAvatar ? `<img src="${sanitizeUrl(project.settings.twitterQuoteAvatar)}" alt="Quote avatar" class="quote-avatar" />` : '';
       const qHandle = project.settings.twitterQuoteHandle ? `@${sanitizeText(project.settings.twitterQuoteHandle.replace(/^@/, ''))}` : '';
-      const qVerified = project.settings.twitterQuoteVerified ? `<span class="verified-container quote-verified-container"><img src="${PLATFORM_ASSETS.twitter.verifiedBadge}" alt="Verified" class="quote-verified-badge" /></span>` : '';
+      const qVerified = project.settings.twitterQuoteVerified ? `<span class="verified-container quote-verified-container"><img src="${PLATFORM_ASSETS.twitter.verifiedBadge}" alt="Verified" class="quote-verified-badge" width="16" height="16" /></span>` : '';
       const qText = sanitizeText(project.settings.twitterQuoteText || '');
       const qImage = project.settings.twitterQuoteImage ? `<img src="${sanitizeUrl(project.settings.twitterQuoteImage)}" alt="Quote image" class="quote-image" />` : '';
       quote = `<div class="quote"><div class="quote-head">${qAvatar}<span class="quote-name">${sanitizeText(project.settings.twitterQuoteName||'')}</span>${qVerified}<span class="quote-handle">${qHandle}</span></div><div class="quote-body">${highlightTwitterText(qText)}${qImage}</div></div>`;
@@ -322,19 +335,26 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
       }
     }
     
-    // Follow button
-    const followBtn = `<button class="follow-btn">Follow</button>`;
+    // A span, not a <button>. AO3's HTML sanitizer allows a fixed element list
+    // and `button` is not on it — the tag would be stripped and "Follow" would
+    // survive as unstyled bare text in the middle of the name line. A span
+    // carries the same class and renders identically in the image path.
+    const followBtn = `<span class="follow-btn">Follow</span>`;
     
     // Check if this should be displayed as expanded view (clicked-into reply)
     if (msg.expandedView) {
       // Expanded view: avatar on left, larger text, no header/metrics, content indented
-      return `<div class="tweet expanded" data-message-id="${msg.id}">${effectiveAvatar}<div class="expanded-content"><div class="expanded-name"><span class="name">${displayName}</span>${verified}</div><div class="expanded-handle">${handle}</div>${replyingTo}<div class="expanded-body">${bodyWithFormatting}${tweetImage}${quote}</div>${timestampLine ? `<div class="time-line">${timestampLine}</div>`:''}</div></div>`;
+      return `<div class="tweet expanded" data-message-id="${msg.id}">${effectiveAvatar}<div class="expanded-content"><div class="expanded-name"><b class="name">${displayName}</b>${verified}</div><div class="expanded-handle">${handle}</div>${replyingTo}<div class="expanded-body">${bodyWithFormatting}${tweetImage}${quote}</div>${timestampLine ? `<div class="time-line">${timestampLine}</div>`:''}</div></div>`;
     }
     
-    // Add reply class if this is a threaded reply
-    const tweetClass = isReply ? 'tweet reply' : 'tweet';
+    // Add reply class if this is a threaded reply. `no-metrics` suppresses the
+    // divider under the timestamp, which otherwise draws a rule pointing at an
+    // empty space when the tweet has no counts.
+    const tweetClass = [isReply ? 'tweet reply' : 'tweet', hasMetrics ? '' : 'no-metrics']
+      .filter(Boolean)
+      .join(' ');
     
-    return `<div class="${tweetClass}" data-message-id="${msg.id}"><div class="tweet-header">${effectiveAvatar}<div class="head"><div class="head-content"><div class="name-line"><span class="name">${displayName}</span>${verified}<span class="handle">${handle}</span><span class="follow-dot">·</span>${followBtn}<img src="${xLogo}" alt="X" class="twitter-logo" /></div></div></div></div>${replyingTo}<div class="body">${bodyWithFormatting}${tweetImage}${quote}</div>${timestampLine ? `<div class="time-line">${timestampLine}</div>`:''}${metrics}</div>`;
+    return `<div class="${tweetClass}" data-message-id="${msg.id}"><div class="tweet-header">${effectiveAvatar}<div class="head"><div class="head-content"><div class="name-line"><b class="name">${displayName}</b> ${verified} <span class="handle">${handle}</span><span class="follow-dot">·</span>${followBtn}<img src="${xLogo}" alt="X" class="twitter-logo" width="20" height="20" /></div></div></div></div>${replyingTo}<div class="body">${bodyWithFormatting}${tweetImage}${quote}</div>${timestampLine ? `<div class="time-line">${timestampLine}</div>`:''}${metrics}</div>`;
   }
   
   if (template === 'google') {
@@ -860,29 +880,55 @@ function buildTwitterCSS(s: SkinProject['settings'], senderBg: string, maxWidth:
 #workskin .tweets .tweet.reply{margin-left:44px;margin-top:-8px;}
 #workskin .tweets .tweet.reply::before{content:'';position:absolute;left:-32px;top:-8px;bottom:12px;width:2px;background:${replyLineColor};}
 #workskin .tweets .tweet.reply::after{content:'';position:absolute;left:-32px;top:20px;width:20px;height:2px;background:${replyLineColor};}
-#workskin .tweet-header{display:flex;align-items:flex-start;gap:12px;margin-bottom:12px;position:relative;}
-#workskin .tweet img.avatar{width:40px;height:40px;border-radius:50%;flex-shrink:0;}
-#workskin .tweet .head{flex:1;min-width:0;}
+/* NOTE ON GAP. AO3 accepts a property only if it is on its list or CONTAINS
+   one of its shorthand names as a substring. column-gap passes (it contains
+   "column"); bare gap matches nothing and is rejected — and AO3 refuses the
+   entire skin over one bad property, so this CSS could never be pasted as a
+   work skin while it used gap. The margins below are the same spacing by
+   other means, and keep this stylesheet legal for both the image path and the
+   work skin path. Do not reintroduce gap here. */
+/* NOTE ON LAYOUT. Float and inline-block, not flexbox — on purpose.
+   Every established AO3 Twitter work skin builds the avatar/post split with
+   float:left plus overflow:hidden, and none of them use flex. Our own
+   flex version renders correctly in this app and in a local AO3 simulation,
+   but wrong on the real archive: the name line right-aligns and the X logo
+   drops to its own line. Whatever the archive is doing to those declarations,
+   float and inline-block are what the community has already proved survives
+   it, and they degrade to something readable if a rule is dropped rather than
+   collapsing the layout. Do not convert this back to flex. */
+#workskin .tweet-header{overflow:hidden;margin-bottom:12px;position:relative;}
+#workskin .tweet img.avatar{width:40px;height:40px;border-radius:50%;float:left;margin-right:12px;}
+#workskin .tweet .head{overflow:hidden;}
 #workskin .tweet .head-content{display:block;}
-#workskin .tweet .name-line{display:flex;align-items:center;line-height:20px;gap:4px;flex-wrap:nowrap;}
+/* No white-space:nowrap here — .head establishes a block formatting context to
+   clear the floated avatar, so anything that overflows the line is clipped
+   rather than shown. .name and .handle carry their own nowrap, so they stay
+   whole while the line itself is free to wrap. */
+#workskin .tweet .name-line{line-height:20px;}
+#workskin .tweet .name-line > *{display:inline-block;vertical-align:middle;margin-right:4px;}
+#workskin .tweet .name-line > *:last-child{margin-right:0;}
 #workskin .tweet .name{font-weight:700;color:${textPrimary};font-size:15px;line-height:20px;white-space:nowrap;}
-#workskin .tweet .verified-container{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;}
-#workskin .tweet .verified-badge{width:18px;height:18px;display:block;vertical-align:middle;}
+#workskin .tweet .verified-container{display:inline-block;vertical-align:middle;}
+#workskin .tweet .verified-badge{width:18px;height:18px;display:inline-block;vertical-align:middle;}
 #workskin .tweet .handle{color:${handleColor};font-weight:400;font-size:15px;line-height:20px;white-space:nowrap;}
 #workskin .tweet .follow-dot{color:${handleColor};font-size:15px;line-height:20px;}
 #workskin .tweet .follow-btn{background:transparent;color:#1d9bf0;font-weight:700;font-size:15px;padding:0;border:none;cursor:pointer;line-height:20px;flex-shrink:0;white-space:nowrap;}
 #workskin .tweet .follow-btn:hover{color:#1a8cd8;text-decoration:underline;}
-#workskin .tweet .twitter-logo{width:20px;height:20px;display:block;vertical-align:middle;flex-shrink:0;}
+#workskin .tweet .twitter-logo{width:20px;height:20px;display:inline-block;vertical-align:middle;}
 #workskin .tweet .body{margin-top:12px;font-size:15px;line-height:20px;color:${textPrimary};word-wrap:break-word;white-space:pre-wrap;}
 #workskin .tweet .body .hashtag{color:#1d9bf0;font-weight:400;}
 #workskin .tweet .body .mention{color:#1d9bf0;font-weight:400;}
 #workskin .tweet .tweet-image{width:100%;max-width:100%;height:auto;max-height:285px;border-radius:16px;margin-top:12px;border:1px solid ${borderColor};display:block;}
 #workskin .tweet .time-line{margin-top:16px;font-size:15px;color:${textSecondary};padding-bottom:16px;border-bottom:1px solid ${borderColor};}
-#workskin .tweet .metrics{display:flex;padding:12px 0;font-size:14px;color:${textSecondary};border-bottom:1px solid ${borderColor};align-items:center;width:100%;gap:12px;}
-#workskin .tweet .metric{display:inline-flex;align-items:center;cursor:pointer;transition:color 0.2s;gap:6px;flex:1;}
+#workskin .tweet.no-metrics .time-line{padding-bottom:0;border-bottom:none;}
+/* Flex is kept HERE only because its failure mode is graceful: if the
+   archive drops it, the metric chips fall back to inline-block and bunch to
+   the left, which still reads fine. The header above could not tolerate that. */
+#workskin .tweet .metrics{display:flex;justify-content:space-between;padding:12px 0;font-size:14px;color:${textSecondary};border-bottom:1px solid ${borderColor};width:100%;}
+#workskin .tweet .metric{display:inline-block;cursor:pointer;transition:color 0.2s;margin-right:18px;}
 #workskin .tweet .metric:first-child{justify-content:flex-start;}
-#workskin .tweet .metric:last-child{justify-content:flex-end;}
-#workskin .tweet .metric-icon{width:20px;height:20px;display:block;flex-shrink:0;vertical-align:middle;}
+#workskin .tweet .metric:last-child{margin-right:0;}
+#workskin .tweet .metric-icon{width:20px;height:20px;display:inline-block;vertical-align:middle;margin-right:6px;}
 #workskin .tweet .metric-count{color:${textSecondary};font-weight:400;font-size:14px;line-height:20px;vertical-align:middle;}
 #workskin .tweet .metric:hover .metric-count{text-decoration:underline;}
 #workskin .tweet .metric.replies:hover{color:#1d9bf0;}

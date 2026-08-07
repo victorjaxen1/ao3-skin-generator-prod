@@ -1,0 +1,1177 @@
+/* == CORE: basic functional layout
+https://otwcode.github.io/docs/stylesheets-views.html#core
+*/
+
+body, .toggled form, .dynamic form, .secondary, .dropdown {
+  background: #fff;
+  color: #2a2a2a;
+  font: 100%/1.125 'Lucida Grande', 'Lucida Sans Unicode', Verdana, Helvetica, sans-serif, 'GNU Unifont';
+  margin: 0;
+  padding: 0;
+}
+
+.heading {
+  font-family: Georgia, serif;
+}
+
+a, a:link {
+  color: #900;
+  text-decoration: none;
+}
+
+#header, #footer, #main, #dashboard {
+  padding: 1em 3em;
+}
+
+.landmark {
+  font-size: 0;
+  opacity: 0;
+}
+
+.hidden {
+  display: none;
+}
+
+li.blurb, fieldset, form dl {
+  border: 1px solid #ddd;
+  padding: 1em;
+  overflow: hidden;
+}
+
+.blurb li, .actions>*, .stats>*, .meta ul li {
+  list-style: none;
+  display: inline;
+  padding-left: 0.25em;
+}
+
+.actions form {
+  display: inline;
+}
+
+.actions input[type="submit"] {
+  margin: 0;
+}
+
+/* END == */
+
+/* == ELEMENTS
+https://otwcode.github.io/docs/stylesheets-views.html#elements
+*/
+
+/* MEYERS RESET. *********************************************** do not edit */
+
+html, body, div, span, applet, object, iframe, h1, h2, h3, h4, h5, h6, p, blockquote, pre, a, abbr, acronym, address, big, cite, code, del, dfn, em, img, ins, kbd, q, s, samp, small, strike, strong, sub, sup, tt, var, dl, dt, dd, ol, ul, li, fieldset, form, label, legend, table, caption, tbody, tfoot, thead, tr, th, td {
+  border: 0;
+  outline: 0;
+  font-weight: inherit;
+  font-style: inherit;
+  font-size: 100%;
+  font-family: inherit;
+  vertical-align: baseline;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* *********************************************** end of uneditable rules */
+
+/* The global rules for normal elements */
+
+body {
+  font: 100%/1.125 'Lucida Grande', 'Lucida Sans Unicode', Verdana, Helvetica, sans-serif, 'GNU Unifont';
+}
+
+a, a:link, a:visited:hover {
+  color: #111;
+  text-decoration: none;
+  border-bottom: 1px solid;
+}
+
+a:visited {
+  color: #666;
+  text-decoration: none;
+  border-bottom: 1px dashed;
+}
+
+a:hover {
+  color: #999;
+}
+
+a:active, a:focus, button:focus {
+  outline: 1px dotted;
+}
+
+a img {
+  border: 0;
+}
+
+a:focus img {
+  outline: 1px dotted;
+}
+
+h1, h2, h3, h4, h5, h6, .heading {
+  font-family: Georgia, serif;
+  font-weight: 400;
+    word-wrap: break-word;
+}
+
+h1 {
+  font-size: 2.5em;
+  line-height: 1;
+  margin: 0.5em 0;
+}
+
+h2 {
+  font-size: 2.143em;
+  line-height: 1;
+  margin: 0.429em 0;
+  display: inline;
+}
+
+/* 24px skipped: font-size: 1.714em; line-height: 1; margin: 0.429em 0 */
+
+h3 {
+  font-size: 1.286em;
+  line-height: 1;
+  margin: 0.5375em 0;
+}
+
+h4 {
+  font-size: 1.143em;
+  line-height: 1.125;
+  margin: 0.5em 0;
+}
+
+h5 {
+  font-size: 1em;
+  line-height: 1.286;
+  margin: 0.643em 0;
+}
+
+h6 {
+  font-size: 0.875em;
+  font-weight: 900;
+  line-height: 1.5;
+  margin: 1.5em 0;
+}
+
+p, li, dd, hr {
+  margin: 0.643em 0;
+}
+
+hr {
+  border: 0;
+  border-bottom: 3px double;
+}
+
+.clear {
+  clear: both;
+  height: 0;
+  border: 0;
+  margin: 0;
+  background: transparent;
+  opacity: 0;
+}
+
+blockquote, pre, address {
+  font: 1em 'Lucida Grande', 'Lucida Sans Unicode', Verdana, Helvetica, sans-serif;
+  margin: 0.643em;
+}
+
+blockquote p:first-child, address p:first-child {
+  margin-top: 0;
+}
+
+blockquote p:last-child, address p:first-child {
+  margin-bottom: 0;
+}
+
+kbd, tt, code, var, pre, samp {
+  font: normal 0.857em 'Monaco', 'Consolas', Courier, monospace;
+  font-variant-ligatures: none;
+  margin: auto;
+}
+
+pre {
+  white-space: pre-wrap;
+}
+
+strong, b {
+  font-weight: bold;
+}
+
+em, cite, i {
+  font-style: oblique;
+}
+
+cite em, em cite, cite i, i cite, i em, em i, em em, i i, cite cite {
+  font-style: normal;
+}
+
+em cite, i cite, ins, u {
+  text-decoration: underline;
+}
+
+del, strike {
+  text-decoration: line-through;
+}
+
+dfn, abbr, acronym {
+  cursor: help;
+}
+
+big {
+  font-size: 114%;
+}
+
+small, sub, sup {
+  font-size: 87.5%;
+}
+
+small small small small {
+  font-size: 100%;
+}
+
+sub {
+  vertical-align: sub;
+  line-height: 0;
+}
+
+sup {
+  vertical-align: super;
+  line-height: 0;
+}
+
+/*
+https://otwcode.github.io/docs/patterns/tables.html
+*/
+
+table {
+  background: #ddd;
+  border-collapse: collapse;
+  margin: auto;
+  width: 100%;
+  clear: right;
+}
+
+caption {
+  height: 0;
+  width: 0;
+  font-size: 0;
+  opacity: 0;
+  padding: 0;
+  margin: 0;
+}
+
+thead, tfoot {
+  border-bottom: 2px solid #bbb;
+  padding: 0.643em;
+  vertical-align: top;
+}
+
+tfoot td {
+  border-top: 1px solid #bbb;
+}
+
+td th {
+  padding-right: 1em;
+}
+
+tbody tr {
+  border-bottom: 1px solid #fff;
+}
+
+td {
+  padding: 0.25em;
+  vertical-align: top;
+}
+
+th {
+  text-align: start;
+}
+
+thead td {
+  background: #ddd;
+  border-bottom: 1px solid #fff;
+}
+
+th, tr:hover, col.name {
+  background: #fff;
+  border: 1px solid #bbb;
+  padding: 0.15em 0.5em 0.25em;
+  vertical-align: top;
+}
+
+th a, th a:visited, th a:link {
+  text-decoration: none;
+}
+
+tbody tr th {
+  text-align: start;
+}
+
+/* END == */
+
+/* == REGION: MAIN is #3 of the 4 regions shown on every page
+https://otwcode.github.io/docs/patterns/regions.html#main-region
+*/
+
+#main {
+  font-size: 0.875em;
+  line-height: 1.286;
+  margin: auto;
+  padding: 0.5em 2.5em 3.5em;
+  position: relative;
+  min-height: 450px;
+}
+
+#main:after {
+  content: " ";
+  display: block;
+  height: 0;
+  font-size: 0;
+  clear: both;
+  visibility: hidden;
+}
+
+#main.dashboard {
+  padding-left: 2em;
+  margin: 0.5em auto 1em 14em;
+}
+
+#main.home {
+  padding: 2em 7.5em 3.5em;
+}
+
+#main.errors {
+  background: url("/images/ao3_logos/sadface.png") top right no-repeat;
+}
+
+#main.error-502 {
+  background: url("/images/ao3_logos/ao3-502.png") top right no-repeat;
+}
+
+#main.error-503-maintenance {
+  background: url("/images/ao3_logos/logo-ruby.png") top right no-repeat;
+}
+
+#main.session {
+  background: url("/images/logo.png") 0.5em 3em no-repeat;
+}
+
+#main.authentication {
+  background: none;
+}
+
+#main.errors h2 {
+  display: block;
+  margin-top: 0;
+}
+
+#main.errors p, #main.errors .heading {
+  margin-right: 325px;
+}
+
+/* END == */
+
+/* == USERSTUFF: displaying content inputted by a user into a textarea. */
+
+.userstuff {
+    word-wrap: break-word;
+    line-height: 1.5;
+}
+
+.userstuff p, .userstuff details {
+  margin: 1.286em auto;
+  padding: 0;
+}
+
+/* lists */
+
+.userstuff dl {
+  margin: 1.5em 0;
+  border: 0;
+}
+
+.userstuff dl dl {
+  width: 90%;
+  margin: auto;
+}
+
+.userstuff dt {
+  display: block;
+  font-weight: bold;
+}
+
+.userstuff dd {
+  display: block;
+  margin-block-start: 1.25em;
+  margin-block-end: 1.25em;
+  margin-inline-start: 3em;
+}
+
+.userstuff dd p {
+  margin: 0;
+  padding: 0;
+}
+
+.userstuff ul {
+  margin: 1.125em auto;
+  padding: 0 1em;
+}
+
+.userstuff ul li { 
+  display: list-item; 
+}
+
+.userstuff li, .userstuff ol ul li {
+  font-weight: normal;
+  display: list-item;
+  list-style-type: disc;
+  margin-block-start: 0.75em;
+  margin-inline-end: 0;
+  margin-block-end: 0.75em;
+  margin-inline-start: 1.75em;
+}
+
+.userstuff ol {
+  margin: 0.75em auto;
+  padding: 0 1.5em;
+}
+
+.userstuff ol li {
+  list-style-type: decimal;
+  margin-block-start: 0.75em;
+  margin-inline-end: 0;
+  margin-block-end: 0.75em;
+  margin-inline-start: 1.75em;
+}
+
+.userstuff ol li ol li {
+  list-style-type: lower-alpha;
+}
+
+.userstuff ol li ol li ol li {
+  list-style-type: lower-roman;
+}
+
+/* headings */
+
+.userstuff h1 {
+  text-align: center;
+}
+
+.userstuff h2 {
+  color: #333;
+  margin: 1.5em 0;
+  display: block;
+}
+
+.userstuff h3 {
+  font-weight: 500;
+  padding: 0.125em;
+  border-bottom: 0.25em double #333;
+}
+
+.userstuff h4 {
+  font-weight: 700;
+}
+
+.userstuff h5 {
+  font-weight: 600;
+  font-size: 1em;
+}
+
+.userstuff h6 {
+  font-size: 0.975em;
+  border-bottom: 1px solid;
+}
+
+.userstuff h3 a, .userstuff h3 a:link, .userstuff h3 a:visited {
+  font-weight: 500;
+  border-bottom: 0;
+  text-decoration: none;
+}
+
+/* tables */
+
+.userstuff caption {
+  font-size: 1em;
+  height: auto;
+  width: auto;
+    opacity: 1;
+}
+
+.userstuff table, .userstuff td, .userstuff col, .userstuff tr, .userstuff thead, .userstuff tfoot, .userstuff tbody, .userstuff th, .userstuff thead td, .userstuff th a, .userstuff th a:link {
+  background: transparent;
+  border: none;
+}
+
+/* quotes and stresses */
+
+.userstuff blockquote, .userstuff address {
+  line-height: 1.5;
+  margin-inline-start: 1.5em;
+  padding: 0.75em;
+  border-inline-start: 2px solid #999;
+}
+
+.userstuff blockquote blockquote {
+  padding: 0.25em;
+  border: 0;
+}
+
+.userstuff hr {
+  width: 33%;
+  margin: 0.875em auto 1.2525em auto;
+  border: 1px solid;
+}
+
+/* media */
+
+.userstuff img {
+  max-width: 100%;
+  height: auto;
+}
+
+.userstuff video {
+  max-width: 100%;
+}
+
+/* expected behaviours, exceptioning */
+
+/* WORK MARGINS */
+
+#workskin {
+  font-size: 1.08em;
+  margin: auto;
+  padding: 0 0.25em;
+  max-width: 72em;
+  overflow-x: auto;
+  overflow-y: hidden;
+  position: relative;
+}
+
+#workskin .module {
+  float: none;
+}
+
+/* contexts */
+
+.comment .userstuff li {
+  list-style-position: inside;
+}
+
+.comment .userstuff blockquote {
+    display: flow-root;
+}
+
+.bookmark .user .userstuff {
+  line-height: 1.5;
+}
+
+.bookmark .user .userstuff blockquote {
+  margin-bottom: 1.286em;
+}
+
+.faq .userstuff dd {
+  margin-block-start: 0.75em;
+  margin-block-end: 0.75em;
+  margin-inline-start: 1.75em;
+}
+
+.faq .userstuff dl {
+  margin: 0.75em 0;
+}
+
+/* END == */
+
+/* == ACTIONS: buttons!
+https://otwcode.github.io/docs/patterns/actions.html
+subtypes:
+.action, .navigation, .sorting, .submit, .cancel, .close, .delete, .pagination, .current, .landmark, #skiplinks
+input[type="submit"], button
+*/
+
+.actions * {
+  display: inline;
+}
+
+ul.actions, p.actions, li.actions, span.actions, fieldset.actions, dd.actions {
+  padding: 0.429em 0.25em 0.25em 0;
+  float: right;
+  text-align: center;
+}
+
+ul.actions {
+  padding-bottom: 0;
+  padding-top: 0;
+}
+
+.actions a, .actions a:link, .action, .action:link, .actions button, .actions input, input[type="submit"], button, .current, .actions label {
+  background: #eee;
+  color: #444;
+  width: auto;
+  font-weight: 400;
+  font-size: 100%;
+  line-height: 1.286;
+  height: 1.286em;
+  vertical-align: middle;
+  display: inline-block;
+  padding: 0.25em 0.75em;
+  white-space: nowrap;
+  overflow: visible;
+  position: relative;
+  text-decoration: none;
+  border: 1px solid #bbb;
+  border-bottom: 1px solid #aaa;
+    background-image: -moz-linear-gradient(#fff 2%,#ddd 95%, #bbb 100%);
+    background-image: -webkit-linear-gradient(#fff 2%,#ddd 95%, #bbb 100%);
+    background-image: -o-linear-gradient(#fff 2%,#ddd 95%, #bbb 100%);
+    background-image: -ms-linear-gradient(#fff 2%,#ddd 95%, #bbb 100%);
+    background-image: linear-gradient(#fff 2%,#ddd 95%, #bbb 100%);
+    border-radius: 0.25em;
+    box-shadow: none;
+}
+
+button {
+  font-family: 'Lucida Grande', 'Lucida Sans Unicode', Verdana, Helvetica, sans-serif, 'GNU Unifont';
+  box-sizing: content-box;
+}
+
+label.action {
+  padding: 0.15em 0.375em;
+}
+
+input[type="submit"] {
+  height: auto;
+  white-space: normal;
+}
+
+p.submit, input.submit, dd.submit {
+  text-align: right;
+}
+
+.actions input[type="checkbox"] {
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+.actions li select, .actions li label input[type="checkbox"] {
+   margin: 0;
+ }
+
+/* subtypes and modes
+test note: this pagination clear needs to be kept an eye on */
+
+ol.pagination, div.pagination, ol.year {
+  text-align: center;
+  clear: right;
+  margin: 0.643em auto;
+}
+
+.actions a:visited, .action:visited, .action a:link, .action a:visited {
+  color: #111;
+}
+
+.actions a:hover, .actions button:hover, .actions input:hover, .actions a:focus, .actions button:focus, .actions input:focus, label.action:hover, .action:hover, .action:focus {
+  color: #900;
+  border-top: 1px solid #999;
+  border-left: 1px solid #999;
+    box-shadow: inset 2px 2px 2px #bbb;
+}
+
+.actions a:active, .current, a.current, a:link.current, .current a:visited {
+  color: #111;
+  background: #ccc;
+  border-color: #fff;
+    box-shadow: inset 1px 1px 3px #333;
+}
+
+.actions label.disabled {
+  background: #ccc;
+}
+
+.actions .disabled select {
+   background: transparent;
+   color: #111;
+   border-color: #aaa;
+ }
+
+.actions li a, .actions li button, .actions li input, .actions li input[type="submit"], .actions li .current, .actions li label {
+  margin: 0.375em auto;
+}
+
+.delete a, span.delete {
+  border: 0;
+  color: #900;
+  font-weight: 900;
+  margin-right: 0.375em;
+  padding: 0 0.1em 0.15em;
+    box-shadow: -1px -1px 2px rgba(0,0,0,0.75);
+    border-radius: 0.875em;
+}
+
+span.delete a {
+  margin: 0 0.2em;
+    box-shadow: none;
+}
+
+ul#skiplinks, .landmark, .landmark a, .index .heading.landmark {
+  font-size: 0;
+  line-height: 0;
+  height: 0;
+  margin: 0;
+  clear: both;
+  color: transparent;
+    opacity: 0;
+}
+
+h2.landmark {
+  display: block;
+}
+
+.secondary {
+  background: #fff;
+  position: absolute;
+  z-index: 54; /* lower than the z-index of #header .menu */
+  border: 2px solid #bbb;
+  margin: auto;
+  padding: 0 0.375em;
+  overflow: hidden;
+  right: 2.5em;
+    box-shadow: 2px 2px 5px #bbb;
+    border-radius: 0.15em;
+}
+
+/* CONTEXTS */
+
+legend .action:link {
+  position: static;
+}
+
+.heading .actions, .heading .action, .heading span.actions {
+  height: auto;
+  font: 100 75%/1.286 'Lucida Grande', 'Lucida Sans Unicode', Verdana, Helvetica, sans-serif, 'GNU Unifont';
+  padding: 0.15em 0.375em;
+}
+
+.heading .actions button {
+  padding: 0.25em 0.75em;
+  margin-left: 0.25em;
+}
+
+th .actions, td .actions {
+  float: none;
+}
+
+dl.stats + .landmark + .actions, .mystery .summary + .landmark + .actions {
+  clear: none;
+  float: left;
+  margin: 0 auto;
+}
+
+.actions .secondary .submit, .nomination .actions {
+  float: none;
+}
+
+.dashboard .landmark {
+  clear: right;
+}
+
+.actions .landmark {
+  clear: none;
+}
+
+.actions a.symbol, .action a {
+  border: 0;
+  background: none;
+  padding: 0 0 0.15em 0;
+}
+
+.many p.actions {
+  float: none;
+  text-align: right;
+}
+
+.concise label.action {
+  float: left;
+}
+
+dd.any label.action {
+  margin-left: 0.5625em;
+}
+
+dl.index p.actions {
+  margin: 0;
+}
+
+/* context: work navigation actions with secondary navigation */
+
+.work.navigation .download {
+  display: block;
+  margin-block-start: 0;
+  padding: 0.375em 0 0.643em;
+}
+
+.work.navigation .download .secondary {
+  position: static;
+}
+
+/* The next two rule sets move the default .secondary style to the secondary's
+parent when JavaScript is disabled and put it back when it's enabled. */
+.work.navigation .download, .javascript .work.navigation .download .secondary {
+  background: #fff;
+  border: 2px solid #bbb;
+    box-shadow: 2px 2px 5px #bbb;
+}
+
+.work.navigation .download .secondary, .javascript .work.navigation .download {
+  background: transparent;
+  border: none;
+    box-shadow: none;
+}
+
+.javascript .work.navigation li {
+  display: inline-block;
+  margin-block: 0;
+  position: relative;
+}
+
+.javascript .work.navigation .download {
+  padding: 0 0 0 0.25em;
+}
+
+/* The top position is part of a workaround for the behavior described here:
+https://otwarchive.atlassian.net/browse/AO3-4629?focusedCommentId=372231
+  0.375em for top margin
++ 1.286em for height
++ 0.25em * 2 for top and bottom padding (buttons use content-box)
++ 0.25em to compensate for borders */
+.javascript .work.navigation .secondary {
+  position: absolute;
+  right: 0;
+  top: 2.411em;
+    align-items: center;
+    gap: 0 0.643em;
+    justify-content: space-evenly;
+}
+
+/* If we use display without the .expanded qualifier, it will override .hidden's
+display: none and secondary will always be open. */
+.javascript .work.navigation .expanded + .secondary {
+    display: flex;
+}
+
+.javascript .work.navigation .download .secondary {
+  z-index: 53;
+    gap: 0.25em;
+}
+
+.javascript .work.navigation .secondary p {
+  padding: 0;
+    align-items: center;
+    display: flex;
+    gap: 0 0.25em;
+}
+
+.javascript .work.navigation .secondary .actions {
+  padding: 0;
+}
+
+/* END== */
+
+/* == TYPES OF DATA, GROUPS OF DATA
+https://otwcode.github.io/docs/stylesheets-views.html#types
+https://otwcode.github.io/docs/classes-taxonomy.html#types
+*/
+
+/* TYPE: TAGS */
+
+a.tag {
+  color: #111;
+  line-height: 1.5;
+  text-decoration: none;
+  padding: 0;
+  border-bottom: 1px dotted;
+}
+
+a.tag:hover, .listbox .heading a.tag:visited:hover {
+  background: #900;
+  color: #fff;
+}
+
+.tags li {
+  display: inline;
+  padding-left: 0;
+  padding-right: 0.25em;
+}
+
+/* context: filters, tag sets */
+
+.filters .tags li, .review .tags, .tagset .listbox .tags li {
+  display: block;
+}
+
+.tagset .listbox .tags li {
+  padding-right: 0;
+}
+
+/* GROUP CLOUD
+https://otwcode.github.io/docs/classes-taxonomy.html#travellers
+*/
+
+ul.cloud {
+  margin: 2em auto;
+  text-align: center;
+  line-height: 2;
+}
+
+a.cloud1 {
+  color: #200;
+  font-size: 0.625em;
+  font-weight: 100;
+}
+
+a.cloud2 {
+  color: #300;
+  font-size: 0.75em;
+  font-weight: 200;
+}
+
+a.cloud3 {
+  color: #400;
+  font-size: 0.875em;
+  font-weight: 300;
+}
+
+a.cloud4 {
+  color: #500;
+  font-size: 1em;
+  font-weight: 400;
+}
+
+a.cloud5 {
+  color: #600;
+  font-size: 1.125em;
+  font-weight: 500;
+}
+
+a.cloud6 {
+  color: #700;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+a.cloud7 {
+  color: #800;
+  font-size: 1.875em;
+  font-weight: 700;
+}
+
+a.cloud8 {
+  color: #900;
+  font-size: 2.25em;
+  font-weight: 800;
+}
+
+/* GROUPS: WRAPPER, MODULE, INDEX  (#outer and #inner .wrapper have no style by default, but wrap the regions on every page for your skins convenience)
+https://otwcode.github.io/docs/classes-taxonomy.html#grouping-and-spacing
+*/
+
+.wrapper {
+    box-shadow: 1px 1px 5px #aaa;
+}
+
+#outer.wrapper {
+  float: left;
+  width: 100%;
+}
+
+#work-skin.wrapper {
+  overflow-y: hidden;
+}
+
+#outer.wrapper, #inner.wrapper, #work-skin.wrapper {
+    box-shadow: none;
+}
+
+.module, .index, .index .index {
+  position: relative;
+  width: auto;
+}
+
+.module, .dashboard .index {
+  float: left;
+  width: 100%;
+}
+
+/*
+https://otwcode.github.io/docs/patterns/indexes.html
+*/
+
+dl.index {
+  margin: 0.643em 0;
+  border: none;
+    box-shadow: none;
+}
+
+dl.index dt {
+  width: auto;
+  float: none;
+  border: none;
+}
+
+dl.index dd {
+  width: auto;
+  float: none;
+  clear: right;
+  margin: 0 0.25em 0.643em 2.5em;
+  padding: 0.375em 0.15em 0.15em;
+  overflow: visible;
+  background: #ededed;
+}
+
+dl.index > dd:after {
+   content: " ";
+   display: block;
+   height: 0;
+   font-size: 0;
+   clear: both;
+   visibility: hidden;
+ }
+
+dl.index dd .userstuff p {
+  display: block;
+}
+
+/* contexts */
+
+form dl.index {
+  position: initial;
+}
+
+/* TYPES */
+
+a.rss span {
+  background: url("/images/imageset.png") no-repeat -150px -275px;
+  padding-left: 16px;
+}
+
+a.work {
+  font: 100 1.143em/1.125 Georgia, serif;
+  margin: 0.5em 0;
+  color: #900;
+}
+
+.warning, .warnings, span.byline, a.user {
+  font-weight: bold;
+}
+
+li.relationships a {
+  background: #eee;
+}
+
+.actions .reindex a {
+  border-bottom: 3px solid #900;
+}
+
+.series.footnote {
+  font-size: 100%;
+  float: none;
+}
+
+/* circle dividers for series navigation on works */
+
+span.series .divider {
+  color: #777;
+}
+
+span.series .previous + .divider:before {
+  content: "\0020\25CF";
+}
+
+span.series .position + .divider:after {
+  content: "\25CF\0020";
+}
+
+p.kudos {
+  background: url("/images/imageset.png") no-repeat -111px -580px;
+  padding: 0.5em 0.5em 0.5em 60px;
+  margin: 2em 0;
+  min-height: 50px;
+    word-wrap: break-word;
+}
+
+.icon, p.qr {
+  margin: 0;
+}
+
+/* QR codes should always be displayed as black on white to ensure contrast and compatibility, even in dark mode. They also need a quiet zone. */
+/* TODO: Check that this is okay in Reversi/Dark Mode. */
+p.qr svg {
+  background: #fff;
+  border: 1em solid #fff;
+}
+
+.icon {
+  height: 100px;
+  width: 100px;
+}
+
+.icon a {
+  border: 0;
+}
+
+.mods li, dl.stats dt, dl.stats dd {
+  background: none;
+  width: auto;
+  min-width: 0;
+  display: inline;
+  clear: none;
+  float: none;
+  margin: auto;
+}
+
+dl.language {
+  clear: right;
+}
+
+dl.stats {
+  text-align: right;
+  background: none;
+  margin-top: 0.643em;
+    box-shadow: none;
+}
+
+dl.stats dd {
+  white-space: nowrap;
+  padding-right: 0.5em;
+}
+
+.statistics .index li {
+ padding: 0.643em 0.375em;
+}
+
+.statistics .index li:nth-of-type(even) {
+  background: #eee;
+}
+
+.statistics.chart svg > g:last-child {
+    pointer-events: none;
+}
+
+.concise li { 
+  width: 45%; 
+  float: left; 
+  clear: none; 
+  margin-right: 1.5em
+}
+
+section.step {
+  margin-block: 2.572em;
+}
+
+/* END == */
+

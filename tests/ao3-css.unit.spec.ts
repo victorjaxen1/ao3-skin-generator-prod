@@ -113,6 +113,19 @@ test.describe('value rules', () => {
     expect(isAo3Safe('#main { background-image: url("/images/skins/tile.png"); }')).toBe(true);
   });
 
+  test('a function\'s comma-separated arguments are one token, not four', () => {
+    // AO3 tokenises on whitespace and commas but NOT inside parens. An earlier
+    // version of this lint split naively and shredded rgba(255, 255, 255, 0.5)
+    // into `rgba(255`, `255`, `255`, `0.5)` — rejecting colours the archive
+    // accepts. Being stricter than AO3 blocks working CSS and looks like AO3's
+    // fault, so it is the one failure mode this file must not have.
+    expect(isAo3Safe('#main { background-color: rgba(255, 255, 255, 0.5); }')).toBe(true);
+    expect(isAo3Safe('#main { color: hsla(200, 50%, 40%, 0.9); }')).toBe(true);
+    expect(isAo3Safe('#main { box-shadow: 0 2px 6px rgba(60, 64, 67, 0.3); }')).toBe(true);
+    // calc() genuinely is absent from VALUE_REGEX, so it still fails.
+    expect(isAo3Safe('#main { max-width: calc(100% - 20px); }')).toBe(false);
+  });
+
   test('content must be one fully-quoted string, url(), or none', () => {
     // The decorative divider glyph — confirmed safe: any fully quoted string.
     expect(isAo3Safe('#workskin hr::after { content: "❦"; }')).toBe(true);

@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { SkinProject } from '../lib/schema';
 import { buildCSS, buildHTML } from '../lib/generator';
+import { buildWorkSkin, supportsWorkSkin } from '../lib/workSkin';
 import { getProStatus, getProFeatures, ProStatus } from '../lib/proFeatures';
 import { ProUpgradeModal } from './ProUpgradeModal';
 import { useToast, ToastContainer } from './Toast';
@@ -427,7 +428,16 @@ export const ExportPanel: React.FC<Props> = ({
   const [ao3Code, setAo3Code] = useState('');
   const [copiedCode, setCopiedCode] = useState(false);
   const [showHowTo, setShowHowTo] = useState(false);
+  const [showWorkSkin, setShowWorkSkin] = useState(false);
+  const [copiedPart, setCopiedPart] = useState<'css' | 'html' | null>(null);
   const { toasts, removeToast, success, error: showError } = useToast();
+
+  // The third export. Cheap to compute — no rendering, no upload — so it is
+  // derived rather than triggered, and the button can open instantly.
+  const workSkin = useMemo(
+    () => (supportsWorkSkin(project.template) ? buildWorkSkin(project) : null),
+    [project]
+  );
 
   useEffect(() => {
     setProStatus(getProStatus());
@@ -656,6 +666,20 @@ export const ExportPanel: React.FC<Props> = ({
             </button>
           </div>
 
+          {/* Third option, shown only where the CSS actually passes AO3's
+              rules. It is a secondary row rather than a third primary button:
+              the image is the reliable default, and this trades that for
+              selectable text and a layout that reflows on a phone. */}
+          {workSkin && (
+            <button
+              onClick={() => setShowWorkSkin(true)}
+              className="mt-2 w-full flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-[13px] font-medium text-stone-600 bg-stone-50 border border-stone-200 hover:bg-stone-100 hover:border-stone-300 transition-all"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+              <span>Or use a work skin — real text, not an image</span>
+            </button>
+          )}
+
           {/* Help panel */}
           {showHelp && (
             <div className="mt-3 pt-3 border-t border-stone-100">
@@ -736,6 +760,153 @@ export const ExportPanel: React.FC<Props> = ({
                   <p>4. Preview your chapter, then post!</p>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------------ */}
+      {/* Work skin modal — two paste targets, not one                        */}
+      {/* ------------------------------------------------------------------ */}
+      {showWorkSkin && workSkin && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4"
+          onClick={() => setShowWorkSkin(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Work skin"
+        >
+          <div
+            className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[92vh] flex flex-col overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="bg-stone-900 text-white px-5 py-4 flex items-center justify-between flex-shrink-0">
+              <div>
+                <h3 className="text-sm font-semibold">Your work skin</h3>
+                <p className="text-xs text-stone-400 mt-0.5">
+                  Two pieces, two different places on AO3
+                </p>
+              </div>
+              <button
+                onClick={() => setShowWorkSkin(false)}
+                aria-label="Close"
+                className="text-white hover:text-stone-300 text-2xl font-bold leading-none ml-4"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="p-5 overflow-y-auto">
+              {workSkin.violations.length > 0 ? (
+                <div role="alert" className="bg-red-50 border border-red-200 rounded-xl p-3 mb-4">
+                  <p className="text-sm font-semibold text-red-900">AO3 would refuse this skin</p>
+                  <p className="text-xs text-red-800 mt-1 leading-relaxed">
+                    AO3 rejects a whole skin when it meets CSS it doesn&apos;t allow. This is a
+                    bug in the generator, not something you did — please report it, and use
+                    &ldquo;Copy for AO3&rdquo; in the meantime.
+                  </p>
+                  <ul className="mt-2 space-y-1">
+                    {workSkin.violations.slice(0, 4).map((v, i) => (
+                      <li key={i} className="text-[11px] font-mono text-red-700">
+                        {v.subject}: {v.message}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <div className="bg-green-50 border border-green-200 rounded-xl p-3 mb-4 flex items-start gap-2">
+                  <span className="text-green-600 font-bold">✓</span>
+                  <div>
+                    <p className="text-sm font-semibold text-green-900">AO3-safe check passed</p>
+                    <p className="text-xs text-green-800 mt-0.5">
+                      Your readers get selectable text that reflows on a phone, instead of a
+                      picture they have to zoom into.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Step 1 — CSS */}
+              <div className="mb-5">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="w-5 h-5 rounded-full bg-stone-800 text-white text-[11px] font-bold flex items-center justify-center flex-shrink-0">1</span>
+                  <p className="text-sm font-semibold text-stone-900">The style</p>
+                </div>
+                <p className="text-xs text-stone-500 mb-2 ml-7 leading-relaxed">
+                  On AO3: <strong className="text-stone-700">Preferences → Skins → Create Work Skin</strong>.
+                  Paste this into the CSS box, give it a title, and submit. You only do this once —
+                  the same skin can be attached to every fic you post.
+                </p>
+                <textarea
+                  readOnly
+                  value={workSkin.css}
+                  rows={6}
+                  aria-label="Work skin CSS"
+                  className="w-full font-mono text-[11px] bg-gray-950 text-green-400 border border-gray-700 rounded-lg p-3 resize-none focus:outline-none"
+                  onClick={e => (e.target as HTMLTextAreaElement).select()}
+                />
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(workSkin.css);
+                    setCopiedPart('css');
+                    setTimeout(() => setCopiedPart(null), 2000);
+                  }}
+                  disabled={workSkin.violations.length > 0}
+                  className={`w-full mt-2 py-2.5 rounded-xl font-semibold text-sm transition-all ${
+                    workSkin.violations.length > 0
+                      ? 'bg-stone-100 text-stone-400 cursor-not-allowed'
+                      : copiedPart === 'css'
+                      ? 'bg-green-500 text-white'
+                      : 'bg-stone-800 text-white hover:bg-stone-900'
+                  }`}
+                >
+                  {copiedPart === 'css' ? '✓ Copied' : 'Copy the CSS'}
+                </button>
+              </div>
+
+              {/* Step 2 — HTML */}
+              <div>
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="w-5 h-5 rounded-full bg-stone-800 text-white text-[11px] font-bold flex items-center justify-center flex-shrink-0">2</span>
+                  <p className="text-sm font-semibold text-stone-900">The conversation</p>
+                </div>
+                <p className="text-xs text-stone-500 mb-2 ml-7 leading-relaxed">
+                  In your chapter editor, switch to <strong className="text-stone-700">HTML mode</strong> and
+                  paste this where the tweets should appear. Then set{' '}
+                  <strong className="text-stone-700">Select Work Skin</strong> to the skin you made
+                  in step 1 — without that, this is unstyled text.
+                </p>
+                <textarea
+                  readOnly
+                  value={workSkin.html}
+                  rows={5}
+                  aria-label="Work skin HTML"
+                  className="w-full font-mono text-[11px] bg-gray-950 text-blue-300 border border-gray-700 rounded-lg p-3 resize-none focus:outline-none"
+                  onClick={e => (e.target as HTMLTextAreaElement).select()}
+                />
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(workSkin.html);
+                    setCopiedPart('html');
+                    setTimeout(() => setCopiedPart(null), 2000);
+                  }}
+                  disabled={workSkin.violations.length > 0}
+                  className={`w-full mt-2 py-2.5 rounded-xl font-semibold text-sm transition-all ${
+                    workSkin.violations.length > 0
+                      ? 'bg-stone-100 text-stone-400 cursor-not-allowed'
+                      : copiedPart === 'html'
+                      ? 'bg-green-500 text-white'
+                      : 'bg-violet-600 text-white hover:bg-violet-700'
+                  }`}
+                >
+                  {copiedPart === 'html' ? '✓ Copied' : 'Copy the HTML'}
+                </button>
+              </div>
+
+              <p className="text-[11px] text-stone-400 mt-5 leading-relaxed">
+                The icons stay hosted by us. If you would rather nothing outside AO3 loads inside
+                your fic, use &ldquo;Copy for AO3&rdquo; instead — that uploads one flat picture.
+              </p>
             </div>
           </div>
         </div>
