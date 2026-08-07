@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" >
     <meta name="viewport" content="width=device-width, initial-scale=1.0" >
-    <meta name="description" content="See real examples of beautiful AO3 work skins created with our generator. Twitter threads, chat interfaces, and custom formatting." >
+    <meta name="description" content="Site skin templates that restyle AO3 for you, and fake screenshot styles — Twitter threads, iMessage, WhatsApp, Google — to paste into a chapter." >
     <title>Examples Gallery - AO3 Skin Generator</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" >
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin >
@@ -148,7 +148,7 @@ nav a:hover { color: var(--primary); }
 
 .example-footer { display: flex; gap: 0.75rem; padding-top: 1rem; border-top: 1px solid var(--border-light); }
 
-.example-btn { flex: 1; padding: 10px 16px; font-size: 14px; text-align: center; border-radius: var(--radius-sm); font-family: 'Google Sans'; font-weight: 500; cursor: pointer; transition: all var(--transition-fast); border: none; }
+.example-btn { flex: 1; padding: 10px 16px; font-size: 14px; text-align: center; border-radius: var(--radius-sm); font-family: 'Google Sans'; font-weight: 500; cursor: pointer; transition: all var(--transition-fast); border: none; text-decoration: none; display: block; }
 
 .example-btn-primary { background: var(--primary); color: white; }
 
@@ -260,7 +260,7 @@ nav { display: none; }
   </head>
   <body>
     <div class="trust-bar">
-      ✨ Free Forever • No Signup Required • Twitter, iMessage, WhatsApp & Google Search
+      ✨ Free Forever • No Signup Required • 16 Site Skins &amp; 4 Screenshot Styles
     </div>
 
     <header>
@@ -301,7 +301,7 @@ nav { display: none; }
     <div class="page-header">
       <div class="container">
         <h1>Examples Gallery</h1>
-        <p>Get inspired by real work skins created with our generator. Click any example to see details and try it yourself.</p>
+        <p>Two kinds of thing here. <strong>Site skins</strong> restyle AO3 for you. <strong>Screenshots</strong> are pictures you paste into a chapter for your readers. Open any of them to start from it.</p>
       </div>
     </div>
 
@@ -309,6 +309,7 @@ nav { display: none; }
       <div class="container">
         <div class="filter-tabs">
           <button class="filter-tab active" data-filter="all">All Examples</button>
+          <button class="filter-tab" data-filter="siteskin">Site Skins</button>
           <button class="filter-tab" data-filter="twitter">Twitter/X</button>
           <button class="filter-tab" data-filter="ios">iOS iMessage</button>
           <button class="filter-tab" data-filter="whatsapp">WhatsApp</button>
@@ -350,8 +351,7 @@ nav { display: none; }
                     <span class="tag">Thread Mode</span>
                   </div>
                   <div class="example-footer">
-                    <button class="example-btn example-btn-primary">Try This Style</button>
-                    <button class="example-btn example-btn-secondary">View Code</button>
+                    <a class="example-btn example-btn-primary" href="https://ao3skingen.netlify.app/?template=twitter-character-thread">Open this example</a>
                   </div>
                 </div>
               </div>
@@ -378,8 +378,7 @@ nav { display: none; }
                     <span class="tag">Celebrity AU</span>
                   </div>
                   <div class="example-footer">
-                    <button class="example-btn example-btn-primary">Try This Style</button>
-                    <button class="example-btn example-btn-secondary">View Code</button>
+                    <a class="example-btn example-btn-primary" href="https://ao3skingen.netlify.app/?template=twitter-verified-account">Open this example</a>
                   </div>
                 </div>
               </div>
@@ -406,11 +405,582 @@ nav { display: none; }
                     <span class="tag">Visual</span>
                   </div>
                   <div class="example-footer">
-                    <button class="example-btn example-btn-primary">Try This Style</button>
-                    <button class="example-btn example-btn-secondary">View Code</button>
+                    <a class="example-btn example-btn-primary" href="https://ao3skingen.netlify.app/?template=twitter-media-image">Open this example</a>
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+
+          <div class="category-section category-siteskin">
+            <div class="category-header">
+              <h2>Site Skin Templates</h2>
+              <p>Restyle AO3 itself. Pick one, adjust the colours and fonts, then paste the CSS into Preferences &rarr; Skins. Only you see it &mdash; on every AO3 page.</p>
+            </div>
+
+            <div class="examples-grid">
+              <div class="example-card">
+                <div class="example-preview" style="background: #101725; min-height: 220px; padding: 0; display: block;">
+                  <div style="height: 46px; background: #7761a8; border-bottom: 3px solid #59497e; display: flex; align-items: center; padding: 0 14px; color: #ffffff; font-family: Georgia, serif; font-weight: 700; font-size: 14px;">Archive of Our Own</div>
+                  <div style="padding: 14px;">
+                    <div style="background: #182238; border: 1px solid #323356; border-radius: 10px; padding: 12px;">
+                      <div style="color: #7761a8; font-family: Georgia, serif; font-size: 14px; font-weight: 600; margin-bottom: 8px;">A Study in Lamplight</div>
+                      <div style="height: 6px; width: 92%; background: #e8e0cf; opacity: 0.32; border-radius: 3px; margin-bottom: 5px;"></div>
+                      <div style="height: 6px; width: 64%; background: #e8e0cf; opacity: 0.32; border-radius: 3px; margin-bottom: 11px;"></div>
+                      <div style="display: flex; gap: 6px;">
+                        <span style="display: inline-block; height: 16px; width: 52px; border: 1px solid #433e6a; border-radius: 999px;"></span>
+                        <span style="display: inline-block; height: 16px; width: 40px; border: 1px solid #433e6a; border-radius: 999px;"></span>
+                        <span style="display: inline-block; height: 16px; width: 60px; border: 1px solid #433e6a; border-radius: 999px;"></span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="example-badge">Dark</div>
+                </div>
+                <div class="example-content">
+                  <div class="example-header">
+                    <div>
+                      <h3 class="example-title">Moonlit Library</h3>
+                      <div class="example-type">Site skin</div>
+                    </div>
+                  </div>
+                  <p class="example-description">Deep navy, parchment type, quiet glow.</p>
+                  <div class="example-tags">
+                    <span class="tag">Dark</span>
+                    <span class="tag">Decorative</span>
+                  </div>
+                  <div class="example-footer">
+                    <a class="example-btn example-btn-primary" href="https://ao3skingen.netlify.app/site-skin?template=moonlit">Open this template</a>
+                  </div>
+                </div>
+              </div>
+
+              <div class="example-card">
+                <div class="example-preview" style="background: #f4efe5; min-height: 220px; padding: 0; display: block;">
+                  <div style="height: 46px; background: #7f2e2e; border-bottom: 3px solid #5f2323; display: flex; align-items: center; padding: 0 14px; color: #ffffff; font-family: 'Palatino Linotype', Palatino, serif; font-weight: 700; font-size: 14px;">Archive of Our Own</div>
+                  <div style="padding: 14px;">
+                    <div style="background: #fffdf8; border: 1px solid #dcc5c1; border-radius: 4px; padding: 12px;">
+                      <div style="color: #7f2e2e; font-family: 'Palatino Linotype', Palatino, serif; font-size: 14px; font-weight: 600; margin-bottom: 8px;">A Study in Lamplight</div>
+                      <div style="height: 6px; width: 92%; background: #2f2a24; opacity: 0.32; border-radius: 3px; margin-bottom: 5px;"></div>
+                      <div style="height: 6px; width: 64%; background: #2f2a24; opacity: 0.32; border-radius: 3px; margin-bottom: 11px;"></div>
+                      <div style="display: flex; gap: 6px;">
+                        <span style="display: inline-block; height: 16px; width: 52px; border: 1px solid #c5a09d; border-radius: 3px;"></span>
+                        <span style="display: inline-block; height: 16px; width: 40px; border: 1px solid #c5a09d; border-radius: 3px;"></span>
+                        <span style="display: inline-block; height: 16px; width: 60px; border: 1px solid #c5a09d; border-radius: 3px;"></span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="example-badge">Light</div>
+                </div>
+                <div class="example-content">
+                  <div class="example-header">
+                    <div>
+                      <h3 class="example-title">Paper & Ink</h3>
+                      <div class="example-type">Site skin</div>
+                    </div>
+                  </div>
+                  <p class="example-description">Warm paper with crisp editorial type.</p>
+                  <div class="example-tags">
+                    <span class="tag">Light</span>
+                    <span class="tag">Minimal</span>
+                  </div>
+                  <div class="example-footer">
+                    <a class="example-btn example-btn-primary" href="https://ao3skingen.netlify.app/site-skin?template=paper">Open this template</a>
+                  </div>
+                </div>
+              </div>
+
+              <div class="example-card">
+                <div class="example-preview" style="background: #f1edf7; min-height: 220px; padding: 0; display: block;">
+                  <div style="height: 46px; background: #735a9b; border-bottom: 3px solid #564474; display: flex; align-items: center; padding: 0 14px; color: #ffffff; font-family: 'Trebuchet MS', Verdana, sans-serif; font-weight: 700; font-size: 14px;">Archive of Our Own</div>
+                  <div style="padding: 14px;">
+                    <div style="background: #fbf9ff; border: 1px solid #d6cee4; border-radius: 18px; padding: 12px;">
+                      <div style="color: #735a9b; font-family: 'Trebuchet MS', Verdana, sans-serif; font-size: 14px; font-weight: 600; margin-bottom: 8px;">A Study in Lamplight</div>
+                      <div style="height: 6px; width: 92%; background: #383142; opacity: 0.32; border-radius: 3px; margin-bottom: 5px;"></div>
+                      <div style="height: 6px; width: 64%; background: #383142; opacity: 0.32; border-radius: 3px; margin-bottom: 11px;"></div>
+                      <div style="display: flex; gap: 6px;">
+                        <span style="display: inline-block; height: 16px; width: 52px; border: 1px solid #beb1d2; border-radius: 999px;"></span>
+                        <span style="display: inline-block; height: 16px; width: 40px; border: 1px solid #beb1d2; border-radius: 999px;"></span>
+                        <span style="display: inline-block; height: 16px; width: 60px; border: 1px solid #beb1d2; border-radius: 999px;"></span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="example-badge">Light</div>
+                </div>
+                <div class="example-content">
+                  <div class="example-header">
+                    <div>
+                      <h3 class="example-title">Lavender Cloud</h3>
+                      <div class="example-type">Site skin</div>
+                    </div>
+                  </div>
+                  <p class="example-description">Soft violet with gentle rounded cards.</p>
+                  <div class="example-tags">
+                    <span class="tag">Light</span>
+                  </div>
+                  <div class="example-footer">
+                    <a class="example-btn example-btn-primary" href="https://ao3skingen.netlify.app/site-skin?template=lavender">Open this template</a>
+                  </div>
+                </div>
+              </div>
+
+              <div class="example-card">
+                <div class="example-preview" style="background: #f5eded; min-height: 220px; padding: 0; display: block;">
+                  <div style="height: 46px; background: #8f1738; border-bottom: 3px solid #6b112a; display: flex; align-items: center; padding: 0 14px; color: #ffffff; font-family: Georgia, serif; font-weight: 700; font-size: 14px;">Archive of Our Own</div>
+                  <div style="padding: 14px;">
+                    <div style="background: #fffafa; border: 1px solid #e1bdc6; border-radius: 10px; padding: 12px;">
+                      <div style="color: #8f1738; font-family: Georgia, serif; font-size: 14px; font-weight: 600; margin-bottom: 8px;">A Study in Lamplight</div>
+                      <div style="height: 6px; width: 92%; background: #2d2326; opacity: 0.32; border-radius: 3px; margin-bottom: 5px;"></div>
+                      <div style="height: 6px; width: 64%; background: #2d2326; opacity: 0.32; border-radius: 3px; margin-bottom: 11px;"></div>
+                      <div style="display: flex; gap: 6px;">
+                        <span style="display: inline-block; height: 16px; width: 52px; border: 1px solid #cd94a3; border-radius: 3px;"></span>
+                        <span style="display: inline-block; height: 16px; width: 40px; border: 1px solid #cd94a3; border-radius: 3px;"></span>
+                        <span style="display: inline-block; height: 16px; width: 60px; border: 1px solid #cd94a3; border-radius: 3px;"></span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="example-badge">Decorative</div>
+                </div>
+                <div class="example-content">
+                  <div class="example-header">
+                    <div>
+                      <h3 class="example-title">Crimson Archive</h3>
+                      <div class="example-type">Site skin</div>
+                    </div>
+                  </div>
+                  <p class="example-description">A richer, calmer take on classic AO3.</p>
+                  <div class="example-tags">
+                    <span class="tag">Light</span>
+                    <span class="tag">Decorative</span>
+                  </div>
+                  <div class="example-footer">
+                    <a class="example-btn example-btn-primary" href="https://ao3skingen.netlify.app/site-skin?template=crimson">Open this template</a>
+                  </div>
+                </div>
+              </div>
+
+              <div class="example-card">
+                <div class="example-preview" style="background: #17251e; min-height: 220px; padding: 0; display: block;">
+                  <div style="height: 46px; background: #b69255; border-bottom: 3px solid #896e40; display: flex; align-items: center; padding: 0 14px; color: #241f20; font-family: 'Palatino Linotype', Palatino, serif; font-weight: 700; font-size: 14px;">Archive of Our Own</div>
+                  <div style="padding: 14px;">
+                    <div style="background: #20342a; border: 1px solid #494d36; border-radius: 4px; padding: 12px;">
+                      <div style="color: #b69255; font-family: 'Palatino Linotype', Palatino, serif; font-size: 14px; font-weight: 600; margin-bottom: 8px;">A Study in Lamplight</div>
+                      <div style="height: 6px; width: 92%; background: #eee5ce; opacity: 0.32; border-radius: 3px; margin-bottom: 5px;"></div>
+                      <div style="height: 6px; width: 64%; background: #eee5ce; opacity: 0.32; border-radius: 3px; margin-bottom: 11px;"></div>
+                      <div style="display: flex; gap: 6px;">
+                        <span style="display: inline-block; height: 16px; width: 52px; border: 1px solid #645e3d; border-radius: 3px;"></span>
+                        <span style="display: inline-block; height: 16px; width: 40px; border: 1px solid #645e3d; border-radius: 3px;"></span>
+                        <span style="display: inline-block; height: 16px; width: 60px; border: 1px solid #645e3d; border-radius: 3px;"></span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="example-badge">Dark</div>
+                </div>
+                <div class="example-content">
+                  <div class="example-header">
+                    <div>
+                      <h3 class="example-title">Forest Study</h3>
+                      <div class="example-type">Site skin</div>
+                    </div>
+                  </div>
+                  <p class="example-description">Moss, paper, and a vintage reading room.</p>
+                  <div class="example-tags">
+                    <span class="tag">Dark</span>
+                    <span class="tag">Decorative</span>
+                  </div>
+                  <div class="example-footer">
+                    <a class="example-btn example-btn-primary" href="https://ao3skingen.netlify.app/site-skin?template=forest">Open this template</a>
+                  </div>
+                </div>
+              </div>
+
+              <div class="example-card">
+                <div class="example-preview" style="background: #eaf4f4; min-height: 220px; padding: 0; display: block;">
+                  <div style="height: 46px; background: #287c83; border-bottom: 3px solid #1e5d62; display: flex; align-items: center; padding: 0 14px; color: #ffffff; font-family: 'Trebuchet MS', Verdana, sans-serif; font-weight: 700; font-size: 14px;">Archive of Our Own</div>
+                  <div style="padding: 14px;">
+                    <div style="background: #f9ffff; border: 1px solid #c1dcde; border-radius: 18px; padding: 12px;">
+                      <div style="color: #287c83; font-family: 'Trebuchet MS', Verdana, sans-serif; font-size: 14px; font-weight: 600; margin-bottom: 8px;">A Study in Lamplight</div>
+                      <div style="height: 6px; width: 92%; background: #243536; opacity: 0.32; border-radius: 3px; margin-bottom: 5px;"></div>
+                      <div style="height: 6px; width: 64%; background: #243536; opacity: 0.32; border-radius: 3px; margin-bottom: 11px;"></div>
+                      <div style="display: flex; gap: 6px;">
+                        <span style="display: inline-block; height: 16px; width: 52px; border: 1px solid #9bc4c7; border-radius: 999px;"></span>
+                        <span style="display: inline-block; height: 16px; width: 40px; border: 1px solid #9bc4c7; border-radius: 999px;"></span>
+                        <span style="display: inline-block; height: 16px; width: 60px; border: 1px solid #9bc4c7; border-radius: 999px;"></span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="example-badge">Minimal</div>
+                </div>
+                <div class="example-content">
+                  <div class="example-header">
+                    <div>
+                      <h3 class="example-title">Ocean Glass</h3>
+                      <div class="example-type">Site skin</div>
+                    </div>
+                  </div>
+                  <p class="example-description">Clear blue-green with airy spacing.</p>
+                  <div class="example-tags">
+                    <span class="tag">Light</span>
+                    <span class="tag">Minimal</span>
+                  </div>
+                  <div class="example-footer">
+                    <a class="example-btn example-btn-primary" href="https://ao3skingen.netlify.app/site-skin?template=ocean">Open this template</a>
+                  </div>
+                </div>
+              </div>
+
+              <div class="example-card">
+                <div class="example-preview" style="background: #f6eceb; min-height: 220px; padding: 0; display: block;">
+                  <div style="height: 46px; background: #a65368; border-bottom: 3px solid #7d3e4e; display: flex; align-items: center; padding: 0 14px; color: #ffffff; font-family: 'Palatino Linotype', Palatino, serif; font-weight: 700; font-size: 14px;">Archive of Our Own</div>
+                  <div style="padding: 14px;">
+                    <div style="background: #fffafa; border: 1px solid #e7cdd3; border-radius: 18px; padding: 12px;">
+                      <div style="color: #a65368; font-family: 'Palatino Linotype', Palatino, serif; font-size: 14px; font-weight: 600; margin-bottom: 8px;">A Study in Lamplight</div>
+                      <div style="height: 6px; width: 92%; background: #463638; opacity: 0.32; border-radius: 3px; margin-bottom: 5px;"></div>
+                      <div style="height: 6px; width: 64%; background: #463638; opacity: 0.32; border-radius: 3px; margin-bottom: 11px;"></div>
+                      <div style="display: flex; gap: 6px;">
+                        <span style="display: inline-block; height: 16px; width: 52px; border: 1px solid #d7afb8; border-radius: 999px;"></span>
+                        <span style="display: inline-block; height: 16px; width: 40px; border: 1px solid #d7afb8; border-radius: 999px;"></span>
+                        <span style="display: inline-block; height: 16px; width: 60px; border: 1px solid #d7afb8; border-radius: 999px;"></span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="example-badge">Decorative</div>
+                </div>
+                <div class="example-content">
+                  <div class="example-header">
+                    <div>
+                      <h3 class="example-title">Rose Tea</h3>
+                      <div class="example-type">Site skin</div>
+                    </div>
+                  </div>
+                  <p class="example-description">Muted blush and cozy book typography.</p>
+                  <div class="example-tags">
+                    <span class="tag">Light</span>
+                    <span class="tag">Decorative</span>
+                  </div>
+                  <div class="example-footer">
+                    <a class="example-btn example-btn-primary" href="https://ao3skingen.netlify.app/site-skin?template=rose">Open this template</a>
+                  </div>
+                </div>
+              </div>
+
+              <div class="example-card">
+                <div class="example-preview" style="background: #090909; min-height: 220px; padding: 0; display: block;">
+                  <div style="height: 46px; background: #ffdf56; border-bottom: 3px solid #bfa741; display: flex; align-items: center; padding: 0 14px; color: #241f20; font-family: Arial, Helvetica, sans-serif; font-weight: 700; font-size: 14px;">Archive of Our Own</div>
+                  <div style="padding: 14px;">
+                    <div style="background: #171717; border: 1px solid #564d28; border-radius: 0px; padding: 12px;">
+                      <div style="color: #ffdf56; font-family: Arial, Helvetica, sans-serif; font-size: 14px; font-weight: 600; margin-bottom: 8px;">A Study in Lamplight</div>
+                      <div style="height: 6px; width: 92%; background: #ffffff; opacity: 0.32; border-radius: 3px; margin-bottom: 5px;"></div>
+                      <div style="height: 6px; width: 64%; background: #ffffff; opacity: 0.32; border-radius: 3px; margin-bottom: 11px;"></div>
+                      <div style="display: flex; gap: 6px;">
+                        <span style="display: inline-block; height: 16px; width: 52px; border: 1px solid #7f7133; border-radius: 0px;"></span>
+                        <span style="display: inline-block; height: 16px; width: 40px; border: 1px solid #7f7133; border-radius: 0px;"></span>
+                        <span style="display: inline-block; height: 16px; width: 60px; border: 1px solid #7f7133; border-radius: 0px;"></span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="example-badge">Minimal</div>
+                </div>
+                <div class="example-content">
+                  <div class="example-header">
+                    <div>
+                      <h3 class="example-title">High Contrast</h3>
+                      <div class="example-type">Site skin</div>
+                    </div>
+                  </div>
+                  <p class="example-description">Black, white, and unmistakable hierarchy.</p>
+                  <div class="example-tags">
+                    <span class="tag">Dark</span>
+                    <span class="tag">Minimal</span>
+                  </div>
+                  <div class="example-footer">
+                    <a class="example-btn example-btn-primary" href="https://ao3skingen.netlify.app/site-skin?template=contrast">Open this template</a>
+                  </div>
+                </div>
+              </div>
+
+              <div class="example-card">
+                <div class="example-preview" style="background: #07110b; min-height: 220px; padding: 0; display: block;">
+                  <div style="height: 46px; background: #52cf78; border-bottom: 3px solid #3e9b5a; display: flex; align-items: center; padding: 0 14px; color: #241f20; font-family: 'Trebuchet MS', Verdana, sans-serif; font-weight: 700; font-size: 14px;">Archive of Our Own</div>
+                  <div style="padding: 14px;">
+                    <div style="background: #0d1d12; border: 1px solid #204d2e; border-radius: 4px; padding: 12px;">
+                      <div style="color: #52cf78; font-family: 'Trebuchet MS', Verdana, sans-serif; font-size: 14px; font-weight: 600; margin-bottom: 8px;">A Study in Lamplight</div>
+                      <div style="height: 6px; width: 92%; background: #c8f5d2; opacity: 0.32; border-radius: 3px; margin-bottom: 5px;"></div>
+                      <div style="height: 6px; width: 64%; background: #c8f5d2; opacity: 0.32; border-radius: 3px; margin-bottom: 11px;"></div>
+                      <div style="display: flex; gap: 6px;">
+                        <span style="display: inline-block; height: 16px; width: 52px; border: 1px solid #2c6d40; border-radius: 3px;"></span>
+                        <span style="display: inline-block; height: 16px; width: 40px; border: 1px solid #2c6d40; border-radius: 3px;"></span>
+                        <span style="display: inline-block; height: 16px; width: 60px; border: 1px solid #2c6d40; border-radius: 3px;"></span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="example-badge">Dark</div>
+                </div>
+                <div class="example-content">
+                  <div class="example-header">
+                    <div>
+                      <h3 class="example-title">Terminal Green</h3>
+                      <div class="example-type">Site skin</div>
+                    </div>
+                  </div>
+                  <p class="example-description">Retro monochrome without visual clutter.</p>
+                  <div class="example-tags">
+                    <span class="tag">Dark</span>
+                    <span class="tag">Minimal</span>
+                  </div>
+                  <div class="example-footer">
+                    <a class="example-btn example-btn-primary" href="https://ao3skingen.netlify.app/site-skin?template=terminal">Open this template</a>
+                  </div>
+                </div>
+              </div>
+
+              <div class="example-card">
+                <div class="example-preview" style="background: #f5ead5; min-height: 220px; padding: 0; display: block;">
+                  <div style="height: 46px; background: #b4662d; border-bottom: 3px solid #874d22; display: flex; align-items: center; padding: 0 14px; color: #ffffff; font-family: Georgia, serif; font-weight: 700; font-size: 14px;">Archive of Our Own</div>
+                  <div style="padding: 14px;">
+                    <div style="background: #fff9ed; border: 1px solid #ebd1b9; border-radius: 10px; padding: 12px;">
+                      <div style="color: #b4662d; font-family: Georgia, serif; font-size: 14px; font-weight: 600; margin-bottom: 8px;">A Study in Lamplight</div>
+                      <div style="height: 6px; width: 92%; background: #3c3024; opacity: 0.32; border-radius: 3px; margin-bottom: 5px;"></div>
+                      <div style="height: 6px; width: 64%; background: #3c3024; opacity: 0.32; border-radius: 3px; margin-bottom: 11px;"></div>
+                      <div style="display: flex; gap: 6px;">
+                        <span style="display: inline-block; height: 16px; width: 52px; border: 1px solid #ddb797; border-radius: 999px;"></span>
+                        <span style="display: inline-block; height: 16px; width: 40px; border: 1px solid #ddb797; border-radius: 999px;"></span>
+                        <span style="display: inline-block; height: 16px; width: 60px; border: 1px solid #ddb797; border-radius: 999px;"></span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="example-badge">Light</div>
+                </div>
+                <div class="example-content">
+                  <div class="example-header">
+                    <div>
+                      <h3 class="example-title">Golden Hour</h3>
+                      <div class="example-type">Site skin</div>
+                    </div>
+                  </div>
+                  <p class="example-description">Warm amber and soft cream surfaces.</p>
+                  <div class="example-tags">
+                    <span class="tag">Light</span>
+                  </div>
+                  <div class="example-footer">
+                    <a class="example-btn example-btn-primary" href="https://ao3skingen.netlify.app/site-skin?template=golden">Open this template</a>
+                  </div>
+                </div>
+              </div>
+
+              <div class="example-card">
+                <div class="example-preview" style="background: #180d13; min-height: 220px; padding: 0; display: block;">
+                  <div style="height: 46px; background: #b35575; border-bottom: 3px solid #864058; display: flex; align-items: center; padding: 0 14px; color: #ffffff; font-family: 'Palatino Linotype', Palatino, serif; font-weight: 700; font-size: 14px;">Archive of Our Own</div>
+                  <div style="padding: 14px;">
+                    <div style="background: #2b151f; border: 1px solid #502636; border-radius: 4px; padding: 12px;">
+                      <div style="color: #b35575; font-family: 'Palatino Linotype', Palatino, serif; font-size: 14px; font-weight: 600; margin-bottom: 8px;">A Study in Lamplight</div>
+                      <div style="height: 6px; width: 92%; background: #f1dfe5; opacity: 0.32; border-radius: 3px; margin-bottom: 5px;"></div>
+                      <div style="height: 6px; width: 64%; background: #f1dfe5; opacity: 0.32; border-radius: 3px; margin-bottom: 11px;"></div>
+                      <div style="display: flex; gap: 6px;">
+                        <span style="display: inline-block; height: 16px; width: 52px; border: 1px solid #683246; border-radius: 3px;"></span>
+                        <span style="display: inline-block; height: 16px; width: 40px; border: 1px solid #683246; border-radius: 3px;"></span>
+                        <span style="display: inline-block; height: 16px; width: 60px; border: 1px solid #683246; border-radius: 3px;"></span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="example-badge">Decorative</div>
+                </div>
+                <div class="example-content">
+                  <div class="example-header">
+                    <div>
+                      <h3 class="example-title">Gothic Velvet</h3>
+                      <div class="example-type">Site skin</div>
+                    </div>
+                  </div>
+                  <p class="example-description">Black cherry with ornate serif details.</p>
+                  <div class="example-tags">
+                    <span class="tag">Dark</span>
+                    <span class="tag">Decorative</span>
+                  </div>
+                  <div class="example-footer">
+                    <a class="example-btn example-btn-primary" href="https://ao3skingen.netlify.app/site-skin?template=gothic">Open this template</a>
+                  </div>
+                </div>
+              </div>
+
+              <div class="example-card">
+                <div class="example-preview" style="background: #f2f3f4; min-height: 220px; padding: 0; display: block;">
+                  <div style="height: 46px; background: #52606d; border-bottom: 3px solid #3e4852; display: flex; align-items: center; padding: 0 14px; color: #ffffff; font-family: Arial, Helvetica, sans-serif; font-weight: 700; font-size: 14px;">Archive of Our Own</div>
+                  <div style="padding: 14px;">
+                    <div style="background: #ffffff; border: 1px solid #d0d4d8; border-radius: 4px; padding: 12px;">
+                      <div style="color: #52606d; font-family: Arial, Helvetica, sans-serif; font-size: 14px; font-weight: 600; margin-bottom: 8px;">A Study in Lamplight</div>
+                      <div style="height: 6px; width: 92%; background: #25282a; opacity: 0.32; border-radius: 3px; margin-bottom: 5px;"></div>
+                      <div style="height: 6px; width: 64%; background: #25282a; opacity: 0.32; border-radius: 3px; margin-bottom: 11px;"></div>
+                      <div style="display: flex; gap: 6px;">
+                        <span style="display: inline-block; height: 16px; width: 52px; border: 1px solid #b1b7bd; border-radius: 3px;"></span>
+                        <span style="display: inline-block; height: 16px; width: 40px; border: 1px solid #b1b7bd; border-radius: 3px;"></span>
+                        <span style="display: inline-block; height: 16px; width: 60px; border: 1px solid #b1b7bd; border-radius: 3px;"></span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="example-badge">Minimal</div>
+                </div>
+                <div class="example-content">
+                  <div class="example-header">
+                    <div>
+                      <h3 class="example-title">Clean Slate</h3>
+                      <div class="example-type">Site skin</div>
+                    </div>
+                  </div>
+                  <p class="example-description">Neutral, compact, and distraction-free.</p>
+                  <div class="example-tags">
+                    <span class="tag">Light</span>
+                    <span class="tag">Minimal</span>
+                  </div>
+                  <div class="example-footer">
+                    <a class="example-btn example-btn-primary" href="https://ao3skingen.netlify.app/site-skin?template=clean">Open this template</a>
+                  </div>
+                </div>
+              </div>
+
+              <div class="example-card">
+                <div class="example-preview" style="background: #0f1117; min-height: 220px; padding: 0; display: block;">
+                  <div style="height: 46px; background: #c9a227; border-bottom: 3px solid #977a1d; display: flex; align-items: center; padding: 0 14px; color: #241f20; font-family: 'Palatino Linotype', Palatino, serif; font-weight: 700; font-size: 14px;">Archive of Our Own</div>
+                  <div style="padding: 14px;">
+                    <div style="background: #191d28; border: 1px solid #494128; border-radius: 4px; padding: 12px;">
+                      <div style="color: #c9a227; font-family: 'Palatino Linotype', Palatino, serif; font-size: 14px; font-weight: 600; margin-bottom: 8px;">A Study in Lamplight</div>
+                      <div style="height: 6px; width: 92%; background: #e6e0d4; opacity: 0.32; border-radius: 3px; margin-bottom: 5px;"></div>
+                      <div style="height: 6px; width: 64%; background: #e6e0d4; opacity: 0.32; border-radius: 3px; margin-bottom: 11px;"></div>
+                      <div style="display: flex; gap: 6px;">
+                        <span style="display: inline-block; height: 16px; width: 52px; border: 1px solid #685928; border-radius: 3px;"></span>
+                        <span style="display: inline-block; height: 16px; width: 40px; border: 1px solid #685928; border-radius: 3px;"></span>
+                        <span style="display: inline-block; height: 16px; width: 60px; border: 1px solid #685928; border-radius: 3px;"></span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="example-badge">Dark</div>
+                </div>
+                <div class="example-content">
+                  <div class="example-header">
+                    <div>
+                      <h3 class="example-title">Midnight Academia</h3>
+                      <div class="example-type">Site skin</div>
+                    </div>
+                  </div>
+                  <p class="example-description">Ink and old gold — add your own banner.</p>
+                  <div class="example-tags">
+                    <span class="tag">Dark</span>
+                    <span class="tag">Decorative</span>
+                    <span class="tag">Banner-ready</span>
+                  </div>
+                  <div class="example-footer">
+                    <a class="example-btn example-btn-primary" href="https://ao3skingen.netlify.app/site-skin?template=academia">Open this template</a>
+                  </div>
+                </div>
+              </div>
+
+              <div class="example-card">
+                <div class="example-preview" style="background: #fdf2f6; min-height: 220px; padding: 0; display: block;">
+                  <div style="height: 46px; background: #b4557e; border-bottom: 3px solid #87405f; display: flex; align-items: center; padding: 0 14px; color: #ffffff; font-family: 'Trebuchet MS', Verdana, sans-serif; font-weight: 700; font-size: 14px;">Archive of Our Own</div>
+                  <div style="padding: 14px;">
+                    <div style="background: #fffafc; border: 1px solid #ebcdda; border-radius: 18px; padding: 12px;">
+                      <div style="color: #b4557e; font-family: 'Trebuchet MS', Verdana, sans-serif; font-size: 14px; font-weight: 600; margin-bottom: 8px;">A Study in Lamplight</div>
+                      <div style="height: 6px; width: 92%; background: #46323c; opacity: 0.32; border-radius: 3px; margin-bottom: 5px;"></div>
+                      <div style="height: 6px; width: 64%; background: #46323c; opacity: 0.32; border-radius: 3px; margin-bottom: 11px;"></div>
+                      <div style="display: flex; gap: 6px;">
+                        <span style="display: inline-block; height: 16px; width: 52px; border: 1px solid #ddb0c3; border-radius: 999px;"></span>
+                        <span style="display: inline-block; height: 16px; width: 40px; border: 1px solid #ddb0c3; border-radius: 999px;"></span>
+                        <span style="display: inline-block; height: 16px; width: 60px; border: 1px solid #ddb0c3; border-radius: 999px;"></span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="example-badge">Light</div>
+                </div>
+                <div class="example-content">
+                  <div class="example-header">
+                    <div>
+                      <h3 class="example-title">Soft Shoujo</h3>
+                      <div class="example-type">Site skin</div>
+                    </div>
+                  </div>
+                  <p class="example-description">Blush pastels and rounded cards — add your own banner.</p>
+                  <div class="example-tags">
+                    <span class="tag">Light</span>
+                    <span class="tag">Decorative</span>
+                    <span class="tag">Banner-ready</span>
+                  </div>
+                  <div class="example-footer">
+                    <a class="example-btn example-btn-primary" href="https://ao3skingen.netlify.app/site-skin?template=shoujo">Open this template</a>
+                  </div>
+                </div>
+              </div>
+
+              <div class="example-card">
+                <div class="example-preview" style="background: #05070a; min-height: 220px; padding: 0; display: block;">
+                  <div style="height: 46px; background: #35d0c0; border-bottom: 3px solid #289c90; display: flex; align-items: center; padding: 0 14px; color: #241f20; font-family: 'Courier New', Courier, monospace; font-weight: 700; font-size: 14px;">Archive of Our Own</div>
+                  <div style="padding: 14px;">
+                    <div style="background: #0d1218; border: 1px solid #184545; border-radius: 0px; padding: 12px;">
+                      <div style="color: #35d0c0; font-family: 'Courier New', Courier, monospace; font-size: 14px; font-weight: 600; margin-bottom: 8px;">A Study in Lamplight</div>
+                      <div style="height: 6px; width: 92%; background: #d5e6ea; opacity: 0.32; border-radius: 3px; margin-bottom: 5px;"></div>
+                      <div style="height: 6px; width: 64%; background: #d5e6ea; opacity: 0.32; border-radius: 3px; margin-bottom: 11px;"></div>
+                      <div style="display: flex; gap: 6px;">
+                        <span style="display: inline-block; height: 16px; width: 52px; border: 1px solid #1f6864; border-radius: 0px;"></span>
+                        <span style="display: inline-block; height: 16px; width: 40px; border: 1px solid #1f6864; border-radius: 0px;"></span>
+                        <span style="display: inline-block; height: 16px; width: 60px; border: 1px solid #1f6864; border-radius: 0px;"></span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="example-badge">Dark</div>
+                </div>
+                <div class="example-content">
+                  <div class="example-header">
+                    <div>
+                      <h3 class="example-title">Neon Terminal</h3>
+                      <div class="example-type">Site skin</div>
+                    </div>
+                  </div>
+                  <p class="example-description">Monospace on black, cyan glow — add your own banner.</p>
+                  <div class="example-tags">
+                    <span class="tag">Dark</span>
+                    <span class="tag">Minimal</span>
+                    <span class="tag">Banner-ready</span>
+                  </div>
+                  <div class="example-footer">
+                    <a class="example-btn example-btn-primary" href="https://ao3skingen.netlify.app/site-skin?template=neon">Open this template</a>
+                  </div>
+                </div>
+              </div>
+
+              <div class="example-card">
+                <div class="example-preview" style="background: #f3e7d3; min-height: 220px; padding: 0; display: block;">
+                  <div style="height: 46px; background: #9c4a21; border-bottom: 3px solid #753819; display: flex; align-items: center; padding: 0 14px; color: #ffffff; font-family: Georgia, serif; font-weight: 700; font-size: 14px;">Archive of Our Own</div>
+                  <div style="padding: 14px;">
+                    <div style="background: #fdf6ea; border: 1px solid #e3c8b4; border-radius: 4px; padding: 12px;">
+                      <div style="color: #9c4a21; font-family: Georgia, serif; font-size: 14px; font-weight: 600; margin-bottom: 8px;">A Study in Lamplight</div>
+                      <div style="height: 6px; width: 92%; background: #3b2f22; opacity: 0.32; border-radius: 3px; margin-bottom: 5px;"></div>
+                      <div style="height: 6px; width: 64%; background: #3b2f22; opacity: 0.32; border-radius: 3px; margin-bottom: 11px;"></div>
+                      <div style="display: flex; gap: 6px;">
+                        <span style="display: inline-block; height: 16px; width: 52px; border: 1px solid #d1a990; border-radius: 3px;"></span>
+                        <span style="display: inline-block; height: 16px; width: 40px; border: 1px solid #d1a990; border-radius: 3px;"></span>
+                        <span style="display: inline-block; height: 16px; width: 60px; border: 1px solid #d1a990; border-radius: 3px;"></span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="example-badge">Decorative</div>
+                </div>
+                <div class="example-content">
+                  <div class="example-header">
+                    <div>
+                      <h3 class="example-title">Sun-Bleached Western</h3>
+                      <div class="example-type">Site skin</div>
+                    </div>
+                  </div>
+                  <p class="example-description">Sand, rust and a wide horizon — add your own banner.</p>
+                  <div class="example-tags">
+                    <span class="tag">Light</span>
+                    <span class="tag">Decorative</span>
+                    <span class="tag">Banner-ready</span>
+                  </div>
+                  <div class="example-footer">
+                    <a class="example-btn example-btn-primary" href="https://ao3skingen.netlify.app/site-skin?template=western">Open this template</a>
+                  </div>
+                </div>
+              </div>
+
             </div>
           </div>
 
@@ -444,8 +1014,7 @@ nav { display: none; }
                     <span class="tag">Read Receipts</span>
                   </div>
                   <div class="example-footer">
-                    <button class="example-btn example-btn-primary">Try This Style</button>
-                    <button class="example-btn example-btn-secondary">View Code</button>
+                    <a class="example-btn example-btn-primary" href="https://ao3skingen.netlify.app/?template=ios-two-person-chat">Open this example</a>
                   </div>
                 </div>
               </div>
@@ -472,8 +1041,7 @@ nav { display: none; }
                     <span class="tag">Personalized</span>
                   </div>
                   <div class="example-footer">
-                    <button class="example-btn example-btn-primary">Try This Style</button>
-                    <button class="example-btn example-btn-secondary">View Code</button>
+                    <a class="example-btn example-btn-primary" href="https://ao3skingen.netlify.app/?template=ios-contact-avatar">Open this example</a>
                   </div>
                 </div>
               </div>
@@ -500,8 +1068,7 @@ nav { display: none; }
                     <span class="tag">Real-time</span>
                   </div>
                   <div class="example-footer">
-                    <button class="example-btn example-btn-primary">Try This Style</button>
-                    <button class="example-btn example-btn-secondary">View Code</button>
+                    <a class="example-btn example-btn-primary" href="https://ao3skingen.netlify.app/?template=ios-typing-indicators">Open this example</a>
                   </div>
                 </div>
               </div>
@@ -538,8 +1105,7 @@ nav { display: none; }
                     <span class="tag">Modern</span>
                   </div>
                   <div class="example-footer">
-                    <button class="example-btn example-btn-primary">Try This Style</button>
-                    <button class="example-btn example-btn-secondary">View Code</button>
+                    <a class="example-btn example-btn-primary" href="https://ao3skingen.netlify.app/?template=whatsapp-chat">Open this example</a>
                   </div>
                 </div>
               </div>
@@ -566,8 +1132,7 @@ nav { display: none; }
                     <span class="tag">Personalized</span>
                   </div>
                   <div class="example-footer">
-                    <button class="example-btn example-btn-primary">Try This Style</button>
-                    <button class="example-btn example-btn-secondary">View Code</button>
+                    <a class="example-btn example-btn-primary" href="https://ao3skingen.netlify.app/?template=whatsapp-profile-picture">Open this example</a>
                   </div>
                 </div>
               </div>
@@ -594,8 +1159,7 @@ nav { display: none; }
                     <span class="tag">Timeline</span>
                   </div>
                   <div class="example-footer">
-                    <button class="example-btn example-btn-primary">Try This Style</button>
-                    <button class="example-btn example-btn-secondary">View Code</button>
+                    <a class="example-btn example-btn-primary" href="https://ao3skingen.netlify.app/?template=whatsapp-timestamps-receipts">Open this example</a>
                   </div>
                 </div>
               </div>
@@ -632,8 +1196,7 @@ nav { display: none; }
                     <span class="tag">Reveal</span>
                   </div>
                   <div class="example-footer">
-                    <button class="example-btn example-btn-primary">Try This Style</button>
-                    <button class="example-btn example-btn-secondary">View Code</button>
+                    <a class="example-btn example-btn-primary" href="https://ao3skingen.netlify.app/?template=google-search-history">Open this example</a>
                   </div>
                 </div>
               </div>
@@ -660,8 +1223,7 @@ nav { display: none; }
                     <span class="tag">Research</span>
                   </div>
                   <div class="example-footer">
-                    <button class="example-btn example-btn-primary">Try This Style</button>
-                    <button class="example-btn example-btn-secondary">View Code</button>
+                    <a class="example-btn example-btn-primary" href="https://ao3skingen.netlify.app/?template=google-research-montage">Open this example</a>
                   </div>
                 </div>
               </div>
@@ -688,8 +1250,7 @@ nav { display: none; }
                     <span class="tag">Articles</span>
                   </div>
                   <div class="example-footer">
-                    <button class="example-btn example-btn-primary">Try This Style</button>
-                    <button class="example-btn example-btn-secondary">View Code</button>
+                    <a class="example-btn example-btn-primary" href="https://ao3skingen.netlify.app/?template=google-news-articles">Open this example</a>
                   </div>
                 </div>
               </div>
@@ -777,9 +1338,10 @@ nav { display: none; }
       <!-- CTA Section -->
       <section class="cta-section">
         <div class="container">
-          <h2>Ready to Create Your Own?</h2>
-          <p>Start building beautiful work skins in minutes. No coding required, completely free.</p>
-          <a href="/" class="btn btn-primary btn-large">Launch Generator Now</a>
+          <h2>Ready to make your own?</h2>
+          <p>Restyle AO3 for yourself, or make a screenshot for your readers. Free, no signup.</p>
+          <a href="https://ao3skingen.netlify.app" class="btn btn-primary btn-large">Make a screenshot</a>
+          <a href="https://ao3skingen.netlify.app/site-skin" class="btn btn-secondary btn-large" style="margin-left: 1rem;">Build a site skin</a>
         </div>
       </section>
     </main>
@@ -790,7 +1352,7 @@ nav { display: none; }
           <div class="footer-col footer-brand">
             <h3>AO3 Skin Generator</h3>
             <p>
-              Create beautiful, professional work skins for Archive of Our Own in seconds. Built with ❤️ for the fanfiction community.
+              Fake screenshots for your fics, and site skins for how you read. Free, unofficial, and built with ❤️ for the fanfiction community.
             </p>
           </div>
           
@@ -799,15 +1361,15 @@ nav { display: none; }
             <ul>
               <li><a href="https://ao3skingen.netlify.app#features">Features</a></li>
               <li><a href="/examples-gallery.html">Examples</a></li>
-              <li><a href="/">Launch Generator</a></li>
+              <li><a href="https://ao3skingen.netlify.app">Screenshot generator</a></li>
             </ul>
           </div>
           
           <div class="footer-col">
             <h3>Resources</h3>
             <ul>
-              <li><a href="#">AO3 Skin Tutorial</a></li>
-              <li><a href="#">Template Gallery</a></li>
+              <li><a href="https://archiveofourown.org/faq/skins-and-archive-interface?language_id=en#howdoiskin">AO3's own skin FAQ</a></li>
+              <li><a href="https://ao3skingen.netlify.app/site-skin">Site skin builder</a></li>
               <li><a href="https://wordfokus.com">WordFokus - Focus Tool</a></li>
             </ul>
           </div>
@@ -901,24 +1463,9 @@ nav { display: none; }
         });
       });
 
-      // Example card interaction (placeholder for modal/navigation)
-      const exampleBtns = document.querySelectorAll('.example-btn-primary');
-      exampleBtns.forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          // Navigate to generator with template (implement later)
-          console.log('Launch generator with this template');
-        });
-      });
-
-      const viewCodeBtns = document.querySelectorAll('.example-btn-secondary');
-      viewCodeBtns.forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          // Show code modal (implement later)
-          console.log('Show generated code');
-        });
-      });
+      // Card buttons are plain links now — each one opens the app on that
+      // template. They used to be <button>s that only console.logged
+      // "implement later", which looked clickable and did nothing.
     </script>
   </body>
 </html>
