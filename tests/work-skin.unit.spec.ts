@@ -116,28 +116,52 @@ test.describe('the Twitter work skin', () => {
    * what AO3's FAQ recommends for accessibility. Pinned as a shape so the
    * stylesheet cannot quietly drift back to px.
    */
-  test('is sized in em, so it scales with the reader rather than overhanging', () => {
-    const css = buildCSS(twitter());
+  /**
+   * All four platforms are em-sized. AO3 forbids `@media` in skin CSS — media
+   * is a field on the skin record — so `em` is the only lever that makes a
+   * fixed card fit a phone, and it is what AO3's FAQ recommends.
+   *
+   * Every value was converted against **its own rule's font-size context**,
+   * measured in a browser rather than guessed. At a 16px base the result is
+   * within 0.3px of the px version it replaced on a default project, so the
+   * image export is unaffected; on AO3, where `.userstuff` computes to roughly
+   * 15px, the card scales to the reader instead of overhanging.
+   */
+  test('every platform is sized in em, so it scales with the reader', () => {
+    for (const template of ['twitter', 'google', 'ios', 'android'] as const) {
+      const p = defaultProject();
+      p.template = template;
 
-    expect(css).toContain('#workskin .chat{width:34.375em');
+      // Comments off first — these stylesheets explain the 16px base they were
+      // converted against, and scanning raw text reads that as a stray px.
+      // (The same oversight was once live in lintAo3Css.)
+      const declarations = stripCssComments(buildCSS(p));
 
-    // Comments off first — this stylesheet's own comment explains the 16px
-    // base it was converted against, and scanning raw text would read that as
-    // a stray px value. (The same oversight was live in lintAo3Css, which
-    // searched for @media before stripping comments.)
-    const declarations = stripCssComments(css);
+      // Two things may stay in px, and nothing else.
+      //
+      // 1. Border WIDTHS and shadows, by property — a 1px rule should stay 1px
+      //    at any text size, and a shadow is not a layout dimension. Border
+      //    RADII are shapes, so those do convert.
+      // 2. Anything 2px or under, by value — hairline connectors and the 1px
+      //    box of the .visually-hidden clip recipe.
+      const stray = (declarations.match(/[^;{]*?:[^;}]*?-?[\d.]+px[^;}]*/g) ?? []).filter((d) => {
+        const prop = d.split(':')[0].trim().split(/[\s{]/).pop() ?? '';
+        if (/^(border(-(top|right|bottom|left))?|[a-z-]*shadow)$/.test(prop)) return false;
+        const values = (d.match(/-?[\d.]+px/g) ?? []).map(parseFloat);
+        return values.some((v) => Math.abs(v) > 2);
+      });
+      expect(stray, `${template}: these lengths should be em, not px:\n${stray.join('\n')}`)
+        .toEqual([]);
 
-    // Only hairline borders may stay in px. This used to allow -9999px as well,
-    // for the old off-screen hidden-text recipe; the clip recipe that replaced
-    // it has no offset to except.
-    const strayPx = (declarations.match(/[:\s](-?[\d.]+)px/g) ?? [])
-      .map(m => parseFloat(m.slice(1)))
-      .filter(v => Math.abs(v) > 2);
-    expect(strayPx, `px values that should be em: ${strayPx.join(', ')}`).toEqual([]);
+      // AO3's number grammar is -?\.?\d{1,3}\.?\d{0,3}: a fourth decimal is
+      // read as a separate token, so 0.9375em parses as 0.937 then 5em and the
+      // declaration is thrown away.
+      expect(declarations, `${template}: em values must have at most 3 decimals`)
+        .not.toMatch(/[\d.]+\.\d{4,}em/);
+    }
 
-    // AO3's number grammar is -?\.?\d{1,3}\.?\d{0,3}: a fourth decimal is read
-    // as a separate token and our tokenising lint rejects the declaration.
-    expect(declarations, 'em values must have at most 3 decimal places').not.toMatch(/[\d.]+\.\d{4,}em/);
+    // Twitter's card width is the one absolute size worth pinning by value.
+    expect(buildCSS(twitter())).toContain('#workskin .chat{width:34.375em');
   });
 
   test('an unconfigured tweet emits no empty metrics band', () => {
@@ -310,11 +334,17 @@ test.describe('which platforms are offered', () => {
     p.template = 'google';
     const css = buildWorkSkin(p).css;
 
-    expect(css).toContain('#workskin p.search-stats{margin:12px 0 0 12px;');
-    expect(css).toContain('#workskin p.search-dym{margin:16px 0 0 12px;');
-    expect(css.indexOf('#workskin p.search-stats')).toBeGreaterThan(
-      css.indexOf('#workskin .chat p{'),
-    );
+    // Matched as a shape, not as literal lengths — this test is about
+    // specificity and source order, and pinning the margins here meant the em
+    // conversion broke it for no reason.
+    for (const sel of ['p.search-stats', 'p.search-dym']) {
+      expect(css, sel).toMatch(
+        new RegExp(`#workskin ${sel.replace('.', '\\.')}\\{margin:[^;}]*[1-9][^;}]*;`)
+      );
+      expect(css.indexOf(`#workskin ${sel}`), sel).toBeGreaterThan(
+        css.indexOf('#workskin .chat p{')
+      );
+    }
   });
 
   /**
@@ -517,14 +547,25 @@ test.describe('which platforms are offered', () => {
   });
 
   test('the credit is smaller than the image export footnote', () => {
-    for (const template of ['ios', 'android', 'google'] as const) {
+    // Unit-agnostic on purpose. Platforms are being converted from px to em one
+    // at a time, and the thing being asserted is a SIZE, not a spelling — an
+    // earlier version pinned "9px" for three platforms and "0.563em" for
+    // Twitter, and broke the moment Google was converted.
+    for (const template of ['ios', 'android', 'google', 'twitter'] as const) {
       const p = defaultProject();
       p.template = template;
-      expect(buildWorkSkin(p).css, template).toMatch(/\.wm\{[^}]*font-size:9px/);
+      const css = buildWorkSkin(p).css;
+
+      const m = css.match(/\.wm\{[^}]*font-size:([\d.]+)(em|px)/);
+      expect(m, `${template}: the credit rule must set a font-size`).not.toBeNull();
+
+      const px = m![2] === 'em' ? parseFloat(m![1]) * 16 : parseFloat(m![1]);
+      // 14px bold is the PNG watermark in ExportPanel; the in-fic credit is
+      // deliberately quieter than that.
+      expect(px, `${template}: credit ${m![1]}${m![2]} is not quieter than the PNG footnote`)
+        .toBeLessThan(14);
+      expect(px, `${template}: credit should be ~9px`).toBeCloseTo(9, 1);
     }
-    // Twitter is em-sized throughout; 0.563em is the same 9px at a 16px base.
-    const t = twitter();
-    expect(buildWorkSkin(t).css).toMatch(/\.wm\{[^}]*font-size:0\.563em/);
   });
 
   test('iOS bubble tails survive AO3 stripping every svg', () => {

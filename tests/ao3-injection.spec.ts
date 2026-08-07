@@ -265,18 +265,33 @@ test('the typing indicator is unchanged in the image export', async ({ page }) =
     p.settings.chatTypingName = 'Sam';
 
     const { html, css } = buildWorkSkin(p);
-    await page.setContent(ao3Page(html, css), { waitUntil: 'domcontentloaded' });
 
-    const size = await page.evaluate(() => {
-      const box = (s: string) => {
-        const r = document.querySelector(s)!.getBoundingClientRect();
-        return `${Math.round(r.width)}x${Math.round(r.height)}`;
-      };
-      return { bubble: box('.typing-bubble'), dot: box('.typing-bubble .dot') };
+    // A BARE 16px context, deliberately not ao3Page(). This test is about the
+    // image export, and html2canvas renders the preview at the browser default
+    // — not inside `.userstuff`, which computes to about 15px. Measuring in
+    // AO3's context reported 57x26 and looked like a regression when it was
+    // the em conversion doing exactly its job.
+    await page.setContent(`<style>${css}</style><div id="workskin">${html}</div>`, {
+      waitUntil: 'domcontentloaded',
     });
 
-    expect(size.dot, `${template}: dots must keep a real size`).toBe('8x8');
-    expect(size.bubble, `${template}: bubble must not grow a text line box`).toBe('60x28');
+    const box = (s: string) =>
+      page.evaluate((sel) => {
+        const r = document.querySelector(sel)!.getBoundingClientRect();
+        return `${Math.round(r.width)}x${Math.round(r.height)}`;
+      }, s);
+
+    expect(await box('.typing-bubble .dot'), `${template}: dots must keep a real size`)
+      .toBe('8x8');
+    expect(await box('.typing-bubble'), `${template}: bubble must not grow a text line box`)
+      .toBe('60x28');
+
+    // And the point of the em conversion: inside AO3's own stylesheet the same
+    // bubble scales DOWN to the reader's text rather than overhanging it.
+    await page.setContent(ao3Page(html, css), { waitUntil: 'domcontentloaded' });
+    const inAo3 = await box('.typing-bubble');
+    expect(inAo3, `${template}: should scale with .userstuff, not stay 60x28`)
+      .not.toBe('60x28');
   }
 });
 

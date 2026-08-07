@@ -12,25 +12,38 @@ function hexToRgba(hex: string, alpha: number): string {
 }
 
 /**
- * Generates CSS for WhatsApp/iMessage-style text formatting
- * Used in message bubbles across all templates
+ * Rich-text formatting inside a message bubble — bold, code, quotes, lists.
+ *
+ * `bubbleFontPx` exists because this block is shared by iOS and Android whose
+ * bubbles are different sizes (15px and 14px). An `em` is relative to the
+ * element's own font size, so there is no single number that is correct for
+ * both — the caller has to say which bubble this is going into. Getting that
+ * wrong does not fail any lint; it just makes one platform's code blocks the
+ * wrong size.
+ *
+ * `code` is the fiddly one: it sets `font-size:0.9em`, so its *own* padding and
+ * radius resolve against 0.9 x the bubble, not the bubble. `pre` and the block
+ * elements resolve against the bubble itself.
  */
-function getTextFormattingCSS(isDark: boolean = false): string {
+function getTextFormattingCSS(isDark: boolean = false, bubbleFontPx: number = 15): string {
   const codeBlockBg = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)';
   const codeBorder = isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.1)';
   const blockquoteBorder = isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.3)';
   const blockquoteBg = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)';
-  
+
+  const b = (px: number) => emFromPx(px, bubbleFontPx);        // against the bubble
+  const c = (px: number) => emFromPx(px, bubbleFontPx * 0.9);  // against `code`, at 0.9em
+
   return `
 #workskin dd.bubble strong,#workskin dd.bubble b{font-weight:700;}
 #workskin dd.bubble em,#workskin dd.bubble i{font-style:italic;}
 #workskin dd.bubble s,#workskin dd.bubble strike,#workskin dd.bubble del{text-decoration:line-through;}
-#workskin dd.bubble code{font-family:'SF Mono','Menlo','Monaco','Consolas',monospace;font-size:0.9em;background:${codeBlockBg};padding:2px 5px;border-radius:4px;border:1px solid ${codeBorder};}
-#workskin dd.bubble pre{margin:8px 0;padding:0;}
-#workskin dd.bubble pre code{display:block;padding:8px 10px;white-space:pre-wrap;word-break:break-word;border-radius:6px;}
-#workskin dd.bubble blockquote{margin:6px 0;padding:4px 0 4px 10px;border-left:3px solid ${blockquoteBorder};background:${blockquoteBg};font-style:italic;}
-#workskin dd.bubble ul,#workskin dd.bubble ol{margin:6px 0;padding-left:20px;}
-#workskin dd.bubble li{margin:2px 0;}
+#workskin dd.bubble code{font-family:'SF Mono','Menlo','Monaco','Consolas',monospace;font-size:0.9em;background:${codeBlockBg};padding:${c(2)} ${c(5)};border-radius:${c(4)};border:1px solid ${codeBorder};}
+#workskin dd.bubble pre{margin:${b(8)} 0;padding:0;}
+#workskin dd.bubble pre code{display:block;padding:${c(8)} ${c(10)};white-space:pre-wrap;word-break:break-word;border-radius:${c(6)};}
+#workskin dd.bubble blockquote{margin:${b(6)} 0;padding:${b(4)} 0 ${b(4)} ${b(10)};border-left:3px solid ${blockquoteBorder};background:${blockquoteBg};font-style:italic;}
+#workskin dd.bubble ul,#workskin dd.bubble ol{margin:${b(6)} 0;padding-left:${b(20)};}
+#workskin dd.bubble li{margin:${b(2)} 0;}
 #workskin dd.bubble ul{list-style-type:disc;}
 #workskin dd.bubble ol{list-style-type:decimal;}`;
 }
@@ -102,6 +115,25 @@ const VISUALLY_HIDDEN_CSS =
  * the same treatment.
  */
 const PARAGRAPH_RESET_CSS = '#workskin .chat p{margin:0;padding:0;}';
+
+/**
+ * A pixel length as em, for the values that reach the stylesheet from settings
+ * rather than being written in it.
+ *
+ * `maxWidthPx` is configured in pixels and interpolated straight into the CSS,
+ * so it is the one length a find-and-replace over the stylesheet cannot reach.
+ * Dividing by the 16px browser default keeps it identical in the preview and
+ * the PNG while letting it scale with the reader on AO3, where `.userstuff`
+ * computes to roughly 15px.
+ *
+ * Three decimal places, never more. AO3's number grammar is
+ * `-?\.?\d{1,3}\.?\d{0,3}`, so `0.9375em` is read as `0.937` followed by `5em`
+ * and the declaration is thrown away. `parseFloat` also drops trailing zeros,
+ * which keeps `37.500em` out of the output.
+ */
+function emFromPx(px: number, base = 16): string {
+  return `${parseFloat((px / base).toFixed(3))}em`;
+}
 
 /**
  * WhatsApp's delivery ticks, with the intrinsic size each one needs.
@@ -862,19 +894,19 @@ function buildIOSCSS(s: SkinProject['settings'], senderBg: string, recvBg: strin
   const footerBg = s.iosFooterImageUrl ? `background:url('${s.iosFooterImageUrl}') no-repeat bottom center;background-size:100% auto;` : `background:${inputBarBg};`;
   
     return `/* Generated with AO3 Skin Generator - Free forever! https://wordfokus.com/ao3skingen */
-#workskin .chat{width:100%;max-width:${Math.min(maxWidth, 375)}px;min-width:320px;margin:0 auto;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;padding:0;background:${chatBg};}
+#workskin .chat{width:100%;max-width:${emFromPx(Math.min(maxWidth, 375))};min-width:20em;margin:0 auto;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;padding:0;background:${chatBg};}
 ${PARAGRAPH_RESET_CSS}
-#workskin .ios-header{position:relative;${headerBg}height:65px;display:flex;align-items:center;padding:0;overflow:hidden;}
-#workskin .ios-header-avatar{position:absolute;left:65px;top:50%;transform:translateY(-50%);width:38px;height:38px;border-radius:50%;overflow:hidden;border:2px solid rgba(255,255,255,0.3);}
+#workskin .ios-header{position:relative;${headerBg}height:4.063em;display:flex;align-items:center;padding:0;overflow:hidden;}
+#workskin .ios-header-avatar{position:absolute;left:4.063em;top:50%;transform:translateY(-50%);width:2.375em;height:2.375em;border-radius:50%;overflow:hidden;border:2px solid rgba(255,255,255,0.3);}
 #workskin .ios-header-avatar img{width:100%;height:100%;}
-#workskin .ios-header-avatar-placeholder{position:absolute;left:65px;top:50%;transform:translateY(-50%);width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,0.25);color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;border:2px solid rgba(255,255,255,0.3);}
+#workskin .ios-header-avatar-placeholder{position:absolute;left:4.643em;top:50%;transform:translateY(-50%);width:2.714em;height:2.714em;border-radius:50%;background:rgba(255,255,255,0.25);color:#fff;display:flex;align-items:center;justify-content:center;font-size:0.875em;font-weight:700;border:2px solid rgba(255,255,255,0.3);}
 /* No max-width here. It used to read calc(100% - 177px), where 177 is exactly
    left(112) + right(65) — so an absolutely positioned box that already spans
    between those two edges was being constrained to the width it already had.
    calc() is genuinely absent from AO3's value grammar, and this one bought
    nothing, so it goes rather than being approximated. */
-#workskin .ios-header-name{position:absolute;left:112px;right:65px;top:0;bottom:0;display:flex;align-items:center;font-size:15px;font-weight:600;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,0.4);line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-#workskin .ios-status-bar{background:${statusBarBg};padding:6px 16px 4px 16px;display:flex;justify-content:space-between;align-items:center;font-size:14px;font-weight:600;color:${statusBarColor};border-bottom:1px solid ${statusBarBorder};}
+#workskin .ios-header-name{position:absolute;left:7.467em;right:4.333em;top:0;bottom:0;display:flex;align-items:center;font-size:0.938em;font-weight:600;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,0.4);line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+#workskin .ios-status-bar{background:${statusBarBg};padding:0.429em 1.143em 0.286em 1.143em;display:flex;justify-content:space-between;align-items:center;font-size:0.875em;font-weight:600;color:${statusBarColor};border-bottom:1px solid ${statusBarBorder};}
 /* Same trick as the Twitter metrics row, and for the same reason: AO3 collapses
    signal / time / battery into one paragraph, which becomes the only flex item.
    Measured before this rule existed — the bar grew 32px to 50px, the time lost
@@ -884,47 +916,47 @@ ${PARAGRAPH_RESET_CSS}
    never see this rule. */
 #workskin .ios-status-bar p{display:contents;}
 #workskin .ios-status-bar .time{flex:1;text-align:center;}
-#workskin .ios-status-bar .status-icons{display:flex;align-items:center;font-size:12px;}
-#workskin .ios-status-bar .status-icons > *{margin-left:4px;}
+#workskin .ios-status-bar .status-icons{display:flex;align-items:center;font-size:0.857em;}
+#workskin .ios-status-bar .status-icons > *{margin-left:0.333em;}
 #workskin .ios-status-bar .status-icons > *:first-child{margin-left:0;}
-#workskin .chat-header{text-align:center;font-size:13px;color:${headerLabelColor};padding:8px 12px 6px 12px;margin-bottom:4px;font-weight:400;background:${headerLabelBg};}
-#workskin .chat-header .to-label{font-weight:400;color:${headerLabelColor};margin-right:4px;}
+#workskin .chat-header{text-align:center;font-size:0.813em;color:${headerLabelColor};padding:0.615em 0.923em 0.462em 0.923em;margin-bottom:0.308em;font-weight:400;background:${headerLabelBg};}
+#workskin .chat-header .to-label{font-weight:400;color:${headerLabelColor};margin-right:0.308em;}
 #workskin .chat-header .contact-name{font-weight:600;color:${contactNameColor};display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-#workskin .chat-messages{padding:12px 8px;background:${messagesBg};}
-#workskin .time-break{text-align:center;font-size:11px;color:${timeBreakColor};margin:12px 0 8px 0;font-weight:500;}
-#workskin .row{display:flex;margin:0 0 0 -6px;align-items:flex-end;flex-wrap:wrap;width:100%;}
-#workskin .row > *{margin-left:6px;}
-#workskin .row.single{margin:12px 0;}
-#workskin .row.first{margin:12px 0 2px 0;}
-#workskin .row.middle{margin:2px 0;}
-#workskin .row.last{margin:2px 0 12px 0;}
+#workskin .chat-messages{padding:0.75em 0.5em;background:${messagesBg};}
+#workskin .time-break{text-align:center;font-size:0.688em;color:${timeBreakColor};margin:1.091em 0 0.727em 0;font-weight:500;}
+#workskin .row{display:flex;margin:0 0 0 -0.375em;align-items:flex-end;flex-wrap:wrap;width:100%;}
+#workskin .row > *{margin-left:0.375em;}
+#workskin .row.single{margin:0.75em 0;}
+#workskin .row.first{margin:0.75em 0 0.125em 0;}
+#workskin .row.middle{margin:0.125em 0;}
+#workskin .row.last{margin:0.125em 0 0.75em 0;}
 #workskin .row.out{justify-content:flex-end;}
 #workskin .row.in{justify-content:flex-start;}
-#workskin img.avatar{width:28px;height:28px;border-radius:50%;overflow:hidden;flex-shrink:0;}
-#workskin dl.msg{margin:0;display:flex;flex-direction:column;margin-top:-1px;}
-#workskin dl.msg > *{margin-top:1px;}
+#workskin img.avatar{width:1.75em;height:1.75em;border-radius:50%;overflow:hidden;flex-shrink:0;}
+#workskin dl.msg{margin:0;display:flex;flex-direction:column;margin-top:-0.063em;}
+#workskin dl.msg > *{margin-top:0.063em;}
 #workskin .row.out dl.msg{align-items:flex-end;}
 #workskin .row.in dl.msg{align-items:flex-start;}
 /* was calc(70% - 36px). At the 375px card that resolves to 60.4%, and this is
    an ellipsised label rather than a load-bearing width, so a flat percentage is
    the honest approximation. See the note on .ios-header-name. */
-#workskin dt.sender{font-size:11px;color:${isDark ? 'rgba(255,255,255,0.5)' : 'rgba(60,60,67,0.6)'};margin:6px 0 2px 36px;font-weight:500;max-width:60%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#workskin dt.sender{font-size:0.688em;color:${isDark ? 'rgba(255,255,255,0.5)' : 'rgba(60,60,67,0.6)'};margin:0.545em 0 0.182em 3.273em;font-weight:500;max-width:60%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 #workskin dd{margin:0;}
-#workskin dd.bubble{position:relative;display:inline-block;min-width:0;max-width:260px;padding:8px 12px;border-radius:18px;line-height:1.35;font-size:15px;white-space:normal;word-break:keep-all;overflow-wrap:anywhere;}
-#workskin dd.bubble.image-bubble{padding:8px 12px;max-width:60%;overflow:visible;}
-#workskin dd.bubble.image-bubble img.message-image{width:100%;height:auto;display:block;border-radius:12px;margin-top:6px;}
-#workskin dd.bubble.image-bubble.out{border-bottom-right-radius:4px;}
-#workskin dd.bubble.image-bubble.out img.message-image{border-bottom-right-radius:4px;}
-#workskin dd.bubble.image-bubble.in{border-bottom-left-radius:4px;}
-#workskin dd.bubble.image-bubble.in img.message-image{border-bottom-left-radius:4px;}
-#workskin dd.bubble.out{background:${senderBg};color:#fff;border-bottom-right-radius:4px;}
+#workskin dd.bubble{position:relative;display:inline-block;min-width:0;max-width:17.333em;padding:0.533em 0.8em;border-radius:1.2em;line-height:1.35;font-size:0.938em;white-space:normal;word-break:keep-all;overflow-wrap:anywhere;}
+#workskin dd.bubble.image-bubble{padding:0.533em 0.8em;max-width:60%;overflow:visible;}
+#workskin dd.bubble.image-bubble img.message-image{width:100%;height:auto;display:block;border-radius:0.8em;margin-top:0.4em;}
+#workskin dd.bubble.image-bubble.out{border-bottom-right-radius:0.267em;}
+#workskin dd.bubble.image-bubble.out img.message-image{border-bottom-right-radius:0.267em;}
+#workskin dd.bubble.image-bubble.in{border-bottom-left-radius:0.267em;}
+#workskin dd.bubble.image-bubble.in img.message-image{border-bottom-left-radius:0.267em;}
+#workskin dd.bubble.out{background:${senderBg};color:#fff;border-bottom-right-radius:0.267em;}
 #workskin dd.bubble.out .bubble-tail{display:none;}
-#workskin dd.bubble.out.has-tail .bubble-tail-out{display:block;position:absolute;right:-8px;bottom:-1px;color:${senderBg};}
-#workskin dd.bubble.in{background:${receiverBubbleBg};color:${receiverTextColor};border-bottom-left-radius:4px;}
+#workskin dd.bubble.out.has-tail .bubble-tail-out{display:block;position:absolute;right:-0.533em;bottom:-0.067em;color:${senderBg};}
+#workskin dd.bubble.in{background:${receiverBubbleBg};color:${receiverTextColor};border-bottom-left-radius:0.267em;}
 #workskin dd.bubble.in .bubble-tail{display:none;}
 /* pointer-events dropped from both tail rules — not on AO3's property list, and
    purely defensive: the tails are decorative and sit outside the bubble's text. */
-#workskin dd.bubble.in.has-tail .bubble-tail-in{display:block;position:absolute;left:-8px;bottom:-1px;color:${receiverBubbleBg};}
+#workskin dd.bubble.in.has-tail .bubble-tail-in{display:block;position:absolute;left:-0.533em;bottom:-0.067em;color:${receiverBubbleBg};}
 /* TWO WAYS TO DRAW THE SAME TAIL, and both are needed.
    The SVG above is for the PNG: html2canvas cannot rasterise ::before/::after,
    which is the only reason an inline <svg> is in the markup at all.
@@ -938,12 +970,12 @@ ${PARAGRAPH_RESET_CSS}
    stored for this skin on 7 Aug 2026 was read back rule by rule, and the
    single-quoted form is the one we have actually watched survive the sanitizer
    intact. No reason to run two conventions. */
-#workskin .chat.css-tails dd.bubble.out.has-tail::after{content:'';position:absolute;right:-6px;bottom:0;width:8px;height:16px;border-right:8px solid ${senderBg};border-bottom-right-radius:16px 8px;}
-#workskin .chat.css-tails dd.bubble.in.has-tail::after{content:'';position:absolute;left:-6px;bottom:0;width:8px;height:16px;border-left:8px solid ${receiverBubbleBg};border-bottom-left-radius:16px 8px;}
-#workskin dd.bubble.out .time{display:block;font-size:11px;color:rgba(255,255,255,0.65);margin-top:6px;font-weight:400;}
-#workskin dd.bubble.in .time{display:block;font-size:11px;color:${receiverTimeColor};margin-top:6px;font-weight:400;}
-#workskin dd.bubble.image-bubble .time.image-time{position:absolute;bottom:8px;right:8px;margin:0;background:rgba(0,0,0,0.6);padding:2px 6px;border-radius:10px;font-size:11px;color:#fff;}
-#workskin dd.bubble .reaction{position:absolute;bottom:-10px;right:8px;background:rgba(44,44,46,0.95);border:1.5px solid rgba(255,255,255,0.1);border-radius:14px;padding:3px 8px;font-size:16px;box-shadow:0 2px 8px rgba(0,0,0,0.3);}
+#workskin .chat.css-tails dd.bubble.out.has-tail::after{content:'';position:absolute;right:-0.4em;bottom:0;width:0.533em;height:1.067em;border-right:8px solid ${senderBg};border-bottom-right-radius:1.067em 0.533em;}
+#workskin .chat.css-tails dd.bubble.in.has-tail::after{content:'';position:absolute;left:-0.4em;bottom:0;width:0.533em;height:1.067em;border-left:8px solid ${receiverBubbleBg};border-bottom-left-radius:1.067em 0.533em;}
+#workskin dd.bubble.out .time{display:block;font-size:0.733em;color:rgba(255,255,255,0.65);margin-top:0.545em;font-weight:400;}
+#workskin dd.bubble.in .time{display:block;font-size:0.733em;color:${receiverTimeColor};margin-top:0.545em;font-weight:400;}
+#workskin dd.bubble.image-bubble .time.image-time{position:absolute;bottom:0.727em;right:0.727em;margin:0;background:rgba(0,0,0,0.6);padding:0.182em 0.545em;border-radius:0.909em;font-size:0.733em;color:#fff;}
+#workskin dd.bubble .reaction{position:absolute;bottom:-0.625em;right:0.5em;background:rgba(44,44,46,0.95);border:1.5px solid rgba(255,255,255,0.1);border-radius:0.875em;padding:0.188em 0.5em;font-size:1.067em;box-shadow:0 2px 8px rgba(0,0,0,0.3);}
 /* LIGHT-MODE COLOUR, and it was wrong until 7 Aug 2026. This and three sibling
    rules — dt.sender, .typing-label, .typing-bubble .dot — chose between
    rgba(255,255,255,x) and rgba(235,235,245,x). Both are near-white: 235,235,245
@@ -951,11 +983,11 @@ ${PARAGRAPH_RESET_CSS}
    painting near-white text on a white page. A real AO3 render showed "Read" as
    barely-there grey, and in light mode the typing dots and label were invisible
    outright. rgba(60,60,67,·) is the light-mode counterpart. */
-#workskin dd.status-indicator{font-size:10px;color:${isDark ? 'rgba(255,255,255,0.45)' : 'rgba(60,60,67,0.6)'};text-align:right;margin:2px 10px 0 0;font-weight:400;}
-#workskin dd.attach{margin-top:2px;}
-#workskin img.attach-img{max-width:220px;border-radius:12px;display:block;}
-#workskin .row.typing{align-items:center;margin-left:-6px;}
-#workskin .row.typing > *{margin-left:6px;}
+#workskin dd.status-indicator{font-size:0.625em;color:${isDark ? 'rgba(255,255,255,0.45)' : 'rgba(60,60,67,0.6)'};text-align:right;margin:0.2em 1em 0 0;font-weight:400;}
+#workskin dd.attach{margin-top:0.125em;}
+#workskin img.attach-img{max-width:13.75em;border-radius:0.75em;display:block;}
+#workskin .row.typing{align-items:center;margin-left:-0.375em;}
+#workskin .row.typing > *{margin-left:0.375em;}
 /* NO FLEX AND NO > * HERE — the dots vanish outright on AO3 with either.
    A .dot is a <span>, and width/height do not apply to an inline box. Today
    they are only honoured because display:flex blockifies its flex items. AO3
@@ -965,7 +997,7 @@ ${PARAGRAPH_RESET_CSS}
    inline-block makes the size stick whether or not anything blockifies them,
    and the margin moves to a descendant selector so an injected <p> cannot
    intercept it. */
-#workskin .typing-bubble{background:${typingBubbleBg};padding:10px 14px;border-radius:18px;display:inline-block;line-height:0;border-bottom-left-radius:4px;}
+#workskin .typing-bubble{background:${typingBubbleBg};padding:0.625em 0.875em;border-radius:1.125em;display:inline-block;line-height:0;border-bottom-left-radius:0.25em;}
 /* NOTE ON THE TYPING DOTS. Static, with the three dots at descending opacity —
    no animation, because AO3 allows neither the animation property nor
    @keyframes, and refuses the whole skin over either.
@@ -976,31 +1008,31 @@ ${PARAGRAPH_RESET_CSS}
    Do not delete the :nth-child rules to "simplify" — a rule left with no
    declarations is an AO3 error, not a no-op, which is exactly how the
    animation-delay versions of these two failed. */
-#workskin .typing-bubble .dot{display:inline-block;vertical-align:middle;width:8px;height:8px;margin-left:4px;background:${isDark ? 'rgba(255,255,255,0.6)' : 'rgba(60,60,67,0.6)'};border-radius:50%;opacity:0.4;}
+#workskin .typing-bubble .dot{display:inline-block;vertical-align:middle;width:0.5em;height:0.5em;margin-left:0.25em;background:${isDark ? 'rgba(255,255,255,0.6)' : 'rgba(60,60,67,0.6)'};border-radius:50%;opacity:0.4;}
 #workskin .typing-bubble .dot:first-child{margin-left:0;}
 #workskin .typing-bubble .dot:nth-child(1){opacity:0.85;}
 #workskin .typing-bubble .dot:nth-child(2){opacity:0.65;}
-#workskin .typing-label{font-size:11px;color:${isDark ? 'rgba(255,255,255,0.5)' : 'rgba(60,60,67,0.6)'};font-weight:400;}
-#workskin .ios-footer{position:relative;${footerBg}height:47px;border-top:1px solid ${inputBarBorder};}
-#workskin .ios-input-bar{background:${inputBarBg};padding:8px 12px;border-top:1px solid ${inputBarBorder};display:flex;align-items:center;}
-#workskin .ios-input-bar > *{margin-left:8px;}
+#workskin .typing-label{font-size:0.688em;color:${isDark ? 'rgba(255,255,255,0.5)' : 'rgba(60,60,67,0.6)'};font-weight:400;}
+#workskin .ios-footer{position:relative;${footerBg}height:2.938em;border-top:1px solid ${inputBarBorder};}
+#workskin .ios-input-bar{background:${inputBarBg};padding:0.5em 0.75em;border-top:1px solid ${inputBarBorder};display:flex;align-items:center;}
+#workskin .ios-input-bar > *{margin-left:0.5em;}
 #workskin .ios-input-bar > *:first-child{margin-left:0;}
-#workskin .ios-input-bar .input-placeholder{flex:1;background:${inputFieldBg};border:1px solid ${inputFieldBorder};border-radius:18px;padding:8px 12px;font-size:14px;color:${inputPlaceholderColor};}
+#workskin .ios-input-bar .input-placeholder{flex:1;background:${inputFieldBg};border:1px solid ${inputFieldBorder};border-radius:1.286em;padding:0.571em 0.857em;font-size:0.875em;color:${inputPlaceholderColor};}
 /* The gap property is spelled out as child margins: AO3 keeps a property only
    if it is on its list or CONTAINS a shorthand name, so column-gap passes and
    bare gap does not. Same substitution as the Twitter stylesheet. */
-#workskin dd.bubble .group-sender-row{display:flex !important;align-items:center;margin-bottom:4px;visibility:visible !important;opacity:1 !important;}
-#workskin dd.bubble.image-bubble .group-sender-row{display:flex !important;align-items:center;margin-bottom:6px;visibility:visible !important;opacity:1 !important;}
-#workskin dd.bubble .group-sender-row > *{margin-right:6px;}
+#workskin dd.bubble .group-sender-row{display:flex !important;align-items:center;margin-bottom:0.267em;visibility:visible !important;opacity:1 !important;}
+#workskin dd.bubble.image-bubble .group-sender-row{display:flex !important;align-items:center;margin-bottom:0.4em;visibility:visible !important;opacity:1 !important;}
+#workskin dd.bubble .group-sender-row > *{margin-right:0.4em;}
 #workskin dd.bubble .group-sender-row > *:last-child{margin-right:0;}
 /* No object-fit — it is not on AO3's list and has no legal equivalent. The
    avatar is a fixed 20x20 square, so a non-square source letterboxes instead of
    cropping. Visible only to authors who upload a non-square avatar. */
-#workskin dd.bubble .group-avatar{width:20px;height:20px;border-radius:50%;flex-shrink:0;display:block !important;}
-#workskin dd.bubble .group-avatar-initials{width:20px;height:20px;border-radius:50%;display:flex !important;align-items:center;justify-content:center;font-size:8px;font-weight:700;flex-shrink:0;}
-#workskin dd.bubble .group-sender{font-size:11px;font-weight:600;line-height:1.2;opacity:0.9;display:inline-block !important;}
-${getTextFormattingCSS(isDark)}
-#workskin .wm{margin-top:16px;font-size:9px;opacity:0.45;text-align:center;color:${timeBreakColor};}
+#workskin dd.bubble .group-avatar{width:1.333em;height:1.333em;border-radius:50%;flex-shrink:0;display:block !important;}
+#workskin dd.bubble .group-avatar-initials{width:2.5em;height:2.5em;border-radius:50%;display:flex !important;align-items:center;justify-content:center;font-size:0.533em;font-weight:700;flex-shrink:0;}
+#workskin dd.bubble .group-sender{font-size:0.733em;font-weight:600;line-height:1.2;opacity:0.9;display:inline-block !important;}
+${getTextFormattingCSS(isDark, 15)}
+#workskin .wm{margin-top:1.778em;font-size:0.563em;opacity:0.45;text-align:center;color:${timeBreakColor};}
 ${VISUALLY_HIDDEN_CSS}`;
 }
 
@@ -1028,84 +1060,84 @@ function buildAndroidCSS(s: SkinProject['settings'], senderBg: string, recvBg: s
   const bubbleShadow = isDark ? '0 1px 2px rgba(0,0,0,0.3)' : '0 1px 2px rgba(0,0,0,0.1)';
   
     return `/* Generated with AO3 Skin Generator - Free forever! https://wordfokus.com/ao3skingen */
-#workskin .chat{width:100%;max-width:${Math.min(maxWidth, 400)}px;min-width:320px;margin:0 auto;display:flex;flex-direction:column;font-family:${s.fontFamily};background:${chatBg};padding:0;}
+#workskin .chat{width:100%;max-width:${emFromPx(Math.min(maxWidth, 400))};min-width:20em;margin:0 auto;display:flex;flex-direction:column;font-family:${s.fontFamily};background:${chatBg};padding:0;}
 ${PARAGRAPH_RESET_CSS}
-#workskin .android-header{position:relative;${headerBg}height:60px;display:flex;align-items:center;padding:0;overflow:visible;}
-#workskin .android-header-avatar{position:absolute;left:60px;top:0;bottom:0;margin:auto 0;width:40px;height:40px;border-radius:50%;overflow:hidden;border:2px solid rgba(255,255,255,0.2);}
+#workskin .android-header{position:relative;${headerBg}height:3.75em;display:flex;align-items:center;padding:0;overflow:visible;}
+#workskin .android-header-avatar{position:absolute;left:3.75em;top:0;bottom:0;margin:auto 0;width:2.5em;height:2.5em;border-radius:50%;overflow:hidden;border:2px solid rgba(255,255,255,0.2);}
 #workskin .android-header-avatar img{width:100%;height:100%;}
-#workskin .android-header-avatar-placeholder{position:absolute;left:60px;top:0;bottom:0;margin:auto 0;width:40px;height:40px;border-radius:50%;background:${avatarPlaceholderBg};display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;font-weight:600;border:2px solid rgba(255,255,255,0.2);}
+#workskin .android-header-avatar-placeholder{position:absolute;left:3.75em;top:0;bottom:0;margin:auto 0;width:2.5em;height:2.5em;border-radius:50%;background:${avatarPlaceholderBg};display:flex;align-items:center;justify-content:center;color:#fff;font-size:1em;font-weight:600;border:2px solid rgba(255,255,255,0.2);}
 /* max-width dropped for the same reason as .ios-header-name: 170 was
    left(110) + right(60), constraining the box to the width it already had. */
-#workskin .android-header-name{position:absolute;left:110px;right:60px;top:0;bottom:0;display:flex;align-items:center;font-size:16px;font-weight:600;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,0.3);line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:4px 0;}
-#workskin .android-header-name-wrapper{position:absolute;left:110px;right:60px;top:0;bottom:0;display:flex;flex-direction:column;justify-content:center;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,0.3);padding:4px 0;}
-#workskin .android-header-name-wrapper .android-header-name{position:static;font-size:16px;font-weight:600;line-height:1.4;padding:0;max-width:100%;overflow:visible;}
-#workskin .android-header-subtitle{font-size:12px;opacity:0.8;line-height:1.2;margin-top:2px;}
-#workskin .chat-header{padding:8px 12px;background:${headerBgColor};color:#fff;margin-bottom:12px;}
-#workskin .chat-header .contact-name{font-size:16px;font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;}
-#workskin .chat-header .status{font-size:12px;opacity:0.8;display:block;margin-top:2px;}
-#workskin .chat-messages{padding:12px 8px;background:${chatBg};}
-#workskin .time-break{text-align:center;font-size:11px;color:${timeBreakColor};margin:12px 0 8px 0;font-weight:500;}
-#workskin .row{display:flex;margin:0 0 0 -6px;align-items:flex-end;flex-wrap:wrap;width:100%;}
-#workskin .row > *{margin-left:6px;}
-#workskin .row.single{margin:12px 0;}
-#workskin .row.first{margin:12px 0 2px 0;}
-#workskin .row.middle{margin:2px 0;}
-#workskin .row.last{margin:2px 0 12px 0;}
+#workskin .android-header-name{position:absolute;left:6.875em;right:3.75em;top:0;bottom:0;display:flex;align-items:center;font-size:1em;font-weight:600;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,0.3);line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0.25em 0;}
+#workskin .android-header-name-wrapper{position:absolute;left:6.875em;right:3.75em;top:0;bottom:0;display:flex;flex-direction:column;justify-content:center;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,0.3);padding:0.25em 0;}
+#workskin .android-header-name-wrapper .android-header-name{position:static;font-size:1em;font-weight:600;line-height:1.4;padding:0;max-width:100%;overflow:visible;}
+#workskin .android-header-subtitle{font-size:0.75em;opacity:0.8;line-height:1.2;margin-top:0.167em;}
+#workskin .chat-header{padding:0.5em 0.75em;background:${headerBgColor};color:#fff;margin-bottom:0.75em;}
+#workskin .chat-header .contact-name{font-size:1em;font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;}
+#workskin .chat-header .status{font-size:0.75em;opacity:0.8;display:block;margin-top:0.167em;}
+#workskin .chat-messages{padding:0.75em 0.5em;background:${chatBg};}
+#workskin .time-break{text-align:center;font-size:0.688em;color:${timeBreakColor};margin:1.091em 0 0.727em 0;font-weight:500;}
+#workskin .row{display:flex;margin:0 0 0 -0.375em;align-items:flex-end;flex-wrap:wrap;width:100%;}
+#workskin .row > *{margin-left:0.375em;}
+#workskin .row.single{margin:0.75em 0;}
+#workskin .row.first{margin:0.75em 0 0.125em 0;}
+#workskin .row.middle{margin:0.125em 0;}
+#workskin .row.last{margin:0.125em 0 0.75em 0;}
 #workskin .row.out{justify-content:flex-end;}
 #workskin .row.in{justify-content:flex-start;}
-#workskin img.avatar{width:32px;height:32px;border-radius:50%;overflow:hidden;flex-shrink:0;}
-#workskin dl.msg{margin:0;display:flex;flex-direction:column;margin-top:-1px;}
-#workskin dl.msg > *{margin-top:1px;}
+#workskin img.avatar{width:2em;height:2em;border-radius:50%;overflow:hidden;flex-shrink:0;}
+#workskin dl.msg{margin:0;display:flex;flex-direction:column;margin-top:-0.063em;}
+#workskin dl.msg > *{margin-top:0.063em;}
 #workskin .row.out dl.msg{align-items:flex-end;}
 #workskin .row.in dl.msg{align-items:flex-start;}
 /* was calc(75% - 8px), which resolves to 73% at the 400px card. */
-#workskin dt.sender{font-size:12px;color:${senderNameColor};margin:0 0 4px 8px;padding:4px 0;font-weight:600;max-width:73%;overflow:visible;white-space:nowrap;line-height:1.4;}
+#workskin dt.sender{font-size:0.75em;color:${senderNameColor};margin:0 0 0.333em 0.667em;padding:0.333em 0;font-weight:600;max-width:73%;overflow:visible;white-space:nowrap;line-height:1.4;}
 #workskin dd{margin:0;}
-#workskin dd.bubble{position:relative;display:inline-block;min-width:0;max-width:280px;padding:7px 10px;border-radius:8px;line-height:1.4;font-size:14px;box-shadow:${bubbleShadow};white-space:normal;word-break:keep-all;overflow-wrap:anywhere;}
-#workskin dd.bubble.image-bubble{padding:7px 10px;max-width:70%;overflow:visible;margin-top:4px;}
-#workskin dd.bubble.image-bubble img.message-image{width:100%;height:auto;display:block;border-radius:6px;margin-top:6px;}
-#workskin dd.bubble.image-bubble.out{border-bottom-right-radius:2px;}
-#workskin dd.bubble.image-bubble.out img.message-image{border-bottom-right-radius:2px;}
-#workskin dd.bubble.image-bubble.in{border-bottom-left-radius:2px;}
-#workskin dd.bubble.image-bubble.in img.message-image{border-bottom-left-radius:2px;}
-#workskin dd.bubble.out{background:${senderBubbleBg};color:${bubbleTextColor};border-top-right-radius:8px;border-bottom-right-radius:2px;border-bottom-left-radius:8px;border-top-left-radius:8px;}
-#workskin dd.bubble.in{background:${receiverBubbleBg};color:${bubbleTextColor};border-top-left-radius:8px;border-bottom-left-radius:2px;border-bottom-right-radius:8px;border-top-right-radius:8px;}
+#workskin dd.bubble{position:relative;display:inline-block;min-width:0;max-width:20em;padding:0.5em 0.714em;border-radius:0.571em;line-height:1.4;font-size:0.875em;box-shadow:${bubbleShadow};white-space:normal;word-break:keep-all;overflow-wrap:anywhere;}
+#workskin dd.bubble.image-bubble{padding:0.5em 0.714em;max-width:70%;overflow:visible;margin-top:0.286em;}
+#workskin dd.bubble.image-bubble img.message-image{width:100%;height:auto;display:block;border-radius:0.429em;margin-top:0.429em;}
+#workskin dd.bubble.image-bubble.out{border-bottom-right-radius:0.143em;}
+#workskin dd.bubble.image-bubble.out img.message-image{border-bottom-right-radius:0.143em;}
+#workskin dd.bubble.image-bubble.in{border-bottom-left-radius:0.143em;}
+#workskin dd.bubble.image-bubble.in img.message-image{border-bottom-left-radius:0.143em;}
+#workskin dd.bubble.out{background:${senderBubbleBg};color:${bubbleTextColor};border-top-right-radius:0.571em;border-bottom-right-radius:0.143em;border-bottom-left-radius:0.571em;border-top-left-radius:0.571em;}
+#workskin dd.bubble.in{background:${receiverBubbleBg};color:${bubbleTextColor};border-top-left-radius:0.571em;border-bottom-left-radius:0.143em;border-bottom-right-radius:0.571em;border-top-right-radius:0.571em;}
 /* The gap property is spelled out as child margins: AO3 keeps a property only
    if it is on its list or CONTAINS a shorthand name, so column-gap passes and
    bare gap does not. Same substitution as the Twitter stylesheet. */
-#workskin dd.bubble .group-sender-row{display:flex !important;align-items:center;margin-bottom:4px;visibility:visible !important;opacity:1 !important;}
-#workskin dd.bubble.image-bubble .group-sender-row{display:flex !important;align-items:center;margin-bottom:6px;visibility:visible !important;opacity:1 !important;}
-#workskin dd.bubble .group-sender-row > *{margin-right:6px;}
+#workskin dd.bubble .group-sender-row{display:flex !important;align-items:center;margin-bottom:0.286em;visibility:visible !important;opacity:1 !important;}
+#workskin dd.bubble.image-bubble .group-sender-row{display:flex !important;align-items:center;margin-bottom:0.429em;visibility:visible !important;opacity:1 !important;}
+#workskin dd.bubble .group-sender-row > *{margin-right:0.429em;}
 #workskin dd.bubble .group-sender-row > *:last-child{margin-right:0;}
 /* No object-fit — it is not on AO3's list and has no legal equivalent. The
    avatar is a fixed 20x20 square, so a non-square source letterboxes instead of
    cropping. Visible only to authors who upload a non-square avatar. */
-#workskin dd.bubble .group-avatar{width:20px;height:20px;border-radius:50%;flex-shrink:0;display:block !important;}
-#workskin dd.bubble .group-avatar-initials{width:20px;height:20px;border-radius:50%;display:flex !important;align-items:center;justify-content:center;font-size:8px;font-weight:700;flex-shrink:0;}
-#workskin dd.bubble .group-sender{font-size:11px;font-weight:600;line-height:1.2;opacity:0.9;display:inline-block !important;}
-#workskin dd.bubble .time{display:block;font-size:10px;color:${timeColor};margin-top:4px;text-align:right;font-weight:400;padding-right:20px;}
-#workskin dd.bubble.image-bubble .time.image-time{position:absolute;bottom:6px;right:8px;margin:0;background:rgba(0,0,0,0.5);padding:2px 6px;border-radius:8px;font-size:10px;color:#fff;padding-right:24px;}
-#workskin dd.bubble.out .check-icon{position:absolute;bottom:6px;right:6px;height:14px;width:auto;opacity:0.7;}
-#workskin dd.bubble.image-bubble.out .check-icon{bottom:8px;right:8px;z-index:1;}
-#workskin dd.bubble .reaction{position:absolute;bottom:-8px;left:8px;background:transparent;border:none;border-radius:0;padding:0;font-size:18px;box-shadow:none;}
-#workskin dd.status-indicator{font-size:10px;color:${timeColor};text-align:right;margin:2px 10px 0 0;font-weight:400;}
-#workskin dd.attach{margin-top:4px;}
-#workskin img.attach-img{max-width:200px;border-radius:8px;display:block;}
-#workskin .row.typing{align-items:center;margin-left:-6px;}
-#workskin .row.typing > *{margin-left:6px;}
+#workskin dd.bubble .group-avatar{width:1.429em;height:1.429em;border-radius:50%;flex-shrink:0;display:block !important;}
+#workskin dd.bubble .group-avatar-initials{width:2.5em;height:2.5em;border-radius:50%;display:flex !important;align-items:center;justify-content:center;font-size:0.571em;font-weight:700;flex-shrink:0;}
+#workskin dd.bubble .group-sender{font-size:0.786em;font-weight:600;line-height:1.2;opacity:0.9;display:inline-block !important;}
+#workskin dd.bubble .time{display:block;font-size:0.714em;color:${timeColor};margin-top:0.4em;text-align:right;font-weight:400;padding-right:2em;}
+#workskin dd.bubble.image-bubble .time.image-time{position:absolute;bottom:0.6em;right:0.8em;margin:0;background:rgba(0,0,0,0.5);padding:0.2em 0.6em;border-radius:0.8em;font-size:0.714em;color:#fff;padding-right:2.4em;}
+#workskin dd.bubble.out .check-icon{position:absolute;bottom:0.429em;right:0.429em;height:1em;width:auto;opacity:0.7;}
+#workskin dd.bubble.image-bubble.out .check-icon{bottom:0.571em;right:0.571em;z-index:1;}
+#workskin dd.bubble .reaction{position:absolute;bottom:-0.444em;left:0.444em;background:transparent;border:none;border-radius:0;padding:0;font-size:1.286em;box-shadow:none;}
+#workskin dd.status-indicator{font-size:0.625em;color:${timeColor};text-align:right;margin:0.2em 1em 0 0;font-weight:400;}
+#workskin dd.attach{margin-top:0.25em;}
+#workskin img.attach-img{max-width:12.5em;border-radius:0.5em;display:block;}
+#workskin .row.typing{align-items:center;margin-left:-0.375em;}
+#workskin .row.typing > *{margin-left:0.375em;}
 /* inline-block, not flex — an injected <p> makes the dots stop being flex
    items and an inline span ignores width/height, so the indicator renders 0x0.
    See the longer note in buildIOSCSS. */
-#workskin .typing-bubble{background:${receiverBubbleBg};padding:10px 14px;border-radius:8px;display:inline-block;line-height:0;box-shadow:${bubbleShadow};}
+#workskin .typing-bubble{background:${receiverBubbleBg};padding:0.625em 0.875em;border-radius:0.5em;display:inline-block;line-height:0;box-shadow:${bubbleShadow};}
 /* Static dots at descending opacity — see the note in buildIOSCSS. */
-#workskin .typing-bubble .dot{display:inline-block;vertical-align:middle;width:8px;height:8px;margin-left:4px;background:${typingDotBg};border-radius:50%;opacity:0.4;}
+#workskin .typing-bubble .dot{display:inline-block;vertical-align:middle;width:0.5em;height:0.5em;margin-left:0.25em;background:${typingDotBg};border-radius:50%;opacity:0.4;}
 #workskin .typing-bubble .dot:first-child{margin-left:0;}
 #workskin .typing-bubble .dot:nth-child(1){opacity:0.85;}
 #workskin .typing-bubble .dot:nth-child(2){opacity:0.65;}
-#workskin .typing-label{font-size:11px;color:${typingLabelColor};}
-#workskin .android-footer{position:relative;${footerBg}height:60px;border-top:1px solid ${footerBorderColor};overflow:visible;background-position:center;}
-${getTextFormattingCSS(isDark)}
-#workskin .wm{margin-top:12px;font-size:9px;opacity:0.45;text-align:center;color:${timeBreakColor};}
+#workskin .typing-label{font-size:0.688em;color:${typingLabelColor};}
+#workskin .android-footer{position:relative;${footerBg}height:3.75em;border-top:1px solid ${footerBorderColor};overflow:visible;background-position:center;}
+${getTextFormattingCSS(isDark, 14)}
+#workskin .wm{margin-top:1.333em;font-size:0.563em;opacity:0.45;text-align:center;color:${timeBreakColor};}
 ${VISUALLY_HIDDEN_CSS}`;
 }
 
@@ -1277,17 +1309,17 @@ ${VISUALLY_HIDDEN_CSS}`;
 
 function buildGoogleCSS(maxWidth: number): string {
   return `/* Generated with AO3 Skin Generator - Free forever! https://wordfokus.com/ao3skingen */
-#workskin .chat{width:100%;min-width:320px;max-width:${Math.min(maxWidth, 600)}px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;box-sizing:border-box;padding:20px 0;}
+#workskin .chat{width:100%;min-width:20em;max-width:${emFromPx(Math.min(maxWidth, 600))};margin:0 auto;font-family:Arial,Helvetica,sans-serif;box-sizing:border-box;padding:1.25em 0;}
 ${PARAGRAPH_RESET_CSS}
-#workskin .logo-container{text-align:center;margin:0 0 26px 0;padding:20px 0;}
-#workskin .google-logo-img{height:92px;width:auto;display:inline-block;}
-#workskin .logo{text-align:center;margin:0 0 24px 0;font-weight:400;font-size:48px;font-family:"Product Sans",Arial,sans-serif;line-height:1;letter-spacing:-0.5px;}
+#workskin .logo-container{text-align:center;margin:0 0 1.625em 0;padding:1.25em 0;}
+#workskin .google-logo-img{height:5.75em;width:auto;display:inline-block;}
+#workskin .logo{text-align:center;margin:0 0 0.5em 0;font-weight:400;font-size:3em;font-family:"Product Sans",Arial,sans-serif;line-height:1;letter-spacing:-0.01em;}
 #workskin .logo.old{font-family:"Cardo","Garamond",serif;}
 #workskin .logo.naver{font-family:"Maven Pro",Verdana,sans-serif;}
 #workskin .naver-green{color:#2DB400;}
 #workskin .blue{color:#4285F4;}#workskin .red{color:#EA4335;}#workskin .yellow{color:#FBBC04;}#workskin .green{color:#34A853;}
-#workskin .search-wrap{margin-top:20px;max-width:584px;margin-left:auto;margin-right:auto;}
-#workskin .search-container{background:#fff;border:1px solid #dfe1e5;border-radius:24px;box-shadow:0 1px 6px rgba(32,33,36,0.28);overflow:hidden;}
+#workskin .search-wrap{margin-top:1.25em;max-width:36.5em;margin-left:auto;margin-right:auto;}
+#workskin .search-container{background:#fff;border:1px solid #dfe1e5;border-radius:1.5em;box-shadow:0 1px 6px rgba(32,33,36,0.28);overflow:hidden;}
 /* NO FLEX BELOW, AND NO > *. Both were here, and a save on the real archive
    on 7 Aug 2026 came back with the tab bar stacked one-per-line and the mic and
    lens icons sitting against the query text instead of at the right edge.
@@ -1313,44 +1345,44 @@ ${PARAGRAPH_RESET_CSS}
    flows horizontally inside whatever block ends up wrapping it). This is the
    same conclusion §5a reached empirically for the Twitter header — now with a
    mechanism, and with a harness that reproduces the failure. */
-#workskin .search-container .search-bar{position:relative;padding:11px 80px 11px 16px;font-size:16px;color:#202124;line-height:1.5;border-bottom:1px solid #e8eaed;white-space:nowrap;}
-#workskin .search-bar-solo{position:relative;background:#fff;border:1px solid #dfe1e5;border-radius:24px;padding:11px 80px 11px 16px;font-size:16px;color:#202124;line-height:1.5;box-shadow:0 1px 6px rgba(32,33,36,0.28);white-space:nowrap;}
-#workskin .search-icon-left{width:20px;height:20px;opacity:0.54;display:inline-block;vertical-align:middle;margin-right:8px;}
+#workskin .search-container .search-bar{position:relative;padding:0.688em 5em 0.688em 1em;font-size:1em;color:#202124;line-height:1.5;border-bottom:1px solid #e8eaed;white-space:nowrap;}
+#workskin .search-bar-solo{position:relative;background:#fff;border:1px solid #dfe1e5;border-radius:1.5em;padding:0.688em 5em 0.688em 1em;font-size:1em;color:#202124;line-height:1.5;box-shadow:0 1px 6px rgba(32,33,36,0.28);white-space:nowrap;}
+#workskin .search-icon-left{width:1.25em;height:1.25em;opacity:0.54;display:inline-block;vertical-align:middle;margin-right:0.5em;}
 #workskin .search-text{color:#202124;display:inline-block;vertical-align:middle;max-width:100%;overflow:hidden;text-overflow:ellipsis;}
-#workskin .search-icons-right{position:absolute;right:14px;top:50%;transform:translateY(-50%);}
-#workskin .search-icons-right img{margin-left:12px;vertical-align:middle;}
-#workskin .search-icon-clear{width:14px;height:14px;opacity:0.54;cursor:pointer;display:inline-block;}
+#workskin .search-icons-right{position:absolute;right:0.875em;top:50%;transform:translateY(-50%);}
+#workskin .search-icons-right img{margin-left:0.75em;vertical-align:middle;}
+#workskin .search-icon-clear{width:0.875em;height:0.875em;opacity:0.54;cursor:pointer;display:inline-block;}
 #workskin .search-icon-clear:hover{opacity:0.87;}
-#workskin .search-icon-mic{width:18px;height:18px;cursor:pointer;display:inline-block;}
-#workskin .search-icon-lens{width:18px;height:18px;opacity:0.54;cursor:pointer;display:inline-block;}
+#workskin .search-icon-mic{width:1.125em;height:1.125em;cursor:pointer;display:inline-block;}
+#workskin .search-icon-lens{width:1.125em;height:1.125em;opacity:0.54;cursor:pointer;display:inline-block;}
 #workskin .search-icon-lens:hover{opacity:0.87;}
-#workskin .suggest-box{padding:8px 0;}
-#workskin .suggest-item{padding:6px 16px;font-size:16px;line-height:1.5;color:#202124;cursor:pointer;}
+#workskin .suggest-box{padding:0.5em 0;}
+#workskin .suggest-item{padding:0.375em 1em;font-size:1em;line-height:1.5;color:#202124;cursor:pointer;}
 #workskin .suggest-item:hover{background:#f8f9fa;}
-#workskin .suggest-icon{width:20px;height:20px;opacity:0.54;display:inline-block;vertical-align:middle;margin-right:14px;}
+#workskin .suggest-icon{width:1.25em;height:1.25em;opacity:0.54;display:inline-block;vertical-align:middle;margin-right:0.875em;}
 #workskin .suggest-item b,#workskin .suggest-item strong{font-weight:700;color:#202124;}
-#workskin .search-tabs{border-bottom:1px solid #dadce0;margin:20px 0 0 0;padding:0;white-space:nowrap;}
-#workskin .search-tabs .tab{padding:14px 12px;font-size:13px;color:#5f6368;cursor:pointer;border-bottom:3px solid transparent;display:inline-block;vertical-align:bottom;}
-#workskin .search-tabs .tab:first-child{margin-left:12px;}
+#workskin .search-tabs{border-bottom:1px solid #dadce0;margin:1.25em 0 0 0;padding:0;white-space:nowrap;}
+#workskin .search-tabs .tab{padding:1.077em 0.923em;font-size:0.813em;color:#5f6368;cursor:pointer;border-bottom:3px solid transparent;display:inline-block;vertical-align:bottom;}
+#workskin .search-tabs .tab:first-child{margin-left:0.923em;}
 #workskin .search-tabs .tab:hover{color:#202124;}
 #workskin .search-tabs .tab.active{color:#1a73e8;border-bottom-color:#1a73e8;}
-#workskin .search-tabs .tab-icon{width:16px;height:16px;opacity:0.87;display:inline-block;vertical-align:middle;margin-right:6px;}
+#workskin .search-tabs .tab-icon{width:1.231em;height:1.231em;opacity:0.87;display:inline-block;vertical-align:middle;margin-right:0.462em;}
 /* p.search-stats, not .search-stats: these are the only real <p> elements we
    emit, and the paragraph reset above is (0,1,1,1). Tagging the selector with
    its element matches that specificity, and being later in the sheet wins the
    tie — so the reset still neutralises anything AO3 injects while our own two
    paragraphs keep their margins. See PARAGRAPH_RESET_CSS. */
-#workskin p.search-stats{margin:12px 0 0 12px;color:#70757a;font-size:14px;}
-#workskin p.search-dym{margin:16px 0 0 12px;font-size:16px;line-height:1.5;}
+#workskin p.search-stats{margin:0.857em 0 0 0.857em;color:#70757a;font-size:0.875em;}
+#workskin p.search-dym{margin:1em 0 0 0.75em;font-size:1em;line-height:1.5;}
 #workskin .search-dym1{color:#5f6368;}
 #workskin .search-dym2{color:#1a0dab;font-weight:400;text-decoration:none;cursor:pointer;}
 #workskin .search-dym2:hover{text-decoration:underline;}
-#workskin .search-result{margin:24px 0 0 12px;max-width:600px;}
-#workskin .result-url{color:#006621;font-size:14px;line-height:1.3;margin-bottom:4px;}
-#workskin .result-title{color:#1a0dab;font-size:20px;line-height:1.3;font-weight:400;cursor:pointer;margin-bottom:4px;}
+#workskin .search-result{margin:1.5em 0 0 0.75em;max-width:37.5em;}
+#workskin .result-url{color:#006621;font-size:0.875em;line-height:1.3;margin-bottom:0.286em;}
+#workskin .result-title{color:#1a0dab;font-size:1.25em;line-height:1.3;font-weight:400;cursor:pointer;margin-bottom:0.2em;}
 #workskin .result-title:hover{text-decoration:underline;}
-#workskin .result-desc{color:#4d5156;font-size:14px;line-height:1.58;}
-#workskin .wm{margin-top:24px;font-size:9px;opacity:0.45;text-align:center;}
+#workskin .result-desc{color:#4d5156;font-size:0.875em;line-height:1.58;}
+#workskin .wm{margin-top:2.667em;font-size:0.563em;opacity:0.45;text-align:center;}
 ${VISUALLY_HIDDEN_CSS}`;
 }
 
