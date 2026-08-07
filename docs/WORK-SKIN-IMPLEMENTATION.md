@@ -7,7 +7,18 @@ conversation generator. §3 of that document is the shared, verified account of
 AO3's CSS sanitizer and is assumed knowledge here — this document only records
 what is **different** for work skins.
 
-**Written 6 Aug 2026**, against otwarchive `master`.
+**Written 6 Aug 2026** against otwarchive `master`; **substantially revised
+7 Aug 2026**, when all four platforms were saved on the real archive for the
+first time and the stored CSS was read back.
+
+> **If you are new to this file, read four things and skip the rest until you
+> need it:** §2 (where it stands), §12 (AO3 injects `<p>`, which is what breaks
+> layouts), §13 (comments make AO3 drop rules — the one bug the lint cannot
+> see), and §10 (handoff: what to do next and the traps that have already cost
+> time).
+>
+> Sections 5–9 are the historical record of how each platform got here. They are
+> accurate and mostly no longer actionable.
 
 ---
 
@@ -40,21 +51,39 @@ which `lintAo3Css(css, 'work')` now provides.
 
 ## 2. Status
 
-| Platform | Work skin | Why |
-| --- | --- | --- |
-| **X / Twitter** | ✅ shipped | 0 violations after the fixes in §5 |
-| **Google** | ✅ shipped | 0 violations with no changes at all — its CSS was always legal |
-| **iOS** | ✅ shipped 7 Aug 2026 | was 12 violations; see §9e |
-| **Android** | ✅ shipped 7 Aug 2026 | was 12 violations; see §9e |
+All four platforms ship, and **all four have now been saved on real AO3 and
+read back rule by rule.** That changes this document's standing: most of what
+follows is verified against the archive rather than against otwarchive source.
 
-`supportsWorkSkin(template)` gates the UI, and `ExportPanel` reads it directly —
-so iOS and Android picked the export up with no UI change. A platform is listed
-there **only** once its CSS lints clean in both modes: AO3 refuses an entire
-skin over one bad property, so "mostly legal" and "broken" are the same thing.
+| Platform | Work skin | Saved on AO3 | Sized in `em` | Survives `<p>` injection |
+| --- | --- | --- | --- | --- |
+| **X / Twitter** | ✅ | ✅ verified | ✅ | ✅ measured |
+| **Google** | ✅ | ✅ verified | ✅ | ✅ measured |
+| **iOS** | ✅ | ✅ verified | ✅ | ✅ measured |
+| **Android** | ✅ | ✅ verified | ✅ | ✅ measured |
 
-**Release gate, still open:** none of this has been saved on real AO3 by the
-author of this document. See §8 — there is one specific unresolved rendering
-discrepancy.
+`supportsWorkSkin(template)` gates the UI and `ExportPanel` reads it directly. A
+platform is listed there **only** once its CSS lints clean in both modes: AO3
+refuses an entire skin over one bad property, so "mostly legal" and "broken" are
+the same outcome.
+
+**What the real saves established** (7 Aug 2026, all four skins reopened in
+AO3's editor and diffed against what we emit):
+
+- **The lint is an accurate model of `css_cleaner.rb`.** Zero drift. Every
+  construct it permits and the sanitizer might not, survived: `transform`,
+  `filter`, `transition`, `box-shadow`, `text-shadow`, `clip:rect(0,0,0,0)`,
+  `overflow-wrap`, `word-break`, `letter-spacing`, `z-index`, `float`, `flex`
+  and friends, `content:''`, `::before`/`::after`, `:nth-child`, grouped
+  selectors, `> *`, `!important`, quoted font names, absolute `url()`, and
+  **`display:contents`**.
+- **One exception, and it is a big one: comments make AO3 drop rules.** See §13.
+  This is the only case we have found of the archive silently discarding legal
+  CSS, and the lint cannot see it.
+
+**Release gate, still open:** the *HTML* half. Nothing has been checked with
+Creator's Style off, downloaded as EPUB, or re-parsed by editing a posted work
+(§10, "What is still unverified").
 
 ---
 
@@ -181,7 +210,7 @@ and the name line from flex to inline-block.
 **This was empirical, and the cause was not understood at the time.** The flex version rendered
 correctly in this app and in the AO3 simulation of §6, but wrong on the real
 archive: the name line right-aligned and the X logo dropped to its own line.
-Every established AO3 Twitter work skin — see §11 — uses float and none use
+Every established AO3 Twitter work skin — see §14 — uses float and none use
 flex. That is accumulated community knowledge about what survives on the
 archive, and it is worth more than a local render that says the flex version is
 fine.
@@ -202,35 +231,43 @@ npx playwright test --project=unit
 ```
 
 `tests/work-skin.unit.spec.ts` asserts every shipped platform lints clean in
-*both* modes, that the HTML uses no stripped element, that images carry
-dimensions, and — deliberately — that **iOS and Android still fail**. If that
-last test starts failing because someone cleaned a platform up, that platform
-is ready: add it to `SUPPORTED` rather than deleting the assertion.
+*both* modes, uses no element AO3 strips, carries image dimensions, reads as
+prose unstyled, is `em`-sized to at most three decimals, emits no newline, and
+carries exactly one plain-text credit.
 
-### The AO3 simulation (the useful one)
+### The AO3 simulation (the useful one) — now a committed test
 
-`tests/fixtures/ao3-core.css` is a concatenation of the archive's own
-stylesheets (`01-core`, `02-elements`, `05-region-main`, `21-userstuff`,
-`08-actions`, `10-types-groups`). Build a page that nests the export the way a
-real chapter does —
+`tests/ao3-injection.spec.ts`. It builds the page a real chapter produces —
 
 ```text
 #outer.wrapper > #inner.wrapper > #main > .work > #work-skin > #workskin
   > #chapters > .chapter > .userstuff.module > [our HTML]
 ```
 
-— with `ao3-core.css` first and the exported CSS second, and screenshot it.
-Render it **twice**: once with the skin and once without, for §4a.
+— with `tests/fixtures/ao3-core.css` first (a concatenation of the archive's own
+`01-core`, `02-elements`, `05-region-main`, `21-userstuff`, `08-actions`,
+`10-types-groups`) and the exported CSS second, then renders **twice**: clean,
+and with AO3's `<p>` injection applied through the DOM. It diffs the geometry of
+the load-bearing elements.
 
-This is how the empty-metrics bug and the Creator's-Style problems were found.
-It is not currently a committed test because it asserts nothing automatically;
-it is a debugging harness. Promoting it to a visual-regression test would be a
-good improvement.
+```bash
+npx playwright test --project=desktop tests/ao3-injection.spec.ts
+```
 
-### The manual gate
+It needs a browser because the CSS is legal either way — **the lint cannot see
+any of this**. It was a throwaway debugging harness in an earlier version of
+this document; promoting it is what turned §12 from a hypothesis into a
+measurement.
 
-Save on real AO3. The sanitizer is the only authority, and §8 exists because
-the simulation and the archive have already disagreed once.
+### The manual gate — and the one technique that beats all of the above
+
+Save on real AO3, then **reopen the skin in AO3's editor and read the stored
+CSS**. AO3 keeps the *cleaned* stylesheet, so that box is a direct readout of
+what the sanitizer accepted and what it silently threw away.
+
+This is the highest-value two minutes in the project. It closed §8, confirmed
+`display:contents`, proved the lint has zero drift, and found §13 — a bug no
+test we own could have detected.
 
 ---
 
@@ -270,17 +307,24 @@ project, and the lint tells you the moment you are done.
 
 ---
 
-## 8. Open question
+## 8. Open question — **settled, 7 Aug 2026**
 
-**The float rewrite of §5a is unverified against real AO3.** It was made in
-response to a screenshot of a broken render that could not be reproduced
-locally, so there is no local test that distinguishes the broken version from
-the fixed one.
+> This section used to say the float rewrite of §5a was unverified guesswork.
+> It is now verified, and the mechanism is understood. Kept because the *method*
+> it recommended is the one that cracked it.
 
-If it is still wrong, the fastest way to settle it is to open the saved work
-skin in AO3's own editor: **AO3 stores the cleaned CSS**, so what is in that box
-is a direct readout of what the sanitizer kept and dropped. That removes all
-the guesswork this section is currently standing in for.
+**The float rewrite was right, and for a better reason than we had.** A Twitter
+skin saved to the real archive renders the avatar floated left with the name
+line beside it, body, image, timestamp and metrics all correct. §12 explains
+why: AO3 wraps bare inline children in `<p>`, which does not strip `flex` — it
+*moves* it, so the injected paragraph becomes the flex item and everything we
+meant to lay out is a grandchild. Float and inline-block survive that; flex does
+not.
+
+The method this section recommended — *open the saved skin in AO3's own editor,
+because AO3 stores the cleaned CSS* — is the single most useful technique in
+this document. It has since settled three separate questions and found one bug
+nothing else could see (§13). **Reach for it first.**
 
 ---
 
@@ -427,77 +471,107 @@ Neither is implemented — they are UI copy, not compiler work.
 
 Where this stands as of **7 Aug 2026**, and what to pick up.
 
-> **You have two jobs, in this order.**
->
-> **Job 1 — apply the fixes.** A week of reading published skins produced a set
-> of small, high-value corrections. They are ranked in **`BACKLOG.md`**, which is
-> the single list; this section explains the shape of the work and the traps.
->
-> **Job 2 — retrofit what we built before we knew.** Most of this product was
-> written before we had read a single published work skin. §10a is a *verified*
-> audit of what that cost — measured, not guessed — so you are not re-auditing
-> from scratch.
->
-> Do Job 1 first: several of its items are the fix for problems Job 2 would
-> otherwise have you solve twice.
-
 ### The state of things
 
-All four platforms export a work skin AO3 accepts, and none has ever been saved
-on the real archive.
+All four platforms export a work skin AO3 accepts, **and all four have been
+saved on the real archive and read back.** The CSS half of the release gate is
+closed; the HTML half is not.
 
 | | Status |
 | --- | --- |
 | Twitter, Google, iOS, Android | ✅ 0 violations, both lint modes |
-| Reads as prose with no CSS | ⚠️ Twitter, iOS, Android only — **Google has none** (§10a) |
-| Sized in `em` | ⚠️ Twitter only |
-| Paragraph reset against AO3's formatter | ❌ **none of the four** (§10a) |
-| Saved on real AO3 | ❌ **never, by anyone** |
+| Reads as prose with no CSS | ✅ all four |
+| Sized in `em` | ✅ all four |
+| Survives AO3's `<p>` injection | ✅ all four, measured (§12) |
+| Saved on real AO3, stored CSS diffed | ✅ all four, zero drift |
+| Exported CSS is comment-free | ✅ (§13 — this was a real bug) |
+| Creator's Style **off** / EPUB download | ❌ **never checked** |
+| Re-parse after editing a posted work | ❌ **never checked** |
 
-### 10a. Retrofit audit — what the new knowledge costs us
+### The five things worth knowing before you touch anything
 
-Measured on 7 Aug 2026 by compiling every platform and counting. Each row is a
-thing we did before reading how published skins actually work.
+1. **Read the stored CSS.** AO3 keeps the *cleaned* CSS, so reopening a saved
+   skin in AO3's editor is a direct readout of what the sanitizer kept and
+   dropped. It has settled three questions and found one bug nothing else could
+   see. It is the highest-value tool in this project and it takes two minutes.
+2. **Comments make AO3 drop rules** (§13). The export is comment-free for this
+   reason. Do not put them back.
+3. **AO3 wraps bare inline children in `<p>`** (§12), which breaks `flex` and
+   `> *` — not by stripping them, but by making the paragraph the child. Use
+   float, inline-block, absolute positioning, descendant selectors, or
+   `p{display:contents}`. The paragraph reset does *not* save you here.
+4. **The lint is a good model but it is not the archive.** It was re-verified
+   against `master` with zero drift, and it still could not see §13. When a
+   render is wrong and the lint is clean, go and read the stored CSS.
+5. **One stylesheet drives the preview, the PNG and the work skin.** Change CSS
+   in `generator.ts`, never at the export boundary. `SITE-SKIN-IMPLEMENTATION.md`
+   §5 explains what two renderings that can disagree cost the other product.
 
-| Finding | Measured | Why it matters | Item |
-| --- | --- | --- | --- |
-| **No paragraph reset anywhere** | 0 of 4 platforms | AO3 injects `<p>` *depending on how the user pastes*, which we cannot control. Five independent published skins reset paragraphs as their first defence. One line per platform | BACKLOG 2a |
-| **Google has no skin-off support** | 0 `.visually-hidden` spans vs 1+ on the others | Our own oversight this session: Twitter was done, then iOS and Android, and Google was never revisited. A download reads *"search query All Images Videos News Maps More About 2,145,330,903 results…"* | BACKLOG 2b |
-| **Five CDN images per tweet** | verified badge, X logo, reply, retweet, like | A 20-tweet thread is 100 requests to one host inside a published fic, forever. The canonical Twitter skin needs **zero** chrome images | BACKLOG 5a |
-| **Wrong hidden-text recipe** | 3 identical rules | `left:-9999px` where the archive is serving `clip: rect(0,0,0,0)` | BACKLOG 2 |
-| **Colour is baked, not layered** | 24–32% of rules settings-dependent | Night mode in a published skin is *five rules*, because its base is structure-only | BACKLOG 5b |
-| **`px` on three platforms** | Twitter converted only | `em` is the only responsive lever AO3 leaves us | BACKLOG 4 |
-| **One dead anchor** | `<a href="#">` in the reply indicator | Announced as a link, scrolls to top when clicked | BACKLOG 5c |
-| Google's HTML is 9 lines | others are 1 | AO3 rewrites it — but 2a makes this survivable rather than fatal, so do 2a first | BACKLOG 1 |
+### The traps that have already cost time
 
-**What the audit cleared.** Not everything needs revisiting:
+- **A half-styled render usually means a stale saved skin**, not a sanitizer
+  bug. This cost an hour: a plausible silent-truncation mechanism was inferred
+  from symptoms and written up, and the account simply had an older skin saved.
+  Check the saved skin is current *before* theorising.
+- **Do not promote a hypothesis to a finding.** Both times a mechanism was
+  inferred from symptoms this week it was wrong. Both times, reading the stored
+  CSS settled it in minutes. §13d is deliberately left labelled unproven.
+- **Strip comments before pattern-matching CSS.** Use `stripCssComments` from
+  `ao3Css.ts`; it exists because forgetting produced four wrong answers, every
+  one of them making us *stricter than AO3*.
+- **`em` values must have at most three decimals.** AO3's number grammar is
+  `-?\.?\d{1,3}\.?\d{0,3}`, so `0.9375em` parses as `0.937` then `5em` and the
+  declaration is discarded.
+- **Convert `px` against the rule's own font-size context**, not a global base —
+  and measure that context in a browser rather than reasoning about the cascade.
+  `tests/_ctx`-style harnesses are cheap; a third of rules matched no element on
+  the first pass and would have been guesses.
 
-- The **site-skin product** is essentially unaffected. It emits no `flex`, no
-  `@media`, and its one `content:` pseudo-element is the divider glyph, which
-  never passes through html2canvas. Site skins also *permit* `var()` and custom
-  properties, so the constraints that shape the work-skin design do not apply.
-- The **PNG export** is unaffected by everything shipped on 7 Aug: the `em`
-  conversion was verified value-by-value at a 16px base, and the hidden spans
-  are absolutely positioned so they add nothing to the styled layout.
-- The **lint** is sound. Re-verified against otwarchive `master` with zero drift
-  across all five copied lists.
+### How to verify a change
 
-### Start here
+```bash
+npx playwright test --project=unit                              # ~10s, no browser
+npx playwright test --project=desktop tests/ao3-injection.spec.ts # <p> injection
+npm run build
+```
 
-1. **Read `SITE-SKIN-IMPLEMENTATION.md` §3 first.** It is the verified account
-   of AO3's sanitizer and this document assumes all of it. §7 of that file
-   records four corrections to `ao3Css.ts`, three of which were the same
-   mistake: *being stricter than AO3*. That is the failure mode to fear here —
-   it blocks working CSS and the user cannot tell that we, not the archive, are
-   wrong.
-2. **Run the gate:** `npx playwright test --project=unit`. No browser, no
-   server, about ten seconds. It asserts every platform lints clean in both
-   modes, that none emits `animation`/`@keyframes`/`gap`/`object-fit`/`calc()`,
-   and that all four read as prose unstyled.
-3. **Change CSS in `generator.ts`, never at the export boundary.** One
-   stylesheet feeds the preview, the PNG and the work skin. That is deliberate;
-   `SITE-SKIN-IMPLEMENTATION.md` §5 explains what two renderings that can
-   disagree cost the other product.
+The unit project asserts every platform lints clean in both modes, emits no
+banned property, reads as prose unstyled, is `em`-sized to three decimals, and
+carries exactly one plain-text credit. The injection project needs a browser
+because that failure is geometric and **the lint cannot see it**.
+
+Then the part no test can do: **save it on AO3 and read the CSS back.**
+
+### 10a. Retrofit audit — closed
+
+Measured on 7 Aug 2026 by compiling every platform and counting. Each row was a
+thing built before we had read a single published work skin. **Seven of the
+eight are now done**, which is most of what this document's earlier handoff was
+about.
+
+| Finding | Status |
+| --- | --- |
+| No paragraph reset anywhere | ✅ all four — but see §12, it is necessary and **not** sufficient |
+| Google has no skin-off support | ✅ hidden labels on query, tabs, stats and each result |
+| Wrong hidden-text recipe (`left:-9999px`) | ✅ `clip:rect(0,0,0,0)`, confirmed intact on the archive |
+| `px` on three platforms | ✅ all four in `em`, 381 lengths, verified within 0.3px |
+| Google's HTML is 9 lines | ✅ one line, with a test that no platform emits `
+` |
+| Colour is baked, not layered | ⬜ BACKLOG 5b — 24–32% of rules settings-dependent |
+| Five CDN images per tweet | ⬜ BACKLOG 5a — 100 requests per 20-tweet thread, forever |
+| One dead anchor `<a href="#">` | ⬜ BACKLOG 5c |
+
+**What the audit cleared.** Not everything needed revisiting:
+
+- The **PNG export** is unaffected by any of it. The `em` conversion was
+  verified element-by-element at a 16px base, and the hidden spans are
+  absolutely positioned so they add nothing to the styled layout.
+- The **lint** is sound, and is now confirmed against the archive rather than
+  against source (§2).
+
+One correction to this audit's own conclusions: it said the **site-skin
+product** was "essentially unaffected". That was right about `flex` and `@media`
+and wrong about comments — see §13f.
 
 ### The constraints that are easy to forget
 
@@ -527,64 +601,71 @@ thing we did before reading how published skins actually work.
   answers so far, including a lint that refused any stylesheet whose comment
   mentioned `@media`. `BACKLOG 3` extracts a shared helper.
 
-### Known gaps
+### What to pick up next
 
-**Ranked in `BACKLOG.md`** — 28 items, one list, each pointing back at the doc
-that holds the reasoning. Do not maintain a second copy here; this section used
-to be one and drifted out of date within a day.
+**Ranked in `BACKLOG.md`** — one list, each item pointing back at the doc that
+holds the reasoning. Do not maintain a second copy here; this section used to be
+one and drifted out of date within a day.
 
-The order that matters:
+The order that matters now that the live bugs are cleared:
 
-1. **BACKLOG 2a — the paragraph reset.** One line per platform, and it is the
-   most valuable line in the list. Do it before item 1, which fixes only the one
-   case we can see, and before any layout work, because it may also be the fix
-   for the flex problem below.
-2. **BACKLOG 2b and 2 — finish what 7 Aug started.** Google's missing skin-off
-   support and the hidden-text recipe. Both are corrections to work we shipped,
-   not new features.
-3. **BACKLOG 4 — `em` for the remaining three platforms.** The method is in
-   `buildTwitterCSS`'s header comment and the assertion to copy is in
-   `tests/work-skin.unit.spec.ts`. Convert each value against **its own rule's
-   font-size context**: do that and the PNG is unchanged; get it wrong and every
-   card resizes. Keep em values to three decimals — AO3's number grammar splits
-   `0.9375em` into `0.937` + `5em`.
-4. **Then the master skin** (BACKLOG 6–10), which several of the above make
-   cheaper.
+1. **BACKLOG 5 + 2d together — the export dialog.** Three things an author meets
+   on their first paste and we do not say: a work can use **only one skin** (so
+   anyone who already has one must *merge*, not create), skin titles are unique
+   **across all of AO3** rather than per account, and a quota-limited image host
+   will break a published fic silently. 2d rides along: the site skin's
+   "leave the skin type on add on to archive skin" instruction moves out of a
+   CSS comment and into the dialog, and then the comments can go (§13f). This is
+   the last thing standing between the current state and an author using this
+   unaided.
+2. **BACKLOG 5a — cut the chrome images.** A 20-tweet thread is 100 requests to
+   `media.publit.io` inside somebody's published fic, forever, and the WhatsApp
+   skin author had exactly this break when Cloudinary cut them off. The
+   canonical Twitter skin needs no chrome images at all.
+3. **BACKLOG 5b — separate structure from colour**, which makes the master skin
+   cheap instead of a doubling.
+4. **Then the master skin** (BACKLOG 6–10).
 
-### The flex question, and why 2a might settle it
+### The flex question — **settled, 7 Aug 2026**
 
-§5a records the Twitter header rendering correctly locally and wrong on the real
-archive, rewritten to `float` on a cause we could not explain. We now know more:
+§5a rewrote the Twitter header from flex to float on purely empirical grounds
+and admitted it could not say why. §12 is the answer, reproduced in a harness:
 
-- **The sanitizer keeps `display: flex`.** It is present in a 71 KB skin AO3 is
-  serving. The widely-repeated claim that AO3's validator strips it is wrong,
-  and our lint is right to permit it.
-- **Three independent authors abandoned it anyway**, including one who rewrote
-  an entire skin because they "realized ao3 wouldnt allow it".
+- **The sanitizer keeps `display:flex`.** The widely-repeated claim that AO3's
+  validator strips it is wrong, and our lint is right to permit it. It is
+  present in a 71 KB skin AO3 is serving, and in our own stored CSS.
+- **AO3 wraps bare inline children in `<p>`.** The paragraph becomes the flex
+  item and everything we meant to lay out is a grandchild. Float, inline-block
+  and absolute positioning survive that; flex does not.
+- **The paragraph reset does not fix it.** It was ranked top of the backlog
+  partly because it might; it does not. Zeroing a paragraph's margins stops it
+  adding space, not being a box in between.
 
-The hypothesis that reconciles this: AO3 injects `<p>` wrappers between
-elements, and a flex container's children then become those paragraphs rather
-than the intended elements. Float and inline-block survive the same injection;
-flex cannot.
+So three practitioners who abandoned flex were right, for a reason none of them
+wrote down. Flex is kept where its failure is graceful (`.metrics`) and where a
+`p{display:contents}` rule neutralises the wrapper.
 
-**If that is right, BACKLOG 2a is the fix**, and flex was never the problem.
-Test both together on the real save. Until then float and inline-block remain
-the correct default, because they survive the failure rather than needing it
-prevented.
+### What is still unverified
 
-### The release gate that is still open
+The CSS half of the release gate is **closed**: all four skins saved on a real
+account, stored CSS read back and diffed, zero drift (§2), with §13 found and
+fixed in the process.
 
-**Nothing here has been saved on real AO3.** Our lint is a careful model of
-`css_cleaner.rb`, re-verified against `master` on 7 Aug 2026 with zero drift in
-all five copied lists — but a model is not the archive. Before promoting this
-further:
+The HTML half is untouched. None of this needs code — it needs somebody with an
+AO3 account and twenty minutes:
 
-- Save all four platforms' CSS as work skins on a real account.
-- Paste the HTML into a real chapter and post it, single- and multi-chapter.
-- Check with Creator's Style **on and off**, and download the EPUB.
-- Reopen each saved skin in AO3's editor and diff the stored CSS against what
-  we emitted. Anything missing is a rule our lint does not know about — and is
-  worth a correction entry in `SITE-SKIN-IMPLEMENTATION.md` §7.
+- **Creator's Style off.** Every claim in §4a and §9a about the export reading
+  as prose is verified by unit test against our own HTML, and never against a
+  real render.
+- **Download the EPUB.** AO3's FAQ says downloads do not retain work skins, so
+  this is the skin-off path most readers actually hit.
+- **Edit a posted work and check it still renders** (BACKLOG 17a). AO3 re-runs
+  its HTML parser on every edit — a new chapter, an author's-note tweak, a tag
+  change — and the parser itself changes over time. Markup that posted correctly
+  can break months later with nobody touching it.
+- **Post multi-chapter**, since the injection rule in §12a was read off a
+  single-chapter work.
+- **Site skins** (BACKLOG 20): all 16 templates, plus §13f.
 
 ### Deployment
 
@@ -688,6 +769,95 @@ graceful, but that is not the same as knowing. A Twitter skin with all three
 7 Aug 2026 with every one of them intact, alongside the narrowed grouped
 selectors. Zero drift, 79 of 79 rules.
 
+---
+
+## 13. Comments make AO3 drop rules (7 Aug 2026)
+
+**The only case we have found of the archive silently discarding legal CSS, and
+the lint cannot see it.** If you read one section of this document, read this
+one — it is the most expensive thing to rediscover.
+
+### 13a. What happened
+
+A saved iOS work skin was read back out of AO3's editor and was missing **eleven
+consecutive rules**:
+
+```text
+dd.bubble.in.has-tail .bubble-tail-in        kept
+  .chat.css-tails …out….has-tail::after      GONE
+  .chat.css-tails …in….has-tail::after       GONE
+  dd.bubble.out .time                        GONE
+  dd.bubble.in .time                         GONE
+  dd.bubble.image-bubble .time.image-time    GONE
+  dd.bubble .reaction                        GONE
+  dd.status-indicator                        GONE
+  dd.attach / img.attach-img                 GONE
+  .row.typing / .row.typing > *              GONE
+.typing-bubble                               kept
+```
+
+88 rules sent, 77 stored. Everything before and after survived. The work saved
+without error, and the render simply looked wrong — timestamps inline, no
+bubble tails — which is indistinguishable from a CSS mistake of our own.
+
+### 13b. How it was settled
+
+Three saves of the same skin:
+
+| Save | Comments in the export | Rules stored |
+| --- | --- | --- |
+| 1 | yes | 77 of 88 |
+| 2 | yes | 77 of 88 — reproduced, so not a paste accident |
+| 3 | **no** | **88 of 88** |
+
+Nothing else changed between save 2 and save 3.
+
+### 13c. What it is not
+
+Ruled out before concluding anything, because the obvious answers were all
+wrong:
+
+- The lint passes in both modes, zero violations.
+- **Every numeric token satisfies AO3's own grammar** `-?\.?\d{1,3}\.?\d{0,3}`,
+  checked programmatically across all four stylesheets.
+- **Every double quote in the file is inside a comment, and all are paired**, so
+  an unterminated string is not the mechanism.
+- Android kept the analogous rules, so it is not those selectors being illegal.
+
+### 13d. The trigger, recorded honestly as unproven
+
+The drop began immediately after the only comment in the file that contained a
+CSS declaration — a note mentioning `content:""` — and ran to the next comment.
+A parser that partly reads comment bodies as CSS would behave exactly like this.
+
+**That is suggestive and it is not evidence, and the distinction matters here.**
+Earlier the same day a different mechanism was inferred from symptoms for a
+different broken render, written up convincingly, and was simply wrong — the
+account had an old skin saved. Cheap to test if it ever matters. It does not,
+because the fix is to send no comments at all.
+
+### 13e. The fix
+
+`stripExportComments` in `workSkin.ts`. **AO3 deletes every comment on save**, so
+they reach nobody: not the reader, not the author reopening the skin. They exist
+for whoever reads `generator.ts`, and that copy is untouched — the preview and
+the PNG still carry every word.
+
+Do not "restore" comments to the export without re-saving on real AO3 and
+diffing the stored CSS rule by rule.
+
+### 13f. The site-skin product has the same exposure
+
+`compile.ts` emits a comment per annotated rule plus three header comments, and
+**this has never been checked on AO3** (BACKLOG 20). The risk is lower — none of
+its five comments contains a `property: value` pair — but the class is identical.
+
+It was deliberately *not* stripped blind, because one of those comments is
+load-bearing UI copy: *"leave the skin type on add on to archive skin"* is only
+ever seen in the paste box, since AO3 deletes it on save. Removing it would
+trade a possible bug for a certain one. Filed as **BACKLOG 2d**, to be done with
+the export-dialog copy (item 5), which is where that instruction belongs anyway.
+
 **Nothing is unmeasured any more.** Group chat was the last case, and it is the
 one the rule *predicts* is safe: `.group-sender-row` is a flex row of inline
 children — an avatar beside a name — which is exactly the shape that collapsed
@@ -701,7 +871,7 @@ trivially when there is nothing on the page to move.
 
 ---
 
-## 11. Sources
+## 14. Sources
 
 Community work skins read while building this — the source of §4a and §5a:
 
@@ -732,6 +902,15 @@ AO3's own documentation, read 7 Aug 2026:
 - [Tutorial: Creating a Work Skin FAQ](https://archiveofourown.org/faq/tutorial-creating-a-work-skin) — **a work can only use one skin**; skin titles must be unique across all users; unsupported code is removed on save; `#workskin` is added automatically if you forget it
 - [Skins and Archive Interface FAQ](https://archiveofourown.org/faq/skins-and-archive-interface) — "downloaded works don't retain their work skin"; readers can disable custom work skins in Preferences; the `em` recommendation quoted in §10
 - [A Step-by-Step Guide to Work Skins](https://archiveofourown.org/admin_posts/1370)
+
+Our own saves on the real archive, 7 Aug 2026 — the primary evidence for §2,
+§8, §12 and §13, and the reason most of this document is no longer a model:
+
+- Four work skins saved on a real account and reopened in AO3's editor, and the
+  stored (cleaned) CSS diffed rule by rule against what we emit. Twitter, Google,
+  iOS and Android; iOS saved three times, which is what isolated §13.
+- Two posted works read back as raw HTML, which gave the injection rule in §12a
+  directly rather than inferring it from symptoms.
 
 otwarchive `master`:
 
