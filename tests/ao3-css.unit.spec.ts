@@ -6,6 +6,7 @@ import {
   lintAo3Css,
   isAo3Safe,
   checkAo3ImageUrl,
+  stripCssComments,
 } from '../src/lib/siteSkin/ao3Css';
 import { AO3_PROPERTIES, AO3_SHORTHANDS } from '../src/lib/siteSkin/ao3Properties';
 
@@ -238,4 +239,52 @@ a.tag {
 `.trim();
 
   expect(lintAo3Css(css)).toEqual([]);
+});
+
+
+test.describe('stripCssComments', () => {
+  /**
+   * The single most repeated mistake in this codebase: matching a pattern
+   * against raw CSS and hitting the prose instead of the code. It has produced
+   * four wrong answers, and every one of them made us STRICTER than AO3 —
+   * refusing CSS the archive would have accepted. AO3 never sees a comment at
+   * all, so a comment cannot change what saves.
+   */
+  test('a comment mentioning a banned at-rule does not fail the lint', () => {
+    // The exact regression: the Twitter work skin became unexportable the day
+    // its stylesheet grew a comment explaining why em is used instead of @media.
+    const css = `
+      /* NOTE ON UNITS. AO3 forbids @media in skin CSS, so em is the only
+         responsive lever available. Nor can we use @font-face. */
+      #workskin .chat { width: 34.375em; }
+    `;
+    expect(lintAo3Css(css, 'work')).toEqual([]);
+    expect(lintAo3Css(css, 'site')).toEqual([]);
+  });
+
+  test('a real @media outside a comment is still caught', () => {
+    // The guard on the guard: stripping comments must not blind the lint.
+    const css = '/* explaining @media */ @media (min-width: 40em) { #workskin .chat { width: 20em; } }';
+    expect(lintAo3Css(css).some(v => v.kind === 'media_block')).toBe(true);
+  });
+
+  test('values in a comment are not mistaken for declarations', () => {
+    // How two tests went wrong: scanning for stray px found "16px" in prose.
+    expect(stripCssComments('/* converted against a 16px base */ a { color: red; }'))
+      .not.toContain('16px');
+  });
+
+  test('separate comments do not swallow the rules between them', () => {
+    // The namespacing prototype lost seven rules to a greedy match.
+    const out = stripCssComments('/* one */ a { color: red; } /* two */ b { color: blue; }');
+    expect(out).toContain('a { color: red; }');
+    expect(out).toContain('b { color: blue; }');
+    expect(out).not.toContain('one');
+    expect(out).not.toContain('two');
+  });
+
+  test('a stylesheet with no comments is returned unchanged', () => {
+    const css = '#workskin .chat { width: 100%; }';
+    expect(stripCssComments(css)).toBe(css);
+  });
 });

@@ -416,6 +416,34 @@ function checkValue(property: string, value: string): Violation | null {
 }
 
 /**
+ * Remove CSS comments before pattern-matching a stylesheet.
+ *
+ * **Call this before any regex that decides something about CSS.** Forgetting
+ * it has produced four separate wrong answers in this codebase:
+ *
+ * 1. `lintAo3Css` refused a perfectly legal stylesheet because a *comment*
+ *    explaining the em conversion contained the word `@media`
+ * 2. and 3. two tests read values out of comments and asserted on them — one
+ *    scanning for stray `px` found the "16px base" mentioned in prose
+ * 4. the namespacing prototype missed seven rules that followed a comment
+ *
+ * The failure is always the same shape and always in the same direction: we
+ * end up **stricter than AO3**, which is the one thing this file must never
+ * be. AO3 never sees a comment at all — `css_parser` hands `clean_css_code`
+ * parsed rule sets — so a comment can say anything without affecting what the
+ * archive accepts.
+ *
+ * Known limits, stated because the naive regex is the right tool here and a
+ * real tokeniser would not be: a `/*` appearing inside a quoted value would be
+ * treated as a comment start, and an unterminated comment is left in place
+ * rather than swallowing the rest of the file. Neither can occur in CSS we
+ * generate, and we only ever feed this our own output.
+ */
+export function stripCssComments(css: string): string {
+  return css.replace(/\/\*[\s\S]*?\*\//g, '');
+}
+
+/**
  * Lint a compiled stylesheet.
  *
  * A deliberately small parser: we only ever feed it CSS we generated
@@ -425,19 +453,10 @@ function checkValue(property: string, value: string): Violation | null {
 export function lintAo3Css(css: string, mode: SkinMode = 'site'): Violation[] {
   const violations: Violation[] = [];
 
-  /*
-   * Comments come off FIRST, before the at-rule checks.
-   *
-   * AO3 never sees a comment: css_parser hands `clean_css_code` rule sets, and
-   * the @font-face check runs against a *selector*. So a stylesheet whose
-   * comment happens to explain why we avoid @font-face or @media is perfectly
-   * acceptable to the archive — but scanning the raw text for those words
-   * refuses it. That is the stricter-than-AO3 failure this file must not have:
-   * it blocks working CSS and the user cannot tell that we, not the archive,
-   * are the ones who are wrong. It bit the Twitter work skin the moment its
-   * stylesheet grew a comment explaining the em conversion.
-   */
-  const withoutComments = css.replace(/\/\*[\s\S]*?\*\//g, '');
+  // Comments come off FIRST, before the at-rule checks below — a stylesheet
+  // whose comment explains why we avoid @media must not be refused for saying
+  // so. See stripCssComments for the four times that went wrong.
+  const withoutComments = stripCssComments(css);
 
   if (/@font-face/i.test(withoutComments)) {
     violations.push({

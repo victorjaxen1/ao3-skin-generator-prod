@@ -15,14 +15,30 @@ async function openTemplate(page: Page, template: string) {
   await page.locator('#workskin:visible').first().waitFor({ state: 'visible', timeout: 20000 });
 }
 
-test('Twitter offers a work skin; iOS does not', async ({ page }) => {
-  await openTemplate(page, 'twitter-verified-account');
-  await expect(page.getByRole('button', { name: /work skin/i })).toBeVisible();
-
-  // iOS still needs `animation` for its typing indicator, which AO3 bans —
-  // so it is not offered rather than offered and broken.
-  await openTemplate(page, 'ios-two-person-chat');
-  await expect(page.getByRole('button', { name: /work skin/i })).toHaveCount(0);
+/**
+ * This test used to be "Twitter offers a work skin; iOS does not", and it
+ * asserted iOS offered *no* button, because iOS needed `animation` for its
+ * typing indicator and AO3 bans it. That stopped being true on 7 Aug 2026 when
+ * the indicator was rebuilt as static descending-opacity dots and iOS and
+ * Android both shipped — but the test lives in a browser project, so the unit
+ * gate never ran it and nobody noticed it asserting the opposite of the
+ * product for a day.
+ *
+ * `supportsWorkSkin` is the gate, and all four platforms now pass it.
+ */
+test('every platform offers a work skin', async ({ page }) => {
+  for (const template of [
+    'twitter-verified-account',
+    'ios-two-person-chat',
+    'whatsapp-chat',
+    'google-search-history',
+  ]) {
+    await openTemplate(page, template);
+    await expect(
+      page.getByRole('button', { name: /work skin/i }),
+      template
+    ).toBeVisible();
+  }
 });
 
 test('the modal hands over two pieces, each with its own destination', async ({ page }) => {

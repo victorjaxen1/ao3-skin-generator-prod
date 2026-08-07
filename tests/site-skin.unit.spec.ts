@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { compile, compileRules, derive } from '../src/lib/siteSkin/compile';
 import { TEMPLATES, cloneTheme, findTemplate } from '../src/lib/siteSkin/templates';
 import { FONT_STACKS, validateTheme, SiteSkinTheme } from '../src/lib/siteSkin/theme';
-import { lintAo3Css, isLegalFontStack, checkAo3ImageUrl } from '../src/lib/siteSkin/ao3Css';
+import { lintAo3Css, isLegalFontStack, checkAo3ImageUrl, stripCssComments } from '../src/lib/siteSkin/ao3Css';
 import {
   mixHex,
   normalizeHex,
@@ -252,7 +252,7 @@ test.describe('region ownership', () => {
   test('every declaration carries !important', () => {
     // A user site skin loads with role "user", so AO3's ID- and class-scoped
     // defaults are still there and outrank ours on specificity.
-    const body = compile(SAMPLE).replace(/\/\*[\s\S]*?\*\//g, '');
+    const body = stripCssComments(compile(SAMPLE));
     const declarations = body.match(/[a-z-]+\s*:[^;{}]+;/g) ?? [];
     expect(declarations.length).toBeGreaterThan(30);
     for (const declaration of declarations) {

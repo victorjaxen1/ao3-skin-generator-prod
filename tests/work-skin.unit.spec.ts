@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { buildWorkSkin, supportsWorkSkin } from '../src/lib/workSkin';
 import { defaultProject } from '../src/lib/schema';
 import { buildCSS, buildHTML } from '../src/lib/generator';
-import { lintAo3Css, isAo3Safe } from '../src/lib/siteSkin/ao3Css';
+import { lintAo3Css, isAo3Safe, stripCssComments } from '../src/lib/siteSkin/ao3Css';
 
 /**
  * The work-skin export exists only if AO3 would actually accept it. AO3
@@ -125,7 +125,7 @@ test.describe('the Twitter work skin', () => {
     // base it was converted against, and scanning raw text would read that as
     // a stray px value. (The same oversight was live in lintAo3Css, which
     // searched for @media before stripping comments.)
-    const declarations = css.replace(/\/\*[\s\S]*?\*\//g, '');
+    const declarations = stripCssComments(css);
 
     // Only hairline borders may stay in px. This used to allow -9999px as well,
     // for the old off-screen hidden-text recipe; the clip recipe that replaced
@@ -228,7 +228,7 @@ test.describe('which platforms are offered', () => {
     for (const template of ['ios', 'android', 'twitter', 'google'] as const) {
       const p = defaultProject();
       p.template = template;
-      const css = buildCSS(p).replace(/\/\*[\s\S]*?\*\//g, '');
+      const css = stripCssComments(buildCSS(p));
 
       expect(css, `${template}: animation`).not.toMatch(/[;{]\s*animation(-[a-z]+)?\s*:/);
       expect(css, `${template}: @keyframes`).not.toMatch(/@keyframes/);
@@ -446,7 +446,7 @@ test.describe('which platforms are offered', () => {
     const p = defaultProject();
     p.template = 'google';
     p.settings.googleSuggestions = ['a suggestion'];
-    const css = buildWorkSkin(p).css.replace(/\/\*[\s\S]*?\*\//g, '');
+    const css = stripCssComments(buildWorkSkin(p).css);
 
     expect(css, 'flex needs a direct parent/child link AO3 will break')
       .not.toMatch(/display:\s*(inline-)?flex/);
@@ -465,7 +465,7 @@ test.describe('which platforms are offered', () => {
     for (const template of ['ios', 'android', 'twitter', 'google'] as const) {
       const p = defaultProject();
       p.template = template;
-      const css = buildWorkSkin(p).css.replace(/\/\*[\s\S]*?\*\//g, '');
+      const css = stripCssComments(buildWorkSkin(p).css);
 
       expect(css, `${template}: content:"" truncates the skin on AO3`)
         .not.toMatch(/content:\s*"/);
