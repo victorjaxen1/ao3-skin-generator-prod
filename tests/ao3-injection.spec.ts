@@ -341,6 +341,69 @@ test('the expanded view and threaded replies survive injection', async ({ page }
   expect(moved, `${moved.length} element(s) moved:\n${moved.join('\n')}`).toEqual([]);
 });
 
+/**
+ * Group chat, the last injection case, and the one the rule predicts is safe.
+ *
+ * `.group-sender-row` is a flex row of inline children — an avatar image beside
+ * a name — which is precisely the shape that broke the status bar and the
+ * metrics. It should nevertheless be untouched, because it lives inside a
+ * `<dd>`, and the stored markup shows AO3 wrapping nothing inside `<dd>`.
+ *
+ * That prediction is worth testing rather than trusting: it is the only thing
+ * standing between this row and the same collapse, and one avatar sits in a
+ * `.group-avatar-initials` div, which is a different container again.
+ */
+test('group chat survives injection, as the dd rule predicts', async ({ page }) => {
+  for (const template of ['ios', 'android'] as const) {
+    const { before, after } = await geometryUnderInjection(
+      page,
+      template,
+      [
+        '#workskin dd.bubble .group-sender-row',
+        '#workskin dd.bubble .group-avatar-initials',
+        '#workskin dd.bubble .group-sender',
+        '#workskin dd.bubble.in',
+      ],
+      (p) => {
+        const participants = [
+          { id: 'p1', name: 'Sam Okafor', color: '#e0245e' },
+          { id: 'p2', name: 'Riya Patel', color: '#1d9bf0' },
+        ];
+        if (template === 'ios') {
+          p.settings.iosGroupMode = true;
+          p.settings.iosGroupName = 'The Group';
+          p.settings.iosGroupParticipants = participants;
+        } else {
+          p.settings.androidGroupMode = true;
+          p.settings.androidGroupName = 'The Group';
+          p.settings.androidGroupParticipants = participants;
+        }
+        p.messages = [
+          { id: '1', sender: 'Sam Okafor', content: 'anyone up', outgoing: false,
+            timestamp: '10:23', participantId: 'p1' },
+          { id: '2', sender: 'Riya Patel', content: 'unfortunately', outgoing: false,
+            timestamp: '10:24', participantId: 'p2' },
+          { id: '3', sender: 'You', content: 'go to sleep', outgoing: true, timestamp: '10:25' },
+        ] as typeof p.messages;
+      }
+    );
+
+    expect(
+      before.filter((b) => b.sel === '#workskin dd.bubble .group-sender-row').length,
+      `${template}: fixture rendered no sender rows — the test would be vacuous`
+    ).toBeGreaterThan(0);
+
+    const moved = before
+      .map((b, i) => ({ b, a: after[i] }))
+      .filter(({ b, a }) => b.x !== a.x || b.y !== a.y || b.w !== a.w || b.h !== a.h)
+      .map(({ b, a }) =>
+        `${b.sel}[${b.i}]  ${b.x},${b.y} ${b.w}x${b.h}  ->  ${a.x},${a.y} ${a.w}x${a.h}`
+      );
+
+    expect(moved, `${template}: ${moved.length} moved:\n${moved.join('\n')}`).toEqual([]);
+  }
+});
+
 for (const template of ['google', 'twitter', 'ios', 'android'] as const) {
   test(`${template}: an injected paragraph moves nothing`, async ({ page }) => {
     const { before, after } = await geometryUnderInjection(page, template, LOAD_BEARING[template]);

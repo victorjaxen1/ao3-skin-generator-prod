@@ -688,8 +688,12 @@ graceful, but that is not the same as knowing. A Twitter skin with all three
 7 Aug 2026 with every one of them intact, alongside the narrowed grouped
 selectors. Zero drift, 79 of 79 rules.
 
-**Still unmeasured:** group-chat mode. The expanded-tweet view and threaded
-replies *are* now covered — `.tweet.expanded` is the awkward case, being a flex
+**Nothing is unmeasured any more.** Group chat was the last case, and it is the
+one the rule *predicts* is safe: `.group-sender-row` is a flex row of inline
+children — an avatar beside a name — which is exactly the shape that collapsed
+the status bar and the metrics row, yet it is untouched because it sits inside a
+`<dd>`. Confirmed rather than assumed, on both iOS and Android. The
+expanded-tweet view and threaded replies are covered too — `.tweet.expanded` is the awkward case, being a flex
 row whose first child is a bare `<img>` while still using a child combinator for
 its gap, so it carries both failure shapes at once. Its test asserts the fixture
 actually produced an expanded and a reply tweet, because a geometry diff passes
