@@ -1,6 +1,6 @@
 import { SkinProject } from './schema';
 import { buildCSS, buildHTML } from './generator';
-import { lintAo3Css, Violation } from './siteSkin/ao3Css';
+import { lintAo3Css, stripCssComments, Violation } from './siteSkin/ao3Css';
 
 /**
  * The third export: a real AO3 work skin.
@@ -181,8 +181,37 @@ function appendCredit(html: string): string {
   return `${html.slice(0, close)}<div class="wm">${CREDIT}</div>${html.slice(close)}`;
 }
 
+/**
+ * Ship the work skin without comments.
+ *
+ * **AO3 deletes every comment on save**, so they reach nobody: not the reader,
+ * not the author reopening the skin in AO3's editor. They exist for whoever
+ * reads `generator.ts`, and that copy is untouched — the preview and the PNG
+ * still carry them.
+ *
+ * They are also the least-tested thing we hand the archive, and on 7 Aug 2026 a
+ * saved iOS skin came back missing **eleven consecutive rules** — the CSS bubble
+ * tails, both `.time` rules, `.reaction`, `.status-indicator`, `.attach` and the
+ * typing row — while every rule before and after survived. The block is
+ * bracketed by comments, the same rules survived an earlier save, and our lint
+ * calls the stylesheet clean, so what the parser objected to is *not* known.
+ *
+ * This does not diagnose that. It removes a whole class of interaction between
+ * prose we control and a parser we do not, at zero cost on AO3 — and doubles as
+ * the experiment: if the eleven rules come back, comments were involved.
+ *
+ * Do not "restore" the comments to the export without re-saving on real AO3 and
+ * diffing the stored CSS rule by rule.
+ */
+function stripExportComments(css: string): string {
+  return stripCssComments(css)
+    .split('\n')
+    .filter((line) => line.trim().length > 0)
+    .join('\n');
+}
+
 export function buildWorkSkin(project: SkinProject): WorkSkinExport {
-  const css = absolutizeCssAssets(buildCSS(project));
+  const css = stripExportComments(absolutizeCssAssets(buildCSS(project)));
   const html = appendCredit(
     useCssBubbleTails(absolutizeAssets(stripEditorAttributes(buildHTML(project))))
   );
