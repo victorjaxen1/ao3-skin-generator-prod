@@ -35,6 +35,31 @@ function getTextFormattingCSS(isDark: boolean = false): string {
 #workskin dd.bubble ol{list-style-type:decimal;}`;
 }
 
+/**
+ * Text that is invisible while the work skin is on, and reads as ordinary prose
+ * the moment it is off.
+ *
+ * This is the community-standard pattern — the iOS text-message tutorial calls
+ * it `.hide` and every established social-media work skin uses some version of
+ * it — and it exists because a work skin is absent far more often than authors
+ * expect. AO3's own FAQ says it twice: "downloaded works don't retain their
+ * work skin", and readers can disable custom work skins in their preferences.
+ * Every EPUB, PDF and MOBI download is a skin-off rendering.
+ *
+ * We diverge from the community on the hiding technique. They use
+ * `display: none`, which also hides the text from screen readers; we position
+ * it off-screen, so the connective prose is available to assistive technology
+ * even while the skin is on. Same visual result, strictly more accessible.
+ *
+ * Do NOT reimplement this with `content:` on a pseudo-element, which is the
+ * other pattern the tutorials teach. html2canvas cannot rasterise `::before` /
+ * `::after`, and this stylesheet also drives the PNG export — anything moved
+ * into a pseudo-element disappears from the image.
+ */
+function srOnly(text: string): string {
+  return `<span class="visually-hidden">${text}</span>`;
+}
+
 function applyBoldMarkup(raw: string): string {
   return raw.replace(/\*([^*]+)\*/g, '<b>$1</b>');
 }
@@ -206,9 +231,10 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
     }
   }
   
-  // Add timestamp (iOS/Android)
+  // Add timestamp (iOS/Android). Hidden space so the time does not weld itself
+  // to the message text when no CSS puts it on its own line — see srOnly().
   if ((template === 'ios' || template === 'android') && msg.timestamp) {
-    bubble += `<span class="time">${msg.timestamp||''}</span>`;
+    bubble += `${srOnly(' ')}<span class="time">${msg.timestamp||''}</span>`;
   }
   
   // Add checkmarks outside timestamp for absolute positioning (Android only)
@@ -300,12 +326,15 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
     // emitting it when every count is blank produces two horizontal rules with
     // nothing between them — which is what an unconfigured tweet looked like,
     // in the image export as well as on AO3.
+    // Each count carries a hidden word. With the skin on, the icon says what the
+    // number means; with it off, the icons are 20px pictures in a row and the
+    // counts would read "156 89 847" — three numbers and no nouns.
     const metricChips = project.settings.twitterShowMetrics ? [
-      replies ? `<span class="metric replies" title="Replies"><img src="${replyIcon}" alt="" class="metric-icon" width="20" height="20" /> <span class="metric-count">${formatNumber(replies)}</span></span>`:'',
-      retweets ? `<span class="metric retweets" title="Retweets"><img src="${retweetIcon}" alt="" class="metric-icon" width="20" height="20" /> <span class="metric-count">${formatNumber(retweets)}</span></span>`:'',
-      likes ? `<span class="metric likes" title="Likes"><img src="${likeIcon}" alt="" class="metric-icon" width="20" height="20" /> <span class="metric-count">${formatNumber(likes)}</span></span>`:'',
-      bookmarks ? `<span class="metric bookmarks" title="Bookmarks"><img src="${PLATFORM_ASSETS.twitter.bookmarkIcon}" alt="" class="metric-icon" width="20" height="20" /> <span class="metric-count">${formatNumber(bookmarks)}</span></span>`:'',
-      views ? `<span class="metric views" title="Views"><img src="${PLATFORM_ASSETS.twitter.viewsIcon}" alt="" class="metric-icon" width="20" height="20" /> <span class="metric-count">${formatNumber(views)}</span></span>`:'',
+      replies ? `<span class="metric replies" title="Replies"><img src="${replyIcon}" alt="" class="metric-icon" width="20" height="20" /> <span class="metric-count">${formatNumber(replies)}</span>${srOnly(' replies')}</span>`:'',
+      retweets ? `<span class="metric retweets" title="Retweets"><img src="${retweetIcon}" alt="" class="metric-icon" width="20" height="20" /> <span class="metric-count">${formatNumber(retweets)}</span>${srOnly(' retweets')}</span>`:'',
+      likes ? `<span class="metric likes" title="Likes"><img src="${likeIcon}" alt="" class="metric-icon" width="20" height="20" /> <span class="metric-count">${formatNumber(likes)}</span>${srOnly(' likes')}</span>`:'',
+      bookmarks ? `<span class="metric bookmarks" title="Bookmarks"><img src="${PLATFORM_ASSETS.twitter.bookmarkIcon}" alt="" class="metric-icon" width="20" height="20" /> <span class="metric-count">${formatNumber(bookmarks)}</span>${srOnly(' bookmarks')}</span>`:'',
+      views ? `<span class="metric views" title="Views"><img src="${PLATFORM_ASSETS.twitter.viewsIcon}" alt="" class="metric-icon" width="20" height="20" /> <span class="metric-count">${formatNumber(views)}</span>${srOnly(' views')}</span>`:'',
     ].filter(Boolean).join(' ') : '';
     const hasMetrics = metricChips.length > 0;
     const metrics = hasMetrics ? `<div class="metrics">${metricChips}</div>` : '';
@@ -320,6 +349,26 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
       quote = `<div class="quote"><div class="quote-head">${qAvatar}<span class="quote-name">${sanitizeText(project.settings.twitterQuoteName||'')}</span>${qVerified}<span class="quote-handle">${qHandle}</span></div><div class="quote-body">${highlightTwitterText(qText)}${qImage}</div></div>`;
     }
     const bodyWithFormatting = highlightTwitterText(sanitized);
+
+    // Turns "Alex Rivers @alexrivers okay so I need to tell you all something"
+    // into "Alex Rivers (@alexrivers) tweeted: okay so I need to tell you..."
+    // once the skin is off. The brackets are hidden too, so they never double up
+    // with the styled layout.
+    //
+    // The closing bracket has to hug the handle: the follow dot and the Follow
+    // label sit after it in the name line, and an earlier version put the close
+    // bracket after them, which read "(@alexrivers·Follow) tweeted:".
+    // The trailing spaces matter and cost nothing. Whitespace INSIDE these
+    // spans is off-screen while the skin is on, so it cannot shift the styled
+    // layout or the PNG — but unstyled it is what stops the header collapsing
+    // into "(@alexrivers)·Follow". The iOS tutorial makes the same point about
+    // its <br><br>: "not needed for the coding per se, but more so when the
+    // Creator's Style is turned off, your lines aren't jumbled on top of each
+    // other."
+    const openParen = srOnly(' (');
+    const closeParen = srOnly(') ');
+    const chromeGap = srOnly(' ');
+    const attribution = srOnly(isReply ? ' replied: ' : ' tweeted: ');
     
     // Reply indicator - show "Replying to @handles" if this is a reply
     let replyingTo = '';
@@ -344,7 +393,7 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
     // Check if this should be displayed as expanded view (clicked-into reply)
     if (msg.expandedView) {
       // Expanded view: avatar on left, larger text, no header/metrics, content indented
-      return `<div class="tweet expanded" data-message-id="${msg.id}">${effectiveAvatar}<div class="expanded-content"><div class="expanded-name"><b class="name">${displayName}</b>${verified}</div><div class="expanded-handle">${handle}</div>${replyingTo}<div class="expanded-body">${bodyWithFormatting}${tweetImage}${quote}</div>${timestampLine ? `<div class="time-line">${timestampLine}</div>`:''}</div></div>`;
+      return `<div class="tweet expanded" data-message-id="${msg.id}">${effectiveAvatar}<div class="expanded-content"><div class="expanded-name"><b class="name">${displayName}</b>${verified}</div><div class="expanded-handle">${openParen}${handle}${closeParen}</div>${replyingTo}${attribution}<div class="expanded-body">${bodyWithFormatting}${tweetImage}${quote}</div>${timestampLine ? `<div class="time-line">${timestampLine}</div>`:''}</div></div>`;
     }
     
     // Add reply class if this is a threaded reply. `no-metrics` suppresses the
@@ -354,7 +403,7 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
       .filter(Boolean)
       .join(' ');
     
-    return `<div class="${tweetClass}" data-message-id="${msg.id}"><div class="tweet-header">${effectiveAvatar}<div class="head"><div class="head-content"><div class="name-line"><b class="name">${displayName}</b> ${verified} <span class="handle">${handle}</span><span class="follow-dot">·</span>${followBtn}<img src="${xLogo}" alt="X" class="twitter-logo" width="20" height="20" /></div></div></div></div>${replyingTo}<div class="body">${bodyWithFormatting}${tweetImage}${quote}</div>${timestampLine ? `<div class="time-line">${timestampLine}</div>`:''}${metrics}</div>`;
+    return `<div class="${tweetClass}" data-message-id="${msg.id}"><div class="tweet-header">${effectiveAvatar}<div class="head"><div class="head-content"><div class="name-line"><b class="name">${displayName}</b> ${verified} ${openParen}<span class="handle">${handle}</span>${closeParen}<span class="follow-dot">·</span>${chromeGap}${followBtn}<img src="${xLogo}" alt="" class="twitter-logo" width="20" height="20" /></div></div></div></div>${replyingTo}${attribution}<div class="body">${bodyWithFormatting}${tweetImage}${quote}</div>${timestampLine ? `<div class="time-line">${timestampLine}</div>`:''}${metrics}</div>`;
   }
   
   if (template === 'google') {
@@ -380,10 +429,12 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
       bubbleContent += `<img src="${imgUrl}" alt="" class="message-image" />`;
     }
     
-    // Add timestamp
+    // Add timestamp. The hidden space is what stops "hey10:23" when no CSS
+    // applies — the time is styled onto its own line, so nothing separates it
+    // from the message text in the markup. See srOnly().
     if (isLastInGroup && msg.timestamp) {
       const timeClass = hasImage ? 'time image-time' : 'time';
-      bubbleContent += `<span class="${timeClass}">${msg.timestamp}</span>`;
+      bubbleContent += `${srOnly(' ')}<span class="${timeClass}">${msg.timestamp}</span>`;
     }
     
     // Add inline SVG tail for html2canvas compatibility (::after doesn't render in canvas)
@@ -411,7 +462,17 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
     // Add reaction if present
     const reaction = msg.reaction ? `<span class="reaction">${msg.reaction}</span>` : '';
     
-    return `${timeBreak}<div class="${rowClass} ${groupClass}" data-message-id="${msg.id}"><dl class="msg">${bubble}${reaction}${statusIndicator}</dl></div>`;
+    // Who is speaking, for when no CSS applies.
+    //
+    // A bubble carries its speaker entirely in colour and alignment, so with
+    // the skin off — a download, or Hide Creator's Style — the whole
+    // conversation collapses to unattributed lines: "hey / you free tonight?"
+    // with no way to tell who said which.
+    //
+    // <dt> is the right element rather than a span: this is already a <dl>,
+    // where the term is the speaker and the definition is what they said. AO3
+    // allows dt, and unstyled browsers indent dd under dt for free.
+    return `${timeBreak}<div class="${rowClass} ${groupClass}" data-message-id="${msg.id}"><dl class="msg"><dt class="visually-hidden">${sanitizeText(msg.sender || (msg.outgoing ? 'You' : 'Them'))}: </dt>${bubble}${reaction}${statusIndicator}</dl></div>`;
   }
   
   // Android and other templates: show avatar and sender name (with grouping for Android)
@@ -441,7 +502,7 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
       
       // Add timestamp
       if (msg.timestamp) {
-        bubbleContent += `<span class="time image-time">${sanitizeText(msg.timestamp)}</span>`;
+        bubbleContent += `${srOnly(' ')}<span class="time image-time">${sanitizeText(msg.timestamp)}</span>`;
       }
       
       // Add checkmarks
@@ -453,7 +514,8 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
       finalBubble = bubble;
     }
     
-    return `${timeBreak}<div class="${rowClass} ${groupClass}" data-message-id="${msg.id}"><dl class="msg">${finalBubble}${statusIndicator}</dl></div>`;
+    // Hidden speaker, as in the iOS branch above.
+    return `${timeBreak}<div class="${rowClass} ${groupClass}" data-message-id="${msg.id}"><dl class="msg"><dt class="visually-hidden">${sanitizeText(msg.sender || (msg.outgoing ? 'You' : 'Them'))}: </dt>${finalBubble}${statusIndicator}</dl></div>`;
   }
   
   // Other templates: basic row structure
@@ -543,8 +605,13 @@ export function buildHTML(project: SkinProject): string {
       : project.messages.map(m => msgHTML(m, project.template, project)).join('');
     
     // Typing indicator
-    const typing = s.chatShowTyping 
-      ? `<div class="row typing"><div class="typing-bubble"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>${s.chatTypingName ? `<span class="typing-label">${sanitizeText(s.chatTypingName)}</span>` : ''}</div>`
+    // The three dots are pure CSS shapes, so with no skin the indicator is
+    // either nothing at all or a bare name floating after the conversation.
+    // The iOS tutorial solves it with exactly this line — <span class="hide">Mom
+    // is typing...</span> — and it is the one piece of the fic that is
+    // otherwise invisible in a download rather than merely ugly.
+    const typing = s.chatShowTyping
+      ? `<div class="row typing"><div class="typing-bubble"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>${s.chatTypingName ? `<span class="typing-label">${sanitizeText(s.chatTypingName)}</span>` : ''}${srOnly(`${s.chatTypingName ? ' is' : 'Someone is'} typing…`)}</div>`
       : '';
     
     // iOS Footer with background image
@@ -698,7 +765,12 @@ function buildIOSCSS(s: SkinProject['settings'], senderBg: string, recvBg: strin
 #workskin .ios-header-avatar{position:absolute;left:65px;top:50%;transform:translateY(-50%);width:38px;height:38px;border-radius:50%;overflow:hidden;border:2px solid rgba(255,255,255,0.3);}
 #workskin .ios-header-avatar img{width:100%;height:100%;}
 #workskin .ios-header-avatar-placeholder{position:absolute;left:65px;top:50%;transform:translateY(-50%);width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,0.25);color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;border:2px solid rgba(255,255,255,0.3);}
-#workskin .ios-header-name{position:absolute;left:112px;right:65px;top:0;bottom:0;display:flex;align-items:center;font-size:15px;font-weight:600;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,0.4);line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:calc(100% - 177px);}
+/* No max-width here. It used to read calc(100% - 177px), where 177 is exactly
+   left(112) + right(65) — so an absolutely positioned box that already spans
+   between those two edges was being constrained to the width it already had.
+   calc() is genuinely absent from AO3's value grammar, and this one bought
+   nothing, so it goes rather than being approximated. */
+#workskin .ios-header-name{position:absolute;left:112px;right:65px;top:0;bottom:0;display:flex;align-items:center;font-size:15px;font-weight:600;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,0.4);line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 #workskin .ios-status-bar{background:${statusBarBg};padding:6px 16px 4px 16px;display:flex;justify-content:space-between;align-items:center;font-size:14px;font-weight:600;color:${statusBarColor};border-bottom:1px solid ${statusBarBorder};}
 #workskin .ios-status-bar .time{flex:1;text-align:center;}
 #workskin .ios-status-bar .status-icons{display:flex;align-items:center;font-size:12px;}
@@ -722,7 +794,10 @@ function buildIOSCSS(s: SkinProject['settings'], senderBg: string, recvBg: strin
 #workskin dl.msg > *{margin-top:1px;}
 #workskin .row.out dl.msg{align-items:flex-end;}
 #workskin .row.in dl.msg{align-items:flex-start;}
-#workskin dt.sender{font-size:11px;color:${isDark ? 'rgba(255,255,255,0.5)' : 'rgba(235,235,245,0.5)'};margin:6px 0 2px 36px;font-weight:500;max-width:calc(70% - 36px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+/* was calc(70% - 36px). At the 375px card that resolves to 60.4%, and this is
+   an ellipsised label rather than a load-bearing width, so a flat percentage is
+   the honest approximation. See the note on .ios-header-name. */
+#workskin dt.sender{font-size:11px;color:${isDark ? 'rgba(255,255,255,0.5)' : 'rgba(235,235,245,0.5)'};margin:6px 0 2px 36px;font-weight:500;max-width:60%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 #workskin dd{margin:0;}
 #workskin dd.bubble{position:relative;display:inline-block;min-width:0;max-width:260px;padding:8px 12px;border-radius:18px;line-height:1.35;font-size:15px;white-space:normal;word-break:keep-all;overflow-wrap:anywhere;}
 #workskin dd.bubble.image-bubble{padding:8px 12px;max-width:60%;overflow:visible;}
@@ -733,10 +808,22 @@ function buildIOSCSS(s: SkinProject['settings'], senderBg: string, recvBg: strin
 #workskin dd.bubble.image-bubble.in img.message-image{border-bottom-left-radius:4px;}
 #workskin dd.bubble.out{background:${senderBg};color:#fff;border-bottom-right-radius:4px;}
 #workskin dd.bubble.out .bubble-tail{display:none;}
-#workskin dd.bubble.out.has-tail .bubble-tail-out{display:block;position:absolute;right:-8px;bottom:-1px;color:${senderBg};pointer-events:none;}
+#workskin dd.bubble.out.has-tail .bubble-tail-out{display:block;position:absolute;right:-8px;bottom:-1px;color:${senderBg};}
 #workskin dd.bubble.in{background:${receiverBubbleBg};color:${receiverTextColor};border-bottom-left-radius:4px;}
 #workskin dd.bubble.in .bubble-tail{display:none;}
-#workskin dd.bubble.in.has-tail .bubble-tail-in{display:block;position:absolute;left:-8px;bottom:-1px;color:${receiverBubbleBg};pointer-events:none;}
+/* pointer-events dropped from both tail rules — not on AO3's property list, and
+   purely defensive: the tails are decorative and sit outside the bubble's text. */
+#workskin dd.bubble.in.has-tail .bubble-tail-in{display:block;position:absolute;left:-8px;bottom:-1px;color:${receiverBubbleBg};}
+/* TWO WAYS TO DRAW THE SAME TAIL, and both are needed.
+   The SVG above is for the PNG: html2canvas cannot rasterise ::before/::after,
+   which is the only reason an inline <svg> is in the markup at all.
+   AO3 is the mirror image — it removes <svg> together with its contents, so on
+   the archive the SVG tails simply vanish, silently, with the work saving fine.
+   Hence the pure-CSS pair below, which is the border-plus-radius trick every
+   community iOS skin uses. They are scoped to .css-tails, a class only
+   buildWorkSkin adds, so the browser never draws both at once. */
+#workskin .chat.css-tails dd.bubble.out.has-tail::after{content:"";position:absolute;right:-6px;bottom:0;width:8px;height:16px;border-right:8px solid ${senderBg};border-bottom-right-radius:16px 8px;}
+#workskin .chat.css-tails dd.bubble.in.has-tail::after{content:"";position:absolute;left:-6px;bottom:0;width:8px;height:16px;border-left:8px solid ${receiverBubbleBg};border-bottom-left-radius:16px 8px;}
 #workskin dd.bubble.out .time{display:block;font-size:11px;color:rgba(255,255,255,0.65);margin-top:6px;font-weight:400;}
 #workskin dd.bubble.in .time{display:block;font-size:11px;color:${receiverTimeColor};margin-top:6px;font-weight:400;}
 #workskin dd.bubble.image-bubble .time.image-time{position:absolute;bottom:8px;right:8px;margin:0;background:rgba(0,0,0,0.6);padding:2px 6px;border-radius:10px;font-size:11px;color:#fff;}
@@ -749,19 +836,36 @@ function buildIOSCSS(s: SkinProject['settings'], senderBg: string, recvBg: strin
 #workskin .typing-bubble{background:${typingBubbleBg};padding:10px 14px;border-radius:18px;display:flex;align-items:center;border-bottom-left-radius:4px;}
 #workskin .typing-bubble > *{margin-left:4px;}
 #workskin .typing-bubble > *:first-child{margin-left:0;}
-#workskin .typing-bubble .dot{width:8px;height:8px;background:${isDark ? 'rgba(255,255,255,0.6)' : 'rgba(235,235,245,0.6)'};border-radius:50%;animation:typing 1.4s infinite;}
-#workskin .typing-bubble .dot:nth-child(2){animation-delay:0.2s;}
-#workskin .typing-bubble .dot:nth-child(3){animation-delay:0.4s;}
-@keyframes typing{0%,60%,100%{opacity:0.3;transform:translateY(0);}30%{opacity:1;transform:translateY(-4px);}}
+/* NOTE ON THE TYPING DOTS. Static, with the three dots at descending opacity —
+   no animation, because AO3 allows neither the animation property nor
+   @keyframes, and refuses the whole skin over either.
+   This is the community's answer, not a compromise we invented: the same
+   descending-opacity trio appears in the iOS text-message tutorial that every
+   AO3 messaging skin descends from. It reads as "mid-typing" while standing
+   still, which a single flat-grey trio does not.
+   Do not delete the :nth-child rules to "simplify" — a rule left with no
+   declarations is an AO3 error, not a no-op, which is exactly how the
+   animation-delay versions of these two failed. */
+#workskin .typing-bubble .dot{width:8px;height:8px;background:${isDark ? 'rgba(255,255,255,0.6)' : 'rgba(235,235,245,0.6)'};border-radius:50%;opacity:0.4;}
+#workskin .typing-bubble .dot:nth-child(1){opacity:0.85;}
+#workskin .typing-bubble .dot:nth-child(2){opacity:0.65;}
 #workskin .typing-label{font-size:11px;color:${isDark ? 'rgba(255,255,255,0.5)' : 'rgba(235,235,245,0.5)'};font-weight:400;}
 #workskin .ios-footer{position:relative;${footerBg}height:47px;border-top:1px solid ${inputBarBorder};}
 #workskin .ios-input-bar{background:${inputBarBg};padding:8px 12px;border-top:1px solid ${inputBarBorder};display:flex;align-items:center;}
 #workskin .ios-input-bar > *{margin-left:8px;}
 #workskin .ios-input-bar > *:first-child{margin-left:0;}
 #workskin .ios-input-bar .input-placeholder{flex:1;background:${inputFieldBg};border:1px solid ${inputFieldBorder};border-radius:18px;padding:8px 12px;font-size:14px;color:${inputPlaceholderColor};}
-#workskin dd.bubble .group-sender-row{display:flex !important;align-items:center;gap:6px;margin-bottom:4px;visibility:visible !important;opacity:1 !important;}
-#workskin dd.bubble.image-bubble .group-sender-row{display:flex !important;align-items:center;gap:6px;margin-bottom:6px;visibility:visible !important;opacity:1 !important;}
-#workskin dd.bubble .group-avatar{width:20px;height:20px;border-radius:50%;object-fit:cover;flex-shrink:0;display:block !important;}
+/* The gap property is spelled out as child margins: AO3 keeps a property only
+   if it is on its list or CONTAINS a shorthand name, so column-gap passes and
+   bare gap does not. Same substitution as the Twitter stylesheet. */
+#workskin dd.bubble .group-sender-row{display:flex !important;align-items:center;margin-bottom:4px;visibility:visible !important;opacity:1 !important;}
+#workskin dd.bubble.image-bubble .group-sender-row{display:flex !important;align-items:center;margin-bottom:6px;visibility:visible !important;opacity:1 !important;}
+#workskin dd.bubble .group-sender-row > *{margin-right:6px;}
+#workskin dd.bubble .group-sender-row > *:last-child{margin-right:0;}
+/* No object-fit — it is not on AO3's list and has no legal equivalent. The
+   avatar is a fixed 20x20 square, so a non-square source letterboxes instead of
+   cropping. Visible only to authors who upload a non-square avatar. */
+#workskin dd.bubble .group-avatar{width:20px;height:20px;border-radius:50%;flex-shrink:0;display:block !important;}
 #workskin dd.bubble .group-avatar-initials{width:20px;height:20px;border-radius:50%;display:flex !important;align-items:center;justify-content:center;font-size:8px;font-weight:700;flex-shrink:0;}
 #workskin dd.bubble .group-sender{font-size:11px;font-weight:600;line-height:1.2;opacity:0.9;display:inline-block !important;}
 ${getTextFormattingCSS(isDark)}
@@ -798,7 +902,9 @@ function buildAndroidCSS(s: SkinProject['settings'], senderBg: string, recvBg: s
 #workskin .android-header-avatar{position:absolute;left:60px;top:0;bottom:0;margin:auto 0;width:40px;height:40px;border-radius:50%;overflow:hidden;border:2px solid rgba(255,255,255,0.2);}
 #workskin .android-header-avatar img{width:100%;height:100%;}
 #workskin .android-header-avatar-placeholder{position:absolute;left:60px;top:0;bottom:0;margin:auto 0;width:40px;height:40px;border-radius:50%;background:${avatarPlaceholderBg};display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;font-weight:600;border:2px solid rgba(255,255,255,0.2);}
-#workskin .android-header-name{position:absolute;left:110px;right:60px;top:0;bottom:0;display:flex;align-items:center;font-size:16px;font-weight:600;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,0.3);line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:calc(100% - 170px);padding:4px 0;}
+/* max-width dropped for the same reason as .ios-header-name: 170 was
+   left(110) + right(60), constraining the box to the width it already had. */
+#workskin .android-header-name{position:absolute;left:110px;right:60px;top:0;bottom:0;display:flex;align-items:center;font-size:16px;font-weight:600;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,0.3);line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:4px 0;}
 #workskin .android-header-name-wrapper{position:absolute;left:110px;right:60px;top:0;bottom:0;display:flex;flex-direction:column;justify-content:center;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,0.3);padding:4px 0;}
 #workskin .android-header-name-wrapper .android-header-name{position:static;font-size:16px;font-weight:600;line-height:1.4;padding:0;max-width:100%;overflow:visible;}
 #workskin .android-header-subtitle{font-size:12px;opacity:0.8;line-height:1.2;margin-top:2px;}
@@ -820,7 +926,8 @@ function buildAndroidCSS(s: SkinProject['settings'], senderBg: string, recvBg: s
 #workskin dl.msg > *{margin-top:1px;}
 #workskin .row.out dl.msg{align-items:flex-end;}
 #workskin .row.in dl.msg{align-items:flex-start;}
-#workskin dt.sender{font-size:12px;color:${senderNameColor};margin:0 0 4px 8px;padding:4px 0;font-weight:600;max-width:calc(75% - 8px);overflow:visible;white-space:nowrap;line-height:1.4;}
+/* was calc(75% - 8px), which resolves to 73% at the 400px card. */
+#workskin dt.sender{font-size:12px;color:${senderNameColor};margin:0 0 4px 8px;padding:4px 0;font-weight:600;max-width:73%;overflow:visible;white-space:nowrap;line-height:1.4;}
 #workskin dd{margin:0;}
 #workskin dd.bubble{position:relative;display:inline-block;min-width:0;max-width:280px;padding:7px 10px;border-radius:8px;line-height:1.4;font-size:14px;box-shadow:${bubbleShadow};white-space:normal;word-break:keep-all;overflow-wrap:anywhere;}
 #workskin dd.bubble.image-bubble{padding:7px 10px;max-width:70%;overflow:visible;margin-top:4px;}
@@ -831,9 +938,17 @@ function buildAndroidCSS(s: SkinProject['settings'], senderBg: string, recvBg: s
 #workskin dd.bubble.image-bubble.in img.message-image{border-bottom-left-radius:2px;}
 #workskin dd.bubble.out{background:${senderBubbleBg};color:${bubbleTextColor};border-top-right-radius:8px;border-bottom-right-radius:2px;border-bottom-left-radius:8px;border-top-left-radius:8px;}
 #workskin dd.bubble.in{background:${receiverBubbleBg};color:${bubbleTextColor};border-top-left-radius:8px;border-bottom-left-radius:2px;border-bottom-right-radius:8px;border-top-right-radius:8px;}
-#workskin dd.bubble .group-sender-row{display:flex !important;align-items:center;gap:6px;margin-bottom:4px;visibility:visible !important;opacity:1 !important;}
-#workskin dd.bubble.image-bubble .group-sender-row{display:flex !important;align-items:center;gap:6px;margin-bottom:6px;visibility:visible !important;opacity:1 !important;}
-#workskin dd.bubble .group-avatar{width:20px;height:20px;border-radius:50%;object-fit:cover;flex-shrink:0;display:block !important;}
+/* The gap property is spelled out as child margins: AO3 keeps a property only
+   if it is on its list or CONTAINS a shorthand name, so column-gap passes and
+   bare gap does not. Same substitution as the Twitter stylesheet. */
+#workskin dd.bubble .group-sender-row{display:flex !important;align-items:center;margin-bottom:4px;visibility:visible !important;opacity:1 !important;}
+#workskin dd.bubble.image-bubble .group-sender-row{display:flex !important;align-items:center;margin-bottom:6px;visibility:visible !important;opacity:1 !important;}
+#workskin dd.bubble .group-sender-row > *{margin-right:6px;}
+#workskin dd.bubble .group-sender-row > *:last-child{margin-right:0;}
+/* No object-fit — it is not on AO3's list and has no legal equivalent. The
+   avatar is a fixed 20x20 square, so a non-square source letterboxes instead of
+   cropping. Visible only to authors who upload a non-square avatar. */
+#workskin dd.bubble .group-avatar{width:20px;height:20px;border-radius:50%;flex-shrink:0;display:block !important;}
 #workskin dd.bubble .group-avatar-initials{width:20px;height:20px;border-radius:50%;display:flex !important;align-items:center;justify-content:center;font-size:8px;font-weight:700;flex-shrink:0;}
 #workskin dd.bubble .group-sender{font-size:11px;font-weight:600;line-height:1.2;opacity:0.9;display:inline-block !important;}
 #workskin dd.bubble .time{display:block;font-size:10px;color:${timeColor};margin-top:4px;text-align:right;font-weight:400;padding-right:20px;}
@@ -849,10 +964,10 @@ function buildAndroidCSS(s: SkinProject['settings'], senderBg: string, recvBg: s
 #workskin .typing-bubble{background:${receiverBubbleBg};padding:10px 14px;border-radius:8px;display:flex;align-items:center;box-shadow:${bubbleShadow};}
 #workskin .typing-bubble > *{margin-left:4px;}
 #workskin .typing-bubble > *:first-child{margin-left:0;}
-#workskin .typing-bubble .dot{width:8px;height:8px;background:${typingDotBg};border-radius:50%;animation:typing 1.4s infinite;}
-#workskin .typing-bubble .dot:nth-child(2){animation-delay:0.2s;}
-#workskin .typing-bubble .dot:nth-child(3){animation-delay:0.4s;}
-@keyframes typing{0%,60%,100%{opacity:0.3;}30%{opacity:1;}}
+/* Static dots at descending opacity — see the note in buildIOSCSS. */
+#workskin .typing-bubble .dot{width:8px;height:8px;background:${typingDotBg};border-radius:50%;opacity:0.4;}
+#workskin .typing-bubble .dot:nth-child(1){opacity:0.85;}
+#workskin .typing-bubble .dot:nth-child(2){opacity:0.65;}
 #workskin .typing-label{font-size:11px;color:${typingLabelColor};}
 #workskin .android-footer{position:relative;${footerBg}height:60px;border-top:1px solid ${footerBorderColor};overflow:visible;background-position:center;}
 ${getTextFormattingCSS(isDark)}
@@ -874,12 +989,33 @@ function buildTwitterCSS(s: SkinProject['settings'], senderBg: string, maxWidth:
   const replyLineColor = isDark ? '#38444d' : '#cfd9de';
   
   return `/* Generated with AO3 Skin Generator - Free forever! Support: https://ao3skingenerator.com/donate */
-#workskin .chat{width:550px;max-width:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;margin:0 auto;box-sizing:border-box;}
-#workskin .tweets .tweet{background:${bgColor};border:1px solid ${borderColor};border-radius:16px;padding:16px;margin:0 0 12px 0;position:relative;box-sizing:border-box;transition:background-color 0.2s;}
+/* NOTE ON UNITS. Sizes here are em, not px, and that is the whole reason this
+   card works on a phone. AO3 forbids @media blocks in skin CSS — media is a
+   field on the skin record, not something you can write here — so a breakpoint
+   is not available to us. Sizing in em is what every "scalable" community work
+   skin does instead, and AO3's own FAQ pushes it: "We highly encourage learning
+   about and using em, which lets you set dimensions relative to the user's
+   current font size. This will make your layouts much more flexible and
+   responsive to different browser and font settings, and improve their
+   accessibility to users with differing needs."
+
+   Every value below was converted against its own rule's font-size context, so
+   at a 16px base this renders identically to the px version it replaced — the
+   PNG export is unchanged. On AO3, where .userstuff computes to roughly 15px,
+   the card scales down to match the reader's text instead of overhanging it.
+
+   Hairline borders and the off-screen offset stay in px on purpose: a 1px rule
+   should stay 1px at any text size.
+
+   Keep decimals to three places. AO3's number grammar is
+   -?\\.?\\d{1,3}\\.?\\d{0,3}, so 0.9375em is parsed as "0.937" + "5em" and our
+   lint — which tokenises rather than re-scanning — rejects it. 0.938em is fine. */
+#workskin .chat{width:34.375em;max-width:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;margin:0 auto;box-sizing:border-box;}
+#workskin .tweets .tweet{background:${bgColor};border:1px solid ${borderColor};border-radius:1em;padding:1em;margin:0 0 0.75em 0;position:relative;box-sizing:border-box;transition:background-color 0.2s;}
 #workskin .tweets .tweet:hover{background:${bgHover};}
-#workskin .tweets .tweet.reply{margin-left:44px;margin-top:-8px;}
-#workskin .tweets .tweet.reply::before{content:'';position:absolute;left:-32px;top:-8px;bottom:12px;width:2px;background:${replyLineColor};}
-#workskin .tweets .tweet.reply::after{content:'';position:absolute;left:-32px;top:20px;width:20px;height:2px;background:${replyLineColor};}
+#workskin .tweets .tweet.reply{margin-left:2.75em;margin-top:-0.5em;}
+#workskin .tweets .tweet.reply::before{content:'';position:absolute;left:-2em;top:-0.5em;bottom:0.75em;width:2px;background:${replyLineColor};}
+#workskin .tweets .tweet.reply::after{content:'';position:absolute;left:-2em;top:1.25em;width:1.25em;height:2px;background:${replyLineColor};}
 /* NOTE ON GAP. AO3 accepts a property only if it is on its list or CONTAINS
    one of its shorthand names as a substring. column-gap passes (it contains
    "column"); bare gap matches nothing and is rejected — and AO3 refuses the
@@ -896,40 +1032,40 @@ function buildTwitterCSS(s: SkinProject['settings'], senderBg: string, maxWidth:
    float and inline-block are what the community has already proved survives
    it, and they degrade to something readable if a rule is dropped rather than
    collapsing the layout. Do not convert this back to flex. */
-#workskin .tweet-header{overflow:hidden;margin-bottom:12px;position:relative;}
-#workskin .tweet img.avatar{width:40px;height:40px;border-radius:50%;float:left;margin-right:12px;}
+#workskin .tweet-header{overflow:hidden;margin-bottom:0.75em;position:relative;}
+#workskin .tweet img.avatar{width:2.5em;height:2.5em;border-radius:50%;float:left;margin-right:0.75em;}
 #workskin .tweet .head{overflow:hidden;}
 #workskin .tweet .head-content{display:block;}
 /* No white-space:nowrap here — .head establishes a block formatting context to
    clear the floated avatar, so anything that overflows the line is clipped
    rather than shown. .name and .handle carry their own nowrap, so they stay
    whole while the line itself is free to wrap. */
-#workskin .tweet .name-line{line-height:20px;}
-#workskin .tweet .name-line > *{display:inline-block;vertical-align:middle;margin-right:4px;}
+#workskin .tweet .name-line{line-height:1.25;}
+#workskin .tweet .name-line > *{display:inline-block;vertical-align:middle;margin-right:0.25em;}
 #workskin .tweet .name-line > *:last-child{margin-right:0;}
-#workskin .tweet .name{font-weight:700;color:${textPrimary};font-size:15px;line-height:20px;white-space:nowrap;}
+#workskin .tweet .name{font-weight:700;color:${textPrimary};font-size:0.938em;line-height:1.333;white-space:nowrap;}
 #workskin .tweet .verified-container{display:inline-block;vertical-align:middle;}
-#workskin .tweet .verified-badge{width:18px;height:18px;display:inline-block;vertical-align:middle;}
-#workskin .tweet .handle{color:${handleColor};font-weight:400;font-size:15px;line-height:20px;white-space:nowrap;}
-#workskin .tweet .follow-dot{color:${handleColor};font-size:15px;line-height:20px;}
-#workskin .tweet .follow-btn{background:transparent;color:#1d9bf0;font-weight:700;font-size:15px;padding:0;border:none;cursor:pointer;line-height:20px;flex-shrink:0;white-space:nowrap;}
+#workskin .tweet .verified-badge{width:1.125em;height:1.125em;display:inline-block;vertical-align:middle;}
+#workskin .tweet .handle{color:${handleColor};font-weight:400;font-size:0.938em;line-height:1.333;white-space:nowrap;}
+#workskin .tweet .follow-dot{color:${handleColor};font-size:0.938em;line-height:1.333;}
+#workskin .tweet .follow-btn{background:transparent;color:#1d9bf0;font-weight:700;font-size:0.938em;padding:0;border:none;cursor:pointer;line-height:1.333;flex-shrink:0;white-space:nowrap;}
 #workskin .tweet .follow-btn:hover{color:#1a8cd8;text-decoration:underline;}
-#workskin .tweet .twitter-logo{width:20px;height:20px;display:inline-block;vertical-align:middle;}
-#workskin .tweet .body{margin-top:12px;font-size:15px;line-height:20px;color:${textPrimary};word-wrap:break-word;white-space:pre-wrap;}
+#workskin .tweet .twitter-logo{width:1.25em;height:1.25em;display:inline-block;vertical-align:middle;}
+#workskin .tweet .body{margin-top:0.8em;font-size:0.938em;line-height:1.333;color:${textPrimary};word-wrap:break-word;white-space:pre-wrap;}
 #workskin .tweet .body .hashtag{color:#1d9bf0;font-weight:400;}
 #workskin .tweet .body .mention{color:#1d9bf0;font-weight:400;}
-#workskin .tweet .tweet-image{width:100%;max-width:100%;height:auto;max-height:285px;border-radius:16px;margin-top:12px;border:1px solid ${borderColor};display:block;}
-#workskin .tweet .time-line{margin-top:16px;font-size:15px;color:${textSecondary};padding-bottom:16px;border-bottom:1px solid ${borderColor};}
+#workskin .tweet .tweet-image{width:100%;max-width:100%;height:auto;max-height:17.813em;border-radius:1em;margin-top:0.75em;border:1px solid ${borderColor};display:block;}
+#workskin .tweet .time-line{margin-top:1.067em;font-size:0.938em;color:${textSecondary};padding-bottom:1.067em;border-bottom:1px solid ${borderColor};}
 #workskin .tweet.no-metrics .time-line{padding-bottom:0;border-bottom:none;}
 /* Flex is kept HERE only because its failure mode is graceful: if the
    archive drops it, the metric chips fall back to inline-block and bunch to
    the left, which still reads fine. The header above could not tolerate that. */
-#workskin .tweet .metrics{display:flex;justify-content:space-between;padding:12px 0;font-size:14px;color:${textSecondary};border-bottom:1px solid ${borderColor};width:100%;}
-#workskin .tweet .metric{display:inline-block;cursor:pointer;transition:color 0.2s;margin-right:18px;}
+#workskin .tweet .metrics{display:flex;justify-content:space-between;padding:0.857em 0;font-size:0.875em;color:${textSecondary};border-bottom:1px solid ${borderColor};width:100%;}
+#workskin .tweet .metric{display:inline-block;cursor:pointer;transition:color 0.2s;margin-right:1.286em;}
 #workskin .tweet .metric:first-child{justify-content:flex-start;}
 #workskin .tweet .metric:last-child{margin-right:0;}
-#workskin .tweet .metric-icon{width:20px;height:20px;display:inline-block;vertical-align:middle;margin-right:6px;}
-#workskin .tweet .metric-count{color:${textSecondary};font-weight:400;font-size:14px;line-height:20px;vertical-align:middle;}
+#workskin .tweet .metric-icon{width:1.429em;height:1.429em;display:inline-block;vertical-align:middle;margin-right:0.429em;}
+#workskin .tweet .metric-count{color:${textSecondary};font-weight:400;font-size:1em;line-height:1.429;vertical-align:middle;}
 #workskin .tweet .metric:hover .metric-count{text-decoration:underline;}
 #workskin .tweet .metric.replies:hover{color:#1d9bf0;}
 #workskin .tweet .metric.replies:hover .metric-icon{opacity:1;filter:none;}
@@ -941,37 +1077,37 @@ function buildTwitterCSS(s: SkinProject['settings'], senderBg: string, maxWidth:
 #workskin .tweet .metric.bookmarks:hover .metric-icon{opacity:1;filter:none;}
 #workskin .tweet .metric.views:hover{color:${textSecondary};}
 #workskin .tweet .metric.views:hover .metric-icon{opacity:1;}
-#workskin .tweet .replying-to{font-size:13px;color:${textSecondary};margin:8px 0 4px 0;line-height:16px;}
+#workskin .tweet .replying-to{font-size:0.813em;color:${textSecondary};margin:0.615em 0 0.308em 0;line-height:1.231;}
 #workskin .tweet .replying-to .reply-handle{color:#1d9bf0;text-decoration:none;}
 #workskin .tweet .replying-to .reply-handle:hover{text-decoration:underline;}
-#workskin .tweet.expanded{padding:16px;display:flex;margin-left:-12px;}
-#workskin .tweet.expanded > *{margin-left:12px;}
-#workskin .tweet.expanded .avatar{width:40px;height:40px;flex-shrink:0;margin:0;}
+#workskin .tweet.expanded{padding:1em;display:flex;margin-left:-0.75em;}
+#workskin .tweet.expanded > *{margin-left:0.75em;}
+#workskin .tweet.expanded .avatar{width:2.5em;height:2.5em;flex-shrink:0;margin:0;}
 #workskin .tweet.expanded .expanded-content{flex:1;min-width:0;}
-#workskin .tweet.expanded .expanded-name{display:flex;align-items:center;margin-bottom:2px;margin-left:-4px;}
-#workskin .tweet.expanded .expanded-name > *{margin-left:4px;}
-#workskin .tweet.expanded .expanded-name .name{font-weight:700;color:${textPrimary};font-size:20px;line-height:24px;}
-#workskin .tweet.expanded .expanded-name .verified-badge{width:20px;height:20px;}
+#workskin .tweet.expanded .expanded-name{display:flex;align-items:center;margin-bottom:0.125em;margin-left:-0.25em;}
+#workskin .tweet.expanded .expanded-name > *{margin-left:0.25em;}
+#workskin .tweet.expanded .expanded-name .name{font-weight:700;color:${textPrimary};font-size:1.25em;line-height:1.2;}
+#workskin .tweet.expanded .expanded-name .verified-badge{width:1.25em;height:1.25em;}
 
-#workskin .tweet.expanded .expanded-handle{color:${textSecondary};font-size:15px;line-height:20px;margin-bottom:4px;}
-#workskin .tweet.expanded .replying-to{margin:0 0 12px 0;}
-#workskin .tweet.expanded .expanded-body{font-size:23px;line-height:28px;color:${textPrimary};word-wrap:break-word;white-space:pre-wrap;}
-#workskin .tweet.expanded .tweet-image{margin-top:16px;}
-#workskin .tweet.expanded .time-line{border:none;padding:0;margin-top:16px;}
-#workskin .tweet .quote{border:1px solid ${borderColor};border-radius:12px;padding:12px;margin-top:12px;transition:background-color 0.2s;cursor:pointer;}
+#workskin .tweet.expanded .expanded-handle{color:${textSecondary};font-size:0.938em;line-height:1.333;margin-bottom:0.267em;}
+#workskin .tweet.expanded .replying-to{margin:0 0 0.923em 0;}
+#workskin .tweet.expanded .expanded-body{font-size:1.438em;line-height:1.217;color:${textPrimary};word-wrap:break-word;white-space:pre-wrap;}
+#workskin .tweet.expanded .tweet-image{margin-top:1em;}
+#workskin .tweet.expanded .time-line{border:none;padding:0;margin-top:1.067em;}
+#workskin .tweet .quote{border:1px solid ${borderColor};border-radius:0.75em;padding:0.75em;margin-top:0.75em;transition:background-color 0.2s;cursor:pointer;}
 #workskin .tweet .quote:hover{background:${quoteHover};}
-#workskin .tweet .quote-head{display:flex;align-items:center;font-size:14px;line-height:16px;margin-bottom:4px;margin-left:-4px;}
-#workskin .tweet .quote-head > *{margin-left:4px;}
+#workskin .tweet .quote-head{display:flex;align-items:center;font-size:0.875em;line-height:1.143;margin-bottom:0.286em;margin-left:-0.286em;}
+#workskin .tweet .quote-head > *{margin-left:0.286em;}
 #workskin .tweet .quote-name{font-weight:700;color:${textPrimary};}
-#workskin .tweet .quote-avatar{width:20px;height:20px;border-radius:50%;overflow:hidden;}
-#workskin .tweet .quote-verified-container{display:inline-flex;align-items:center;margin-left:-2px;}
-#workskin .tweet .quote-verified-container > *{margin-left:2px;}
-#workskin .tweet .quote-verified-badge{width:16px;height:16px;display:inline-block;vertical-align:middle;}
+#workskin .tweet .quote-avatar{width:1.429em;height:1.429em;border-radius:50%;overflow:hidden;}
+#workskin .tweet .quote-verified-container{display:inline-flex;align-items:center;margin-left:-0.143em;}
+#workskin .tweet .quote-verified-container > *{margin-left:0.143em;}
+#workskin .tweet .quote-verified-badge{width:1.143em;height:1.143em;display:inline-block;vertical-align:middle;}
 
-#workskin .tweet .quote-handle{color:${textSecondary};font-weight:400;font-size:14px;}
-#workskin .tweet .quote-body{margin-top:4px;font-size:15px;line-height:20px;color:${textPrimary};}
-#workskin .tweet .quote-image{width:100%;height:auto;border-radius:12px;margin-top:12px;border:1px solid ${borderColor};}
-#workskin .tweets .wm{margin-top:12px;font-size:10px;opacity:0.5;text-align:center;color:${textSecondary};}
+#workskin .tweet .quote-handle{color:${textSecondary};font-weight:400;font-size:1em;}
+#workskin .tweet .quote-body{margin-top:0.267em;font-size:0.938em;line-height:1.333;color:${textPrimary};}
+#workskin .tweet .quote-image{width:100%;height:auto;border-radius:0.75em;margin-top:0.75em;border:1px solid ${borderColor};}
+#workskin .tweets .wm{margin-top:1.2em;font-size:0.625em;opacity:0.5;text-align:center;color:${textSecondary};}
 #workskin .link{text-decoration:none;color:#1d9bf0;}
 #workskin .visually-hidden{position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden;}`;
 }
