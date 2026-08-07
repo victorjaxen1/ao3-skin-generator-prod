@@ -6,10 +6,19 @@
 codebase. This plan keeps their product thinking and replaces their
 architecture with ours.
 
-**Revision 2 — 6 Aug 2026.** Every rule below was re-verified against
-otwarchive `master`, including — for the first time — AO3's *own default
-stylesheets*, not just its sanitizer. That reading changed the compiler spec
-substantially; §4 and §4b are the parts that moved. Citations at the end.
+**Revision 3 — 6 Aug 2026.** Every rule below was re-verified against
+otwarchive `master`, including AO3's *own default stylesheets*, not just its
+sanitizer. That reading changed the compiler spec substantially; §4 and §4b are
+the parts that moved. Revision 3 added header banners and the image-address
+validator (§3a), and reversed the earlier "v1 emits no `url()`". Citations at
+the end.
+
+**A second product now shares this knowledge.** `WORK-SKIN-IMPLEMENTATION.md`
+covers the conversation generator's third export. It relies on §3 below and
+records only what differs — chiefly that work skins ban custom properties and
+`var()`, that AO3's *HTML* sanitizer fails silently where the CSS one errors
+loudly, and that readers can switch a work skin off entirely. If you are
+changing `ao3Css.ts`, both products depend on it.
 
 ---
 
@@ -422,6 +431,12 @@ src/lib/siteSkin/
 Pages Router, matching the rest of the app. Ignore the blueprint's
 `app/routes/...` layout — that is App Router and would fork the codebase.
 
+`/site-skin?template=<id>` opens the editor straight onto that template,
+mirroring how `index.tsx` handles the same parameter. The examples gallery in
+`public/` links to it, so a card lands you on the thing you clicked. An
+unrecognised id falls through to the gallery rather than to a silent default:
+a stale link should look like a wrong turn, not like a choice made for you.
+
 ### The preview must be an iframe
 
 Compiled site-skin CSS targets `body`, `#header`, `#main`. Our current
@@ -569,6 +584,27 @@ Always emit a fallback stack, and keep every family name inside
 | 7 | A11y, tests, **manual AO3 save of every template** | ⬜ **the remaining gate** — see §8 |
 | 8 | Header banners, hide-logo, URL validator, 4 banner-ready presets | ✅ 16 templates; see §3a and §11 |
 
+### Corrections made to `ao3Css.ts` after Phase 8
+
+Two bugs in the safety layer, both found by pointing it at CSS it had not been
+written for. Both are the *same* failure — being stricter than AO3 — which is
+the one this file must not have, because it blocks working CSS and looks like
+the archive's fault:
+
+- **The value tokeniser split on commas without respecting parentheses**, so
+  `rgba(255, 255, 255, 0.5)` became four broken tokens and was rejected. AO3's
+  `tokenize_and_sanitize_css_value` scans to the matching close paren. Fixing
+  it dropped the false-positive count on the generator's stylesheet from 36 to
+  19.
+- **`url()` values were never checked at all** — only the *property* carrying
+  them was. `tests/ao3-css.unit.spec.ts` had asserted that
+  `background-image: url(x.png)` and `content: url(x.png)` were safe. Both are
+  refused: a relative address has neither a scheme nor an allowlisted domain.
+  The tests encoded the gap rather than catching it.
+
+`lintAo3Css` also gained a `mode` parameter (`'site'` | `'work'`). Site is the
+default and is unchanged.
+
 ### What still needs a human
 
 - **Save all twelve templates on AO3.** The sanitizer is the only authority,
@@ -580,6 +616,26 @@ Always emit a fallback stack, and keep every family name inside
 - Known rough edge: on a phone the preview scrolls sideways rather than
   scaling AO3's desktop layout down to fit. It is usable; it is not elegant.
   Scaling was left out rather than added untested at the end.
+
+### Marketing pages, corrected alongside this
+
+`public/ao3skingen.wordfokus.com.txt` (the SwipePages source) and
+`public/examples-gallery.html` described the app as a **work skin** generator.
+It has never made one: `buildCSS`/`buildHTML` only fed the preview and the
+capture, and the export uploaded a PNG. Three false claims were fixed — the
+work-skin framing, "Export CSS, HTML, or Images", and "Your Data Never Leaves
+Your Browser" (the AO3 flow uploads to ImgBB, which the privacy policy already
+disclosed correctly).
+
+Both pages now describe two products and say plainly that **neither is a work
+skin**, which is the distinction an AO3 user arrives confused about. The
+gallery gained the 16 site-skin templates — generated from the real catalog by
+a throwaway script rather than hand-transcribed, so the page cannot drift from
+what ships — and its "Try This Style" buttons, which previously only logged
+`"implement later"` to the console, now deep-link to `?template=<id>`.
+
+Since Phase 8 the conversation generator *does* emit a real work skin for two
+platforms. The marketing copy has **not** been updated to mention it.
 
 The catalog is the prototype's 12 templates — they are well chosen and already
 carry exactly our field set.
