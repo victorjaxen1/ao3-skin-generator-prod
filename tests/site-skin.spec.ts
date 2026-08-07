@@ -44,6 +44,31 @@ test('the picker offers the site skin builder as its own thing', async ({ page }
   await expect(page.getByRole('heading', { name: 'Make AO3 feel like yours' })).toBeVisible();
 });
 
+test('a ?template= link opens the editor on that template', async ({ page }) => {
+  // What the examples gallery links to. Landing on the gallery instead would
+  // make every card on that page a dead end.
+  await page.goto('/site-skin?template=gothic');
+  await expect(page.getByRole('button', { name: 'Copy to AO3' })).toBeVisible();
+  await expect(page.getByText('Gothic Velvet')).toBeVisible();
+
+  // Its accent, not the default template's.
+  await expect(page.getByLabel('Accent', { exact: true })).toHaveValue('#b35575');
+});
+
+test('a banner-ready template arrives with its header controls set', async ({ page }) => {
+  await page.goto('/site-skin?template=western');
+  await expect(page.getByText('Sun-Bleached Western')).toBeVisible();
+  await expect(page.getByRole('switch', { name: "Hide AO3's logo" })).toHaveAttribute(
+    'aria-checked',
+    'true'
+  );
+});
+
+test('an unknown template id falls back to the gallery, not a silent default', async ({ page }) => {
+  await page.goto('/site-skin?template=not-a-real-template');
+  await expect(page.getByRole('heading', { name: 'Make AO3 feel like yours' })).toBeVisible();
+});
+
 test('mood filters narrow the gallery', async ({ page }) => {
   await page.goto('/site-skin');
   // A saved theme adds a "Keep editing …" button carrying the same name, so

@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
+import { useRouter } from 'next/router';
 import { SiteSkinTheme } from '../lib/siteSkin/theme';
-import { cloneTheme, DEFAULT_TEMPLATE } from '../lib/siteSkin/templates';
+import { cloneTheme, DEFAULT_TEMPLATE, findTemplate } from '../lib/siteSkin/templates';
 import { compile } from '../lib/siteSkin/compile';
 import { lintAo3Css } from '../lib/siteSkin/ao3Css';
 import {
@@ -29,6 +30,7 @@ const MAX_HISTORY = 50;
  * anywhere on this page.
  */
 export default function SiteSkinPage() {
+  const router = useRouter();
   const [theme, setTheme] = useState<SiteSkinTheme>(() => cloneTheme(DEFAULT_TEMPLATE));
   const [isLoaded, setIsLoaded] = useState(false);
   const [showGallery, setShowGallery] = useState(true);
@@ -42,15 +44,36 @@ export default function SiteSkinPage() {
   const [historyIndex, setHistoryIndex] = useState(-1);
 
   // ── Mount ───────────────────────────────────────────────────────────────
+  // `?template=<id>` opens the editor straight onto that template, matching
+  // how the conversation generator handles the same parameter. It is what the
+  // examples gallery links to, so a card lands you on the thing you clicked
+  // rather than on a gallery you have to search again.
   useEffect(() => {
+    if (!router.isReady) return;
+
     const stored = hasStoredTheme();
-    const initial = stored ? loadStoredTheme() : cloneTheme(DEFAULT_TEMPLATE);
+    let templateId = (router.query.template as string) || '';
+    if (!templateId && typeof window !== 'undefined') {
+      templateId = new URLSearchParams(window.location.search).get('template') || '';
+    }
+
+    const linked = templateId ? findTemplate(templateId) : undefined;
+    const initial = linked
+      ? cloneTheme(linked)
+      : stored
+      ? loadStoredTheme()
+      : cloneTheme(DEFAULT_TEMPLATE);
+
     setTheme(initial);
     setHistory([initial]);
     setHistoryIndex(0);
     setHasSaved(stored);
+    // An unrecognised id falls through to the gallery rather than to a silent
+    // default — a stale link should look like a wrong turn, not like a choice
+    // that was made for you.
+    if (linked) setShowGallery(false);
     setIsLoaded(true);
-  }, []);
+  }, [router.isReady, router.query]);
 
   // ── Persist + history ───────────────────────────────────────────────────
   // Same discipline as the generator: debounce, then report a refused save
