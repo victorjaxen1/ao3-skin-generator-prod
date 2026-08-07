@@ -60,6 +60,65 @@ function srOnly(text: string): string {
   return `<span class="visually-hidden">${text}</span>`;
 }
 
+/**
+ * The rule that makes srOnly() work, and the only mechanism the whole skin-off
+ * story rests on. One definition, interpolated into all four stylesheets —
+ * it used to be three copies of a line, and the copies were the wrong recipe.
+ *
+ * This is the WCAG-standard clip pattern, and it is not a theoretical choice:
+ * it was read out of CSS AO3 is currently serving, so the archive demonstrably
+ * keeps every declaration in it. `clip` is on AO3's supported-property list and
+ * `rect()` reaches VALUE_REGEX through its shape-function branch.
+ *
+ * We used to write `position:absolute;left:-9999px`. That works, but the
+ * off-screen technique can create horizontal overflow, is handled
+ * inconsistently by assistive technology, and on a right-to-left page pushes
+ * the hidden text back into view. Clipping has none of those problems.
+ *
+ * `width:1px` is ours: the published skin omits it, and without a width the
+ * box is free to be as wide as its text.
+ */
+const VISUALLY_HIDDEN_CSS =
+  '#workskin .visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;}';
+
+/**
+ * Make an injected paragraph harmless.
+ *
+ * AO3 stuffs `<p>` and `<br>` into work HTML at line breaks — and *how much* it
+ * injects depends partly on how the user pastes into the editor, which is not
+ * something our output can control. Without this, an injected `<p>` inherits
+ * `.userstuff p`'s margins and pushes the layout apart.
+ *
+ * Five independently written community skins reset paragraphs (`.tw p`,
+ * `.spotify-cont-outer p`, `.snap-cont p`, `.polaroid p`, `.tunglebody p`), and
+ * the canonical Twitter skin's author names it as their main defence precisely
+ * because it does not depend on the markup being perfect. It is the first thing
+ * an experienced AO3 skin author writes.
+ *
+ * NOTE ON SPECIFICITY. This is `#workskin .chat p` (0,1,1,1), which outranks a
+ * plain `#workskin .some-class` (0,1,1,0). Google's own two paragraphs are
+ * therefore written as `#workskin p.search-stats` — same specificity, later in
+ * the sheet, so they win. Any future rule targeting a real `<p>` of ours needs
+ * the same treatment.
+ */
+const PARAGRAPH_RESET_CSS = '#workskin .chat p{margin:0;padding:0;}';
+
+/**
+ * WhatsApp's delivery ticks, with the intrinsic size each one needs.
+ *
+ * The CSS sizes these by height with `width:auto`, which is fine until the skin
+ * is off and nothing is sizing them at all. The four sources are 140x144,
+ * 91x83, 116x95 and 117x105 — four different aspect ratios — so a single width
+ * attribute would squash three of them. At the 14px height the CSS asks for,
+ * they come out 14, 15, 17 and 16 wide.
+ */
+const WHATSAPP_TICKS = {
+  sending: { src: PLATFORM_ASSETS.whatsapp.checkmarkSending, width: 14 },
+  sent: { src: PLATFORM_ASSETS.whatsapp.checkmarkSent, width: 15 },
+  delivered: { src: PLATFORM_ASSETS.whatsapp.checkmarkDelivered, width: 17 },
+  read: { src: PLATFORM_ASSETS.whatsapp.checkmarkRead, width: 16 },
+} as const;
+
 function applyBoldMarkup(raw: string): string {
   return raw.replace(/\*([^*]+)\*/g, '<b>$1</b>');
 }
@@ -160,7 +219,10 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
       // Build avatar or initials with inline styles for maximum specificity
       let avatarHTML = '';
       if (participant.avatarUrl) {
-        avatarHTML = `<img src="${sanitizeUrl(participant.avatarUrl)}" alt="${sanitizeText(participant.name)}" class="group-avatar" style="width:20px;height:20px;border-radius:50%;object-fit:cover;flex-shrink:0;display:block !important;" />`;
+        // The width/height ATTRIBUTES are the ones that matter on AO3: `style`
+        // is on no allowed-attribute list, so the sanitizer strips it silently
+        // and the inline sizing below never reaches the archive at all.
+        avatarHTML = `<img src="${sanitizeUrl(participant.avatarUrl)}" alt="${sanitizeText(participant.name)}" class="group-avatar" width="20" height="20" style="width:20px;height:20px;border-radius:50%;object-fit:cover;flex-shrink:0;display:block !important;" />`;
       } else {
         // Generate initials (first 2 chars of name)
         const initials = participant.name.substring(0, 2).toUpperCase();
@@ -197,14 +259,10 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
   // Build checkmark HTML for WhatsApp (will be added inside bubble)
   let checkmarkHTML = '';
   if (template === 'android' && msg.outgoing && project.settings.androidCheckmarks) {
-    let checkImg = '';
-    if (msg.status === 'sending') checkImg = PLATFORM_ASSETS.whatsapp.checkmarkSending;
-    else if (msg.status === 'sent') checkImg = PLATFORM_ASSETS.whatsapp.checkmarkSent;
-    else if (msg.status === 'delivered') checkImg = PLATFORM_ASSETS.whatsapp.checkmarkDelivered;
-    else if (msg.status === 'read') checkImg = PLATFORM_ASSETS.whatsapp.checkmarkRead;
-    
-    if (checkImg) {
-      checkmarkHTML = `<img src="${checkImg}" alt="${msg.status}" class="check-icon" />`;
+    const tick = msg.status ? WHATSAPP_TICKS[msg.status as keyof typeof WHATSAPP_TICKS] : undefined;
+
+    if (tick) {
+      checkmarkHTML = `<img src="${tick.src}" alt="${msg.status}" class="check-icon" width="${tick.width}" height="14" />`;
     }
   }
 
@@ -564,7 +622,7 @@ export function buildHTML(project: SkinProject): string {
       // A background image needs its container even with nothing to overlay.
       if (s.iosHeaderImageUrl || contactName || avatarUrl) {
         const avatarOverlay = avatarUrl
-          ? `<img src="${sanitizeUrl(avatarUrl)}" alt="avatar" class="ios-header-avatar" />`
+          ? `<img src="${sanitizeUrl(avatarUrl)}" alt="avatar" class="ios-header-avatar" width="38" height="38" />`
           : (contactName ? `<div class="ios-header-avatar-placeholder">${getInitials(contactName)}</div>` : '');
         const nameOverlay = contactName
           ? `<div class="ios-header-name">${sanitizeText(contactName)}</div>`
@@ -580,7 +638,7 @@ export function buildHTML(project: SkinProject): string {
 
       if (s.androidHeaderImageUrl || contactName || avatarUrl) {
         const avatarOverlay = avatarUrl
-          ? `<img src="${sanitizeUrl(avatarUrl)}" alt="avatar" class="android-header-avatar" />`
+          ? `<img src="${sanitizeUrl(avatarUrl)}" alt="avatar" class="android-header-avatar" width="40" height="40" />`
           : (contactName ? `<div class="android-header-avatar-placeholder">${getInitials(contactName)}</div>` : '');
 
         // Group chats show the member count where a 1-on-1 shows "online".
@@ -641,26 +699,60 @@ export function buildHTML(project: SkinProject): string {
       ? `<span class="naver-green">NAVER</span>`
       : engine === 'google-old'
         ? `<span class="blue">G</span><span class="red">o</span><span class="yellow">o</span><span class="blue">g</span><span class="green">l</span><span class="red">e</span>`
-        : `<img src="${PLATFORM_ASSETS.google.logo}" alt="Google" class="google-logo-img" />`;
+        // Every img below states its size. With the skin off there is no CSS to
+        // constrain them, and these assets are 512x512 and 936x336 sources — a
+        // download rendered the search magnifier as a picture the width of the
+        // page, six times over. §4a's first rule, which Twitter already
+        // followed and Google never did.
+        //
+        // These are presentational hints, so any author CSS outranks them and
+        // the styled render is unchanged — including the logo, whose
+        // width:auto still wins over the width attribute here.
+        : `<img src="${PLATFORM_ASSETS.google.logo}" alt="Google" class="google-logo-img" width="256" height="92" />`;
     
     const logoClass = engine === 'google' ? 'logo-container' : engine === 'google-old' ? 'logo old' : 'logo naver';
     
     // Build suggestions
     const suggestions = (s.googleSuggestions||[]).filter(line=>line.trim().length>0).map(line => {
       const withBold = applyBoldMarkup(line);
-      return `<div class="suggest-item"><img src="${PLATFORM_ASSETS.google.searchIcon}" alt="" class="suggest-icon" />${sanitizeText(withBold)}</div>`;
+      return `<div class="suggest-item"><img src="${PLATFORM_ASSETS.google.searchIcon}" alt="" class="suggest-icon" width="20" height="20" />${sanitizeText(withBold)}</div>`;
     }).join('');
     
-    // Build search bar with icons
-    const searchBarContent = `<img src="${PLATFORM_ASSETS.google.searchIcon}" alt="" class="search-icon-left" /><span class="search-text">${searchTerm}</span><div class="search-icons-right"><img src="${PLATFORM_ASSETS.google.clearIcon}" alt="" class="search-icon-clear" /><img src="${PLATFORM_ASSETS.google.micIcon}" alt="" class="search-icon-mic" /><img src="${PLATFORM_ASSETS.google.lensIcon}" alt="" class="search-icon-lens" /></div>`;
-    
+    // Build search bar with icons.
+    //
+    // The hidden label is what turns a bare noun into a sentence once the skin
+    // is off — a download otherwise opens on the query with nothing saying it
+    // is a query. See srOnly().
+    const searchBarContent = `<img src="${PLATFORM_ASSETS.google.searchIcon}" alt="" class="search-icon-left" width="20" height="20" />${srOnly('Searched for: ')}<span class="search-text">${searchTerm}</span>${srOnly('. ')}<div class="search-icons-right"><img src="${PLATFORM_ASSETS.google.clearIcon}" alt="" class="search-icon-clear" width="14" height="14" /><img src="${PLATFORM_ASSETS.google.micIcon}" alt="" class="search-icon-mic" width="18" height="18" /><img src="${PLATFORM_ASSETS.google.lensIcon}" alt="" class="search-icon-lens" width="18" height="18" /></div>`;
+
     // Build unified search component (bar + dropdown as one)
-    const searchComponent = suggestions.length 
-      ? `<div class="search-container"><div class="search-bar">${searchBarContent}</div><div class="suggest-box">${suggestions}</div></div>`
+    const searchComponent = suggestions.length
+      ? `<div class="search-container"><div class="search-bar">${searchBarContent}</div>${srOnly('Suggested searches: ')}<div class="suggest-box">${suggestions}</div></div>`
       : `<div class="search-bar-solo">${searchBarContent}</div>`;
-    
-    // Tabs (All, Images, Videos, News, etc.)
-    const tabs = `<div class="search-tabs"><span class="tab active"><img src="${PLATFORM_ASSETS.google.searchIcon}" alt="" class="tab-icon" />All</span><span class="tab">Images</span><span class="tab">Videos</span><span class="tab">News</span><span class="tab">Maps</span><span class="tab">More</span></div>`;
+
+    // Tabs (All, Images, Videos, News, etc.).
+    //
+    // These six words are chrome, and unlike the labels above we cannot make
+    // them disappear when the skin is off — hiding them would need
+    // `display:none`, which hides them from screen readers with the skin ON
+    // too, and moving them into `content:` would delete them from the PNG
+    // (html2canvas cannot rasterise pseudo-elements). So they are labelled
+    // instead of removed: "All Images Videos News Maps More" reads as junk,
+    // "Search tabs: All Images Videos News Maps More." reads as chrome. Same
+    // deliberate compromise as Twitter's "· Follow".
+    // The literal spaces between the spans keep a download from reading
+    // "AllImagesVideosNewsMapsMore". They used to be free, because a flex
+    // container drops whitespace-only text nodes between its items; now that
+    // the tabs are inline-block they render as an ordinary word space, which is
+    // why .tab no longer carries the negative margin it used to.
+    //
+    // The two hidden labels sit OUTSIDE the .search-tabs div, which matters
+    // more than it looks. Inside, the leading one is `.search-tabs`'s first
+    // child, and `.search-tabs .tab:first-child{margin-left:12px}` then stops
+    // matching the first tab — the whole bar loses its indent. A hidden span is
+    // only free if it changes no structural selector; being out of flow is not
+    // enough. Caught by the pixel check in the AO3 nesting harness.
+    const tabs = `${srOnly('Search tabs: ')}<div class="search-tabs"><span class="tab active"><img src="${PLATFORM_ASSETS.google.searchIcon}" alt="" class="tab-icon" width="16" height="16" />All</span> <span class="tab">Images</span> <span class="tab">Videos</span> <span class="tab">News</span> <span class="tab">Maps</span> <span class="tab">More</span></div>${srOnly('. ')}`;
     
     // Result statistics. Pure flavour, so they are derived from the query
     // rather than asked for — a user who cares can still override either in
@@ -677,17 +769,27 @@ export function buildHTML(project: SkinProject): string {
       ? `<p class="search-dym"><span class="search-dym1">Did you mean: </span><span class="search-dym2">${sanitizeText(s.googleDidYouMean)}</span></p>`
       : '';
     
-    // Build search results from messages array
-    const results = project.messages.map(msg => {
+    // Build search results from messages array.
+    //
+    // ONE LINE, NO EXCEPTIONS. This used to be an indented template literal —
+    // nine lines with two blank-line breaks — and AO3 injects <br> at every
+    // newline and wraps blank-line-separated chunks in <p>. It was rewriting
+    // the inside of .search-result on every save, in a shipped platform. A
+    // single line is never touched. Pinned by a test that asserts no
+    // platform's exported HTML contains a newline at all.
+    //
+    // The hidden labels are the skin-off story: with no CSS, a result is three
+    // stacked divs reading "https://example.com Untitled Result some text",
+    // with nothing marking where one result ends and the next begins. The URL
+    // comes before the title in the markup because that is the order Google
+    // renders them, so the label has to carry the awkward join.
+    const results = project.messages.map((msg, i) => {
       const title = sanitizeText(msg.content || 'Untitled Result');
       const url = sanitizeText(msg.googleResultUrl || 'https://example.com');
       const description = msg.googleResultDescription ? sanitizeText(msg.googleResultDescription) : '';
-      
-      return `<div class="search-result">
-        <div class="result-url">${url}</div>
-        <div class="result-title">${title}</div>
-        ${description ? `<div class="result-desc">${description}</div>` : ''}
-      </div>`;
+      const desc = description ? `<div class="result-desc">${description}</div>` : '';
+
+      return `<div class="search-result"><div class="result-url">${srOnly(`Result ${i + 1}, from `)}${url}</div><div class="result-title">${srOnly(': ')}${title}</div>${desc}</div>`;
     }).join('');
     
     const body = `<div class="${logoClass}">${logoHtml}</div><div class="search-wrap">${searchComponent}${tabs}${stats}${dym}${results}</div>`;
@@ -759,8 +861,9 @@ function buildIOSCSS(s: SkinProject['settings'], senderBg: string, recvBg: strin
   const headerBg = s.iosHeaderImageUrl ? `background:url('${s.iosHeaderImageUrl}') no-repeat top center;background-size:100% auto;` : 'background:#007aff;';
   const footerBg = s.iosFooterImageUrl ? `background:url('${s.iosFooterImageUrl}') no-repeat bottom center;background-size:100% auto;` : `background:${inputBarBg};`;
   
-    return `/* Generated with AO3 Skin Generator - Free forever! Support: https://ao3skingenerator.com/donate */
+    return `/* Generated with AO3 Skin Generator - Free forever! https://wordfokus.com/ao3skingen */
 #workskin .chat{width:100%;max-width:${Math.min(maxWidth, 375)}px;min-width:320px;margin:0 auto;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;padding:0;background:${chatBg};}
+${PARAGRAPH_RESET_CSS}
 #workskin .ios-header{position:relative;${headerBg}height:65px;display:flex;align-items:center;padding:0;overflow:hidden;}
 #workskin .ios-header-avatar{position:absolute;left:65px;top:50%;transform:translateY(-50%);width:38px;height:38px;border-radius:50%;overflow:hidden;border:2px solid rgba(255,255,255,0.3);}
 #workskin .ios-header-avatar img{width:100%;height:100%;}
@@ -797,7 +900,7 @@ function buildIOSCSS(s: SkinProject['settings'], senderBg: string, recvBg: strin
 /* was calc(70% - 36px). At the 375px card that resolves to 60.4%, and this is
    an ellipsised label rather than a load-bearing width, so a flat percentage is
    the honest approximation. See the note on .ios-header-name. */
-#workskin dt.sender{font-size:11px;color:${isDark ? 'rgba(255,255,255,0.5)' : 'rgba(235,235,245,0.5)'};margin:6px 0 2px 36px;font-weight:500;max-width:60%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#workskin dt.sender{font-size:11px;color:${isDark ? 'rgba(255,255,255,0.5)' : 'rgba(60,60,67,0.6)'};margin:6px 0 2px 36px;font-weight:500;max-width:60%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 #workskin dd{margin:0;}
 #workskin dd.bubble{position:relative;display:inline-block;min-width:0;max-width:260px;padding:8px 12px;border-radius:18px;line-height:1.35;font-size:15px;white-space:normal;word-break:keep-all;overflow-wrap:anywhere;}
 #workskin dd.bubble.image-bubble{padding:8px 12px;max-width:60%;overflow:visible;}
@@ -822,13 +925,25 @@ function buildIOSCSS(s: SkinProject['settings'], senderBg: string, recvBg: strin
    Hence the pure-CSS pair below, which is the border-plus-radius trick every
    community iOS skin uses. They are scoped to .css-tails, a class only
    buildWorkSkin adds, so the browser never draws both at once. */
-#workskin .chat.css-tails dd.bubble.out.has-tail::after{content:"";position:absolute;right:-6px;bottom:0;width:8px;height:16px;border-right:8px solid ${senderBg};border-bottom-right-radius:16px 8px;}
-#workskin .chat.css-tails dd.bubble.in.has-tail::after{content:"";position:absolute;left:-6px;bottom:0;width:8px;height:16px;border-left:8px solid ${receiverBubbleBg};border-bottom-left-radius:16px 8px;}
+/* Single quotes on content, matching the Twitter stylesheet. Both forms are
+   very likely fine — this pair was content:"" for a long time — but the CSS AO3
+   stored for this skin on 7 Aug 2026 was read back rule by rule, and the
+   single-quoted form is the one we have actually watched survive the sanitizer
+   intact. No reason to run two conventions. */
+#workskin .chat.css-tails dd.bubble.out.has-tail::after{content:'';position:absolute;right:-6px;bottom:0;width:8px;height:16px;border-right:8px solid ${senderBg};border-bottom-right-radius:16px 8px;}
+#workskin .chat.css-tails dd.bubble.in.has-tail::after{content:'';position:absolute;left:-6px;bottom:0;width:8px;height:16px;border-left:8px solid ${receiverBubbleBg};border-bottom-left-radius:16px 8px;}
 #workskin dd.bubble.out .time{display:block;font-size:11px;color:rgba(255,255,255,0.65);margin-top:6px;font-weight:400;}
 #workskin dd.bubble.in .time{display:block;font-size:11px;color:${receiverTimeColor};margin-top:6px;font-weight:400;}
 #workskin dd.bubble.image-bubble .time.image-time{position:absolute;bottom:8px;right:8px;margin:0;background:rgba(0,0,0,0.6);padding:2px 6px;border-radius:10px;font-size:11px;color:#fff;}
 #workskin dd.bubble .reaction{position:absolute;bottom:-10px;right:8px;background:rgba(44,44,46,0.95);border:1.5px solid rgba(255,255,255,0.1);border-radius:14px;padding:3px 8px;font-size:16px;box-shadow:0 2px 8px rgba(0,0,0,0.3);}
-#workskin dd.status-indicator{font-size:10px;color:${isDark ? 'rgba(255,255,255,0.45)' : 'rgba(235,235,245,0.45)'};text-align:right;margin:2px 10px 0 0;font-weight:400;}
+/* LIGHT-MODE COLOUR, and it was wrong until 7 Aug 2026. This and three sibling
+   rules — dt.sender, .typing-label, .typing-bubble .dot — chose between
+   rgba(255,255,255,x) and rgba(235,235,245,x). Both are near-white: 235,235,245
+   is iOS's secondary label for DARK backgrounds, so the light branch was
+   painting near-white text on a white page. A real AO3 render showed "Read" as
+   barely-there grey, and in light mode the typing dots and label were invisible
+   outright. rgba(60,60,67,·) is the light-mode counterpart. */
+#workskin dd.status-indicator{font-size:10px;color:${isDark ? 'rgba(255,255,255,0.45)' : 'rgba(60,60,67,0.6)'};text-align:right;margin:2px 10px 0 0;font-weight:400;}
 #workskin dd.attach{margin-top:2px;}
 #workskin img.attach-img{max-width:220px;border-radius:12px;display:block;}
 #workskin .row.typing{align-items:center;margin-left:-6px;}
@@ -846,10 +961,10 @@ function buildIOSCSS(s: SkinProject['settings'], senderBg: string, recvBg: strin
    Do not delete the :nth-child rules to "simplify" — a rule left with no
    declarations is an AO3 error, not a no-op, which is exactly how the
    animation-delay versions of these two failed. */
-#workskin .typing-bubble .dot{width:8px;height:8px;background:${isDark ? 'rgba(255,255,255,0.6)' : 'rgba(235,235,245,0.6)'};border-radius:50%;opacity:0.4;}
+#workskin .typing-bubble .dot{width:8px;height:8px;background:${isDark ? 'rgba(255,255,255,0.6)' : 'rgba(60,60,67,0.6)'};border-radius:50%;opacity:0.4;}
 #workskin .typing-bubble .dot:nth-child(1){opacity:0.85;}
 #workskin .typing-bubble .dot:nth-child(2){opacity:0.65;}
-#workskin .typing-label{font-size:11px;color:${isDark ? 'rgba(255,255,255,0.5)' : 'rgba(235,235,245,0.5)'};font-weight:400;}
+#workskin .typing-label{font-size:11px;color:${isDark ? 'rgba(255,255,255,0.5)' : 'rgba(60,60,67,0.6)'};font-weight:400;}
 #workskin .ios-footer{position:relative;${footerBg}height:47px;border-top:1px solid ${inputBarBorder};}
 #workskin .ios-input-bar{background:${inputBarBg};padding:8px 12px;border-top:1px solid ${inputBarBorder};display:flex;align-items:center;}
 #workskin .ios-input-bar > *{margin-left:8px;}
@@ -869,8 +984,8 @@ function buildIOSCSS(s: SkinProject['settings'], senderBg: string, recvBg: strin
 #workskin dd.bubble .group-avatar-initials{width:20px;height:20px;border-radius:50%;display:flex !important;align-items:center;justify-content:center;font-size:8px;font-weight:700;flex-shrink:0;}
 #workskin dd.bubble .group-sender{font-size:11px;font-weight:600;line-height:1.2;opacity:0.9;display:inline-block !important;}
 ${getTextFormattingCSS(isDark)}
-#workskin .wm{margin-top:16px;font-size:10px;opacity:0.4;text-align:center;color:${timeBreakColor};}
-#workskin .visually-hidden{position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden;}`;
+#workskin .wm{margin-top:16px;font-size:9px;opacity:0.45;text-align:center;color:${timeBreakColor};}
+${VISUALLY_HIDDEN_CSS}`;
 }
 
 function buildAndroidCSS(s: SkinProject['settings'], senderBg: string, recvBg: string, neutralBg: string, maxWidth: number): string {
@@ -896,8 +1011,9 @@ function buildAndroidCSS(s: SkinProject['settings'], senderBg: string, recvBg: s
   const avatarPlaceholderBg = isDark ? '#00a884' : '#128c7e';
   const bubbleShadow = isDark ? '0 1px 2px rgba(0,0,0,0.3)' : '0 1px 2px rgba(0,0,0,0.1)';
   
-    return `/* Generated with AO3 Skin Generator - Free forever! Support: https://ao3skingenerator.com/donate */
+    return `/* Generated with AO3 Skin Generator - Free forever! https://wordfokus.com/ao3skingen */
 #workskin .chat{width:100%;max-width:${Math.min(maxWidth, 400)}px;min-width:320px;margin:0 auto;display:flex;flex-direction:column;font-family:${s.fontFamily};background:${chatBg};padding:0;}
+${PARAGRAPH_RESET_CSS}
 #workskin .android-header{position:relative;${headerBg}height:60px;display:flex;align-items:center;padding:0;overflow:visible;}
 #workskin .android-header-avatar{position:absolute;left:60px;top:0;bottom:0;margin:auto 0;width:40px;height:40px;border-radius:50%;overflow:hidden;border:2px solid rgba(255,255,255,0.2);}
 #workskin .android-header-avatar img{width:100%;height:100%;}
@@ -971,8 +1087,8 @@ function buildAndroidCSS(s: SkinProject['settings'], senderBg: string, recvBg: s
 #workskin .typing-label{font-size:11px;color:${typingLabelColor};}
 #workskin .android-footer{position:relative;${footerBg}height:60px;border-top:1px solid ${footerBorderColor};overflow:visible;background-position:center;}
 ${getTextFormattingCSS(isDark)}
-#workskin .wm{margin-top:12px;font-size:10px;opacity:0.5;text-align:center;color:${timeBreakColor};}
-#workskin .visually-hidden{position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden;}`;
+#workskin .wm{margin-top:12px;font-size:9px;opacity:0.45;text-align:center;color:${timeBreakColor};}
+${VISUALLY_HIDDEN_CSS}`;
 }
 
 function buildTwitterCSS(s: SkinProject['settings'], senderBg: string, maxWidth: number): string {
@@ -988,7 +1104,7 @@ function buildTwitterCSS(s: SkinProject['settings'], senderBg: string, maxWidth:
   const quoteHover = isDark ? '#1c2e3f' : '#f7f9f9';
   const replyLineColor = isDark ? '#38444d' : '#cfd9de';
   
-  return `/* Generated with AO3 Skin Generator - Free forever! Support: https://ao3skingenerator.com/donate */
+  return `/* Generated with AO3 Skin Generator - Free forever! https://wordfokus.com/ao3skingen */
 /* NOTE ON UNITS. Sizes here are em, not px, and that is the whole reason this
    card works on a phone. AO3 forbids @media blocks in skin CSS — media is a
    field on the skin record, not something you can write here — so a breakpoint
@@ -1004,13 +1120,15 @@ function buildTwitterCSS(s: SkinProject['settings'], senderBg: string, maxWidth:
    PNG export is unchanged. On AO3, where .userstuff computes to roughly 15px,
    the card scales down to match the reader's text instead of overhanging it.
 
-   Hairline borders and the off-screen offset stay in px on purpose: a 1px rule
-   should stay 1px at any text size.
+   Hairline borders stay in px on purpose: a 1px rule should stay 1px at any
+   text size. So does the clipped box in the visually-hidden rule, which is not
+   layout at all.
 
    Keep decimals to three places. AO3's number grammar is
    -?\\.?\\d{1,3}\\.?\\d{0,3}, so 0.9375em is parsed as "0.937" + "5em" and our
    lint — which tokenises rather than re-scanning — rejects it. 0.938em is fine. */
 #workskin .chat{width:34.375em;max-width:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;margin:0 auto;box-sizing:border-box;}
+${PARAGRAPH_RESET_CSS}
 #workskin .tweets .tweet{background:${bgColor};border:1px solid ${borderColor};border-radius:1em;padding:1em;margin:0 0 0.75em 0;position:relative;box-sizing:border-box;transition:background-color 0.2s;}
 #workskin .tweets .tweet:hover{background:${bgHover};}
 #workskin .tweets .tweet.reply{margin-left:2.75em;margin-top:-0.5em;}
@@ -1107,14 +1225,15 @@ function buildTwitterCSS(s: SkinProject['settings'], senderBg: string, maxWidth:
 #workskin .tweet .quote-handle{color:${textSecondary};font-weight:400;font-size:1em;}
 #workskin .tweet .quote-body{margin-top:0.267em;font-size:0.938em;line-height:1.333;color:${textPrimary};}
 #workskin .tweet .quote-image{width:100%;height:auto;border-radius:0.75em;margin-top:0.75em;border:1px solid ${borderColor};}
-#workskin .tweets .wm{margin-top:1.2em;font-size:0.625em;opacity:0.5;text-align:center;color:${textSecondary};}
+#workskin .tweets .wm{margin-top:1.2em;font-size:0.563em;opacity:0.45;text-align:center;color:${textSecondary};}
 #workskin .link{text-decoration:none;color:#1d9bf0;}
-#workskin .visually-hidden{position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden;}`;
+${VISUALLY_HIDDEN_CSS}`;
 }
 
 function buildGoogleCSS(maxWidth: number): string {
-  return `/* Generated with AO3 Skin Generator - Free forever! Support: https://ao3skingenerator.com/donate */
+  return `/* Generated with AO3 Skin Generator - Free forever! https://wordfokus.com/ao3skingen */
 #workskin .chat{width:100%;min-width:320px;max-width:${Math.min(maxWidth, 600)}px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;box-sizing:border-box;padding:20px 0;}
+${PARAGRAPH_RESET_CSS}
 #workskin .logo-container{text-align:center;margin:0 0 26px 0;padding:20px 0;}
 #workskin .google-logo-img{height:92px;width:auto;display:inline-block;}
 #workskin .logo{text-align:center;margin:0 0 24px 0;font-weight:400;font-size:48px;font-family:"Product Sans",Arial,sans-serif;line-height:1;letter-spacing:-0.5px;}
@@ -1124,38 +1243,60 @@ function buildGoogleCSS(maxWidth: number): string {
 #workskin .blue{color:#4285F4;}#workskin .red{color:#EA4335;}#workskin .yellow{color:#FBBC04;}#workskin .green{color:#34A853;}
 #workskin .search-wrap{margin-top:20px;max-width:584px;margin-left:auto;margin-right:auto;}
 #workskin .search-container{background:#fff;border:1px solid #dfe1e5;border-radius:24px;box-shadow:0 1px 6px rgba(32,33,36,0.28);overflow:hidden;}
-#workskin .search-container .search-bar{display:flex;align-items:center;padding:11px 14px 11px 16px;font-size:16px;color:#202124;line-height:1.5;border-bottom:1px solid #e8eaed;}
-#workskin .search-container .search-bar > *{margin-left:8px;}
-#workskin .search-container .search-bar > *:first-child{margin-left:0;}
-#workskin .search-bar-solo{background:#fff;border:1px solid #dfe1e5;border-radius:24px;display:flex;align-items:center;padding:11px 14px 11px 16px;font-size:16px;color:#202124;line-height:1.5;box-shadow:0 1px 6px rgba(32,33,36,0.28);}
-#workskin .search-bar-solo > *{margin-left:8px;}
-#workskin .search-bar-solo > *:first-child{margin-left:0;}
-#workskin .search-icon-left{width:20px;height:20px;opacity:0.54;flex-shrink:0;}
-#workskin .search-text{flex:1;min-width:0;color:#202124;}
-#workskin .search-icons-right{display:flex;align-items:center;margin-left:auto;flex-shrink:0;}
-#workskin .search-icons-right{margin-left:-12px;}
-#workskin .search-icons-right > *{margin-left:12px;}
-#workskin .search-icon-clear{width:14px;height:14px;opacity:0.54;cursor:pointer;flex-shrink:0;}
+/* NO FLEX BELOW, AND NO > *. Both were here, and a save on the real archive
+   on 7 Aug 2026 came back with the tab bar stacked one-per-line and the mic and
+   lens icons sitting against the query text instead of at the right edge.
+
+   The cause is now reproduced rather than guessed. AO3 wraps our children in
+   <p>, which does not remove flex — it moves it. The injected paragraph becomes
+   the flex item, so every child we were laying out is a grandchild, and the
+   layout silently evaporates. margin-left:auto had nothing to push against;
+   the .tab spans, still display:flex themselves, became blocks and stacked.
+
+   THE PARAGRAPH RESET DOES NOT FIX THIS. Zeroing a <p>'s margins stops it
+   adding space; it does not make it stop being a box in between. The reset is
+   still worth having — it is why the gaps are not also enormous — but it is not
+   a substitute for laying out in a way that survives the wrapper.
+
+   > * is exactly as fragile as flex for the same reason, and it was our
+   standard substitute for gap. An injected <p> matches > * and takes the
+   margin meant for the icon inside it. Descendant selectors (.x img) survive;
+   child combinators do not.
+
+   What survives: absolute positioning (its containing block is the nearest
+   POSITIONED ancestor, and an injected <p> is not one) and inline-block (which
+   flows horizontally inside whatever block ends up wrapping it). This is the
+   same conclusion §5a reached empirically for the Twitter header — now with a
+   mechanism, and with a harness that reproduces the failure. */
+#workskin .search-container .search-bar{position:relative;padding:11px 80px 11px 16px;font-size:16px;color:#202124;line-height:1.5;border-bottom:1px solid #e8eaed;white-space:nowrap;}
+#workskin .search-bar-solo{position:relative;background:#fff;border:1px solid #dfe1e5;border-radius:24px;padding:11px 80px 11px 16px;font-size:16px;color:#202124;line-height:1.5;box-shadow:0 1px 6px rgba(32,33,36,0.28);white-space:nowrap;}
+#workskin .search-icon-left{width:20px;height:20px;opacity:0.54;display:inline-block;vertical-align:middle;margin-right:8px;}
+#workskin .search-text{color:#202124;display:inline-block;vertical-align:middle;max-width:100%;overflow:hidden;text-overflow:ellipsis;}
+#workskin .search-icons-right{position:absolute;right:14px;top:50%;transform:translateY(-50%);}
+#workskin .search-icons-right img{margin-left:12px;vertical-align:middle;}
+#workskin .search-icon-clear{width:14px;height:14px;opacity:0.54;cursor:pointer;display:inline-block;}
 #workskin .search-icon-clear:hover{opacity:0.87;}
-#workskin .search-icon-mic{width:18px;height:18px;cursor:pointer;flex-shrink:0;}
-#workskin .search-icon-lens{width:18px;height:18px;opacity:0.54;cursor:pointer;flex-shrink:0;}
+#workskin .search-icon-mic{width:18px;height:18px;cursor:pointer;display:inline-block;}
+#workskin .search-icon-lens{width:18px;height:18px;opacity:0.54;cursor:pointer;display:inline-block;}
 #workskin .search-icon-lens:hover{opacity:0.87;}
 #workskin .suggest-box{padding:8px 0;}
-#workskin .suggest-item{display:flex;align-items:center;padding:6px 16px;font-size:16px;line-height:1.5;color:#202124;cursor:pointer;margin-left:-14px;}
-#workskin .suggest-item > *{margin-left:14px;}
+#workskin .suggest-item{padding:6px 16px;font-size:16px;line-height:1.5;color:#202124;cursor:pointer;}
 #workskin .suggest-item:hover{background:#f8f9fa;}
-#workskin .suggest-icon{width:20px;height:20px;opacity:0.54;flex-shrink:0;}
+#workskin .suggest-icon{width:20px;height:20px;opacity:0.54;display:inline-block;vertical-align:middle;margin-right:14px;}
 #workskin .suggest-item b,#workskin .suggest-item strong{font-weight:700;color:#202124;}
-#workskin .search-tabs{display:flex;border-bottom:1px solid #dadce0;margin:20px 0 0 0;padding:0;}
-#workskin .search-tabs .tab{padding:14px 12px;font-size:13px;color:#5f6368;cursor:pointer;border-bottom:3px solid transparent;display:flex;align-items:center;margin:0 0 0 -8px;}
-#workskin .search-tabs .tab > *{margin-left:8px;}
-#workskin .search-tabs .tab > *{margin-left:8px;}
+#workskin .search-tabs{border-bottom:1px solid #dadce0;margin:20px 0 0 0;padding:0;white-space:nowrap;}
+#workskin .search-tabs .tab{padding:14px 12px;font-size:13px;color:#5f6368;cursor:pointer;border-bottom:3px solid transparent;display:inline-block;vertical-align:bottom;}
 #workskin .search-tabs .tab:first-child{margin-left:12px;}
 #workskin .search-tabs .tab:hover{color:#202124;}
 #workskin .search-tabs .tab.active{color:#1a73e8;border-bottom-color:#1a73e8;}
-#workskin .search-tabs .tab-icon{width:16px;height:16px;opacity:0.87;}
-#workskin .search-stats{margin:12px 0 0 12px;color:#70757a;font-size:14px;}
-#workskin .search-dym{margin:16px 0 0 12px;font-size:16px;line-height:1.5;}
+#workskin .search-tabs .tab-icon{width:16px;height:16px;opacity:0.87;display:inline-block;vertical-align:middle;margin-right:6px;}
+/* p.search-stats, not .search-stats: these are the only real <p> elements we
+   emit, and the paragraph reset above is (0,1,1,1). Tagging the selector with
+   its element matches that specificity, and being later in the sheet wins the
+   tie — so the reset still neutralises anything AO3 injects while our own two
+   paragraphs keep their margins. See PARAGRAPH_RESET_CSS. */
+#workskin p.search-stats{margin:12px 0 0 12px;color:#70757a;font-size:14px;}
+#workskin p.search-dym{margin:16px 0 0 12px;font-size:16px;line-height:1.5;}
 #workskin .search-dym1{color:#5f6368;}
 #workskin .search-dym2{color:#1a0dab;font-weight:400;text-decoration:none;cursor:pointer;}
 #workskin .search-dym2:hover{text-decoration:underline;}
@@ -1164,7 +1305,8 @@ function buildGoogleCSS(maxWidth: number): string {
 #workskin .result-title{color:#1a0dab;font-size:20px;line-height:1.3;font-weight:400;cursor:pointer;margin-bottom:4px;}
 #workskin .result-title:hover{text-decoration:underline;}
 #workskin .result-desc{color:#4d5156;font-size:14px;line-height:1.58;}
-#workskin .wm{margin-top:24px;font-size:10px;opacity:0.5;text-align:center;}`;
+#workskin .wm{margin-top:24px;font-size:9px;opacity:0.45;text-align:center;}
+${VISUALLY_HIDDEN_CSS}`;
 }
 
 export function buildCSS(project: SkinProject): string {

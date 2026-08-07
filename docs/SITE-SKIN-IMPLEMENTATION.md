@@ -20,6 +20,12 @@ records only what differs — chiefly that work skins ban custom properties and
 loudly, and that readers can switch a work skin off entirely. If you are
 changing `ao3Css.ts`, both products depend on it.
 
+> **Do not import the work-skin constraints wholesale.** A week of reading
+> published work skins (`AO3-WORK-SKIN-KNOWLEDGE.md`) produced a lot of rules
+> that look universal and are not. **§12 is the reconciliation** — what carries
+> over, what is work-skin-only, and what the site-skin product may use *because*
+> it is a site skin. Read it before applying anything learned over there.
+
 ---
 
 ## 0. What this is, in one paragraph
@@ -219,6 +225,19 @@ all screen handheld speech print braille embossed projection tty tv
 **v1 emits no `@media` blocks.** If we later want a dark variant, it is a
 second skin with `(prefers-color-scheme: dark)` set, combined via AO3's parent
 skin mechanism — a v2 conversation, not a compiler feature.
+
+**The mechanism, added 7 Aug 2026, because the danger is worse than "not
+supported".** `clean_css_code` iterates `parser.each_rule_set do |rs|` — arity
+**one**. The css_parser gem yields `(rule_set, media_types)`, so the media types
+are discarded, and the sheet is rebuilt as bare `selectors { declarations }`
+with no wrapper. **The rules survive; their condition does not.** A breakpoint
+you write is not rejected — it is applied at every width.
+
+This matters because it fails the check a developer would actually run. Paste a
+`@media` block, look at the page, see your styling appear, conclude it works. A
+widely-read community tutorial does exactly this and states "confirmed working
+in AO3 workskins"; it is wrong. `lintAo3Css` refuses `@media` for this reason
+and its message says so. Do not relax it.
 
 ### 3b. Our CSS is an *addition*, not a replacement
 
@@ -664,7 +683,8 @@ pattern-match a stylesheet.**
 
 ### What still needs a human
 
-- **Save all twelve templates on AO3.** The sanitizer is the only authority,
+- **Save all sixteen templates on AO3.** (Phase 8 raised the catalog from 12 to
+  16; this line said "twelve" until 7 Aug 2026.) The sanitizer is the only authority,
   and our lint is a model of it. Until that checklist is filled in, "AO3-safe"
   is a well-tested prediction rather than an observation.
 - **Check the drop cap and divider on a real work**, single-chapter *and*
@@ -846,6 +866,104 @@ ships ~20 static PNG previews because it has no other way to show you, and its
 own instructions tell users to keep a master copy in Notepad *because AO3
 mangles the CSS on save*. We are the master copy: the theme lives in storage
 and is regenerated, never hand-edited.
+
+---
+
+## 12. Handoff — and what the work-skin research does and does not change
+
+**Written 7 Aug 2026**, after reading a dozen published work skins, AO3's own
+FAQs and two community tutorials for the *other* product. The obvious question
+is whether any of it lands here. Mostly it does not, and knowing precisely why
+is the useful part.
+
+### The audit
+
+Every shipped template was recompiled and counted, not eyeballed:
+
+| | Result |
+| --- | --- |
+| Templates shipped | 16 |
+| Lint violations, all templates | **0** |
+| `display: flex` emitted | 0 |
+| `@media` emitted | 0 |
+| `var()` / custom properties emitted | 0 |
+
+**No code change is required by anything learned for work skins.** What follows
+is guidance, plus one stale number that has been corrected (§7 said "twelve
+templates"; it is sixteen).
+
+### What carries over
+
+| Finding | Applies here because |
+| --- | --- |
+| **`@media` is flattened, not rejected** — the condition is silently dropped | Same `clean_css_code` path. Now documented with the mechanism in §3; the lint already refuses it |
+| **AO3 deletes comments** | Same. §11 already notes our header comment never reaches the archive; the `content:` attribution trick is the only thing that survives |
+| **Strip comments before pattern-matching CSS** | Bit `lintAo3Css` directly — Correction 4 in §7 |
+| **The URL validator was too loose** | Correction 3 in §7. This is a site-skin feature: banner addresses |
+| **Image hosts fail, and take published work with them** | A published skin's author blew a free-tier quota and every image in every fic using it broke at once. Our banner feature points users at *their* host. The export dialog should say: use imgur or postimg, not a quota-limited account |
+
+### What is work-skin-only — do not import it
+
+| Work-skin rule | Why it does not apply here |
+| --- | --- |
+| **"Never use flexbox"** | The loudest rule over there, and it is **not a site-skin rule**. The sanitizer demonstrably keeps `display: flex`. The working hypothesis for why it fails in work skins is AO3's `<p>` injection into *user-pasted chapter HTML* — which does not exist here, because a site skin styles AO3's own DOM. §11 already observes Rosé Pine using flex 29 times successfully; that now has an explanation rather than being an anomaly |
+| **Enumerated variant classes** (`.p1`…`.p100`, `.light`/`.dark` pairs) | An elaborate workaround for work skins banning `var()`. **Site skins permit custom properties and `var()`** — we have the better tool and simply do not use it yet. Do not copy the enumeration pattern here |
+| **Paragraph resets, the one-line rule, the `<!--- --->` comment trick** | All defences against AO3 rewriting *user-pasted HTML*. We emit no HTML |
+| **`.visually-hidden` / skin-off prose** | A work skin is absent on every download. A site skin is a preference the reader chose and can switch off; there is no "downloaded with the skin missing" state |
+| **html2canvas cannot render `::before`/`::after`** | Only constrains the shared stylesheet feeding the PNG export. Nothing here passes through html2canvas, which is why §4b's `::after` divider glyph is fine |
+
+### Newly proven, and available to us
+
+Read out of CSS AO3 is currently serving, so these are known-legal:
+
+- **`:has()`** — 111 occurrences in one served skin. Would let a rule react to
+  page state without JavaScript.
+- **`<details>` / `[open]`** — 175 and 213 occurrences. Not obviously useful for
+  restyling AO3, since we do not control the markup.
+- **`::-webkit-scrollbar`** — legal because `scrollbar` is on the shorthand list.
+  **This is a real feature idea**: a themed scrollbar is one of the most visible
+  things a site skin can do, it costs a handful of rules, and none of the three
+  published skins in §11 does it.
+- **`clip: rect(0,0,0,0)`** — `clip` is on the property list and `rect()` reaches
+  `VALUE_REGEX` through `SHAPE_FUNCTION_REGEX`.
+
+### The state of this product
+
+| | Status |
+| --- | --- |
+| Compiler, editor, gallery, export | ✅ Phases 0–6 and 8 complete |
+| 16 templates lint clean | ✅ |
+| Saved on real AO3 | ❌ **never** — the open gate |
+| Mobile preview | ⚠️ scrolls sideways rather than scaling |
+| Marketing copy mentions the work-skin export | ❌ still not |
+
+### What to do next, in order
+
+1. **Phase 7 — the release gate.** Save all sixteen templates on AO3 by hand and
+   confirm each applies. Then the two probes §8 names: the
+   `#chapters .userstuff` drop cap and divider on a single-chapter *and* a
+   multi-chapter work, and the header dropdown from §4.4 with a logged-in
+   account. Until this is done "AO3-safe" is a well-tested prediction rather
+   than an observation. There is no checklist file yet; make one.
+   - While you are there: **reopen each saved skin in AO3's editor.** AO3 stores
+     the *cleaned* CSS, so that box is a direct readout of what the sanitizer
+     kept. Diff it against what we emitted. Anything missing is a rule our lint
+     does not know about, and belongs in §7 as a correction.
+2. **Export-dialog copy on image hosting** — one paragraph, and it prevents the
+   failure mode that has already broken a published skin.
+3. **Themed scrollbars** — small, visible, legal, and nobody else ships it.
+4. **Tag colours by type** (§11) — still the most-requested AO3 customisation,
+   still semantic rather than decorative, still previewable in the Browse mock.
+
+`BACKLOG.md` carries the cross-product list; item 20 is this product's release
+gate. The other 28 items are work-skin work and do not touch this codebase.
+
+### Two things that are still true and still unfixed
+
+- **The 8-digit hex gap** (§11). Our lint rejects `#89797925` where AO3 accepts
+  it by accident. We are stricter than the archive, which §3 says never to be.
+  It does not bite while we emit no alpha colours.
+- **The mobile preview** does not scale. Left out rather than added untested.
 
 ---
 

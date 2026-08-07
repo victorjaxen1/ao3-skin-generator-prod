@@ -123,14 +123,6 @@ export function hasFeature(feature: keyof ProFeatures): boolean {
 }
 
 /**
- * Get the purchase URL for Pro upgrade
- */
-export function getProPurchaseUrl(): string {
-  // Replace with your actual Gumroad/Stripe product URL
-  return 'https://gumroad.com/l/ao3skingen-pro';
-}
-
-/**
  * Format price for display
  */
 export function getProPrice(): { amount: number; currency: string; formatted: string } {

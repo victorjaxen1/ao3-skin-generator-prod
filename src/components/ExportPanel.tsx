@@ -64,7 +64,12 @@ function applyWatermark(canvas: HTMLCanvasElement, skipWatermark: boolean): HTML
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(
-    '★ Made with ao3skingen.wordfokus.com — Free Social Media AU Generator',
+    // Root domain, matching the work-skin credit in workSkin.ts, and for the
+    // same reason: this text is rasterised into the PNG and uploaded, so it is
+    // frozen in the author's fic exactly as the pasted credit line is. The
+    // address has to be the one likeliest to still resolve years from now,
+    // which is the root domain rather than the subdomain we serve from.
+    '★ Made with wordfokus.com/ao3skingen — Free Social Media AU Generator',
     out.width / 2,
     canvas.height + watermarkHeight / 2
   );

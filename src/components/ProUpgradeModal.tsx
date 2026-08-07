@@ -176,7 +176,7 @@ export const ProUpgradeModal: React.FC<Props> = ({ isOpen, onClose, onStatusChan
         {/* Footer */}
         <div className="bg-stone-50 px-6 py-3 border-t border-stone-100">
           <p className="text-xs text-stone-400 text-center">
-            Questions? Contact us at support@ao3skingen.com
+            Questions? Contact us at support@wordfokus.com
           </p>
         </div>
       </div>
