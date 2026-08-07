@@ -595,6 +595,97 @@ pushing.
 
 ---
 
+## 12. Paragraph injection: the rule, and what it broke (7 Aug 2026)
+
+AO3 rewrites the HTML you paste. This section is the **measured** account of how,
+replacing the guesswork in §5a and MASTER §5. It was obtained by posting two
+works, fetching them back, and diffing the stored markup against what we emit.
+
+### 12a. The rule
+
+> **Inside a `<div>`, each contiguous run of inline content — text, `<span>`,
+> `<img>`, `<b>` — is wrapped in a single `<p>`. Block children (`div`, `dl`)
+> are left completely alone. The interior of `<dd>` and `<dt>` is untouched.**
+
+No `<br>` wrapping was observed anywhere, which the older docs had assumed.
+
+From `works/75270521`:
+
+```html
+<div class="tweet-header">
+  <p><img class="avatar"></p>              <!-- lone img wrapped -->
+  <div class="head">...                    <!-- div untouched -->
+<div class="metrics">
+  <p><span/><span/><span/></p>             <!-- three chips, ONE paragraph -->
+```
+
+**"One run, one paragraph" is what does the damage.** A flex row of inline
+children does not become several flex items wrapped in paragraphs — it becomes
+*one* flex item. So `justify-content` has nothing to distribute, and `> *`
+matches the paragraph instead of the elements inside it.
+
+The paragraph reset does not help with any of this. It stops an injected
+paragraph adding **space**; it cannot stop it being a **box in between**.
+
+### 12b. Two fixes, and which applies when
+
+| Symptom | Fix | Why |
+| --- | --- | --- |
+| A flex row collapses to one item | `display:contents` on the injected `<p>` | Removes the wrapper from the layout tree, so our elements are flex items again. We never emit a `<p>` in these containers, so the rule matches nothing in the preview and **the PNG is unchanged** |
+| `> *` margins land on the wrapper | Name the elements with descendant selectors | A child combinator selects on DOM structure, which `display:contents` does not change. Match the *same element set* the combinator did — element-type selectors are wider and will quietly restyle nested children |
+
+Both were needed in `.quote-head`, which is a flex row *and* used `> *`.
+
+### 12c. What was actually broken
+
+| Platform | Broken | Consequence |
+| --- | --- | --- |
+| iOS, Android | **Typing indicator rendered 0x0** | A `.dot` is a `<span>`, and width/height do not apply to an inline box. It only ever worked because `display:flex` blockified the dots into flex items. Injection stopped them being flex items and **the indicator vanished silently** |
+| iOS | Status bar collapsed | Grew 32px→50px, the time lost its `flex:1` (312px→25px), the battery jumped from the right edge to the left and wrapped to a second line — pushing every message row below it down 18px |
+| Twitter | Name line jammed | `.name-line > *` put the gap on the wrapper, so a real save read `Jamie Chen @jamiechen·Follow` with nothing between the parts |
+| Twitter | Metrics bunched left | The three counts became one flex item. §5a had accepted this as graceful degradation; `display:contents` fixes it properly and costs the PNG nothing |
+
+**Confirmed safe**, and worth knowing so nobody "hardens" them: `.row > *`,
+`dl.msg > *` and `.group-sender-row > *`. Their children are block elements or
+live inside a `<dd>`, both of which AO3 leaves alone. The stored HTML proves it.
+
+The typing fix is the one to be careful with. Moving the dots to `inline-block`
+makes the size stick, but inline-block boxes sit on a text baseline, and the
+line box that creates made the bubble 43px tall instead of 28. `line-height:0`
+on the bubble restores it. There is a test pinning `60x28` with `8x8` dots,
+because this stylesheet also drives every PNG anyone exports.
+
+### 12d. Why the float rewrite was right
+
+§5a rewrote the tweet header from flex to `float:left` + `overflow:hidden` on
+empirical grounds, and admitted it could not explain why. Now it can:
+
+AO3 wraps the avatar in a `<p>`. The float escapes that paragraph, and
+`.head{overflow:hidden}` establishes a block formatting context, which sits
+*beside* a float by definition. Flex had no such escape hatch. The community was
+right, and for a reason nobody had written down.
+
+### 12e. The harness
+
+`tests/ao3-injection.spec.ts` renders each platform inside AO3's own stylesheet
+and nesting, twice — clean, and with the rule in 12a applied through the DOM —
+and diffs the geometry of the load-bearing elements. It needs a browser because
+the CSS is legal either way; **the lint cannot see any of this**.
+
+```bash
+npx playwright test --project=desktop tests/ao3-injection.spec.ts
+```
+
+Optional chrome is switched on deliberately: the status bar, input bar and quote
+tweet are all flex rows of inline children, and all were unmeasured until the
+harness turned them on. Remote images are blocked so an image finishing between
+the two measurements cannot be misread as injection damage.
+
+**Still unmeasured:** the expanded-tweet view, and group-chat mode. Both got the
+same treatment defensively, neither is exercised by the harness.
+
+---
+
 ## 11. Sources
 
 Community work skins read while building this — the source of §4a and §5a:

@@ -14,8 +14,12 @@ what to do next.
 > **Update, 7 Aug 2026 — items 1, 2, 2a and 2b are done**, and a real AO3 save
 > settled item 17. See "The flex question, settled" below; the short version is
 > that AO3 wraps our children in `<p>`, which breaks flex and `> *` alike, and
-> **the paragraph reset does not fix it**. Google is converted; Twitter, iOS and
-> Android are not yet.
+> **the paragraph reset does not fix it**.
+>
+> **All four platforms are now converted and measured** (17b), against the real
+> injection rule read off the archive (17c). The harness is
+> `tests/ao3-injection.spec.ts`; run it with
+> `npx playwright test --project=desktop tests/ao3-injection.spec.ts`.
 
 | # | Task | Why it matters | Where |
 | --- | --- | --- | --- |
@@ -131,10 +135,10 @@ without that injection.
 
 | # | Remaining | Note |
 | --- | --- | --- |
-| 17b | **Convert iOS and Android** the way Google was converted | **Twitter is confirmed good on the real archive** — a save on 7 Aug rendered the avatar floated left with the name line beside it, body, image, timestamp and metrics all correct. §5a's float rewrite is vindicated, and the metrics bunching left rather than spreading is the graceful flex degradation §5a predicted and accepted. iOS and Android are **unmeasured**: the reproduction harness only injected into Google and Twitter containers. They carry 13 and 11 flex rules |
+| 17b | ✅ **DONE, all four platforms, measured not assumed.** `tests/ao3-injection.spec.ts` renders each export inside AO3's own CSS twice — clean, and with the real injection rule applied — and diffs the geometry of the load-bearing elements. Optional chrome (status bar, input bar, quote tweet) is switched on so it is covered too. Three genuine breakages found and fixed, listed in WORK-SKIN §12. The worst was invisible: **the typing indicator rendered 0x0 on AO3**, on both iOS and Android | Twitter's float rewrite is now confirmed *with a mechanism*, not just empirically: the stored HTML shows the avatar wrapped in a `<p>`, and `.head{overflow:hidden}` establishes a BFC beside the float, which is exactly why it survives where flex would not |
 | 19 | ✅ **CLOSED, 7 Aug 2026, all four platforms.** The stored CSS was read back out of AO3's editor for Twitter, Google, iOS and Android and compared against what we emit. **Nothing was dropped, anywhere.** Every construct the lint permits and the sanitizer might not, survived: `transform`, `filter`, `transition`, `box-shadow`, `text-shadow`, `clip:rect(0,0,0,0)`, `overflow-wrap`, `word-break`, `letter-spacing`, `z-index`, `float`, `flex`/`flex-shrink`/`flex-direction`, `content:''`, `::before`/`::after`, `:nth-child(1)`, `:first-child`/`:last-child`, grouped comma selectors, `> *`, `!important`, quoted font names and absolute `url()`. Comments are deleted, as documented. **The lint is an accurate model of `css_cleaner.rb`, now confirmed against the archive rather than against source** | This also means a wrong render is *our* bug, not the sanitizer's — which is the assumption to start from in future |
 | 17d | ✅ **The same readout refuted a theory in minutes** — a method note, not a finding; the result itself is item 19 above | Recorded because it cost an hour: an iOS work first rendered half-styled (inline timestamps, visible bold `<dt>` labels, unstyled `Read`) and a silent-truncation mechanism was inferred for it, complete with a plausible `content:""` culprit. **It was wrong** — the account simply had an older skin saved. Reading the stored CSS refuted it immediately. Check the saved skin is current before theorising |
-| 17c | **Get the HTML AO3 actually stored** — view source on the posted work, or reopen the skin in AO3's editor | We have modelled the injection from its symptoms and the model reproduces them exactly, which is strong but is not the same as reading what the archive wrote. It would settle whether the wrapper is `<p>`, `<br>`, or both, and where |
+| 17c | ✅ **DONE — the rule, read off the archive.** Both posted works were fetched back and their stored markup compared with what we emit. **Inside a `<div>`, each contiguous run of inline content (text, `<span>`, `<img>`, `<b>`) is wrapped in a single `<p>`. Block children (`div`, `dl`) are untouched. The interior of `<dd>`/`<dt>` is untouched.** The "one run, one paragraph" part is what does the damage: a flex row of inline children collapses to a SINGLE flex item | This is now encoded in the harness rather than described in prose, so it is testable. It also retires the guesswork in §5a and MASTER §5 — no `<br>` wrapping was observed at all |
 
 ## Document map
 

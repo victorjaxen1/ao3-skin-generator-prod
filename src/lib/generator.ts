@@ -875,6 +875,14 @@ ${PARAGRAPH_RESET_CSS}
    nothing, so it goes rather than being approximated. */
 #workskin .ios-header-name{position:absolute;left:112px;right:65px;top:0;bottom:0;display:flex;align-items:center;font-size:15px;font-weight:600;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,0.4);line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 #workskin .ios-status-bar{background:${statusBarBg};padding:6px 16px 4px 16px;display:flex;justify-content:space-between;align-items:center;font-size:14px;font-weight:600;color:${statusBarColor};border-bottom:1px solid ${statusBarBorder};}
+/* Same trick as the Twitter metrics row, and for the same reason: AO3 collapses
+   signal / time / battery into one paragraph, which becomes the only flex item.
+   Measured before this rule existed — the bar grew 32px to 50px, the time lost
+   its flex:1 (312px down to 25px) and the battery icon jumped from the right
+   edge to the left and wrapped onto a second line, shoving every message row
+   below it down by 18px. We emit no paragraph here, so the preview and the PNG
+   never see this rule. */
+#workskin .ios-status-bar p{display:contents;}
 #workskin .ios-status-bar .time{flex:1;text-align:center;}
 #workskin .ios-status-bar .status-icons{display:flex;align-items:center;font-size:12px;}
 #workskin .ios-status-bar .status-icons > *{margin-left:4px;}
@@ -948,9 +956,16 @@ ${PARAGRAPH_RESET_CSS}
 #workskin img.attach-img{max-width:220px;border-radius:12px;display:block;}
 #workskin .row.typing{align-items:center;margin-left:-6px;}
 #workskin .row.typing > *{margin-left:6px;}
-#workskin .typing-bubble{background:${typingBubbleBg};padding:10px 14px;border-radius:18px;display:flex;align-items:center;border-bottom-left-radius:4px;}
-#workskin .typing-bubble > *{margin-left:4px;}
-#workskin .typing-bubble > *:first-child{margin-left:0;}
+/* NO FLEX AND NO > * HERE — the dots vanish outright on AO3 with either.
+   A .dot is a <span>, and width/height do not apply to an inline box. Today
+   they are only honoured because display:flex blockifies its flex items. AO3
+   wraps the three spans in a single <p>, at which point they stop being flex
+   items, the 8x8 is ignored, and the indicator measures 0x0 — invisible, with
+   no error anywhere. Measured in tests/ao3-injection.spec.ts.
+   inline-block makes the size stick whether or not anything blockifies them,
+   and the margin moves to a descendant selector so an injected <p> cannot
+   intercept it. */
+#workskin .typing-bubble{background:${typingBubbleBg};padding:10px 14px;border-radius:18px;display:inline-block;line-height:0;border-bottom-left-radius:4px;}
 /* NOTE ON THE TYPING DOTS. Static, with the three dots at descending opacity —
    no animation, because AO3 allows neither the animation property nor
    @keyframes, and refuses the whole skin over either.
@@ -961,7 +976,8 @@ ${PARAGRAPH_RESET_CSS}
    Do not delete the :nth-child rules to "simplify" — a rule left with no
    declarations is an AO3 error, not a no-op, which is exactly how the
    animation-delay versions of these two failed. */
-#workskin .typing-bubble .dot{width:8px;height:8px;background:${isDark ? 'rgba(255,255,255,0.6)' : 'rgba(60,60,67,0.6)'};border-radius:50%;opacity:0.4;}
+#workskin .typing-bubble .dot{display:inline-block;vertical-align:middle;width:8px;height:8px;margin-left:4px;background:${isDark ? 'rgba(255,255,255,0.6)' : 'rgba(60,60,67,0.6)'};border-radius:50%;opacity:0.4;}
+#workskin .typing-bubble .dot:first-child{margin-left:0;}
 #workskin .typing-bubble .dot:nth-child(1){opacity:0.85;}
 #workskin .typing-bubble .dot:nth-child(2){opacity:0.65;}
 #workskin .typing-label{font-size:11px;color:${isDark ? 'rgba(255,255,255,0.5)' : 'rgba(60,60,67,0.6)'};font-weight:400;}
@@ -1077,11 +1093,13 @@ ${PARAGRAPH_RESET_CSS}
 #workskin img.attach-img{max-width:200px;border-radius:8px;display:block;}
 #workskin .row.typing{align-items:center;margin-left:-6px;}
 #workskin .row.typing > *{margin-left:6px;}
-#workskin .typing-bubble{background:${receiverBubbleBg};padding:10px 14px;border-radius:8px;display:flex;align-items:center;box-shadow:${bubbleShadow};}
-#workskin .typing-bubble > *{margin-left:4px;}
-#workskin .typing-bubble > *:first-child{margin-left:0;}
+/* inline-block, not flex — an injected <p> makes the dots stop being flex
+   items and an inline span ignores width/height, so the indicator renders 0x0.
+   See the longer note in buildIOSCSS. */
+#workskin .typing-bubble{background:${receiverBubbleBg};padding:10px 14px;border-radius:8px;display:inline-block;line-height:0;box-shadow:${bubbleShadow};}
 /* Static dots at descending opacity — see the note in buildIOSCSS. */
-#workskin .typing-bubble .dot{width:8px;height:8px;background:${typingDotBg};border-radius:50%;opacity:0.4;}
+#workskin .typing-bubble .dot{display:inline-block;vertical-align:middle;width:8px;height:8px;margin-left:4px;background:${typingDotBg};border-radius:50%;opacity:0.4;}
+#workskin .typing-bubble .dot:first-child{margin-left:0;}
 #workskin .typing-bubble .dot:nth-child(1){opacity:0.85;}
 #workskin .typing-bubble .dot:nth-child(2){opacity:0.65;}
 #workskin .typing-label{font-size:11px;color:${typingLabelColor};}
@@ -1159,8 +1177,15 @@ ${PARAGRAPH_RESET_CSS}
    rather than shown. .name and .handle carry their own nowrap, so they stay
    whole while the line itself is free to wrap. */
 #workskin .tweet .name-line{line-height:1.25;}
-#workskin .tweet .name-line > *{display:inline-block;vertical-align:middle;margin-right:0.25em;}
-#workskin .tweet .name-line > *:last-child{margin-right:0;}
+/* Descendant selectors, not a child combinator. AO3 collapses this whole line
+   into a single paragraph, so the combinator matches that paragraph and puts
+   the 0.25em on the wrapper instead of on the name, handle and Follow label —
+   which is why a real save read "Jamie Chen @jamiechen-Follow" with nothing
+   between the parts. Naming the element types reaches them through the
+   injected paragraph. The logo takes the last-child reset by class, for the
+   same reason. */
+#workskin .tweet .name-line .name,#workskin .tweet .name-line .verified-container,#workskin .tweet .name-line .handle,#workskin .tweet .name-line .follow-dot,#workskin .tweet .name-line .follow-btn,#workskin .tweet .name-line .twitter-logo{display:inline-block;vertical-align:middle;margin-right:0.25em;}
+#workskin .tweet .name-line .twitter-logo{margin-right:0;}
 #workskin .tweet .name{font-weight:700;color:${textPrimary};font-size:0.938em;line-height:1.333;white-space:nowrap;}
 #workskin .tweet .verified-container{display:inline-block;vertical-align:middle;}
 #workskin .tweet .verified-badge{width:1.125em;height:1.125em;display:inline-block;vertical-align:middle;}
@@ -1179,6 +1204,19 @@ ${PARAGRAPH_RESET_CSS}
    archive drops it, the metric chips fall back to inline-block and bunch to
    the left, which still reads fine. The header above could not tolerate that. */
 #workskin .tweet .metrics{display:flex;justify-content:space-between;padding:0.857em 0;font-size:0.875em;color:${textSecondary};border-bottom:1px solid ${borderColor};width:100%;}
+/* THE ONE RULE THAT ONLY EXISTS FOR AO3, and it costs the PNG nothing.
+   We never emit a <p> inside .metrics — but AO3 does. It collapses the whole
+   run of chips into a SINGLE paragraph, which then becomes the only flex item,
+   so space-between has nothing to distribute and all three counts bunch to the
+   left. That is exactly what a real save looked like.
+   display:contents removes the injected paragraph from the layout tree without
+   removing it from the DOM, so the chips are direct flex items again and the
+   row spreads as designed. Since no such paragraph exists in the preview, this
+   rule matches nothing there and the image export is byte-identical.
+   Note it does NOT rescue a child combinator, which selects on DOM structure —
+   something display:contents does not change. That is why .name-line above had
+   to move to descendant selectors instead. The two fixes are complementary. */
+#workskin .tweet .metrics p{display:contents;}
 #workskin .tweet .metric{display:inline-block;cursor:pointer;transition:color 0.2s;margin-right:1.286em;}
 #workskin .tweet .metric:first-child{justify-content:flex-start;}
 #workskin .tweet .metric:last-child{margin-right:0;}
@@ -1203,7 +1241,8 @@ ${PARAGRAPH_RESET_CSS}
 #workskin .tweet.expanded .avatar{width:2.5em;height:2.5em;flex-shrink:0;margin:0;}
 #workskin .tweet.expanded .expanded-content{flex:1;min-width:0;}
 #workskin .tweet.expanded .expanded-name{display:flex;align-items:center;margin-bottom:0.125em;margin-left:-0.25em;}
-#workskin .tweet.expanded .expanded-name > *{margin-left:0.25em;}
+#workskin .tweet.expanded .expanded-name p{display:contents;}
+#workskin .tweet.expanded .expanded-name .name,#workskin .tweet.expanded .expanded-name .verified-container{margin-left:0.25em;}
 #workskin .tweet.expanded .expanded-name .name{font-weight:700;color:${textPrimary};font-size:1.25em;line-height:1.2;}
 #workskin .tweet.expanded .expanded-name .verified-badge{width:1.25em;height:1.25em;}
 
@@ -1215,7 +1254,13 @@ ${PARAGRAPH_RESET_CSS}
 #workskin .tweet .quote{border:1px solid ${borderColor};border-radius:0.75em;padding:0.75em;margin-top:0.75em;transition:background-color 0.2s;cursor:pointer;}
 #workskin .tweet .quote:hover{background:${quoteHover};}
 #workskin .tweet .quote-head{display:flex;align-items:center;font-size:0.875em;line-height:1.143;margin-bottom:0.286em;margin-left:-0.286em;}
-#workskin .tweet .quote-head > *{margin-left:0.286em;}
+/* Descendant selectors plus display:contents — this row needs BOTH fixes.
+   contents makes the injected paragraph stop being the single flex item;
+   naming the element types gets the gap margin past it, since a child
+   combinator would still match the paragraph. Measured: without these the
+   quote handle slid 3px left and the line shifted 1px. */
+#workskin .tweet .quote-head p{display:contents;}
+#workskin .tweet .quote-head .quote-avatar,#workskin .tweet .quote-head .quote-name,#workskin .tweet .quote-head .quote-verified-container,#workskin .tweet .quote-head .quote-handle{margin-left:0.286em;}
 #workskin .tweet .quote-name{font-weight:700;color:${textPrimary};}
 #workskin .tweet .quote-avatar{width:1.429em;height:1.429em;border-radius:50%;overflow:hidden;}
 #workskin .tweet .quote-verified-container{display:inline-flex;align-items:center;margin-left:-0.143em;}
