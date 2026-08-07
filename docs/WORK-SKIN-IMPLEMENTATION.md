@@ -681,8 +681,19 @@ tweet are all flex rows of inline children, and all were unmeasured until the
 harness turned them on. Remote images are blocked so an image finishing between
 the two measurements cannot be misread as injection damage.
 
-**Still unmeasured:** the expanded-tweet view, and group-chat mode. Both got the
-same treatment defensively, neither is exercised by the harness.
+**`display:contents` is confirmed legal.** It was the one unverified part of
+12b when it shipped — the lint accepts it and the fallback would have been
+graceful, but that is not the same as knowing. A Twitter skin with all three
+`p{display:contents}` rules was saved on the archive and read back on
+7 Aug 2026 with every one of them intact, alongside the narrowed grouped
+selectors. Zero drift, 79 of 79 rules.
+
+**Still unmeasured:** group-chat mode. The expanded-tweet view and threaded
+replies *are* now covered — `.tweet.expanded` is the awkward case, being a flex
+row whose first child is a bare `<img>` while still using a child combinator for
+its gap, so it carries both failure shapes at once. Its test asserts the fixture
+actually produced an expanded and a reply tweet, because a geometry diff passes
+trivially when there is nothing on the page to move.
 
 ---
 

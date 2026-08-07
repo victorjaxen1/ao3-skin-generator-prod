@@ -141,7 +141,12 @@ async function measure(page: Page, selectors: string[]): Promise<Box[]> {
   }, selectors);
 }
 
-async function geometryUnderInjection(page: Page, template: string, selectors: string[]) {
+async function geometryUnderInjection(
+  page: Page,
+  template: string,
+  selectors: string[],
+  customise?: (p: ReturnType<typeof defaultProject>) => void
+) {
   const p = defaultProject();
   p.template = template as typeof p.template;
   // Optional chrome is off by default, and every one of these is a flex row of
@@ -164,6 +169,8 @@ async function geometryUnderInjection(page: Page, template: string, selectors: s
     p.settings.chatShowTyping = true;
     p.settings.chatTypingName = 'Sam';
   }
+
+  customise?.(p);
 
   const { html, css } = buildWorkSkin(p);
 
@@ -271,6 +278,67 @@ test('the typing indicator is unchanged in the image export', async ({ page }) =
     expect(size.dot, `${template}: dots must keep a real size`).toBe('8x8');
     expect(size.bubble, `${template}: bubble must not grow a text line box`).toBe('60x28');
   }
+});
+
+/**
+ * The two Twitter modes the per-platform tests above never reach.
+ *
+ * `.tweet.expanded` is a flex row whose first child is a bare `<img>`, and it
+ * still uses a child combinator for its gap — so it has both failure shapes at
+ * once. Thread mode adds `.tweet.reply`, whose connector lines are `::before` /
+ * `::after` on a positioned ancestor and should be indifferent to injection.
+ *
+ * Both were fixed defensively during the 17b pass and neither was measured.
+ */
+test('the expanded view and threaded replies survive injection', async ({ page }) => {
+  const { before, after } = await geometryUnderInjection(
+    page,
+    'twitter',
+    [
+      '#workskin .tweet.expanded',
+      '#workskin .tweet.expanded .avatar',
+      '#workskin .tweet.expanded .expanded-content',
+      '#workskin .tweet.expanded .expanded-name .name',
+      '#workskin .tweet.expanded .expanded-body',
+      '#workskin .tweets .tweet.reply',
+      '#workskin .tweet .name-line .handle',
+    ],
+    (p) => {
+      p.settings.twitterThreadMode = true;
+      p.messages = [
+        { id: 'a', sender: 'Alex Rivers', content: 'the moth is back', outgoing: true,
+          timestamp: '2:15 PM', twitterHandle: 'alexrivers', useCustomIdentity: true,
+          twitterLikes: 847, twitterRetweets: 89, twitterReplies: 156 },
+        { id: 'b', sender: 'Sam', content: 'it never left', outgoing: false, parentId: 'a',
+          timestamp: '2:17 PM', twitterHandle: 'sam', useCustomIdentity: true,
+          replyToHandles: ['alexrivers'] },
+        { id: 'c', sender: 'Alex Rivers', content: 'do not say that', outgoing: true,
+          timestamp: '2:20 PM', twitterHandle: 'alexrivers', useCustomIdentity: true,
+          expandedView: true },
+      ] as typeof p.messages;
+    }
+  );
+
+  expect(after.length, 'injection changed how many elements exist').toBe(before.length);
+
+  // Guard against the worst kind of green: this test would pass trivially if
+  // the fixture stopped producing expanded or threaded tweets, since nothing
+  // can move if nothing is there. Name them rather than counting.
+  for (const required of ['#workskin .tweet.expanded', '#workskin .tweets .tweet.reply']) {
+    expect(
+      before.filter((b) => b.sel === required).length,
+      `fixture rendered no ${required} — the test would be vacuous`
+    ).toBeGreaterThan(0);
+  }
+
+  const moved = before
+    .map((b, i) => ({ b, a: after[i] }))
+    .filter(({ b, a }) => b.x !== a.x || b.y !== a.y || b.w !== a.w || b.h !== a.h)
+    .map(({ b, a }) =>
+      `${b.sel}[${b.i}]  ${b.x},${b.y} ${b.w}x${b.h}  ->  ${a.x},${a.y} ${a.w}x${a.h}`
+    );
+
+  expect(moved, `${moved.length} element(s) moved:\n${moved.join('\n')}`).toEqual([]);
 });
 
 for (const template of ['google', 'twitter', 'ios', 'android'] as const) {
