@@ -196,11 +196,27 @@ function tokenizeValue(value: string): string[] {
  * thing we can do is say so before the user pastes into AO3 and gets a
  * generic error.
  */
+/*
+ * Anchored at BOTH ends, which upstream achieves by construction rather than by
+ * anchors: URI_REGEX is wrapped in URL_FUNCTION_REGEX as `url\(\s*` + URI +
+ * `\s*\)`, so the address must begin immediately after the paren and be fully
+ * consumed before it closes.
+ *
+ * Leaving this unanchored — as an earlier version did — accepts six shapes AO3
+ * refuses, all of them because `\/images` matches *inside* the path rather than
+ * at the start: `https://cdn.example.xyz/images/banner.png` has an
+ * unallowlisted TLD, but the bare substring `/images/banner.png` satisfies the
+ * pattern on its own. Trailing junk (`…/a.png"); body{display:none}`) slipped
+ * through for the same reason.
+ */
 const AO3_URI = new RegExp(
-  '(?:\\/images|https?:\\/\\/\\w[\\w\\-.]+\\.(?:' + AO3_TLDS.join('|') + '))' +
-    '\\/[\\w\\-./]*[\\w-]\\.(?:' + AO3_IMAGE_EXTENSIONS.join('|') + ')',
+  '^(?:\\/images|https?:\\/\\/\\w[\\w\\-.]+\\.(?:' + AO3_TLDS.join('|') + '))' +
+    '\\/[\\w\\-./]*[\\w-]\\.(?:' + AO3_IMAGE_EXTENSIONS.join('|') + ')$',
   'i'
 );
+
+/** The character set URI_REGEX permits after the scheme. No `?`, `:`, space, `%`. */
+const AO3_URI_CHARS = /^[\w\-./]+$/;
 
 export interface ImageUrlVerdict {
   ok: boolean;
@@ -240,6 +256,16 @@ export function checkAo3ImageUrl(raw: string): ImageUrlVerdict {
       ok: false,
       problem: 'AO3 won’t accept an address with a “?” or “#” in it.',
       fix: 'Discord, Google Drive and Dropbox links all have one. Re-upload the image to imgur.com or postimg.cc and use that link instead.',
+    };
+  }
+
+  // Checked before the extension, or a trailing space turns into the nonsense
+  // "AO3 doesn't accept .png extra-junk images".
+  if (!AO3_URI_CHARS.test(lower.replace(/^https?:\/\//, ''))) {
+    return {
+      ok: false,
+      problem: 'AO3 won’t accept this address.',
+      fix: 'Addresses may only contain letters, numbers, dots, dashes and slashes. Spaces, %20, colons and other symbols are refused.',
     };
   }
 
@@ -399,7 +425,21 @@ function checkValue(property: string, value: string): Violation | null {
 export function lintAo3Css(css: string, mode: SkinMode = 'site'): Violation[] {
   const violations: Violation[] = [];
 
-  if (/@font-face/i.test(css)) {
+  /*
+   * Comments come off FIRST, before the at-rule checks.
+   *
+   * AO3 never sees a comment: css_parser hands `clean_css_code` rule sets, and
+   * the @font-face check runs against a *selector*. So a stylesheet whose
+   * comment happens to explain why we avoid @font-face or @media is perfectly
+   * acceptable to the archive — but scanning the raw text for those words
+   * refuses it. That is the stricter-than-AO3 failure this file must not have:
+   * it blocks working CSS and the user cannot tell that we, not the archive,
+   * are the ones who are wrong. It bit the Twitter work skin the moment its
+   * stylesheet grew a comment explaining the em conversion.
+   */
+  const withoutComments = css.replace(/\/\*[\s\S]*?\*\//g, '');
+
+  if (/@font-face/i.test(withoutComments)) {
     violations.push({
       kind: 'font_face',
       subject: '@font-face',
@@ -407,7 +447,7 @@ export function lintAo3Css(css: string, mode: SkinMode = 'site'): Violation[] {
     });
   }
 
-  if (/@media/i.test(css)) {
+  if (/@media/i.test(withoutComments)) {
     violations.push({
       kind: 'media_block',
       subject: '@media',
@@ -416,8 +456,7 @@ export function lintAo3Css(css: string, mode: SkinMode = 'site'): Violation[] {
     });
   }
 
-  // Strip comments, then walk `selector { declarations }` pairs.
-  const withoutComments = css.replace(/\/\*[\s\S]*?\*\//g, '');
+  // Walk `selector { declarations }` pairs.
   const ruleRe = /([^{}]+)\{([^{}]*)\}/g;
   let match: RegExpExecArray | null;
 

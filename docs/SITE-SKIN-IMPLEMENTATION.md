@@ -605,6 +605,63 @@ the archive's fault:
 `lintAo3Css` also gained a `mode` parameter (`'site'` | `'work'`). Site is the
 default and is unchanged.
 
+### Correction 3 — the address validator was too *loose* (7 Aug 2026)
+
+Found by re-verifying against `master` rather than by a failing test, and it is
+the opposite failure from the two above: **`AO3_URI` was unanchored.**
+
+AO3 anchors the address by construction rather than with anchors — `URI_REGEX`
+sits inside `URL_FUNCTION_REGEX` as `url\(\s*` … `\s*\)`, so it must begin
+immediately after the paren and be fully consumed before it closes. Ours was a
+bare substring test, so the `\/images` alternative matched *inside* a path and
+green-lit six shapes AO3 refuses:
+
+| Address | Why AO3 refuses it | Why we accepted it |
+| --- | --- | --- |
+| `https://cdn.example.xyz/images/banner.png` | `.xyz` is not in the TLD list | `/images/banner.png` matched on its own |
+| `https://evil.app/images/x.jpg` | `.app` is not in the list | same |
+| `https://nope.moe/images/a.gif` | `.moe` is not in the list | same |
+| `javascript:alert(1)/images/x.png` | no scheme | same |
+| `https://ok.com/a.png extra-junk` | trailing junk — the paren never lines up | unanchored tail |
+| `https://ok.com/a.png"); body{display:none}` | same | same |
+
+These are **false accepts**, which is the quieter failure and the worse one for
+the user: §3a's whole promise is that we catch a bad address *before* they
+leave the app, and instead we would have sent them to AO3 to be told "your skin
+could not be saved". Anchoring both ends takes the divergence against a
+faithful port of `URL_FUNCTION_REGEX` to zero across all fourteen probes.
+
+A second, smaller fix went in alongside: the diagnostic checked the file
+extension before the character set, so `…/a.png extra` was reported as *"AO3
+doesn't accept .png extra images"*. The character-set check now runs first and
+says the true thing about spaces and symbols.
+
+Pinned by two tests in `tests/ao3-css.unit.spec.ts`. Note that neither of the
+last two rows is an AO3 exploit — the archive rejects them — but until this fix
+our own preview iframe would have rendered the broken-out CSS.
+
+### Correction 4 — the at-rule checks ran before comments were stripped (7 Aug 2026)
+
+`lintAo3Css` searched the **raw** stylesheet for `@font-face` and `@media`, then
+stripped comments afterwards for the rule walk. So a stylesheet whose *comment*
+mentioned either word was refused.
+
+AO3 never sees a comment: css_parser hands `clean_css_code` rule sets, and the
+`@font-face` check runs against a **selector**. A comment explaining why we
+avoid `@media` is completely acceptable to the archive. This is the
+stricter-than-AO3 direction again — the third such bug in this file, and the
+same root cause as Correction 1.
+
+It surfaced when the Twitter work skin's stylesheet grew a comment explaining
+its `em` conversion, which mentioned `@media`; the whole platform stopped
+linting. Comments now come off first.
+
+Worth knowing how contagious the mistake is: the same oversight then appeared
+**twice more** in the test written to pin the fix — once reading "a 16px base"
+from a comment as a stray pixel value, once reading `0.9375em` out of a comment
+that existed to warn about four-decimal values. **Strip comments before you
+pattern-match a stylesheet.**
+
 ### What still needs a human
 
 - **Save all twelve templates on AO3.** The sanitizer is the only authority,
@@ -794,7 +851,25 @@ and is regenerated, never hand-edited.
 
 ## Sources
 
-AO3 rules verified against otwarchive `master`, 6 August 2026:
+AO3 rules verified against otwarchive `master`, 6 August 2026 and **re-verified
+7 August 2026**. The re-verification diffed our copied data against upstream
+mechanically rather than by eye:
+
+| Copied list | Upstream | Ours | |
+| --- | --- | --- | --- |
+| `SUPPORTED_CSS_PROPERTIES` | 181 | 181 | match |
+| `SUPPORTED_CSS_SHORTHAND_PROPERTIES` | 20 | 20 | match |
+| `TOP_LEVEL_DOMAINS` | 270 | 270 | match |
+| `SUPPORTED_EXTERNAL_URLS` | 4 | 4 | match |
+| url()-bearing properties | 6 | 6 | match |
+| `Skin::MEDIA`, `Skin::ROLES` | — | — | match |
+
+No upstream drift. The one defect found was ours, not AO3's — see Correction 3
+in §7. Also settled while re-reading: `content: "…" !important` is safe even
+though `sanitize_css_content` does not strip `!important`, because css_parser's
+`each_declaration` yields it as a separate `is_important` flag and
+`clean_css_code` re-appends it afterwards. The value the sanitizer sees never
+contains it.
 
 - [`lib/css_cleaner.rb`](https://github.com/otwcode/otwarchive/blob/master/lib/css_cleaner.rb) — `legal_property?`, `legal_shorthand_property?`, `sanitize_css_declaration_value` branch order, `sanitize_css_font`, `sanitize_css_content`, `VALUE_REGEX`, `@font-face` rejection, `url()` gating
 - [`config/config.yml`](https://github.com/otwcode/otwarchive/blob/master/config/config.yml) — `SUPPORTED_CSS_PROPERTIES`, `SUPPORTED_CSS_SHORTHAND_PROPERTIES`, `SUPPORTED_CSS_KEYWORDS`, `SUPPORTED_EXTERNAL_URLS`

@@ -5,6 +5,7 @@ import {
   isCustomProperty,
   lintAo3Css,
   isAo3Safe,
+  checkAo3ImageUrl,
 } from '../src/lib/siteSkin/ao3Css';
 import { AO3_PROPERTIES, AO3_SHORTHANDS } from '../src/lib/siteSkin/ao3Properties';
 
@@ -111,6 +112,44 @@ test.describe('value rules', () => {
     expect(isAo3Safe('#main { background-image: url(x.png); }')).toBe(false);
     expect(isAo3Safe('#main { content: url(x.png); }')).toBe(false);
     expect(isAo3Safe('#main { background-image: url("/images/skins/tile.png"); }')).toBe(true);
+  });
+
+  /**
+   * AO3 anchors the address by construction: URI_REGEX sits inside
+   * `url\(\s*` … `\s*\)`, so it must start right after the paren and be fully
+   * consumed before it closes. Our AO3_URI was unanchored, so `\/images`
+   * matched *inside* a path and waved through six addresses AO3 refuses.
+   *
+   * These are false-accepts, which is the quieter of the two failure modes and
+   * the worse one for the user: we promise the paste will work, and then AO3
+   * says "your skin could not be saved" after they have left the app.
+   */
+  test('the address must match end to end, not merely contain a legal-looking part', () => {
+    // An unallowlisted TLD is not rescued by an /images/ path segment.
+    expect(checkAo3ImageUrl('https://cdn.example.xyz/images/banner.png').ok).toBe(false);
+    expect(checkAo3ImageUrl('https://evil.app/images/x.jpg').ok).toBe(false);
+    expect(checkAo3ImageUrl('https://nope.moe/images/a.gif').ok).toBe(false);
+
+    // Nor is a missing scheme.
+    expect(checkAo3ImageUrl('javascript:alert(1)/images/x.png').ok).toBe(false);
+
+    // Trailing anything means the closing paren never lines up.
+    expect(checkAo3ImageUrl('https://ok.com/a.png extra-junk').ok).toBe(false);
+    expect(checkAo3ImageUrl('https://ok.com/a.png"); body{display:none}').ok).toBe(false);
+
+    // The legitimate shapes still pass.
+    expect(checkAo3ImageUrl('https://i.imgur.com/abc123.png').ok).toBe(true);
+    expect(checkAo3ImageUrl('https://postimg.cc/gallery/banner.jpg').ok).toBe(true);
+    expect(checkAo3ImageUrl('https://user.github.io/assets/header.gif').ok).toBe(true);
+    expect(checkAo3ImageUrl('/images/skins/textures/tiles/red-ao3.png').ok).toBe(true);
+  });
+
+  test('names the actual reason, so the export dialog can say something useful', () => {
+    expect(checkAo3ImageUrl('https://cdn.example.xyz/images/b.png').problem).toContain('.xyz');
+    expect(checkAo3ImageUrl('https://example.com/pic.webp').problem).toContain('.webp');
+    expect(checkAo3ImageUrl('https://x.com/a.png?ex=1').problem).toContain('?');
+    // A space must not be reported as an extension called "png extra-junk".
+    expect(checkAo3ImageUrl('https://ok.com/a.png extra').fix).toContain('Spaces');
   });
 
   test('a function\'s comma-separated arguments are one token, not four', () => {
