@@ -37,6 +37,33 @@ different aspect ratios behind one `height:14px;width:auto` rule.
 **2a did not do what it was ranked for.** It was top of this list because it
 might also fix the flex problem. It does not — see below.
 
+## Proven on the archive: comments make AO3 drop rules
+
+**7 Aug 2026, confirmed by three saves of the same skin.** This is the only
+sanitizer behaviour we have caught silently discarding legal CSS, and it took
+reading the stored CSS back to see it at all.
+
+A saved iOS work skin came back with **eleven consecutive rules missing** — both
+CSS bubble tails, both `.time` rules, `.time.image-time`, `.reaction`,
+`.status-indicator`, `.attach`, `img.attach-img` and both `.row.typing` rules.
+88 rules sent, 77 stored. Everything before and after survived. Reproduced on a
+second save; **removing comments from the export brought all eleven back.**
+
+What it is not: the lint passes in both modes, every numeric token satisfies
+AO3's own grammar, and every double quote in the file sits inside a comment and
+is paired.
+
+**Unproven but strongly suggested by the boundaries:** the drop began
+immediately after the only comment containing a CSS declaration — a note that
+mentioned `content:""` — and ran to the next comment. A parser that partly reads
+comment bodies as CSS would behave exactly this way. Cheap to test if it ever
+matters; it does not, because the fix is to send no comments.
+
+| # | Task | Why | Where |
+| --- | --- | --- | --- |
+| 2c | ✅ **done for work skins.** `stripExportComments` in `workSkin.ts` | AO3 deletes every comment on save, so they reach nobody — the `generator.ts` copy is untouched and the preview and PNG still carry them | this section |
+| 2d | **Site skins have the same exposure and it is unverified.** `compile.ts:342` emits a comment per annotated rule, plus three header comments | Lower risk than the work skin — none of the five contains a `property: value` pair — but the class is identical and BACKLOG 20 has never been run. **One of them is load-bearing UI copy**: *"leave the skin type on add on to archive skin"* is only ever seen in the paste box, since AO3 deletes it on save. So this is not a blind strip: move that instruction into the export dialog (item 5) and drop the comments in the same change | MASTER, this section |
+
 ## Correctness and hygiene
 
 | # | Task | Why | Where |
