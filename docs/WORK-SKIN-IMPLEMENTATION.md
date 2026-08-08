@@ -509,7 +509,40 @@ somebody else's server. Both dialogs now say so.
 
 ## 10. Handoff
 
-Where this stands as of **7 Aug 2026**, and what to pick up.
+Where this stands as of **8 Aug 2026**, and what to pick up.
+
+**If you read three things here:** the state table below, "Deployment" (nothing
+from 7–8 Aug is pushed), and §10c (the recipe for the next item). The seven
+things worth knowing and the traps are the accumulated cost of getting here and
+will save you a day each time you hit one.
+
+### How much is done
+
+A single percentage is arbitrary, so here is the count, taken from the ranked
+list in `BACKLOG.md` on 8 Aug 2026:
+
+| Track | Done | Open |
+| --- | --- | --- |
+| Live bugs, and the comment exposure (1, 2, 2a–2d) | 6 | 0 |
+| Correctness and hygiene (3, 4, 5, 5a, 5b, 5c) | 5 | 1 |
+| Master skin (6–10) | 1 | 4 |
+| Optional features (11–16b) | 0 | 9 |
+| Verification that needs a real AO3 account (17–20) | 5 | 3 |
+
+**The shipping product — the per-platform work skin — is essentially done.** All
+four platforms export CSS AO3 accepts, all four were saved on the archive and
+diffed rule by rule with zero drift, all four survive paragraph injection, and
+the dialog tells an author the three things AO3 does not. One code item remains
+(5c, a one-line `<a>` → `<span>`). **What is left is not code**: it is the HTML
+half of the release gate, which needs an account and twenty minutes, not a
+commit.
+
+**The master skin is a fifth done** — the namespacer landed, 7–10 remain, and
+§10c is the recipe for 7. **The optional features are untouched and the backlog
+calls none of them urgent**, so do not read 0/9 as a gap.
+
+Do not turn the raw 17-of-34 into "50% complete". It weights "add seven new
+platforms" the same as swapping one anchor for a span.
 
 ### The state of things
 
@@ -533,7 +566,7 @@ closed; the HTML half is not.
 | Creator's Style **off** / EPUB download | ❌ **never checked** |
 | Re-parse after editing a posted work | ❌ **never checked** |
 
-### The six things worth knowing before you touch anything
+### The seven things worth knowing before you touch anything
 
 1. **Read the stored CSS.** AO3 keeps the *cleaned* CSS, so reopening a saved
    skin in AO3's editor is a direct readout of what the sanitizer kept and
@@ -559,6 +592,20 @@ closed; the HTML half is not.
    passing unit tests, and two of them reached the author before they reached
    us. The unit suite proves the CSS is *legal*; only a picture proves it is
    *right*. Export a PNG, and diff it against one from before your change.
+7. **The container's class string is now a contract, in three places at once**
+   (added 8 Aug 2026, with the namespacer). `buildHTML` emits
+   `class="chat <platform>"`; `useCssBubbleTails` appends `css-tails` to it;
+   `namespaceCss` splices the platform class into any selector whose first
+   compound is made only of `CONTAINER_CLASSES`. **Change any one of the three
+   and the other two are wrong**, and every failure in this cluster is silent —
+   a selector that matches nothing looks exactly like a rule you forgot to
+   write. Two of them already happened in one afternoon: `.tweets` was missing
+   from the list and every `.tweet` rule lost its box, and `useCssBubbleTails`
+   matched the literal string `class="chat"` which had just stopped existing,
+   so iOS would have shipped with its SVG tails deleted and the CSS tails never
+   switched on. Both are pinned by tests that read the real markup rather than
+   trusting the constant; if you add a class to that container, add it to
+   `CONTAINER_CLASSES` in the same commit.
 
 ### The traps that have already cost time
 
@@ -587,6 +634,22 @@ closed; the HTML half is not.
   everything and leaves the index, so the next `--amend` silently swallows the
   staged files. Stage by path and commit; the recovery is `reset --soft` plus
   `git checkout stash@{0} -- <paths>`, but do not need it.
+- **In a geometry harness, stub images — do not abort them.** Aborting looks
+  correct, and the reasoning is sound as far as it goes: every `<img>` we emit
+  carries `width` and `height`, so layout is determined without the bytes.
+  It is still wrong. **A failed image is not the same box as a loaded one** —
+  Chrome sizes the broken-image placeholder when the failure lands, and that is
+  not at a fixed point relative to the load event. On 8 Aug 2026 this made two
+  *identical* Google renders differ by 6.69px, which is indistinguishable from a
+  real layout regression and was chased as one. `route.fulfill` with a 1x1 PNG
+  is deterministic, never touches the network, and lays out at the declared
+  attributes. `tests/namespace.spec.ts` does this; `ao3-injection.spec.ts` still
+  aborts and gets away with it only because it measures twice on one page.
+- **Before believing a two-render diff, diff a render against itself.** The step
+  that cracked the above: render the same page twice and compare. Zero
+  difference proved the measurement was sound and moved the search to the
+  content, which is where it was. Cheap, and it rules out the entire class of
+  "the harness is lying to me" in one run.
 
 ### How to verify a change
 
@@ -728,8 +791,11 @@ The order that matters now that the live bugs are cleared:
    diffs every computed style on every element to prove neither changes a
    pixel — and caught two bugs doing it, both invisible to the lint.
 5. **The master skin** (BACKLOG 7–10). ⬅ **START HERE**, at 7:
-   `buildMasterWorkSkin`. 8 is the item 5b was done for and is cheap once 7
-   lands.
+   `buildMasterWorkSkin`. **The recipe is §10c**, scoped on 8 Aug 2026 with the
+   ordering constraint, the traps and the invariant already worked out — item 7
+   is assembly, not invention, because the namespacer and the platform class
+   both exist and are proven not to move a pixel. 8 is the item 5b was done for
+   and is cheap once 7 lands.
 6. **The two small correctness items**, BACKLOG 5c (the dead `<a href="#">`)
    and the paragraph-reset question in §9d, whenever they are convenient. They
    are independent of the master-skin chain.
@@ -798,6 +864,71 @@ repo wants to carry.
 
 BACKLOG 8 is now worth attempting.
 
+### 10c. The recipe for BACKLOG 7, scoped but not started (8 Aug 2026)
+
+`buildMasterWorkSkin(project)` — one skin an author saves once, covering all
+four platforms. **Everything it needs now exists**; item 7 is assembly, not
+invention. Written the way §10b was, because that format worked: the recipe,
+then the traps, then the invariant.
+
+**What is already in place.** `namespaceCss(css, platform)` scopes a stylesheet
+(MASTER §6a); `buildHTML` already emits `class="chat <platform>"` on every path,
+so **no markup change is needed at all**; `absolutizeCssAssets` and
+`stripExportComments` already run inside `buildWorkSkin`.
+
+1. **Build each platform's CSS through the existing pipeline, then namespace.**
+   Clone the project with `template` overridden, run it through whatever
+   `buildWorkSkin` already does, and namespace the result. **Order matters:**
+   namespacing goes last. Android reaches `buildCSS` with `url('/assets/…')`,
+   which AO3 refuses outright, so a master skin assembled from raw `buildCSS`
+   output is rejected in full — and one bad rule loses the whole skin, all four
+   platforms at once.
+2. **One project already holds all four platforms' settings**, which is the part
+   that could have been ugly and is not. `iosDarkMode`, `androidDarkMode` and
+   `twitterDarkMode` are separate fields, and `buildCSS` forces iOS's bubble
+   colours regardless of the shared ones. So cloning per template and reusing
+   the same settings object is honest rather than a compromise — each block gets
+   the settings that actually belong to it. Google has no theme at all.
+3. **Emit the version as a rule, not a comment.** AO3 deletes every comment on
+   save (§13), so `/* Generated with … */` has never once reached the archive.
+   Rosé Pine's trick survives because it is a real rule —
+   `#workskin .ao3skingen-v3::after{content:'3';}` — and it lets the app detect
+   a stale saved skin if the author pastes their CSS back in. Bump it whenever
+   the class contract changes. Single quotes: that is the form we have watched
+   survive the sanitizer (see the note in `buildIOSCSS`).
+4. **Leave dedupe to item 9 and do not block on it.** Measured 8 Aug 2026: the
+   four namespaced blocks are **34.5 KB over 292 rules**, and only **26 distinct
+   rules are byte-identical across two or more platforms, occupying 3.4 KB** —
+   about a tenth. (MASTER §7 says 38 rules; that figure predates the `em`
+   conversion and the palette tables. 26 is the current count.) Size is not a
+   problem: AO3 serves a 104 KB skin today.
+
+**The invariant, and it is the same shape as 5b's.** A master skin must render
+each platform **identically to that platform's single-platform skin**. That is
+exactly what `tests/namespace.spec.ts` already measures, one platform at a time,
+so the test is a loop around a harness that exists: build the master CSS once,
+then for each platform diff every computed style on every element against the
+single-platform export. Do it under paragraph injection too — the file already
+has that case.
+
+**The traps this will walk into**, all of them already paid for once:
+
+- **`.chat.css-tails` is iOS-only and is added by the export, not by
+  `buildHTML`.** It is in `CONTAINER_CLASSES`, so `namespaceCss` handles it —
+  but a master skin serving a Twitter project still carries the namespaced iOS
+  tail rules, which is correct and must not be "cleaned up".
+- **Four `#workskin .chat p{…}` paragraph resets, four `.visually-hidden`
+  blocks, four `.wm` credits.** Namespaced they do not conflict; they are simply
+  redundant until item 9. Do not hand-merge them early — the single-platform
+  export still needs its own copy, and two code paths that can disagree is the
+  failure mode `SITE-SKIN-IMPLEMENTATION.md` §5 is about.
+- **One credit, not four.** The unit suite asserts *exactly one* plain-text
+  credit per export. A naive concatenation emits four and that test will catch
+  it — it is doing its job, so fix the assembly rather than the test.
+- **The export UI is item 10, and it is not optional.** An author must choose
+  "one skin for everything" or "just this platform", because a work can use only
+  one skin (§9f) and the master skin is the whole point of the choice.
+
 ### The flex question — **settled, 7 Aug 2026**
 
 §5a rewrote the Twitter header from flex to float on purely empirical grounds
@@ -839,12 +970,27 @@ AO3 account and twenty minutes:
   single-chapter work.
 - **Site skins** (BACKLOG 20): all 16 templates, plus §13f.
 
-### Deployment
+### Deployment — **read this first if you are picking the project up**
 
 Netlify, building from `main` on push (`netlify.toml`, `@netlify/plugin-nextjs`).
 There is no separate deploy step and no staging environment: **a push to `main`
 is a production release.** Run `npm run build` and the unit project before
 pushing.
+
+> **Nothing from 7–8 Aug 2026 is deployed.** As of 8 Aug 2026 the work sits on
+> the branch `work-skin-chrome-and-export-copy`, **seven commits ahead of `main`
+> and with no upstream** — so none of it has been pushed anywhere, let alone
+> released. That covers the site-skin comment fix, Twitter's drawn chrome, the
+> export-dialog copy, the three PNG fixes, the colour tables and the namespacer.
+>
+> This matters for reading the rest of this document: where it says something
+> "ships" or is "live", that means *merged into this branch and green*, not *in
+> front of authors*. The three PNG bugs in §14a are the sharpest case — two were
+> reported by the author against the **deployed** build, and the fixes are still
+> sitting here.
+>
+> Deciding whether to merge is the owner's call, not a mechanical step: it is a
+> production release with the HTML half of the release gate still open (below).
 
 ---
 

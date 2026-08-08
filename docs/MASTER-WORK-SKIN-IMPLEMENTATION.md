@@ -102,6 +102,30 @@ its own rule"*) is harmless either way, so the disagreement changes no code.
 
 Taken from the four shipped stylesheets, not estimated.
 
+> **Re-measured 8 Aug 2026**, now that the namespacer exists and the numbers can
+> be taken from its actual output rather than estimated from `buildCSS`. The
+> shape of the conclusion is unchanged; three figures moved. The originals are
+> kept in the second table because the reasoning elsewhere in this document was
+> built on them.
+
+Measured on the **export** CSS — what `buildWorkSkin` emits, comments stripped
+and asset URLs absolutized — which is the only version that can go in a skin,
+and then namespaced:
+
+| Platform | Export CSS | Namespaced | Rules |
+| --- | --- | --- | --- |
+| iOS | 9,767 B | 10,673 B | 88 |
+| Android | 8,677 B | 9,799 B | 76 |
+| Twitter | 7,850 B | 9,048 B | 80 |
+| Google | 4,373 B | 4,998 B | 48 |
+| **Combined** | — | **34,518 B** | **292** |
+
+Namespacing costs about **10%** in bytes, which is the price of the platform
+class on every selector.
+
+The original estimates, and why they read higher: they were taken from
+`buildCSS` *with its comments*, which the export strips.
+
 | Platform | CSS | Rules | Rules that change with the user's theme |
 | --- | --- | --- | --- |
 | iOS | 11,780 B | 87 | 25% |
@@ -110,16 +134,20 @@ Taken from the four shipped stylesheets, not estimated.
 | Google | 4,368 B | 52 | **0%** |
 | **Combined** | **~38 KB namespaced** | 290 | — |
 
-**Size is a non-issue.** Rosé Pine ships 104 KB and AO3 accepts it.
+**Size is a non-issue.** Rosé Pine ships 104 KB and AO3 accepts it, and the real
+combined figure came in *under* the estimate at 34.5 KB.
 
 **Collisions are narrow.** 223 distinct selectors, 63 shared by two or more
 platforms, of which only **25 actually conflict** — and 24 of those are iOS vs
 Android, which both build on `dd.bubble`. Twitter and Google collide with
 nothing but `.chat` and `.wm`.
 
-**Namespacing is mechanical.** All 290 selectors begin with `#workskin`, so a
-rewrite to `#workskin .chat.<platform> …` is a ~15-line transform. A prototype
-of it produced a sheet that lints clean.
+**Namespacing is mechanical.** All 292 selectors begin with `#workskin` —
+confirmed, not assumed, and `namespaceCss` now throws rather than pass through
+one that does not. The transform came in near the predicted size, but "mechanical"
+undersold it: the two things it actually had to get right (the container's own
+classes, and comments) are in §6a-i, and both were found by rendering rather than
+by reading.
 
 ---
 
@@ -327,7 +355,7 @@ stale skin if the user pastes their saved CSS back in.
 | 1 | ✅ **done.** `stripCssComments()` in `ao3Css.ts`, used by the lint and the namespacer |
 | 2 | ✅ **done, 8 Aug 2026.** `namespaceCss(css, platform)` + platform class in `buildHTML`, with a PNG-unchanged check — `tests/namespace.spec.ts`, which diffs every computed style on every element, with and without the class and with and without the rewrite, under paragraph injection as well. Two bugs it caught are in §6a-i |
 | 3 | ⬅ **next.** `buildMasterWorkSkin(project)` — shared block, four namespaced blocks, version rule |
-| 4 | Dedupe the 38 rules that are byte-identical across platforms (`.visually-hidden`, the `dd.bubble` text formatting) |
+| 4 | Dedupe the rules that are byte-identical across platforms (`.visually-hidden`, the paragraph reset, the `dd.bubble` text formatting). **Re-measured 8 Aug 2026: 26 distinct rules, 3.4 KB of 34.5 KB** — the "38" this row used to claim predates the `em` conversion and the palette tables. About a tenth, so worth doing and not worth blocking item 3 on |
 | 5 | Export UI: "one skin for everything" vs "just this platform", and the §9f copy fixes — one skin per work, globally unique titles |
 | 6 | **Save it on real AO3** and settle §5 |
 
