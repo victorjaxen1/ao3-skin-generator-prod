@@ -7,10 +7,30 @@ what to do next.
 **Last reconciled: 8 Aug 2026.** Everything shipped up to commit `c30f97b`
 (iOS and Android work skins) is excluded.
 
-**Next up: item 7**, `buildMasterWorkSkin`. Item 6 landed on 8 Aug 2026, so the
-namespacer and the platform class exist and are proven not to change a pixel;
-7 assembles them into one skin. Item 8 is what 5b was done for and is cheap once
-7 lands.
+**The master-skin chain is done — built, shipped in the UI, and proven on the
+archive.** Items 6, 7, 8 and 10 landed on 8 Aug 2026, and **18a closed the same
+day**: the 67 KB skin was saved on real AO3, read back **537 of 537 rules and
+2,019 of 2,019 declarations, in order, nothing dropped**, and a single work
+carrying all four platforms renders correctly from it.
+
+**Next up: item 5d** (rounded corners in the PNG that AO3 does not have) and
+**5c**, both small, then item 9 (dedupe — hygiene now, not a size problem: AO3
+took the 67 KB paste whole).
+
+**Item 18 is mostly closed too.** A work with all four platforms was posted and
+read with **Creator's Style off**: our markup survives, none of our CSS is
+served, and it reads as prose. That found two real defects, both fixed — shared
+settings leaking a colour into three platforms out of four, and a group chat
+naming every speaker three times (WORK-SKIN §16a, §16b). Only the EPUB *text*
+is unread; the structure is known (AO3 strips every `class`), and repeated
+download attempts returned Cloudflare 525s.
+
+**Item 8 did not land the way it was scoped**, and the correction is the useful
+part: a *derived diff* of the two themes (64 rules, the "five rules" shape
+KNOWLEDGE §18 promised) is **unsound**, because an override can tie on
+specificity with a more specific base rule and beat it by source order. It did,
+and it put a hairline back under a metric-less tweet. The variant is a whole
+namespaced stylesheet now — sound by construction, and 32 KB. See MASTER §6b.
 
 **Items 5, 2d, 5a and 5b closed 7–8 Aug 2026.** The export-dialog copy; the
 site-skin export going comment-free once the instruction it carried had a better
@@ -107,22 +127,26 @@ unit tests all passed straight through these. Render it and look at it.
 | 5 | ✅ **done, 7–8 Aug 2026.** All three are in the work-skin modal: an amber note under step 1 carries the unique-title rule with a per-platform example (`yourname — WhatsApp`) and the one-skin-per-work merge instruction, and the footnote now says plainly that the icons load from our host, that AO3 keeps no copy, and that **"Copy for AO3" does not avoid this** — it uploads to ImgBB, which the old copy implied was the safe option. The image path's own modal says the same in one line. Pinned by *"the modal states the three things AO3 will not"* in `work-skin.spec.ts` | Three factual errors an author meets on their first paste. UI copy, not compiler work | WORK-SKIN §9f, KNOWLEDGE §7 |
 | 5a | ✅ **done, 8 Aug 2026 — five to ONE, not two.** Both verified badges are `✔` in a CSS circle. The whole metric row became characters — `↩ ⇄ ♡` — which the author preferred to keeping our blue discs, and which looks more like the real site. Only the X logo is still fetched (a trademark we should not draw). Views and bookmarks stay images: opt-in extras, no character reads right. Pinned by *"a tweet fetches one chrome image, not five"*. **Two PNG bugs came out of this, both in WORK-SKIN §14a** — including a tweet name line that has been clipped in every PNG this app ever exported. ~~**Cut the chrome images from five per tweet to two.** Verified badge → CSS circle with `✔`; like icon → the character `❤`. Keep reply/retweet glyphs and the X logo as images~~ | A twenty-tweet thread is currently **100 requests to `media.publit.io`** inside somebody's published fic, forever. The WhatsApp author had exactly this break when Cloudinary cut them off, and every fic using their skin lost its images at once. gadaursan's skin needs **no chrome images at all** | KNOWLEDGE §11, §19 |
 | 5b | ✅ **done, 8 Aug 2026.** **48 theme ternaries became four palette tables** — `TEXT_FORMATTING_COLOURS`, `iosColours(recvBg)`, `androidColours(senderBg, recvBg)`, `TWITTER_COLOURS` — each holding light and dark side by side, with the theme resolved once into `colour`. **No rule body mentions `isDark`**; `grep '\${isDark'` returns nothing. The settings-driven slots are palette *parameters* rather than entries kept outside the table, so **both variants stay reachable as data**, which is the whole precondition for item 8. Verified by snapshotting `buildCSS` *and* `buildHTML` for 96 variants — theme × three bubble palettes × `useDarkNeutral` × `iosMode`, optional chrome on — and requiring byte-identical output; pinning the HTML too is what proves the PNG is unchanged without exporting one. Google left alone (no dark mode). Recipe and what it did not anticipate: WORK-SKIN §10b. ~~**Separate structure from colour** in the four stylesheets~~ | Night mode in the canonical skin is **five rules**, because its base defines structure only. Ours bakes one theme, which is why settings-dependence is 24–32%. Worth doing on its own merits, and it makes item 8 cheap instead of a doubling | KNOWLEDGE §18 |
+| 5d | **iOS and Android are rounded in the PNG and square everywhere else.** `renderChunk` sets `clone.style.borderRadius = '20px'` (plus `overflow:hidden`) on the export clone only — it is not in the stylesheet, so the preview and the real AO3 render both have square corners. Seen on a posted work, 8 Aug 2026. **Decide which is right and make all three agree**: either move the radius into `buildIOSCSS`/`buildAndroidCSS` (legal — `border-radius` is all over the stored CSS and `overflow` passes as a shorthand substring, and it would leave the PNG byte-identical) or drop it from the clone. Moving it in is the recommendation: a phone screen has rounded corners | This is precisely the "two renderings that can disagree" failure `SITE-SKIN-IMPLEMENTATION.md` §5 is about, and it does **not** qualify for the narrow exception WORK-SKIN §10 allows, because it compensates for nothing in html2canvas — it is a design choice that only one of the three paths got | WORK-SKIN §10 rule 5 |
+| 5e | ✅ **done, 8 Aug 2026. Shared settings leaked into three platforms out of four.** `senderColor`, `receiverColor`, `bubbleOpacity`, `fontFamily` and `iosMode` are one set of fields for all four platforms, so a master skin built four blocks from whatever was chosen for the one the author had open — **unseen**, since those blocks style markup pasted chapters later. On a real posted work that meant **blue WhatsApp bubbles** and an **SMS-green iMessage**. `PLATFORM_LOOK` in `generator.ts` is the fix: the open platform keeps the author's settings (its CSS sits beside a preview built from them), the other three wear their own look. **The platform picker was a third opinion and the worst one** — WhatsApp was `#00A884` on `#1F2C34`, its *dark-theme* colours on a light card — and now reads the same table | One table, three call sites. Retires the old invariant "the master skin is the same whichever platform is open", which was true *because* every block took the open project's colours | WORK-SKIN §16a |
+| 5f | ✅ **done, 8 Aug 2026. With the skin off, a group chat named every speaker three times** — the hidden `<dt>` label, the avatar monogram and the visible group name, one after another. The label is duplication the moment a row prints the name, so `msgHTML` omits it there; one-to-one chats and outgoing rows keep it. `tests/skin-off.spec.ts` renders with no CSS and reads `innerText`, which is the only way to see this | Found by looking at the posted work with `?style=disable`, which is also what every EPUB, MOBI and PDF is | WORK-SKIN §16b |
 | 5c | **Replace `<a href="#" class="reply-handle">` with a `<span>`** — our only anchor | A link that goes nowhere: screen readers announce it as a link, and clicking scrolls the reader to the top of the page. Separately, AO3's parser has historically had trouble with `<a>` as a sibling of `<div>` and re-runs on every edit | KNOWLEDGE §22 |
 
 ## The master skin
 
 Ordered; each depends on the one above. Items 1–3 above should land first.
 
-**This is the live chain now** — everything above it is closed except 5c and the
-opt-in features. 6 is done; start at 7.
+**Code-complete, 8 Aug 2026.** 6, 7, 8 and 10 are done; only 9 (dedupe) remains,
+and it is an optimisation rather than a gap. **The chain now ends at item 18a**,
+which no amount of code can close: somebody has to save the thing on AO3.
 
 | # | Task | Where |
 | --- | --- | --- |
 | 6 | ✅ **done, 8 Aug 2026.** `namespaceCss(css, platform)` and `CONTAINER_CLASSES` in `workSkin.ts`; `buildHTML` emits `class="chat <platform>"` on every path. The PNG-unchanged check is `tests/namespace.spec.ts` — every computed style on every element, diffed three ways (class alone, rewrite alone, both under paragraph injection). **It caught two real bugs**: `.tweets` is a class on the container beside `.chat`, so prefixing made every `.tweet` rule match nothing; and namespacing must run *after* `absolutizeCssAssets` or Android's `url('/assets/…')` gets the whole skin refused. Both in MASTER §6a-i, along with why a blocked image made the harness flaky | MASTER §6a |
-| 7 | `buildMasterWorkSkin(project)` — shared block, four namespaced blocks, a version rule (a comment cannot carry it; AO3 deletes comments) | MASTER §6c, §7 |
-| 8 | Light/dark variant classes per platform — **5b is done, so both palettes are reachable as data and the override block can be *derived* by diffing `light` against `dark` rather than hand-written** | MASTER §6b, KNOWLEDGE §18 |
-| 9 | Dedupe the 38 byte-identical shared rules | MASTER §7 |
-| 10 | Export UI: "one skin for everything" vs "just this platform" | MASTER §7 |
+| 7 | ✅ **done, 8 Aug 2026.** `buildMasterWorkSkin(project)` — a version rule (`#workskin .ao3skingen-v1::after{content:'1';}`, because AO3 deletes comments) then four namespaced blocks, 34,567 bytes over 293 rules. `tests/master-skin.spec.ts` diffs every computed style on every element against each platform's own single-platform skin, clean and under paragraph injection: **nothing moves**. The unit gate adds byte-identical containment — every master block *is* `namespaceCss(buildWorkSkin(p).css, t)`, so the two exports cannot become two generators — plus the stylesheet being the same whichever platform is open, which matters because the author saves it once. The render harness is now shared: `tests/_ao3-render.ts`, used by `namespace.spec.ts` too. **Not exposed to anyone yet — that is item 10** | MASTER §6c, §6d, §7 |
+| 8 | ✅ **done, 8 Aug 2026.** Both themes in one skin. `buildHTML` emits `theme-light` / `theme-dark` on the container, `namespaceCss` takes an optional theme, and each themed platform carries a variant block for the theme the author did *not* pick (Google has none). Pinned by four browser cases per platform: the skin is always built from the **opposite** theme to the block under test, so the variant is the only thing that can be styling it. **The planned derivation — diff the palettes, emit ~20 colour rules — was built, measured and rejected**: an override tied on specificity with a more specific base rule and beat it by source order, restoring a border the base sheet removed. A whole namespaced stylesheet is sound by construction; the argument is in `themeVariantCss` | MASTER §6b, §6d, KNOWLEDGE §18 |
+| 9 | ⬅ **START HERE.** Dedupe the byte-identical shared rules. **Worth more since 8**: the skin is 67 KB now, and the variant blocks duplicate every structural rule a second time — the shared-rule count needs re-measuring against 537 rules, not 293. Do **not** hand-merge into the single-platform export as well; two code paths that can disagree is the failure MASTER §6d names | MASTER §7 |
+| 10 | ✅ **done, 8 Aug 2026.** The work-skin modal carries the choice: **Just \<platform\>** (the default, and what the modal did before) against **All four platforms**. Picking the wider one swaps the CSS box for `buildMasterWorkSkin`'s output, changes the title example to `yourname — chat skins`, and adds a line telling the author to come back and copy the HTML for the next conversation whatever app it is. The master skin is built lazily — eleven stylesheet builds, and `project` changes on every keystroke — so it is computed only while the modal is open on that choice. Pinned by *"the author can take one skin for everything, or just this platform"* in `work-skin.spec.ts`, which needs a local server: `UX_BASE_URL=http://localhost:3000` | MASTER §7 |
 
 ## Features we don't have
 
@@ -149,7 +173,8 @@ release gate, and it has been open since the work-skin export shipped.
 | --- | --- | --- |
 | 17 | ✅ **SETTLED, 7 Aug 2026 — see "The flex question, settled" below.** The hypothesis was right about the mechanism and wrong about the fix | |
 | 17a | **Is our HTML idempotent under re-parsing?** Edit an author's note on a posted work and check the fic still renders | AO3 re-runs its HTML parser *on every edit* — new chapter, note change, tag edit — and the parser itself changes over time. A January 2023 change stopped `<a>` being a sibling of `<div>`; wrapping the structure in `<figure>` restored it. Markup that posts fine can break months later — KNOWLEDGE §22 |
-| 18 | Save all four platforms, post a real chapter, check with Creator's Style **on and off**, and download the EPUB | The sanitizer is the only authority. Our lint is a model of it |
+| 18 | 🟡 **mostly done, 8 Aug 2026.** All four platforms saved as one master skin, a real chapter posted with all four in it, and read with Creator's Style **on** and **off**. Two defects found and fixed (5e, 5f); three more turned out to be the *measurement* rather than the export — `textContent` glues blocks together, `innerText` is the honest reading (WORK-SKIN §16c). **Outstanding: the EPUB text.** Its structure is known — AO3 strips every `class` attribute, so an EPUB is structure plus text — but repeated downloads returned Cloudflare 525s | The sanitizer is the only authority. Our lint is a model of it |
+| 18a | ✅ **CLOSED, 8 Aug 2026 — saved, read back, and seen rendering.** **537 rules sent, 537 stored. 2,019 declarations sent, 2,019 stored. Zero selectors missing in either direction, zero properties dropped, zero rules reordered.** Every high-risk construct survives at an identical count: `display:contents` ×8, `clip:rect` ×7, `::after` ×7, `content:'…'` ×9, `transform` ×5, `filter` ×8, `box-shadow` ×10, `text-shadow` ×6, `float` ×2, `!important` ×36, `display:flex` ×52, quoted font names, absolute Publit URLs, `:nth-child` ×8, and **263 `.theme-dark` selectors** — the whole variant block. Comments: 0, as designed. **And a single work carrying all four platforms renders correctly**, styled by that one skin. So: no size cap at 67 KB, no editor mangling, no truncation | AO3 stores a pretty-printed copy — 80,409 bytes for the 66,983 we send — which is the form any future cap would presumably apply to. Item 9 is no longer needed for size; it is hygiene now — MASTER §6d, §8 |
 | 19 | ✅ **DONE — all four platforms, 7 Aug 2026. Zero drift; full result in the update section below.** | AO3 stores the *cleaned* CSS, so the box is a direct readout of what survived. Anything missing is a rule our lint does not know — file it as a correction in SITE-SKIN §7 |
 | 20 | Site skins: save all 16 templates; check the drop cap and divider on single- and multi-chapter works | The site-skin product's own open gate |
 

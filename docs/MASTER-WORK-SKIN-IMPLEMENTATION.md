@@ -275,8 +275,15 @@ render diff could see either.
   images with a 1x1 PNG instead of aborting them; it is deterministic and still
   never touches the network.
 
-### 6b. Theming — enumerate the variants, don't bake one
+### 6b. Theming — enumerate the variants, don't bake one — **done, 8 Aug 2026**
 
+> **Shipped.** `buildHTML` emits `theme-light` / `theme-dark` on the container;
+> `namespaceCss(css, platform, theme)` scopes a stylesheet to
+> `.chat.<platform>.theme-<theme>`; `buildMasterWorkSkin` carries a variant
+> block for the theme the author did *not* pick. Google has no theme and gets
+> neither class nor block. **The one thing this section got wrong is the cost**
+> — see 6b-i, which is the more useful half.
+>
 > **Revised 7 Aug 2026.** This section originally concluded "one skin, one
 > theme", reasoning that without `var()` a combined skin must bake a single
 > palette. That was too pessimistic, and the evidence against it is the
@@ -324,7 +331,58 @@ Two things to decide when building, not now:
 Keep the existing per-platform export alongside it for anyone who wants a
 minimal skin for one fic.
 
-### 6c. Versioning, given that AO3 deletes comments
+### 6b-i. The variant is a whole stylesheet, not a diff (8 Aug 2026)
+
+This is the part worth reading. **The cheap version was built, measured, and
+thrown away** — and it is exactly the version this document, `BACKLOG` item 8
+and KNOWLEDGE §18 all recommended.
+
+The plan was: both palettes are data since 5b, so compile each platform twice,
+diff the two stylesheets, and emit only the declarations that differ. It worked
+and it was small — **64 rules, 5 KB**, pure colour, the same shape as the
+canonical skin's five-rule night mode. It was also **wrong**:
+
+```text
+base       #workskin .chat.twitter .tweet .time-line             1 id, 4 classes
+base       #workskin .chat.twitter .tweet.no-metrics .time-line  1 id, 5 classes  border:none
+override   #workskin .chat.twitter.theme-dark .tweet .time-line  1 id, 5 classes  border:1px …
+```
+
+The override **ties** with `.no-metrics` and comes later in the file, so it won:
+a tweet with no metrics kept a hairline the base sheet had deliberately removed,
+in one theme only. That is §6a-i's warning — *specificity does not rise
+uniformly* — arriving in a new place, and no lint can see it. Only the render
+diff did.
+
+**A hand-writer can do this and we cannot**, which is the general lesson. The
+author of a five-rule night mode knows their own cascade: they know `.no-metrics`
+exists and they write the override to sit beside it. A generator diffing two
+compiled sheets knows nothing about which rules can match the same element.
+
+**The whole-stylesheet variant is sound by construction**, and the argument is
+short enough to keep: every rule in the variant is its base twin plus exactly
+one class, in the same order, so for an element carrying the theme class the
+variant's winner beats its own twin (one class more), beats every other variant
+rule exactly as its twin did (all shifted equally), and beats every other base
+rule (it already beat or tied its twin, which beat or tied that rule). Same
+winner as the variant sheet alone would pick, with the variant's value.
+
+The price: **32 KB, taking the master skin from 34.5 KB to 67 KB** over 537
+rules, against the 104 KB skin AO3 serves today. Item 9 (dedupe) is worth more
+than it was, and item 18a's "does a 34 KB paste survive AO3's editor" is now a
+67 KB question.
+
+**What the variant still cannot do: change a posted block's theme by editing its
+class.** Twitter's X logo is chosen in `buildHTML` — grey for dark, colour for
+light — so switching theme means regenerating the block. One image, and the
+honest limit of a CSS-only variant.
+
+### 6c. Versioning, given that AO3 deletes comments — **shipped, 8 Aug 2026**
+
+> `MASTER_SKIN_VERSION = 1` in `workSkin.ts`, emitted as the first line of every
+> master skin: `#workskin .ao3skingen-v1::after{content:'1';}`. The rest of this
+> section is the reasoning, unchanged. **Bump it whenever the classes
+> `buildHTML` emits change** — that is the whole failure it exists to catch.
 
 The user saves the skin once. We ship new CSS later. Their saved skin is now
 stale while newly generated HTML expects classes it does not contain, and
@@ -345,6 +403,140 @@ Rosé Pine's workaround does survive, because it is a real rule:
 Emit one, bump it whenever the class contract changes, and let the app detect a
 stale skin if the user pastes their saved CSS back in.
 
+### 6d. The assembly itself — **done, 8 Aug 2026**
+
+`buildMasterWorkSkin(project)` in `workSkin.ts`. **66,983 bytes, 537 rules**:
+the version rule, then Twitter, Google, iOS and Android, each run through the
+single-platform pipeline and then `namespaceCss` — 34.5 KB over 293 rules —
+followed by a theme variant per themed platform, which is the other 32 KB
+(§6b-i). AO3 serves a 104 KB skin today, so size is not yet the constraint.
+
+It came out as WORK-SKIN §10c predicted — assembly, not invention — and the
+three things worth recording are the ones the recipe did *not* say:
+
+- **The stylesheet does not depend on which platform is open.** Every block is
+  built from a clone with the template overridden, and `buildCSS` reads only
+  `template` and `settings`, so all four projects produce the same master CSS
+  byte for byte. That is worth more than tidiness: the author saves this once,
+  and a sheet that varied with the open chapter would silently go stale on them
+  with nothing on AO3 to say so. Pinned by a test rather than left as a
+  property that happens to hold.
+- **`buildWorkSkin` was refactored into `platformCss` + `platformHtml`, and the
+  master path calls the same two.** Containment is then assertable without a
+  browser: every master block is *byte-identical* to `namespaceCss(single, t)`.
+  Two generators that can disagree is the failure `SITE-SKIN-IMPLEMENTATION.md`
+  §5 is about, and here it would be silent.
+- **The render diff needed a second harness, so it became a shared one.**
+  `tests/_ao3-render.ts` now holds the AO3 page, the injection script, the
+  computed-style snapshot and the 1x1-pixel image stub; `namespace.spec.ts` and
+  the new `master-skin.spec.ts` are both loops around it. The new suite asks
+  the one question the old one cannot: three stylesheets for platforms this
+  markup is *not* are now in the same cascade, and a rule that escapes its
+  block matches silently.
+
+**What did not need doing**, checked rather than assumed: no markup change at
+all (`buildHTML` has emitted the platform class since item 2), no credit
+de-duplication (the credit is in the HTML, and there is one block of HTML), and
+no merge of the four paragraph resets or `.visually-hidden` blocks — namespaced
+they are redundant, not conflicting, which is phase 4.
+
+**Verified on the archive the same day — see §6f.** The 67 KB skin saved whole,
+read back rule for rule, and rendered all four platforms correctly in one work.
+§8's two questions — whether the paste survives AO3's editor,
+and whether any undocumented size cap exists — are exactly as open as they were,
+and the paste is 67 KB rather than 34 KB since §6b-i.
+
+**One harness note that cost half an hour**, and it is the third variation on
+the same theme (§6a-i's blocked images, WORK-SKIN §10's "diff a render against
+itself"): `waitUntil: 'load'` is **not** the end of layout. Fonts resolve on
+their own schedule — this harness aborts font requests, so the fallback swap
+lands whenever the failure does — and AO3's stylesheet centres several ancestors
+with `margin: auto`, so a few pixels of text width become a few hundred pixels
+of margin on the element being measured. Two renders of the *same* Google page
+disagreed by 56.92px, in one run out of three, which reads exactly like a real
+regression. `render()` in `tests/_ao3-render.ts` awaits `document.fonts.ready`
+and two animation frames before snapshotting; three consecutive full runs are
+clean.
+
+### 6e. The choice, and why the default is the narrow one (8 Aug 2026)
+
+The master skin is only worth building if an author can take it, and the reason
+they have to *choose* is AO3's: **a work gets exactly one skin.** An author whose
+chapter 4 is a different app cannot save a second one — they would have to merge
+two stylesheets by hand, or lose the first. So the choice belongs in the modal,
+at the moment they are about to save, not in a settings screen and not in a FAQ.
+
+A segmented control in step 1: **Just \<platform\>** against **All four
+platforms**. Three things move with it — the CSS box, the title example
+(`yourname — chat skins` rather than `yourname — Twitter`, since a skin covering
+four platforms should not be named after one), and a line in step 2 telling the
+author to come back and copy the HTML for the next conversation, whatever app
+and theme it is.
+
+- **The default is the narrow one.** It is the smaller paste, it is what this
+  modal did before the choice existed, and it is right for the common case of a
+  fic that stays on one platform. The wider skin is the one you need *later*,
+  which is exactly why the copy for the narrow option names the situation that
+  sends you back: "if a later chapter uses a different app you will need the
+  other option, since a fic can only have one work skin."
+- **The master skin is built lazily.** `buildWorkSkin` is one stylesheet and
+  runs on every `project` change like everything else in that component;
+  `buildMasterWorkSkin` is eleven, and `project` changes on every keystroke in
+  the editor. It is computed only while the modal is open *and* the wide option
+  is selected.
+- **The HTML does not change**, which is what makes the choice cheap to explain:
+  it is about the stylesheet only. The unit suite pins `master.html === single.html`
+  and the UI test re-reads the HTML box after switching back.
+
+### 6f. Saved on AO3 — **the gate is closed, 8 Aug 2026**
+
+A master skin was saved on a real account, reopened in AO3's editor, and the
+stored CSS diffed against what we emit. **This is the readout that has settled
+every other question in this project** (§8, WORK-SKIN §6), and at eight times
+the size anything had been tried at it came back clean:
+
+| | Sent | Stored |
+| --- | --- | --- |
+| Rules | 537 | **537** |
+| Declarations | 2,019 | **2,019** |
+| Selectors missing, either direction | — | **0** |
+| Properties dropped inside a rule | — | **0** |
+| Rules reordered | — | **0** |
+
+Construct counts are identical, not merely present: `display:contents` ×8,
+`clip:rect` ×7, `::after` ×7, `::before` ×2, `content:'…'` ×9, `transform` ×5,
+`filter` ×8, `box-shadow` ×10, `text-shadow` ×6, `float` ×2, `!important` ×36,
+`display:flex` ×52, quoted font names ×2, absolute Publit URLs ×8,
+`:nth-child` ×8, `.visually-hidden` ×7, and **263 `.theme-dark` selectors** —
+the entire variant block of §6b-i. Comments: 0, as designed (§13).
+
+**And it renders.** One work containing a Google search, a three-tweet thread, a
+WhatsApp group chat and an iMessage conversation, all styled by that one skin,
+with the author's own prose between them. The things that were previously only
+measured in a harness are now seen on the archive: the CSS bubble tails, the
+drawn verified badge, the metric row still spread by `justify-content` under
+paragraph injection, the thread connector, group sender rows, read receipts,
+`display:flex` on a container, and exactly one credit per pasted block.
+
+**What §8 asked, answered:**
+
+- *Does the combined skin exceed a limit?* No. **No cap at 67 KB.**
+- *Does AO3's editor mangle a single 67 KB paste?* No. Nothing truncated.
+- *Does `display:flex` render correctly?* Yes — 52 declarations of it, on the
+  page, laid out right. §5's doubt is retired for good.
+
+**One number worth keeping:** AO3 stores a pretty-printed copy, **80,409 bytes
+for the 66,983 we send** — roughly 20% larger. If a cap is ever found, that is
+the form it would presumably apply to, so measure the stored size, not the paste.
+
+**Reading the page found what the CSS readout could not.** Two real defects,
+both fixed the same day: shared settings put blue bubbles in the WhatsApp block
+and SMS green in the iMessage one, and a group chat named every speaker three
+times with the skin off. Full account in WORK-SKIN §16 — and note that three
+further "defects" turned out to be the measurement, not the export (§16c).
+
+**Still open, and it is not this document's:** the EPUB *text* (BACKLOG 18).
+
 ---
 
 ## 7. Build order
@@ -354,10 +546,11 @@ stale skin if the user pastes their saved CSS back in.
 | 0 | ✅ **done.** **Fix Google's multi-line HTML** (§4) and add the no-newline test. Independent of everything else, and a live bug |
 | 1 | ✅ **done.** `stripCssComments()` in `ao3Css.ts`, used by the lint and the namespacer |
 | 2 | ✅ **done, 8 Aug 2026.** `namespaceCss(css, platform)` + platform class in `buildHTML`, with a PNG-unchanged check — `tests/namespace.spec.ts`, which diffs every computed style on every element, with and without the class and with and without the rewrite, under paragraph injection as well. Two bugs it caught are in §6a-i |
-| 3 | ⬅ **next.** `buildMasterWorkSkin(project)` — shared block, four namespaced blocks, version rule |
-| 4 | Dedupe the rules that are byte-identical across platforms (`.visually-hidden`, the paragraph reset, the `dd.bubble` text formatting). **Re-measured 8 Aug 2026: 26 distinct rules, 3.4 KB of 34.5 KB** — the "38" this row used to claim predates the `em` conversion and the palette tables. About a tenth, so worth doing and not worth blocking item 3 on |
-| 5 | Export UI: "one skin for everything" vs "just this platform", and the §9f copy fixes — one skin per work, globally unique titles |
-| 6 | **Save it on real AO3** and settle §5 |
+| 3 | ✅ **done, 8 Aug 2026.** `buildMasterWorkSkin(project)` — a version rule, then four namespaced blocks. §6d records what it took and what it did not need |
+| 3b | ✅ **done, 8 Aug 2026.** Both themes in one skin — the theme class, `namespaceCss`'s theme argument, and a variant block per themed platform. §6b-i is the one to read: the *derived diff* this was scoped as is unsound, and the render diff is what caught it |
+| 4 | Dedupe the rules that are byte-identical across platforms (`.visually-hidden`, the paragraph reset, the `dd.bubble` text formatting). Measured at **26 distinct rules, 3.4 KB** when the skin was 34.5 KB over 293 rules; the variant blocks of 3b doubled the structural rules, so **re-measure against 537 before starting**. Worth more than it was, and still not worth blocking 5 on |
+| 5 | ✅ **done, 8 Aug 2026.** The work-skin modal offers **Just \<platform\>** (default) against **All four platforms**, with the title example and the follow-up guidance following the choice. The §9f copy fixes shipped earlier, in item 5 of `BACKLOG.md`. §6e records what the choice had to say and why the default is the narrow one |
+| 6 | ⬅ **next, and the only thing left.** **Save it on real AO3** and settle §5 |
 
 Phases 0 and 1 are worth doing regardless of whether the master skin ships.
 
@@ -368,12 +561,21 @@ Phases 0 and 1 are worth doing regardless of whether the master skin ships.
 The lint is a careful model of `css_cleaner.rb`, re-verified against `master`
 with zero drift. It cannot answer any of these:
 
+> **All four are answered as of 8 Aug 2026 — §6f.** A master skin was saved,
+> read back rule for rule with zero drift, and seen rendering all four platforms
+> in one work. Kept below because the *questions* are the right ones to ask of
+> the next thing this project sends to the archive.
+
 - **Does `display: flex` render correctly?** (§5) The single most valuable
-  unknown. Save one skin, view a work, resize.
+  unknown. Save one skin, view a work, resize. ✅ **Yes** — 52 declarations of
+  it, on a real work page, laid out correctly.
 - **Does the combined skin exceed any limit we have not found?** No documented
-  cap, and 104 KB skins exist, but 38 KB has not been tried by us.
-- **Does AO3's editor mangle a single 38 KB paste?** The guide warns the skin
-  editor has no undo history.
+  cap, and 104 KB skins exist, but **67 KB** has not been tried by us.
+  ✅ **No cap at 67 KB**; AO3 stored all of it.
+- **Does AO3's editor mangle a single 67 KB paste?** The guide warns the skin
+  editor has no undo history. (This row said 38 KB while the skin was a plan;
+  it was 34.5 KB when built and 67 KB once both themes were carried — §6b-i.)
+  ✅ **No.** 537 of 537 rules, in order.
 - **Re-open each saved skin in AO3's editor.** AO3 stores the **cleaned** CSS,
   so the box is a direct readout of what the sanitizer kept. Diff it against
   what we emitted; anything missing is a rule our lint does not know about, and

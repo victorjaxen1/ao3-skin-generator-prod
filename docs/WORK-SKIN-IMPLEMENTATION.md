@@ -106,9 +106,35 @@ unaided, and the *image* export got three bug fixes it badly needed:
   `tests/namespace.spec.ts` proves by computed-style diff that neither moves a
   pixel. Two bugs came out of writing that check, one of which silently stripped
   every `.tweet` rule of its box.
+- **And the master skin itself** (§10c, MASTER §6d). `buildMasterWorkSkin` emits
+  a version rule, four namespaced blocks and a theme variant per themed platform
+  — 67 KB, 537 rules — and `tests/master-skin.spec.ts` shows every platform
+  rendering exactly as its own single-platform skin does, in **both themes**,
+  injection included. **Nothing in the UI offers it yet**, so no author can
+  produce one; that is BACKLOG 10.
+- **And it is proven on the archive** (BACKLOG 18a, MASTER §6f). The 67 KB skin
+  saved whole — **537 of 537 rules, 2,019 of 2,019 declarations, in order** —
+  and a work carrying a Google search, a tweet thread, a WhatsApp group chat and
+  an iMessage conversation renders correctly from that one skin. No size cap, no
+  editor mangling, and `display:flex` finally observed working on a real page.
+- **And an author can choose it** (BACKLOG 10, MASTER §6e). The work-skin modal
+  offers **Just \<platform\>** — still the default — against **All four
+  platforms**, because AO3 gives a work exactly one skin and that choice has to
+  be made at the moment they save, not discovered in chapter 4.
+- **Both themes travel in one skin** (BACKLOG 8, MASTER §6b-i). The container
+  carries `theme-light` / `theme-dark`, and the theme the author did not pick is
+  carried as a second namespaced stylesheet. **The cheap version — diff the two
+  palettes, emit 64 colour rules — was built and rejected**: an override tied on
+  specificity with a more specific base rule and beat it by source order. A
+  five-rule night mode is something a hand-writer can do and a generator cannot.
 
-**Release gate, still open:** the *HTML* half. Nothing has been checked with
-Creator's Style off, downloaded as EPUB, or re-parsed by editing a posted work
+**Release gate — the CSS half is now closed for the master skin too.** It was
+saved on a real account, read back **537 of 537 rules and 2,019 of 2,019
+declarations with nothing reordered**, and a single work carrying all four
+platforms renders correctly from it (MASTER §6f).
+
+**Still open:** the *HTML* half. Nothing has been checked with Creator's Style
+off, downloaded as EPUB, or re-parsed by editing a posted work
 (§10, "What is still unverified").
 
 ---
@@ -524,10 +550,10 @@ list in `BACKLOG.md` on 8 Aug 2026:
 | Track | Done | Open |
 | --- | --- | --- |
 | Live bugs, and the comment exposure (1, 2, 2a–2d) | 6 | 0 |
-| Correctness and hygiene (3, 4, 5, 5a, 5b, 5c) | 5 | 1 |
-| Master skin (6–10) | 1 | 4 |
+| Correctness and hygiene (3, 4, 5, 5a–5f) | 7 | 2 |
+| Master skin (6–10) | 4 | 1 |
 | Optional features (11–16b) | 0 | 9 |
-| Verification that needs a real AO3 account (17–20) | 5 | 3 |
+| Verification that needs a real AO3 account (17–20) | 6 | 3 |
 
 **The shipping product — the per-platform work skin — is essentially done.** All
 four platforms export CSS AO3 accepts, all four were saved on the archive and
@@ -537,11 +563,14 @@ the dialog tells an author the three things AO3 does not. One code item remains
 half of the release gate, which needs an account and twenty minutes, not a
 commit.
 
-**The master skin is a fifth done** — the namespacer landed, 7–10 remain, and
-§10c is the recipe for 7. **The optional features are untouched and the backlog
-calls none of them urgent**, so do not read 0/9 as a gap.
+**The master skin is done** — built, offered in the UI, and **verified on the
+archive**: 537 of 537 rules stored and all four platforms rendering in one work
+(MASTER §6f). Only 9 (dedupe) remains, and it is hygiene rather than a size
+problem now that AO3 has taken the paste whole. **What is left on this product
+is the HTML half of the release gate**: Creator's Style off, and an EPUB. **The optional features are untouched
+and the backlog calls none of them urgent**, so do not read 0/9 as a gap.
 
-Do not turn the raw 17-of-34 into "50% complete". It weights "add seven new
+Do not turn the raw 24-of-38 into "63% complete". It weights "add seven new
 platforms" the same as swapping one anchor for a span.
 
 ### The state of things
@@ -563,7 +592,13 @@ closed; the HTML half is not.
 | The PNG renders what the browser renders | ✅ all four, exported and read at zoom (§14a–14b) |
 | Colour separated from structure | ✅ four palette tables, both variants data (§10b) |
 | Namespacing, for one skin holding four | ✅ `namespaceCss`, pixel-diffed (MASTER §6a) |
-| Creator's Style **off** / EPUB download | ❌ **never checked** |
+| One skin holding all four platforms | ✅ built, pixel-diffed, and offered in the modal (§10c, MASTER §6e) |
+| Light *and* dark in that one skin | ✅ both themes, pixel-diffed both ways (MASTER §6b-i) |
+| A master skin saved on real AO3 | ✅ **537/537 rules, 2,019/2,019 declarations, in order** (MASTER §6f) |
+| All four platforms rendering in one work | ✅ seen on the archive, one skin (MASTER §6f) |
+| Creator's Style **off**, on a real work | ✅ read on the archive — two defects found and fixed (§16) |
+| Each platform wears its own colours | ✅ `PLATFORM_LOOK`, after three blocks wore a fourth's (§16a) |
+| EPUB **text** | 🟡 structure known (AO3 strips every `class`); text unread, 525s (§16c) |
 | Re-parse after editing a posted work | ❌ **never checked** |
 
 ### The seven things worth knowing before you touch anything
@@ -594,7 +629,8 @@ closed; the HTML half is not.
    *right*. Export a PNG, and diff it against one from before your change.
 7. **The container's class string is now a contract, in three places at once**
    (added 8 Aug 2026, with the namespacer). `buildHTML` emits
-   `class="chat <platform>"`; `useCssBubbleTails` appends `css-tails` to it;
+   `class="chat <platform> theme-<light|dark>"`, the theme part on every
+   platform but Google; `useCssBubbleTails` appends `css-tails` to it;
    `namespaceCss` splices the platform class into any selector whose first
    compound is made only of `CONTAINER_CLASSES`. **Change any one of the three
    and the other two are wrong**, and every failure in this cluster is silent —
@@ -605,7 +641,9 @@ closed; the HTML half is not.
    so iOS would have shipped with its SVG tails deleted and the CSS tails never
    switched on. Both are pinned by tests that read the real markup rather than
    trusting the constant; if you add a class to that container, add it to
-   `CONTAINER_CLASSES` in the same commit.
+   `CONTAINER_CLASSES` in the same commit. The theme classes went in that way
+   the same day, and the test that reads the real markup is what makes the list
+   safe to extend.
 
 ### The traps that have already cost time
 
@@ -657,6 +695,7 @@ closed; the HTML half is not.
 npx playwright test --project=unit                              # ~15s, no browser
 npx playwright test --project=desktop tests/ao3-injection.spec.ts # <p> injection
 npx playwright test --project=desktop tests/namespace.spec.ts     # master-skin scoping
+npx playwright test --project=desktop tests/master-skin.spec.ts   # the assembled skin
 npm run build
 ```
 
@@ -667,7 +706,10 @@ credit. The injection project needs a browser because that failure is geometric
 and **the lint cannot see it**. `namespace.spec.ts` is the same kind of thing for
 the master skin: it diffs every computed style on every element, with and without
 the platform class and with and without the namespacing rewrite, and it found two
-bugs on the day it was written (MASTER §6a-i).
+bugs on the day it was written (MASTER §6a-i). `master-skin.spec.ts` asks the one
+question that one cannot — three stylesheets for platforms this markup is *not*
+are now in the same cascade — and both are loops around the shared harness in
+`tests/_ao3-render.ts`.
 
 The browser projects point at the deployed site by default, so for local work:
 
@@ -790,15 +832,32 @@ The order that matters now that the live bugs are cleared:
    `buildHTML` now emits that class on every path. `tests/namespace.spec.ts`
    diffs every computed style on every element to prove neither changes a
    pixel — and caught two bugs doing it, both invisible to the lint.
-5. **The master skin** (BACKLOG 7–10). ⬅ **START HERE**, at 7:
-   `buildMasterWorkSkin`. **The recipe is §10c**, scoped on 8 Aug 2026 with the
-   ordering constraint, the traps and the invariant already worked out — item 7
-   is assembly, not invention, because the namespacer and the platform class
-   both exist and are proven not to move a pixel. 8 is the item 5b was done for
-   and is cheap once 7 lands.
-6. **The two small correctness items**, BACKLOG 5c (the dead `<a href="#">`)
-   and the paragraph-reset question in §9d, whenever they are convenient. They
-   are independent of the master-skin chain.
+5. ✅ **done, 8 Aug 2026 — BACKLOG 7, `buildMasterWorkSkin`** (§10c, MASTER §6d).
+   One skin, 34.5 KB, four namespaced blocks and a version rule, proven by
+   computed-style diff to render every platform exactly as its own skin does —
+   injection included. The recipe in §10c was accurate end to end.
+6. ✅ **done, 8 Aug 2026 — BACKLOG 8, both themes in one skin** (MASTER §6b-i).
+   The container carries `theme-light` / `theme-dark` and the unpicked theme
+   travels as a second namespaced stylesheet. The *derived diff* this was scoped
+   as is unsound — read §6b-i before trying it again.
+7. ✅ **done, 8 Aug 2026 — BACKLOG 10, the choice** (MASTER §6e). The modal
+   offers **Just \<platform\>** (the default) against **All four platforms**,
+   and the title example and follow-up guidance move with it. The master skin is
+   reachable now, which makes the next item the gate rather than a formality.
+8. ✅ **done, 8 Aug 2026 — BACKLOG 18a, the master skin is proven on the
+   archive** (MASTER §6f). 537 of 537 rules and 2,019 of 2,019 declarations
+   stored, in order, nothing dropped — and one work carrying all four platforms
+   renders correctly from that single skin. No size cap at 67 KB, no editor
+   mangling, and `display:flex` laid out right on a real page.
+9. **The HTML half of the release gate** (BACKLOG 18). ⬅ **START HERE.** It is
+   the last claim about this export that has never been checked: **Creator's
+   Style off**, and an **EPUB download**. Everything §4a and §9a say about the
+   markup reading as prose is verified by unit test against our own HTML and
+   never against a real render — and every download is a skin-off rendering.
+10. **The three small correctness items**, BACKLOG 5c (the dead `<a href="#">`),
+    **5d** (iOS and Android are rounded in the PNG and square everywhere else —
+    found on the posted work, MASTER §6f), and the paragraph-reset question in
+    §9d, whenever they are convenient. All independent of everything above.
 
 ### 10b. 5b — **done, 8 Aug 2026.** Structure and colour are separated
 
@@ -864,12 +923,42 @@ repo wants to carry.
 
 BACKLOG 8 is now worth attempting.
 
-### 10c. The recipe for BACKLOG 7, scoped but not started (8 Aug 2026)
+### 10c. BACKLOG 7 — **done, 8 Aug 2026.** The master skin is built
 
-`buildMasterWorkSkin(project)` — one skin an author saves once, covering all
-four platforms. **Everything it needs now exists**; item 7 is assembly, not
-invention. Written the way §10b was, because that format worked: the recipe,
-then the traps, then the invariant.
+`buildMasterWorkSkin(project)` in `workSkin.ts`: the version rule, then
+Twitter, Google, iOS and Android, each built through the single-platform
+pipeline and namespaced, then a theme variant for each themed platform
+(BACKLOG 8, MASTER §6b-i). **66,983 bytes, 537 rules** — 34.5 KB of it the four
+base blocks, the rest the variants. The recipe below is kept
+as written because it was accurate — every step landed as described and the
+four traps were all real — and because it is the format to reuse.
+
+**What it is verified to do:** render each platform *identically to that
+platform's own single-platform skin*, measured by diffing every computed style
+on every element, clean and under paragraph injection —
+`tests/master-skin.spec.ts`, four platforms, zero differences. The unit gate
+adds the containment the browser cannot check cheaply: each master block is
+**byte-identical** to `namespaceCss(buildWorkSkin(p).css, template)`, so the two
+exports are one generator rather than two that can drift.
+
+**What it does not do yet:** touch the archive. The export modal offers it as of
+the same day (BACKLOG 10, MASTER §6e), so an author can produce one — but no
+master skin has been saved on real AO3, and that paste is eight times larger
+than anything we have put through the editor (MASTER §6d, §8).
+
+**Two things the recipe did not anticipate**, both small:
+
+- **The master CSS does not depend on the open project's template**, since every
+  block comes from a clone with the template overridden. Worth *pinning* rather
+  than noting, because the author saves this once: a sheet that varied with the
+  open chapter would go stale under them with nothing on AO3 to say so.
+- **A second render diff meant extracting the first one.** The AO3 page nesting,
+  the injection script, the computed-style snapshot and the 1x1-pixel image stub
+  now live in `tests/_ao3-render.ts`; `namespace.spec.ts` and
+  `master-skin.spec.ts` are both loops around it. The leading underscore and the
+  missing `.spec` are what keep Playwright from collecting it as a suite.
+
+Below, as written on 8 Aug 2026 before any of it was built:
 
 **What is already in place.** `namespaceCss(css, platform)` scopes a stylesheet
 (MASTER §6a); `buildHTML` already emits `class="chat <platform>"` on every path,
@@ -928,6 +1017,8 @@ has that case.
 - **The export UI is item 10, and it is not optional.** An author must choose
   "one skin for everything" or "just this platform", because a work can use only
   one skin (§9f) and the master skin is the whole point of the choice.
+  ✅ **Shipped the same day** — MASTER §6e, including why the default stayed the
+  narrow one and why the master build has to be lazy.
 
 ### The flex question — **settled, 7 Aug 2026**
 
@@ -957,17 +1048,23 @@ fixed in the process.
 The HTML half is untouched. None of this needs code — it needs somebody with an
 AO3 account and twenty minutes:
 
-- **Creator's Style off.** Every claim in §4a and §9a about the export reading
-  as prose is verified by unit test against our own HTML, and never against a
-  real render.
-- **Download the EPUB.** AO3's FAQ says downloads do not retain work skins, so
-  this is the skin-off path most readers actually hit.
+- ~~**Creator's Style off.**~~ ✅ **done, 8 Aug 2026.** Read on a real work at
+  `?style=disable`. Our markup survives, none of our CSS is served, and it reads
+  as prose — and it found two real defects, both fixed (§16a, §16b), plus three
+  that were the measurement rather than the export (§16c).
+- **Download the EPUB** — the *text*. Its structure is known: AO3's conversion
+  strips every `class` attribute, so an EPUB is structure plus text and §9a's
+  prose fallback is the whole reading experience. Repeated downloads returned
+  Cloudflare 525s, so the words themselves are still unread.
 - **Edit a posted work and check it still renders** (BACKLOG 17a). AO3 re-runs
   its HTML parser on every edit — a new chapter, an author's-note tweak, a tag
   change — and the parser itself changes over time. Markup that posted correctly
   can break months later with nobody touching it.
 - **Post multi-chapter**, since the injection rule in §12a was read off a
   single-chapter work.
+- ~~**Save the master skin**~~ ✅ **done, 8 Aug 2026** — saved, read back with
+  zero drift, and seen rendering all four platforms in one work (MASTER §6f).
+  The paste was 67 KB and AO3 took every byte.
 - **Site skins** (BACKLOG 20): all 16 templates, plus §13f.
 
 ### Deployment — **read this first if you are picking the project up**
@@ -1358,3 +1455,108 @@ otwarchive `master`:
 - [`config/initializers/gem-plugin_config/sanitizer_config.rb`](https://github.com/otwcode/otwarchive/blob/master/config/initializers/gem-plugin_config/sanitizer_config.rb) — allowed elements, attributes, `remove_contents`
 - [`lib/html_cleaner.rb`](https://github.com/otwcode/otwarchive/blob/master/lib/html_cleaner.rb) — which config applies to which field, and the transformers
 - [`lib/css_cleaner.rb`](https://github.com/otwcode/otwarchive/blob/master/lib/css_cleaner.rb) — shared with site skins; see the companion doc
+
+---
+
+## 16. What a posted work taught us (8 Aug 2026)
+
+A master skin was saved on a real account and a work posted with **all four
+platforms in one chapter** — `works/90045681`. The CSS readout is MASTER §6f
+(537 of 537 rules, nothing dropped). This section is what *looking at the page*
+found, which is a different list, and the reason rule 6 of §10 exists.
+
+### 16a. Shared settings leaked into three platforms out of four — **fixed**
+
+`senderColor`, `receiverColor`, `bubbleOpacity`, `fontFamily` and `iosMode` are
+**one set of fields for all four platforms**. That is fine while an author works
+on one platform: whatever they pick is what the preview and the PNG show. A
+master skin builds *four* blocks from that one set, so three of them wore a
+colour chosen for the fourth — **and the author never saw it**, because those
+blocks style markup they paste chapters later.
+
+On the page: a project carrying the iOS example's `#007AFF` and `iosMode: 'sms'`
+produced **blue WhatsApp bubbles** and an **SMS-green iMessage**. Both faithful
+to the settings, both wrong.
+
+`PLATFORM_LOOK` in `generator.ts` is the fix, and the rule is asymmetric on
+purpose:
+
+- **The platform the author has open keeps their settings**, untouched. Its CSS
+  sits in the modal beside a preview and a PNG built from the same values, and
+  two renderings that can disagree is the failure `SITE-SKIN-IMPLEMENTATION.md`
+  §5 is about.
+- **The other three wear their own look** — WhatsApp `#dcf8c6`, iMessage
+  `#007AFF`, Twitter `#1DA1F2` — taken from what `examples.ts` opens each
+  platform with.
+
+Two tests pin both halves. The old invariant *"the master skin is the same
+stylesheet whichever platform is open"* had to go with it: it was true, and it
+was true **because** every block took the open project's colours. A stylesheet
+that never changes is worth nothing if three quarters of it is the wrong colour.
+What replaced it is the useful half — a block is identical no matter which of
+the *other* platforms is open.
+
+**There was a third opinion on this, and it was the worst one.** The platform
+picker in `pages/index.tsx` set WhatsApp to `#00A884` on `#1F2C34` — its
+**dark-theme** colours, applied to a light card — so picking WhatsApp from the
+picker gave a teal bubble on white while the WhatsApp *examples* gave green. It
+now reads `PLATFORM_LOOK` too: one table, one answer, three call sites.
+
+### 16b. With the skin off, a group chat named every speaker three times — **fixed**
+
+Hide Creator's Style is `?style=disable`, and it is also what every EPUB, MOBI
+and PDF is. The group rows read:
+
+```text
+Alex:                                      <- the hidden speaker label (§9a)
+AL                                         <- the avatar monogram
+Alex                                       <- the visible group name
+Anyone free for coffee tomorrow? 11:30 AM
+```
+
+The label exists because a bubble carries its speaker in colour and alignment
+alone — but a **group** row already prints the name as visible text, so the
+label is pure duplication there. `msgHTML` now omits it whenever a group sender
+row is rendered; one-to-one chats keep it, and outgoing rows keep it because
+they have no visible name. Pinned in `tests/skin-off.spec.ts`.
+
+The monogram stays. It is a picture standing in for a missing avatar, AO3 allows
+no `aria-hidden`, and `content:` would delete it from the PNG (§9c) — so "AL
+Alex" is the accepted cost.
+
+### 16c. Three "defects" that were the measurement, not the export
+
+Worth recording because the method was wrong in a way that looked convincing.
+Reading the skin-off page with **`textContent`** made three run-ons appear —
+Google's result title into its description, the stats into result 1, and a
+two-line tweet body joining up. All three were **fine**: `textContent` ignores
+block boundaries and `<br>`, so it glues text that a reader sees on separate
+lines.
+
+`innerText` is the one that answers the question, because it is the rendered
+text. The unit suite has the same blind spot by design (it strips tags from a
+string), so `tests/skin-off.spec.ts` renders in a browser and reads `innerText`
+instead. **Keep both**: the unit test is the fast gate on the words being there,
+the browser one on how they read.
+
+Two further notes from the same session, neither a defect:
+
+- **An EPUB has no `class` attributes at all.** AO3's conversion strips every
+  one — zero `class="chat"`, no `<style>` — so an EPUB is structure and text,
+  and §9a's prose fallback is the entire reading experience. (Read off one
+  successful download; later attempts returned Cloudflare 525s.)
+- **`?style=disable` leaves our markup in the DOM** and serves none of our CSS,
+  exactly as documented.
+
+### 16d. The rounded corners the PNG has and AO3 does not — open, BACKLOG 5d
+
+`renderChunk` sets `clone.style.borderRadius = '20px'` plus `overflow:hidden` on
+the **export clone only**, so iOS and Android are rounded in the PNG and square
+in the preview and on the archive. Verified by exporting from the current build
+and by the posted work, not by reading the code — the first version of this
+claim was a code reading, which is the trap §10 warns about.
+
+It compensates for nothing in html2canvas, so it does not qualify for the narrow
+exception in §10 rule 5. Move it into `buildIOSCSS`/`buildAndroidCSS` (legal, and
+the PNG stays byte-identical) or drop it from the clone. Unresolved because it is
+a design call, not a bug.

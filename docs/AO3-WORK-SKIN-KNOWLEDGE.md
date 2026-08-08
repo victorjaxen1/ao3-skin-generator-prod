@@ -402,6 +402,25 @@ in one skin is not "double the stylesheet" — if we separate structure from
 colour first, it is a handful of override rules per platform. That refactor is
 worth doing on its own merits, and it makes the master skin much cheaper.
 
+> **Correction, 8 Aug 2026 — the cost estimate above is wrong for us, and the
+> reason is worth more than the estimate.** Item 8 was built exactly as
+> described: both palettes were reachable as data after 5b, the diff produced
+> **64 override rules of pure colour**, and it *rendered wrong*. One override
+> tied on specificity with a more specific base rule (`.tweet.no-metrics
+> .time-line`, which sets `border:none`) and, coming later, beat it — putting a
+> hairline back under a metric-less tweet in one theme only.
+>
+> **A five-rule night mode is something a hand-writer can do and a generator
+> cannot.** The author of that skin knows their own cascade: they know which
+> rules can match the same element and they write the override to sit beside
+> them. Two compiled stylesheets diffed by a program carry no such knowledge.
+>
+> Ours is a whole namespaced stylesheet per variant — sound by construction,
+> 32 KB rather than 5 KB. **This does not retract §3 or §12**: enumerating
+> variants as classes is still the right idiom and still survives the sanitizer.
+> It retracts the *size* claim for generated skins. Full account in
+> `MASTER-WORK-SKIN-IMPLEMENTATION.md` §6b-i.
+
 ## 19. The chrome is text, not images — **PROVEN**
 
 The verified tick is the character `✔` inside a CSS-drawn circle (§11). The like
