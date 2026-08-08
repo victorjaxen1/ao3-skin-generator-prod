@@ -3,6 +3,7 @@ import dynamic from 'next/dynamic';
 import { useRouter } from 'next/router';
 import { defaultProject, SkinProject, UniversalCharacter, Message } from '../lib/schema';
 import { loadStoredProject, persistProject, hasStoredProject } from '../lib/storage';
+import { PLATFORM_LOOK } from '../lib/generator';
 import { TEMPLATE_EXAMPLES } from '../lib/examples';
 import { CharacterLibrary } from '../components/CharacterLibrary';
 import { recordExport, recordPromptShown } from '../lib/donationPrompt';
@@ -189,22 +190,17 @@ export default function HomePage() {
 
   // ── Handlers ────────────────────────────────────────────────────────────
   const handleSelectPlatform = useCallback((template: 'ios' | 'android' | 'twitter' | 'google') => {
+    // Each platform opens wearing its own look, from the one table that holds
+    // those values — `PLATFORM_LOOK` in generator.ts, which the master skin uses
+    // for the same purpose.
+    //
+    // This switch used to be a third opinion on the subject, and a wrong one:
+    // WhatsApp was `#00A884` on `#1F2C34`, its **dark-theme** colours, applied
+    // to a light card — so picking WhatsApp gave a teal bubble on white while
+    // the WhatsApp examples used `#dcf8c6` green. One table, one answer.
     const p = defaultProject();
     p.template = template;
-    // Auto-set appropriate default colors per template
-    switch (template) {
-      case 'ios':
-        p.settings.senderColor = '#007AFF';
-        p.settings.receiverColor = '#E9E9EB';
-        break;
-      case 'android':
-        p.settings.senderColor = '#00A884';
-        p.settings.receiverColor = '#1F2C34';
-        break;
-      case 'twitter':
-        p.settings.senderColor = '#1d9bf0';
-        break;
-    }
+    Object.assign(p.settings, PLATFORM_LOOK[template]);
     setProject(p);
     setHistory([p]);
     setHistoryIndex(0);
