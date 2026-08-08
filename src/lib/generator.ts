@@ -206,12 +206,43 @@ function highlightTwitterText(text: string): string {
   return result;
 }
 
+/**
+ * The three-dot indicator, as a row.
+ *
+ * One copy, used by both the chat-level `chatShowTyping` setting and the
+ * per-message `isTyping` flag, so the two cannot drift. The dots are CSS
+ * shapes, which means they are *nothing at all* with the skin off — hence the
+ * hidden "… is typing…" line, which for this element is the whole skin-off
+ * story (§9a). Do not inline a second copy of this markup.
+ */
+function typingRowHTML(name?: string): string {
+  const named = !!(name && name.trim());
+  const label = named ? `<span class="typing-label">${sanitizeText(name!)}</span>` : '';
+  return `<div class="row typing"><div class="typing-bubble"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>${label}${srOnly(`${named ? ' is' : 'Someone is'} typing…`)}</div>`;
+}
+
 function msgHTML(msg: Message, template: string, project: SkinProject, options?: { index?: number; allMessages?: Message[]; isReply?: boolean }): string {
   // Time break (iOS/Android)
   const timeBreak = msg.showTimeBreak && msg.timeBreakText
     ? `<div class="time-break">${sanitizeText(msg.timeBreakText)}</div>`
     : '';
-  
+
+  // A message flagged as typing IS the indicator, not a message that happens to
+  // say "...".
+  //
+  // `isTyping` has been in the schema from the start and the editor has always
+  // honoured it, but buildHTML never did — so the shipped "iOS Typing
+  // Indicators" example exported a bubble containing three literal dots, in the
+  // PNG and on AO3 alike, and lost the hidden "Riley is typing…" line with it.
+  // Found by exporting the example and looking at it.
+  //
+  // Reusing the chat-level markup exactly is the point: the geometry pinned in
+  // §12c, the paragraph-injection rules and the dot styling then all apply
+  // without a second set of anything.
+  if (msg.isTyping && (template === 'ios' || template === 'android')) {
+    return timeBreak + typingRowHTML(msg.sender);
+  }
+
   const index = options?.index;
   const allMessages = options?.allMessages;
   const isReply = options?.isReply || false;
@@ -387,7 +418,11 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
     
     // Use per-tweet verified status if custom identity, otherwise use main profile verified
     const isVerified = msg.useCustomIdentity ? (msg.verified || false) : (project.settings.twitterVerified || false);
-    const verified = isVerified ? `<span class="verified-container"><img src="${PLATFORM_ASSETS.twitter.verifiedBadge}" alt="Verified" class="verified-badge" width="18" height="18" /></span>` : '';
+    // Drawn, not fetched. See buildTwitterCSS's `.verified-badge` for why a
+    // character in a CSS circle beats a PNG here — the short version is that
+    // every chrome image is a request to our CDN from inside somebody's
+    // published fic, forever, and this one buys nothing an `✔` cannot.
+    const verified = isVerified ? `<span class="verified-container"><span class="verified-badge" title="Verified">✔</span></span>` : '';
     const timestampLine = project.settings.twitterTimestamp || (msg.timestamp ? msg.timestamp : '');
     
     // Build tweet image from attachments array
@@ -406,9 +441,10 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
     
     // Use gray icons in dark mode
     const isDarkMode = project.settings.twitterDarkMode;
-    const replyIcon = isDarkMode ? PLATFORM_ASSETS.twitter.replyIconGrey : PLATFORM_ASSETS.twitter.replyIcon;
-    const retweetIcon = isDarkMode ? PLATFORM_ASSETS.twitter.retweetIconGrey : PLATFORM_ASSETS.twitter.retweetIcon;
-    const likeIcon = isDarkMode ? PLATFORM_ASSETS.twitter.likeIconGrey : PLATFORM_ASSETS.twitter.likeIcon;
+    // No reply, retweet or like icons: all three are characters now, and a
+    // character needs no dark-mode variant because it takes the metric colour
+    // like any other text. The X logo is the last chrome image on a tweet, and
+    // it stays one because it is a trademark we should not be drawing.
     const xLogo = isDarkMode ? PLATFORM_ASSETS.twitter.logoGrey : PLATFORM_ASSETS.twitter.logo;
     
     // Build the metric chips first, and only wrap them if there are any. An
@@ -420,9 +456,9 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
     // number means; with it off, the icons are 20px pictures in a row and the
     // counts would read "156 89 847" — three numbers and no nouns.
     const metricChips = project.settings.twitterShowMetrics ? [
-      replies ? `<span class="metric replies" title="Replies"><img src="${replyIcon}" alt="" class="metric-icon" width="20" height="20" /> <span class="metric-count">${formatNumber(replies)}</span>${srOnly(' replies')}</span>`:'',
-      retweets ? `<span class="metric retweets" title="Retweets"><img src="${retweetIcon}" alt="" class="metric-icon" width="20" height="20" /> <span class="metric-count">${formatNumber(retweets)}</span>${srOnly(' retweets')}</span>`:'',
-      likes ? `<span class="metric likes" title="Likes"><img src="${likeIcon}" alt="" class="metric-icon" width="20" height="20" /> <span class="metric-count">${formatNumber(likes)}</span>${srOnly(' likes')}</span>`:'',
+      replies ? `<span class="metric replies" title="Replies"><span class="glyph-icon">↩︎</span> <span class="metric-count">${formatNumber(replies)}</span>${srOnly(' replies')}</span>`:'',
+      retweets ? `<span class="metric retweets" title="Retweets"><span class="glyph-icon">⇄</span> <span class="metric-count">${formatNumber(retweets)}</span>${srOnly(' retweets')}</span>`:'',
+      likes ? `<span class="metric likes" title="Likes"><span class="glyph-icon">♡</span> <span class="metric-count">${formatNumber(likes)}</span>${srOnly(' likes')}</span>`:'',
       bookmarks ? `<span class="metric bookmarks" title="Bookmarks"><img src="${PLATFORM_ASSETS.twitter.bookmarkIcon}" alt="" class="metric-icon" width="20" height="20" /> <span class="metric-count">${formatNumber(bookmarks)}</span>${srOnly(' bookmarks')}</span>`:'',
       views ? `<span class="metric views" title="Views"><img src="${PLATFORM_ASSETS.twitter.viewsIcon}" alt="" class="metric-icon" width="20" height="20" /> <span class="metric-count">${formatNumber(views)}</span>${srOnly(' views')}</span>`:'',
     ].filter(Boolean).join(' ') : '';
@@ -433,7 +469,7 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
     if (project.settings.twitterQuoteEnabled) {
       const qAvatar = project.settings.twitterQuoteAvatar ? `<img src="${sanitizeUrl(project.settings.twitterQuoteAvatar)}" alt="Quote avatar" class="quote-avatar" />` : '';
       const qHandle = project.settings.twitterQuoteHandle ? `@${sanitizeText(project.settings.twitterQuoteHandle.replace(/^@/, ''))}` : '';
-      const qVerified = project.settings.twitterQuoteVerified ? `<span class="verified-container quote-verified-container"><img src="${PLATFORM_ASSETS.twitter.verifiedBadge}" alt="Verified" class="quote-verified-badge" width="16" height="16" /></span>` : '';
+      const qVerified = project.settings.twitterQuoteVerified ? `<span class="verified-container quote-verified-container"><span class="quote-verified-badge" title="Verified">✔</span></span>` : '';
       const qText = sanitizeText(project.settings.twitterQuoteText || '');
       const qImage = project.settings.twitterQuoteImage ? `<img src="${sanitizeUrl(project.settings.twitterQuoteImage)}" alt="Quote image" class="quote-image" />` : '';
       quote = `<div class="quote"><div class="quote-head">${qAvatar}<span class="quote-name">${sanitizeText(project.settings.twitterQuoteName||'')}</span>${qVerified}<span class="quote-handle">${qHandle}</span></div><div class="quote-body">${highlightTwitterText(qText)}${qImage}</div></div>`;
@@ -700,9 +736,7 @@ export function buildHTML(project: SkinProject): string {
     // The iOS tutorial solves it with exactly this line — <span class="hide">Mom
     // is typing...</span> — and it is the one piece of the fic that is
     // otherwise invisible in a download rather than merely ugly.
-    const typing = s.chatShowTyping
-      ? `<div class="row typing"><div class="typing-bubble"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>${s.chatTypingName ? `<span class="typing-label">${sanitizeText(s.chatTypingName)}</span>` : ''}${srOnly(`${s.chatTypingName ? ' is' : 'Someone is'} typing…`)}</div>`
-      : '';
+    const typing = s.chatShowTyping ? typingRowHTML(s.chatTypingName) : '';
     
     // iOS Footer with background image
     let footer = '';
@@ -1220,7 +1254,27 @@ ${PARAGRAPH_RESET_CSS}
 #workskin .tweet .name-line .twitter-logo{margin-right:0;}
 #workskin .tweet .name{font-weight:700;color:${textPrimary};font-size:0.938em;line-height:1.333;white-space:nowrap;}
 #workskin .tweet .verified-container{display:inline-block;vertical-align:middle;}
-#workskin .tweet .verified-badge{width:1.125em;height:1.125em;display:inline-block;vertical-align:middle;}
+/* THE VERIFIED TICK IS DRAWN, NOT FETCHED. It used to be an 18px PNG on our
+   CDN, and every chrome image is a request from inside a published fic — a
+   twenty-tweet thread was a hundred of them, forever. That is not theoretical:
+   a WhatsApp skin author outgrew a free Cloudinary tier and every image in
+   every fic using their skin broke at once (KNOWLEDGE §7, §11).
+   A circle with a character in it costs nothing, scales with the reader's text
+   instead of being pinned to 18px, and survives a reader who blocks images.
+   The glyph is a real text node rather than a content:'' pseudo-element
+   BECAUSE THIS SHEET
+   ALSO DRIVES THE PNG and html2canvas cannot rasterise a pseudo-element.
+   Sizing note: the geometry is em of the badge's OWN font-size, so the box
+   stays 18px while the glyph inside it is 11px. Change font-size and the
+   circle resizes with it — which is what the expanded and quote variants below
+   do, instead of restating the geometry.
+   The height comes from line-height:1 plus symmetric padding rather than
+   from a tall line box, AND THAT IS NOT A STYLE CHOICE. html2canvas places a
+   glyph from the top of the content box, so centring by line-height put the
+   tick below the circle — white on a white card, i.e. a badge that rasterised
+   as an empty blue disc. Padding is measured the same way by both renderers.
+   Verified by exporting a PNG, not by reasoning about it. */
+#workskin .tweet .verified-badge{display:inline-block;vertical-align:middle;font-size:0.688em;width:1.636em;line-height:1;padding:0.318em 0;text-align:center;font-weight:700;color:#fff;background:#1d9bf0;border-radius:50%;}
 #workskin .tweet .handle{color:${handleColor};font-weight:400;font-size:0.938em;line-height:1.333;white-space:nowrap;}
 #workskin .tweet .follow-dot{color:${handleColor};font-size:0.938em;line-height:1.333;}
 #workskin .tweet .follow-btn{background:transparent;color:#1d9bf0;font-weight:700;font-size:0.938em;padding:0;border:none;cursor:pointer;line-height:1.333;flex-shrink:0;white-space:nowrap;}
@@ -1253,6 +1307,22 @@ ${PARAGRAPH_RESET_CSS}
 #workskin .tweet .metric:first-child{justify-content:flex-start;}
 #workskin .tweet .metric:last-child{margin-right:0;}
 #workskin .tweet .metric-icon{width:1.429em;height:1.429em;display:inline-block;vertical-align:middle;margin-right:0.429em;}
+/* ALL THREE METRIC ICONS ARE CHARACTERS. They used to be blue-circle PNGs on
+   our CDN, which meant a reader fetched three of them per tweet every time
+   they opened the chapter — a twenty-tweet thread was a hundred requests
+   inside somebody's published fic, forever, and a WhatsApp skin author already
+   lost every image in every fic using their skin when a free tier ran out
+   (KNOWLEDGE §7, §19).
+   The glyphs are also closer to the real site than the circles were: Twitter
+   draws a grey outline heart, not a filled disc. They take the metric colour,
+   so the hover tints below now reach the icon as well, and dark mode needs no
+   second set of files.
+   Deliberately NOT a fixed box: these are ordinary inline text, because a
+   glyph centred inside a small box is what html2canvas cannot rasterise (see
+   .verified-badge). As plain text it rasterises like every other word here.
+   1.286em of the 14px metrics context is 18px, which is the size the real
+   site uses and close enough to the 20px images that the row does not jump. */
+#workskin .tweet .glyph-icon{font-size:1.286em;line-height:1;margin-right:0.222em;vertical-align:-0.111em;}
 #workskin .tweet .metric-count{color:${textSecondary};font-weight:400;font-size:1em;line-height:1.429;vertical-align:middle;}
 #workskin .tweet .metric:hover .metric-count{text-decoration:underline;}
 #workskin .tweet .metric.replies:hover{color:#1d9bf0;}
@@ -1276,7 +1346,9 @@ ${PARAGRAPH_RESET_CSS}
 #workskin .tweet.expanded .expanded-name p{display:contents;}
 #workskin .tweet.expanded .expanded-name .name,#workskin .tweet.expanded .expanded-name .verified-container{margin-left:0.25em;}
 #workskin .tweet.expanded .expanded-name .name{font-weight:700;color:${textPrimary};font-size:1.25em;line-height:1.2;}
-#workskin .tweet.expanded .expanded-name .verified-badge{width:1.25em;height:1.25em;}
+/* 20px instead of 18px, stated once as a font-size — the badge's own geometry
+   is in em of this, so the circle follows the glyph. */
+#workskin .tweet.expanded .expanded-name .verified-badge{font-size:0.764em;}
 
 #workskin .tweet.expanded .expanded-handle{color:${textSecondary};font-size:0.938em;line-height:1.333;margin-bottom:0.267em;}
 #workskin .tweet.expanded .replying-to{margin:0 0 0.923em 0;}
@@ -1297,7 +1369,8 @@ ${PARAGRAPH_RESET_CSS}
 #workskin .tweet .quote-avatar{width:1.429em;height:1.429em;border-radius:50%;overflow:hidden;}
 #workskin .tweet .quote-verified-container{display:inline-flex;align-items:center;margin-left:-0.143em;}
 #workskin .tweet .quote-verified-container > *{margin-left:0.143em;}
-#workskin .tweet .quote-verified-badge{width:1.143em;height:1.143em;display:inline-block;vertical-align:middle;}
+/* Same drawn badge, 16px inside a 14px quote head. */
+#workskin .tweet .quote-verified-badge{display:inline-block;vertical-align:middle;font-size:0.699em;width:1.636em;line-height:1;padding:0.318em 0;text-align:center;font-weight:700;color:#fff;background:#1d9bf0;border-radius:50%;}
 
 #workskin .tweet .quote-handle{color:${textSecondary};font-weight:400;font-size:1em;}
 #workskin .tweet .quote-body{margin-top:0.267em;font-size:0.938em;line-height:1.333;color:${textPrimary};}

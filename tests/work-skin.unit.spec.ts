@@ -184,6 +184,49 @@ test.describe('the Twitter work skin', () => {
       expect(src, src).toMatch(/^https:\/\//);
     }
   });
+
+  /**
+   * A tweet used to fetch five chrome images. A twenty-tweet thread was a
+   * hundred requests to `media.publit.io` from inside somebody's published fic,
+   * forever — and that is a failure with a body count: a WhatsApp skin author
+   * outgrew a free Cloudinary tier and every image in every fic using their
+   * skin broke at once, with readers told to relink (KNOWLEDGE §7, §19).
+   *
+   * Four of the five went. Both verified badges are a character in a CSS
+   * circle; the metric row is `↩ ⇄ ♡`, which is closer to the real site than
+   * the blue discs it replaced. Only the X logo is still fetched, and it stays
+   * an image because it is a trademark we should not be drawing ourselves.
+   *
+   * Views and bookmarks are still images. They are opt-in extras rather than
+   * part of the standard tweet, and neither has a character that reads right.
+   *
+   * This is a *blast radius* test. It fails if anyone adds a chrome image back.
+   */
+  test('a tweet fetches one chrome image, not five', () => {
+    const p = twitter();
+    p.settings.twitterVerified = true;
+    p.settings.twitterShowMetrics = true;
+    p.settings.twitterQuoteEnabled = true;
+    p.settings.twitterQuoteVerified = true;
+    p.messages = [{
+      id: '1', sender: 'Alex Rivers', content: 'the moth is back', outgoing: true,
+      timestamp: '2:15 PM', twitterLikes: 847, twitterRetweets: 89, twitterReplies: 156,
+    } as (typeof p.messages)[number]];
+
+    const { html } = buildWorkSkin(p);
+
+    const KEPT = ['twitter-logo.png'];
+    const fetched = new Set([...html.matchAll(/twitter-[A-Za-z]+\.png/g)].map(m => m[0]));
+    for (const file of fetched) expect(KEPT, `${file} is chrome we dropped`).toContain(file);
+
+    // Both badges are drawn, and this is a verified tweet with a verified
+    // quote and metrics, so every replaced icon is on the page.
+    expect(html).toContain('class="verified-badge"');
+    expect(html).toContain('class="quote-verified-badge"');
+    expect(html).toContain('<span class="glyph-icon">↩︎</span>');
+    expect(html).toContain('<span class="glyph-icon">⇄</span>');
+    expect(html).toContain('<span class="glyph-icon">♡</span>');
+  });
 });
 
 test.describe('work-skin-only rules, from WorkSkin#clean_css', () => {
@@ -285,6 +328,38 @@ test.describe('which platforms are offered', () => {
       expect(asRead, template).toContain('You: you free tonight? 10:24');
       // The dots are CSS shapes — without this line the indicator is invisible.
       expect(asRead, template).toContain('Sam is typing…');
+    }
+  });
+
+  /**
+   * `isTyping` is a per-message flag. It has been in the schema from the start
+   * and the editor has always honoured it; `buildHTML` never did.
+   *
+   * So the shipped "iOS Typing Indicators" example — the one whose entire
+   * purpose is to demonstrate the indicator — exported a bubble containing the
+   * literal text "...", in the PNG and on AO3 alike, and lost the hidden
+   * "Riley is typing…" line that is the whole skin-off story for an element
+   * drawn entirely in CSS shapes. Found by exporting the example and looking
+   * at the picture, which is the only thing that could have found it.
+   */
+  test('a message flagged as typing renders the indicator, not three dots of text', () => {
+    for (const template of ['ios', 'android'] as const) {
+      const p = defaultProject();
+      p.template = template;
+      p.messages = [
+        { id: '1', sender: 'Riley', content: '...', outgoing: false, timestamp: '', isTyping: true },
+      ] as typeof p.messages;
+
+      const { html } = buildWorkSkin(p);
+
+      expect(html, template).toContain('class="row typing"');
+      expect(html, template)
+        .toContain('<span class="dot"></span><span class="dot"></span><span class="dot"></span>');
+      // Not a bubble whose text happens to be three dots.
+      expect(html, template).not.toContain('>...<');
+
+      const asRead = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      expect(asRead, template).toContain('Riley is typing…');
     }
   });
 
