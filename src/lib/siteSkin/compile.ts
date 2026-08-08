@@ -29,13 +29,6 @@ import { mixHex, normalizeHex, readableOn } from './colors';
 interface Rule {
   selectors: string[];
   decls: [property: string, value: string][];
-  /**
-   * A comment emitted above the rule. Written for the person who pastes this
-   * into AO3, not for us — no plan section numbers, no defect IDs. AO3 strips
-   * comments when it reparses the CSS, so these only ever exist in the copy
-   * the user reads.
-   */
-  note?: string;
 }
 
 const TAG_SHAPE: Record<SiteSkinTheme['shape']['tagStyle'], { radius: string; border: boolean }> = {
@@ -105,10 +98,11 @@ function buildRules(theme: SiteSkinTheme): Rule[] {
     ],
   });
 
+  // Summaries and notes set their own font, so they need naming separately.
+  // Code blocks are left alone on purpose.
   rules.push({
     selectors: ['blockquote', 'address'],
     decls: [['font-family', theme.typography.bodyFont]],
-    note: 'Summaries and notes set their own font, so they need naming separately. Code blocks are left alone on purpose.',
   });
 
   // Mirrors AO3's own `h1, h2, h3, h4, h5, h6, .heading` selector. Without
@@ -177,6 +171,7 @@ function buildRules(theme: SiteSkinTheme): Rule[] {
     ],
   });
 
+  // Header text, kept readable against the accent colour.
   rules.push({
     selectors: [
       '#header',
@@ -187,7 +182,6 @@ function buildRules(theme: SiteSkinTheme): Rule[] {
       '#header .primary a',
     ],
     decls: [['color', d.headerFg]],
-    note: 'Header text, kept readable against your accent colour.',
   });
 
   // Dropdown panels and the hover/open states that reveal them. One rule, so
@@ -339,11 +333,10 @@ function buildRules(theme: SiteSkinTheme): Rule[] {
 function serialize(rules: Rule[]): string {
   return rules
     .map(rule => {
-      const head = rule.note ? `/* ${rule.note} */\n` : '';
       const body = rule.decls
         .map(([property, value]) => `  ${property}: ${value} !important;`)
         .join('\n');
-      return `${head}${rule.selectors.join(',\n')} {\n${body}\n}`;
+      return `${rule.selectors.join(',\n')} {\n${body}\n}`;
     })
     .join('\n\n');
 }
@@ -355,15 +348,30 @@ function serialize(rules: Rule[]): string {
  * because the preview renders this same string over an AO3-shaped mock DOM, it
  * does not change the preview either. That equivalence is structural, not a
  * promise.
+ *
+ * ## Why there are no comments in the output
+ *
+ * This used to open with three header comments — the theme name, "Paste into
+ * Preferences → Skins → Create Site Skin", and "leave the skin type on add on
+ * to archive skin" — plus a note above two of the rules.
+ *
+ * **AO3 deletes every comment on save**, so none of them ever reached a reader
+ * or even the author reopening their own skin; they existed only in the paste
+ * box. And on 7 Aug 2026 a work skin saved with comments came back from the
+ * archive missing eleven consecutive rules, three times reproduced, with the
+ * rules returning the moment the comments went (WORK-SKIN §13). The mechanism
+ * is still not proven, which is exactly why nothing here is worth the exposure.
+ *
+ * The two instructions were the only reason not to strip them blind — losing
+ * the "add on to archive skin" warning would have traded a possible bug for a
+ * certain one. Both now live in `ExportSkinDialog`'s numbered steps, where the
+ * user actually reads them, and `tests/site-skin.spec.ts` pins them there.
+ *
+ * Do not reintroduce comments here without saving on real AO3 and diffing the
+ * stored CSS rule by rule.
  */
 export function compile(theme: SiteSkinTheme): string {
-  const header = [
-    `/* ${theme.meta.name} — AO3 site skin */`,
-    '/* Made with AO3 SkinGen. Paste into Preferences → Skins → Create Site Skin, */',
-    '/* and leave the skin type on "add on to archive skin". */',
-  ].join('\n');
-
-  return `${header}\n\n${serialize(buildRules(theme))}\n`;
+  return `${serialize(buildRules(theme))}\n`;
 }
 
 /** Exposed for the ownership tests in tests/site-skin.unit.spec.ts. */

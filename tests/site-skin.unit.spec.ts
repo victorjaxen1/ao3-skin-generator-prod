@@ -35,6 +35,17 @@ test.describe('every launch template compiles to CSS AO3 accepts', () => {
     });
   }
 
+  test('the export carries no comments at all', () => {
+    // WORK-SKIN §13: a work skin saved with comments came back from the archive
+    // missing eleven consecutive rules, and they returned when the comments
+    // went. AO3 deletes comments on save regardless, so nothing here is worth
+    // the exposure — the two instructions this file used to carry are in
+    // ExportSkinDialog's steps instead, pinned by tests/site-skin.spec.ts.
+    for (const template of TEMPLATES) {
+      expect(compile(template), template.meta.name).not.toContain('/*');
+    }
+  });
+
   test('every detail toggle combination also passes', () => {
     for (const divider of [true, false]) {
       for (const dropCap of [true, false]) {

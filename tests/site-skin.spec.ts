@@ -183,8 +183,11 @@ test('the export dialog copies the CSS and explains the AO3 step', async ({ page
 
   await expect(page.getByText('AO3-safe check passed')).toBeVisible();
 
-  // Scoped to the instruction steps: the CSS in the textarea repeats these
-  // phrases in its header comment, so an unscoped match is ambiguous.
+  // Scoped to the instruction steps, and these two assertions are the reason
+  // the export can be comment-free: both phrases used to ship as CSS comments
+  // in the paste box, and moving them here is what let `compile()` drop every
+  // comment (WORK-SKIN §13f). If these stop passing, the instruction has been
+  // lost, not just moved.
   const steps = page.locator('ol li');
   await expect(steps.filter({ hasText: "Open AO3's skin editor" })).toContainText(
     'Preferences → Skins → Create Site Skin'
