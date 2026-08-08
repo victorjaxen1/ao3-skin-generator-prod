@@ -100,6 +100,55 @@ test('the exported CSS and HTML are what AO3 will accept', async ({ page }) => {
   expect(html).toContain('https://');
 });
 
+/**
+ * BACKLOG 10 — the choice, which exists because AO3 gives a work exactly one
+ * skin slot.
+ *
+ * An author whose chapter 4 is a different app cannot save a second skin: they
+ * would have to merge two stylesheets by hand, or lose the first. So the wider
+ * skin has to be offered at the moment they are about to save one. The default
+ * stays "just this platform" — the smaller paste, and what this modal did
+ * before the choice existed.
+ */
+test('the author can take one skin for everything, or just this platform', async ({ page }) => {
+  await openTemplate(page, 'twitter-verified-account');
+  await page.getByRole('button', { name: /work skin/i }).click();
+
+  const dialog = page.getByRole('dialog', { name: 'Work skin' });
+  const justThis = dialog.getByRole('radio', { name: 'Just Twitter' });
+  const allFour = dialog.getByRole('radio', { name: 'All four platforms' });
+
+  // The narrower skin is the default.
+  await expect(justThis).toHaveAttribute('aria-checked', 'true');
+  const onePlatform = await page.getByLabel('Work skin CSS').inputValue();
+  expect(onePlatform).toContain('#workskin');
+  expect(onePlatform, 'the platform skin should not carry the other three')
+    .not.toContain('.chat.ios');
+
+  await allFour.click();
+  await expect(allFour).toHaveAttribute('aria-checked', 'true');
+
+  const everything = await page.getByLabel('Work skin CSS').inputValue();
+  // All four platforms, each scoped to its own container class, plus the
+  // version stamp that a comment cannot carry because AO3 deletes comments.
+  for (const scope of ['.twitter', '.google', '.ios', '.android']) {
+    expect(everything, `the master skin is missing ${scope}`).toContain(scope);
+  }
+  expect(everything).toMatch(/\.ao3skingen-v\d+::after\{content:'\d+';\}/);
+  // Both themes travel with it, so a later chapter can be dark.
+  expect(everything).toContain('.theme-dark');
+  expect(everything.length).toBeGreaterThan(onePlatform.length);
+
+  // The title advice follows the choice — a skin covering four platforms
+  // should not be called "yourname — Twitter".
+  await expect(dialog).toContainText('yourname — chat skins');
+
+  // The markup is the same either way: the choice is about the stylesheet.
+  const html = await page.getByLabel('Work skin HTML').inputValue();
+  await justThis.click();
+  expect(await page.getByLabel('Work skin HTML').inputValue()).toBe(html);
+});
+
 test('the image export still works alongside it', async ({ page }) => {
   // The work skin is an addition, not a replacement — the two primary
   // buttons must survive it.

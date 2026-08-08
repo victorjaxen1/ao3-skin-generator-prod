@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { SkinProject } from '../lib/schema';
 import { buildCSS, buildHTML } from '../lib/generator';
-import { buildWorkSkin, supportsWorkSkin } from '../lib/workSkin';
+import { buildMasterWorkSkin, buildWorkSkin, supportsWorkSkin } from '../lib/workSkin';
 import { getProStatus, getProFeatures, ProStatus } from '../lib/proFeatures';
 import { ProUpgradeModal } from './ProUpgradeModal';
 import { useToast, ToastContainer } from './Toast';
@@ -90,6 +90,17 @@ const SKIN_TITLE_EXAMPLE: Record<SkinProject['template'], string> = {
   google: 'yourname — Google',
   ios: 'yourname — iMessage',
   android: 'yourname — WhatsApp',
+};
+
+/** The same, for the skin that covers every platform at once. */
+const MASTER_TITLE_EXAMPLE = 'yourname — chat skins';
+
+/** What an author calls each platform, for the "covers all four" line. */
+const PLATFORM_NAME: Record<SkinProject['template'], string> = {
+  twitter: 'Twitter',
+  google: 'Google',
+  ios: 'iMessage',
+  android: 'WhatsApp',
 };
 
 // ---------------------------------------------------------------------------
@@ -535,6 +546,16 @@ export const ExportPanel: React.FC<Props> = ({
   const [showHowTo, setShowHowTo] = useState(false);
   const [showWorkSkin, setShowWorkSkin] = useState(false);
   const [copiedPart, setCopiedPart] = useState<'css' | 'html' | null>(null);
+  /**
+   * Which skin the author is taking. A work can use **only one skin**, so this
+   * is a real choice rather than a preference: "just this platform" is the
+   * smallest thing that works for a fic that stays on one app, and "all four"
+   * is what an author needs the moment chapter 4 is a different one.
+   *
+   * Defaults to the platform they are looking at — the smaller paste, and the
+   * behaviour this modal had before the choice existed.
+   */
+  const [skinScope, setSkinScope] = useState<'platform' | 'all'>('platform');
   const { toasts, removeToast, success, error: showError } = useToast();
 
   // The third export. Cheap to compute — no rendering, no upload — so it is
@@ -543,6 +564,22 @@ export const ExportPanel: React.FC<Props> = ({
     () => (supportsWorkSkin(project.template) ? buildWorkSkin(project) : null),
     [project]
   );
+
+  // The master skin is eleven stylesheet builds rather than one, and `project`
+  // changes on every keystroke in the editor — so unlike `workSkin` it is built
+  // only while the modal is actually showing it. Same shape, one platform's
+  // markup, four platforms' CSS in both themes.
+  const masterSkin = useMemo(
+    () =>
+      showWorkSkin && skinScope === 'all' && supportsWorkSkin(project.template)
+        ? buildMasterWorkSkin(project)
+        : null,
+    [project, showWorkSkin, skinScope]
+  );
+
+  // The HTML is identical either way — the choice is about the stylesheet, and
+  // `tests/master-skin.spec.ts` pins that the markup does not move.
+  const skin = masterSkin ?? workSkin;
 
   useEffect(() => {
     setProStatus(getProStatus());
@@ -884,7 +921,7 @@ export const ExportPanel: React.FC<Props> = ({
       {/* ------------------------------------------------------------------ */}
       {/* Work skin modal — two paste targets, not one                        */}
       {/* ------------------------------------------------------------------ */}
-      {showWorkSkin && workSkin && (
+      {showWorkSkin && skin && (
         <div
           className="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4"
           onClick={() => setShowWorkSkin(false)}
@@ -913,7 +950,7 @@ export const ExportPanel: React.FC<Props> = ({
             </div>
 
             <div className="p-5 overflow-y-auto">
-              {workSkin.violations.length > 0 ? (
+              {skin.violations.length > 0 ? (
                 <div role="alert" className="bg-red-50 border border-red-200 rounded-xl p-3 mb-4">
                   <p className="text-sm font-semibold text-red-900">AO3 would refuse this skin</p>
                   <p className="text-xs text-red-800 mt-1 leading-relaxed">
@@ -922,7 +959,7 @@ export const ExportPanel: React.FC<Props> = ({
                     &ldquo;Copy for AO3&rdquo; in the meantime.
                   </p>
                   <ul className="mt-2 space-y-1">
-                    {workSkin.violations.slice(0, 4).map((v, i) => (
+                    {skin.violations.slice(0, 4).map((v, i) => (
                       <li key={i} className="text-[11px] font-mono text-red-700">
                         {v.subject}: {v.message}
                       </li>
@@ -954,6 +991,58 @@ export const ExportPanel: React.FC<Props> = ({
                   the same skin can be attached to every fic you post.
                 </p>
 
+                {/* The choice a work skin forces, because AO3 allows a work
+                    exactly one. An author whose chapter 4 is a different app
+                    cannot simply save a second skin — they would have to merge
+                    two stylesheets by hand, or lose the first. So the wider
+                    skin has to be offered here, at the moment they are about to
+                    save one, rather than discovered later.
+
+                    Defaults to this platform: it is the smaller paste and the
+                    behaviour this modal had before the choice existed. */}
+                <div className="ml-7 mb-2.5">
+                  <div
+                    role="radiogroup"
+                    aria-label="What the skin covers"
+                    className="flex rounded-lg border border-stone-200 p-0.5 bg-stone-50"
+                  >
+                    {([
+                      ['platform', `Just ${PLATFORM_NAME[project.template]}`],
+                      ['all', 'All four platforms'],
+                    ] as const).map(([value, label]) => (
+                      <button
+                        key={value}
+                        role="radio"
+                        aria-checked={skinScope === value}
+                        onClick={() => setSkinScope(value)}
+                        className={`flex-1 py-1.5 rounded-md text-xs font-semibold transition-colors ${
+                          skinScope === value
+                            ? 'bg-white text-stone-900 shadow-sm'
+                            : 'text-stone-500 hover:text-stone-700'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-stone-500 mt-1.5 leading-relaxed">
+                    {skinScope === 'all' ? (
+                      <>
+                        Covers Twitter, Google, iMessage and WhatsApp, in light and dark.
+                        A fic can only have <strong>one</strong> work skin, so this is the one
+                        to take if a later chapter might use a different app — you save it once
+                        and never come back. It is longer, because it holds every style.
+                      </>
+                    ) : (
+                      <>
+                        Only the {PLATFORM_NAME[project.template]} style — the shortest thing
+                        that works. If a later chapter uses a different app you will need the
+                        other option, since a fic can only have one work skin.
+                      </>
+                    )}
+                  </p>
+                </div>
+
                 {/* The two things AO3 will not tell an author until it has
                     already cost them something: a title collision is a
                     validation error at submit, and a second work skin on a fic
@@ -967,7 +1056,9 @@ export const ExportPanel: React.FC<Props> = ({
                     name was claimed years ago and AO3 rejects it when you submit.
                     Something like{' '}
                     <code className="bg-amber-100 px-1 rounded">
-                      {SKIN_TITLE_EXAMPLE[project.template]}
+                      {skinScope === 'all'
+                        ? MASTER_TITLE_EXAMPLE
+                        : SKIN_TITLE_EXAMPLE[project.template]}
                     </code>{' '}
                     works.
                   </p>
@@ -980,7 +1071,7 @@ export const ExportPanel: React.FC<Props> = ({
                 </div>
                 <textarea
                   readOnly
-                  value={workSkin.css}
+                  value={skin.css}
                   rows={6}
                   aria-label="Work skin CSS"
                   className="w-full font-mono text-[11px] bg-gray-950 text-green-400 border border-gray-700 rounded-lg p-3 resize-none focus:outline-none"
@@ -988,13 +1079,13 @@ export const ExportPanel: React.FC<Props> = ({
                 />
                 <button
                   onClick={() => {
-                    navigator.clipboard.writeText(workSkin.css);
+                    navigator.clipboard.writeText(skin.css);
                     setCopiedPart('css');
                     setTimeout(() => setCopiedPart(null), 2000);
                   }}
-                  disabled={workSkin.violations.length > 0}
+                  disabled={skin.violations.length > 0}
                   className={`w-full mt-2 py-2.5 rounded-xl font-semibold text-sm transition-all ${
-                    workSkin.violations.length > 0
+                    skin.violations.length > 0
                       ? 'bg-stone-100 text-stone-400 cursor-not-allowed'
                       : copiedPart === 'css'
                       ? 'bg-green-500 text-white'
@@ -1017,9 +1108,19 @@ export const ExportPanel: React.FC<Props> = ({
                   <strong className="text-stone-700">Select Work Skin</strong> to the skin you made
                   in step 1 — without that, this is unstyled text.
                 </p>
+                {skinScope === 'all' && (
+                  // Worth saying once: the markup is identical under either
+                  // choice, so the wider skin costs nothing here. Every block
+                  // names its own platform and theme, and the saved skin
+                  // recognises it.
+                  <p className="text-[11px] text-stone-500 mb-2 ml-7 leading-relaxed">
+                    For the next conversation — any platform, light or dark — come back and
+                    copy this part again. The skin from step 1 already knows what to do with it.
+                  </p>
+                )}
                 <textarea
                   readOnly
-                  value={workSkin.html}
+                  value={skin.html}
                   rows={5}
                   aria-label="Work skin HTML"
                   className="w-full font-mono text-[11px] bg-gray-950 text-blue-300 border border-gray-700 rounded-lg p-3 resize-none focus:outline-none"
@@ -1027,13 +1128,13 @@ export const ExportPanel: React.FC<Props> = ({
                 />
                 <button
                   onClick={() => {
-                    navigator.clipboard.writeText(workSkin.html);
+                    navigator.clipboard.writeText(skin.html);
                     setCopiedPart('html');
                     setTimeout(() => setCopiedPart(null), 2000);
                   }}
-                  disabled={workSkin.violations.length > 0}
+                  disabled={skin.violations.length > 0}
                   className={`w-full mt-2 py-2.5 rounded-xl font-semibold text-sm transition-all ${
-                    workSkin.violations.length > 0
+                    skin.violations.length > 0
                       ? 'bg-stone-100 text-stone-400 cursor-not-allowed'
                       : copiedPart === 'html'
                       ? 'bg-green-500 text-white'
