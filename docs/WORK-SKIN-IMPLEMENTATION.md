@@ -101,6 +101,11 @@ unaided, and the *image* export got three bug fixes it badly needed:
   byte-identical. Nothing renders differently; it is the precondition for
   light/dark variants in the master skin costing five rules instead of a second
   stylesheet.
+- **The master skin has its namespacer** (MASTER §6a). `namespaceCss` scopes a
+  platform's rules to `.chat.<platform>`, `buildHTML` emits that class, and
+  `tests/namespace.spec.ts` proves by computed-style diff that neither moves a
+  pixel. Two bugs came out of writing that check, one of which silently stripped
+  every `.tweet` rule of its box.
 
 **Release gate, still open:** the *HTML* half. Nothing has been checked with
 Creator's Style off, downloaded as EPUB, or re-parsed by editing a posted work
@@ -524,6 +529,7 @@ closed; the HTML half is not.
 | Chrome images per tweet | ✅ **one** — the X logo (§14) |
 | The PNG renders what the browser renders | ✅ all four, exported and read at zoom (§14a–14b) |
 | Colour separated from structure | ✅ four palette tables, both variants data (§10b) |
+| Namespacing, for one skin holding four | ✅ `namespaceCss`, pixel-diffed (MASTER §6a) |
 | Creator's Style **off** / EPUB download | ❌ **never checked** |
 | Re-parse after editing a posted work | ❌ **never checked** |
 
@@ -587,6 +593,7 @@ closed; the HTML half is not.
 ```bash
 npx playwright test --project=unit                              # ~15s, no browser
 npx playwright test --project=desktop tests/ao3-injection.spec.ts # <p> injection
+npx playwright test --project=desktop tests/namespace.spec.ts     # master-skin scoping
 npm run build
 ```
 
@@ -594,7 +601,10 @@ The unit project asserts every platform lints clean in both modes, emits no
 banned property, reads as prose unstyled, is `em`-sized to three decimals,
 fetches no chrome image beyond the X logo, and carries exactly one plain-text
 credit. The injection project needs a browser because that failure is geometric
-and **the lint cannot see it**.
+and **the lint cannot see it**. `namespace.spec.ts` is the same kind of thing for
+the master skin: it diffs every computed style on every element, with and without
+the platform class and with and without the namespacing rewrite, and it found two
+bugs on the day it was written (MASTER §6a-i).
 
 The browser projects point at the deployed site by default, so for local work:
 
@@ -712,9 +722,15 @@ The order that matters now that the live bugs are cleared:
    HTML byte-identical across 96 variants. No rule body mentions `isDark` any
    more, and both palettes are reachable as data — which is the precondition
    BACKLOG 8 was waiting on.
-4. **The master skin** (BACKLOG 6–10). ⬅ **START HERE**, at 6: `namespaceCss`.
-   8 is the item 5b was done for, but it depends on 6 and 7 landing first.
-5. **The two small correctness items**, BACKLOG 5c (the dead `<a href="#">`)
+4. ✅ **done, 8 Aug 2026 — BACKLOG 6, the namespacer** (MASTER §6a, §6a-i).
+   `namespaceCss(css, platform)` scopes a stylesheet to `.chat.<platform>`, and
+   `buildHTML` now emits that class on every path. `tests/namespace.spec.ts`
+   diffs every computed style on every element to prove neither changes a
+   pixel — and caught two bugs doing it, both invisible to the lint.
+5. **The master skin** (BACKLOG 7–10). ⬅ **START HERE**, at 7:
+   `buildMasterWorkSkin`. 8 is the item 5b was done for and is cheap once 7
+   lands.
+6. **The two small correctness items**, BACKLOG 5c (the dead `<a href="#">`)
    and the paragraph-reset question in §9d, whenever they are convenient. They
    are independent of the master-skin chain.
 

@@ -683,6 +683,27 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
   return `${timeBreak}<div class="${rowClass}" data-message-id="${msg.id}">${avatar}<dl class="msg">${who}${bubble}${statusIndicator}</dl></div>`;
 }
 
+/**
+ * The container class, carrying the platform.
+ *
+ * The platform class is what lets one master skin hold four stylesheets without
+ * them colliding — `namespaceCss` in `workSkin.ts` rewrites every selector to
+ * sit under `.chat.<platform>`, and this is the hook it aims at.
+ *
+ * **It is added here rather than at the export boundary**, and that is
+ * deliberate: one stylesheet drives the preview, the PNG and the work skin, so
+ * markup that only the export sees is markup nothing renders in anger until an
+ * author is looking at it. The cost of putting it here is that the class ships
+ * to every path immediately; the benefit is that all three paths agree.
+ *
+ * Until a master skin exists it is inert — no selector anywhere matches `.ios`
+ * or `.google`, on our pages or in AO3's own stylesheets, which was checked
+ * before adding it. `tests/namespace.spec.ts` pins the rendering either way.
+ */
+function chatClass(template: string, extra?: string): string {
+  return `chat ${template}${extra ? ` ${extra}` : ''}`;
+}
+
 export function buildHTML(project: SkinProject): string {
   // iOS and Android templates with enhanced features
   if (project.template === 'ios' || project.template === 'android') {
@@ -785,7 +806,7 @@ export function buildHTML(project: SkinProject): string {
     // Wrap messages in container for iOS and Android
     const messagesContainer = (isIOS || !isIOS) ? `<div class="chat-messages">${body}${typing}</div>` : `${body}${typing}`;
     
-    return `<div class="chat">${header}${messagesContainer}${footer}</div>`;
+    return `<div class="${chatClass(project.template)}">${header}${messagesContainer}${footer}</div>`;
   }
   
   if (project.template === 'google') {
@@ -893,7 +914,7 @@ export function buildHTML(project: SkinProject): string {
     }).join('');
     
     const body = `<div class="${logoClass}">${logoHtml}</div><div class="search-wrap">${searchComponent}${tabs}${stats}${dym}${results}</div>`;
-    return `<div class="chat">${body}</div>`;
+    return `<div class="${chatClass(project.template)}">${body}</div>`;
   }
   
   if (project.template === 'twitter') {
@@ -923,16 +944,16 @@ export function buildHTML(project: SkinProject): string {
       
       // Render all top-level tweets and their threads
       const tweets = topLevelTweets.map(tweet => renderTweetThread(tweet)).join('');
-      return `<div class="chat tweets">${tweets}</div>`;
+      return `<div class="${chatClass(project.template, 'tweets')}">${tweets}</div>`;
     } else {
       // Simple mode: each message becomes its own tweet
       const tweets = project.messages.map(m => msgHTML(m, 'twitter', project)).join('');
-      return `<div class="chat tweets">${tweets}</div>`;
+      return `<div class="${chatClass(project.template, 'tweets')}">${tweets}</div>`;
     }
   }
 
   const body = project.messages.map(m => msgHTML(m, project.template, project)).join('');
-  return `<div class="chat">${body}</div>`;
+  return `<div class="${chatClass(project.template)}">${body}</div>`;
 }
 
 /**

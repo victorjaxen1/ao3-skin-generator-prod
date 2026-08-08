@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { buildWorkSkin, supportsWorkSkin } from '../src/lib/workSkin';
+import { buildWorkSkin, CONTAINER_CLASSES, namespaceCss, supportsWorkSkin } from '../src/lib/workSkin';
 import { defaultProject } from '../src/lib/schema';
 import { buildCSS, buildHTML } from '../src/lib/generator';
 import { lintAo3Css, isAo3Safe, stripCssComments } from '../src/lib/siteSkin/ao3Css';
@@ -654,8 +654,134 @@ test.describe('which platforms are offered', () => {
 
     const { html, css } = buildWorkSkin(p);
     expect(html, 'the work skin carries no svg for AO3 to strip').not.toContain('<svg');
-    expect(html).toContain('class="chat css-tails"');
+    // The class is appended to whatever the container already carries — it used
+    // to be spliced into the literal string `class="chat"`, which stopped
+    // existing when buildHTML began emitting the platform class, and would have
+    // failed silently: SVGs gone, tails never switched on.
+    expect(html).toContain('class="chat ios css-tails"');
     expect(css).toMatch(/\.css-tails dd\.bubble\.out\.has-tail::after/);
     expect(css).toMatch(/\.css-tails dd\.bubble\.in\.has-tail::after/);
+  });
+});
+
+/**
+ * Namespacing — MASTER §6a, the first half of the master skin.
+ *
+ * These pin the transform's shape. What they cannot see is whether the
+ * namespaced sheet still *renders* the same, because adding classes raises
+ * specificity unevenly and rules that tied can swap: that is measured in a
+ * browser by `tests/namespace.spec.ts`.
+ */
+test.describe('namespacing a platform stylesheet', () => {
+  test('roots a plain selector under the platform container', () => {
+    expect(namespaceCss('#workskin dd.bubble{color:red;}', 'ios'))
+      .toBe('#workskin .chat.ios dd.bubble{color:red;}');
+  });
+
+  test('tightens the container rule instead of nesting a second .chat', () => {
+    // #workskin .chat.ios .chat would match nothing at all.
+    expect(namespaceCss('#workskin .chat{width:100%;}', 'twitter'))
+      .toBe('#workskin .chat.twitter{width:100%;}');
+  });
+
+  test('keeps extra classes on the container attached to it', () => {
+    expect(namespaceCss('#workskin .chat.css-tails dd.bubble::after{content:\'\';}', 'ios'))
+      .toBe('#workskin .chat.css-tails.ios dd.bubble::after{content:\'\';}');
+  });
+
+  test('a container class that is not .chat still roots the selector', () => {
+    // `.tweets` sits on the container beside `.chat`, so making it a descendant
+    // asks for `.tweets` inside itself. Caught by the render diff, not by any
+    // of the assertions above: every `.tweet` rule stopped matching and the
+    // card lost its background, border, padding and rounding in one go.
+    expect(namespaceCss('#workskin .tweets .tweet{padding:1em;}', 'twitter'))
+      .toBe('#workskin .tweets.twitter .tweet{padding:1em;}');
+  });
+
+  test('the container-class list matches the markup actually emitted', () => {
+    // CONTAINER_CLASSES is hand-maintained and fails silently when it falls
+    // behind, so it is checked against buildHTML rather than trusted.
+    for (const template of ['ios', 'android', 'twitter', 'google'] as const) {
+      const p = defaultProject();
+      p.template = template;
+      const classes = buildWorkSkin(p).html.match(/<div class="([^"]*)"/)![1].split(/\s+/);
+      for (const cls of classes) {
+        if (cls === template) continue; // the platform class itself
+        expect(CONTAINER_CLASSES, `${template}: the container carries .${cls}, which namespaceCss does not know about`)
+          .toContain(cls);
+      }
+    }
+  });
+
+  test('.chat-messages is not .chat', () => {
+    // The trap this transform is most likely to be "simplified" back into: a
+    // bare startsWith('.chat') yields `.chat.ios-messages`, a class that exists
+    // nowhere, and the rule stops matching with nothing to show for it.
+    expect(namespaceCss('#workskin .chat-messages{padding:0;}', 'android'))
+      .toBe('#workskin .chat.android .chat-messages{padding:0;}');
+    expect(namespaceCss('#workskin .chat-header .contact-name{font-weight:600;}', 'ios'))
+      .toBe('#workskin .chat.ios .chat-header .contact-name{font-weight:600;}');
+  });
+
+  test('rewrites every arm of a grouped selector', () => {
+    expect(namespaceCss('#workskin dd.bubble strong,#workskin dd.bubble b{font-weight:700;}', 'ios'))
+      .toBe('#workskin .chat.ios dd.bubble strong,#workskin .chat.ios dd.bubble b{font-weight:700;}');
+  });
+
+  test('strips comments first, so a selector capture cannot swallow one', () => {
+    // The prototype lost seven rules to exactly this. Capturing backwards from
+    // `{` takes the preceding comment with it, and the resulting selector
+    // matches nothing.
+    const out = namespaceCss('/* a note */\n#workskin .row{display:flex;}', 'android');
+    expect(out).not.toContain('note');
+    expect(out.trim()).toBe('#workskin .chat.android .row{display:flex;}');
+  });
+
+  test('refuses a selector it cannot scope rather than passing it through', () => {
+    // An un-scoped rule in a master skin applies to all four platforms — the
+    // exact failure namespacing exists to prevent, and silent if we let it by.
+    expect(() => namespaceCss('body{margin:0;}', 'ios')).toThrow(/not scoped/);
+  });
+
+  test('scopes every rule of every real stylesheet, and stays legal', () => {
+    for (const template of ['ios', 'android', 'twitter', 'google'] as const) {
+      const p = defaultProject();
+      p.template = template;
+      // The EXPORT's CSS, not buildCSS's. Namespacing goes last, after
+      // absolutizeCssAssets — Android's header and footer reach buildCSS as
+      // `url('/assets/…')`, which AO3 refuses outright, so a master skin built
+      // from the raw stylesheet would be rejected in full. Ordering, not a
+      // detail: this test caught it by being written the wrong way round.
+      const namespaced = namespaceCss(buildWorkSkin(p).css, template);
+
+      const selectors = [...namespaced.matchAll(/([^{}]+)\{[^{}]*\}/g)]
+        .flatMap((m) => m[1].split(',').map((s) => s.trim()))
+        .filter(Boolean);
+      expect(selectors.length, `${template}: found no rules`).toBeGreaterThan(40);
+      for (const sel of selectors) {
+        // The platform class must sit in the FIRST compound — anywhere later
+        // and the rule can reach outside its own block. Its position within
+        // that compound does not matter (`.chat.css-tails.ios` is the same
+        // selector as `.chat.ios.css-tails`), so this asserts the containment
+        // rather than a spelling.
+        const first = /^#workskin\s+([^\s>+~]+)/.exec(sel);
+        expect(first, `${template}: ${sel} is not rooted at #workskin`).not.toBeNull();
+        expect(first![1].split('.').slice(1), `${template}: ${sel} escaped its platform`)
+          .toContain(template);
+      }
+
+      // Namespacing must not cost the skin its legality — AO3 refuses the whole
+      // thing over one bad selector just as it does over one bad property.
+      expect(lintAo3Css(namespaced, 'work'), `${template}: namespaced CSS is illegal`).toEqual([]);
+    }
+  });
+
+  test('the container carries the class the namespaced CSS aims at', () => {
+    for (const template of ['ios', 'android', 'twitter', 'google'] as const) {
+      const p = defaultProject();
+      p.template = template;
+      expect(buildHTML(p), `${template}: container is missing its platform class`)
+        .toMatch(new RegExp(`<div class="chat ${template}[ "]`));
+    }
   });
 });

@@ -118,7 +118,13 @@ function absolutizeCssAssets(css: string): string {
  */
 function useCssBubbleTails(html: string): string {
   const withoutSvg = html.replace(/<svg\b[^>]*class="[^"]*bubble-tail[^"]*"[\s\S]*?<\/svg>/g, '');
-  return withoutSvg === html ? html : withoutSvg.replace('<div class="chat"', '<div class="chat css-tails"');
+  if (withoutSvg === html) return html;
+  // Appends to whatever the container already carries rather than matching the
+  // exact string `class="chat"`, which stopped existing when `buildHTML` began
+  // emitting the platform class. That version failed silently and in one
+  // direction only: the SVGs still went, the `.css-tails` class never arrived,
+  // and iOS shipped with no bubble tails at all.
+  return withoutSvg.replace(/(<div class="chat\b[^"]*)"/, '$1 css-tails"');
 }
 
 /**
@@ -208,6 +214,115 @@ function stripExportComments(css: string): string {
     .split('\n')
     .filter((line) => line.trim().length > 0)
     .join('\n');
+}
+
+/**
+ * Scope a platform's stylesheet to `.chat.<platform>`, so four of them can
+ * share one skin without colliding.
+ *
+ * ```text
+ * #workskin .chat            ->  #workskin .chat.ios
+ * #workskin .chat.css-tails  ->  #workskin .chat.css-tails.ios
+ * #workskin .tweets          ->  #workskin .tweets.twitter
+ * #workskin dd.bubble        ->  #workskin .chat.ios dd.bubble
+ * ```
+ *
+ * This is MASTER §6a, phase 2. It is not used by the single-platform export —
+ * that ships un-namespaced, byte for byte as before — and exists for
+ * `buildMasterWorkSkin` to call once per platform. The matching platform class
+ * *is* already emitted by `buildHTML`, where it is inert until this runs.
+ *
+ * ## Why it is worth the trouble
+ *
+ * 290 rules across four stylesheets, 223 distinct selectors, 63 of them shared
+ * by two or more platforms — and only 25 that actually conflict, 24 of which
+ * are iOS versus Android both building on `dd.bubble`. Namespacing turns that
+ * from a merge problem into a mechanical rewrite.
+ *
+ * ## The four things that make it non-trivial
+ *
+ * - **A selector already rooted at the container must be tightened, not
+ *   nested.** `.chat` and `.tweets` are classes on the *same element*, so
+ *   `#workskin .tweets .tweet` cannot become `#workskin .chat.twitter .tweets
+ *   .tweet` — that asks for `.tweets` inside itself and matches nothing. Every
+ *   `.tweet` rule silently lost its box, its background and its border, which
+ *   is why `CONTAINER_CLASSES` exists and why a test cross-checks it against
+ *   the markup `buildHTML` actually emits.
+ * - **`.chat-header` and `.chat-messages` are not `.chat`.** A naive
+ *   `startsWith('.chat')` produces `#workskin .chat.ios-messages`, a class that
+ *   exists nowhere, and the rule silently stops matching. Hence the compound is
+ *   parsed rather than string-matched. This is the bug this function is most
+ *   likely to be "simplified" back into.
+ * - **Comments must go first.** A selector capture that runs backwards from `{`
+ *   swallows any preceding comment into the selector. That cost the prototype
+ *   seven rules, and it is the fourth thing in this codebase to get it wrong —
+ *   see `stripCssComments`, which exists for exactly this reason.
+ * - **Specificity does not rise uniformly.** A rule already rooted at `.chat`
+ *   gains one class; every other rule gains two. Rules that previously tied can
+ *   therefore swap order, which no lint can see — so the guarantee this carries
+ *   is a rendering one, measured in `tests/namespace.spec.ts` by diffing every
+ *   computed style rather than reasoned about here.
+ *
+ * Throws rather than passing through a selector it cannot scope: an un-scoped
+ * rule in a master skin would apply to all four platforms at once, which is
+ * precisely the failure this exists to prevent, and silence is how it would
+ * reach a published fic.
+ */
+export function namespaceCss(css: string, platform: WorkSkinTemplate): string {
+  return stripCssComments(css).replace(
+    /([^{}]*)(\{[^{}]*\})/g,
+    (_whole, selectorList: string, body: string) => {
+      const lead = /^\s*/.exec(selectorList)![0];
+      const list = selectorList.slice(lead.length);
+      if (!list.trim()) return lead + body;
+      const scoped = list
+        .split(',')
+        .map((one) => namespaceSelector(one.trim(), platform))
+        .join(',');
+      return lead + scoped + body;
+    }
+  );
+}
+
+const ROOT = '#workskin';
+
+/**
+ * Every class `buildHTML` puts on the conversation container itself, plus the
+ * one `useCssBubbleTails` adds on the export path.
+ *
+ * A selector whose first compound is made only of these targets the container,
+ * so the platform class joins that compound instead of becoming an ancestor of
+ * it. Miss one and its rules stop matching, silently — `.tweets` did exactly
+ * that, and took every `.tweet` rule with it.
+ *
+ * Exported so `work-skin.unit.spec.ts` can check it against the markup that is
+ * actually emitted, rather than trusting this list to be kept up to date.
+ */
+export const CONTAINER_CLASSES: readonly string[] = ['chat', 'tweets', 'css-tails'];
+
+function namespaceSelector(selector: string, platform: WorkSkinTemplate): string {
+  if (!selector.startsWith(ROOT)) {
+    throw new Error(`namespaceCss: selector is not scoped to ${ROOT}: ${selector}`);
+  }
+  const rest = selector.slice(ROOT.length).trim();
+  if (!rest) return `${ROOT} .chat.${platform}`;
+
+  const compound = /^[^\s>+~]+/.exec(rest)![0];
+  if (isContainerCompound(compound)) {
+    return `${ROOT} ${compound}.${platform}${rest.slice(compound.length)}`;
+  }
+  return `${ROOT} .chat.${platform} ${rest}`;
+}
+
+/** True only for a compound built purely of the container's own classes. */
+function isContainerCompound(compound: string): boolean {
+  const parts = compound.split('.');
+  // A leading element, id or anything else means this is not the container —
+  // and it keeps `.result-title:hover` out, since the pseudo-class travels with
+  // the class name and will not be in the list.
+  if (parts[0] !== '') return false;
+  const classes = parts.slice(1);
+  return classes.length > 0 && classes.every((c) => CONTAINER_CLASSES.includes(c));
 }
 
 export function buildWorkSkin(project: SkinProject): WorkSkinExport {

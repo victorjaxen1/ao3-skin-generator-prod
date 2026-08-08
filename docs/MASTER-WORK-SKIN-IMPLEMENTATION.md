@@ -185,7 +185,11 @@ docs since the export shipped.
 
 ## 6. Design
 
-### 6a. Namespacing
+### 6a. Namespacing — **done, 8 Aug 2026**
+
+`namespaceCss(css, platform)` and `CONTAINER_CLASSES` are in `workSkin.ts`;
+`buildHTML` emits the platform class; `tests/namespace.spec.ts` is the
+PNG-unchanged check. **What the plan below got wrong is recorded in 6a-i.**
 
 Add a platform class to the container in `buildHTML` — `.chat.ios`,
 `.chat.android`, `.chat.twitter`, `.chat.google` — and rewrite every selector:
@@ -208,6 +212,40 @@ Two things to get right:
   raises specificity uniformly, so relative precedence is unchanged — but verify
   the PNG the same way the `em` conversion was verified (§9b), by comparing
   computed values rather than by eye.
+
+### 6a-i. What the plan above got wrong (8 Aug 2026)
+
+Both bullets were right. The transform was still wrong twice, and only the
+render diff could see either.
+
+- **"`.chat` roots the selector" is not the rule — the *container's classes*
+  do.** The tweet container is `class="chat twitter tweets"`, so `.chat` and
+  `.tweets` are the **same element**. Prefixing turned `#workskin .tweets
+  .tweet` into `#workskin .chat.twitter .tweets .tweet`, which asks for
+  `.tweets` inside itself and matches nothing: every `.tweet` rule lost its
+  background, border, padding and rounding at once. Hence `CONTAINER_CLASSES`
+  (`chat`, `tweets`, `css-tails`), a compound parser rather than a
+  `startsWith`, and a unit test that checks that list against the markup
+  `buildHTML` actually emits — because the list is hand-maintained and fails
+  silently when it falls behind.
+- **"Adding a class raises specificity uniformly" is false.** A rule already
+  rooted at the container gains **one** class; every other rule gains **two**.
+  Rules that previously tied, and were therefore decided by source order, can
+  swap. Nothing static can see it, which is exactly why the check has to be a
+  rendering one. (In the event, nothing swapped — but that is a measurement,
+  not a deduction.)
+- **Namespacing goes last, after `absolutizeCssAssets`.** Android reaches
+  `buildCSS` with `url('/assets/…')`, which AO3 refuses outright, so a master
+  skin assembled from raw `buildCSS` output would be rejected in full. Caught
+  by writing the test the wrong way round.
+- **A blocked image is not a fixed-size box.** The harness originally aborted
+  image requests, on the sound-looking grounds that every `img` we emit carries
+  width and height. But Chrome sizes the broken-image placeholder when the
+  failure lands, which is not fixed relative to the load event, so two
+  *identical* renders differed by 6.69px on Google — the only platform with a
+  single decisive image. That reads exactly like a real namespacing bug. Stub
+  images with a 1x1 PNG instead of aborting them; it is deterministic and still
+  never touches the network.
 
 ### 6b. Theming — enumerate the variants, don't bake one
 
@@ -285,10 +323,10 @@ stale skin if the user pastes their saved CSS back in.
 
 | Phase | Deliverable |
 | --- | --- |
-| 0 | **Fix Google's multi-line HTML** (§4) and add the no-newline test. Independent of everything else, and a live bug |
-| 1 | `stripCssComments()` in `ao3Css.ts`, used by the lint and the namespacer |
-| 2 | `namespaceCss(css, platform)` + platform class in `buildHTML`, with a PNG-unchanged check |
-| 3 | `buildMasterWorkSkin(project)` — shared block, four namespaced blocks, version rule |
+| 0 | ✅ **done.** **Fix Google's multi-line HTML** (§4) and add the no-newline test. Independent of everything else, and a live bug |
+| 1 | ✅ **done.** `stripCssComments()` in `ao3Css.ts`, used by the lint and the namespacer |
+| 2 | ✅ **done, 8 Aug 2026.** `namespaceCss(css, platform)` + platform class in `buildHTML`, with a PNG-unchanged check — `tests/namespace.spec.ts`, which diffs every computed style on every element, with and without the class and with and without the rewrite, under paragraph injection as well. Two bugs it caught are in §6a-i |
+| 3 | ⬅ **next.** `buildMasterWorkSkin(project)` — shared block, four namespaced blocks, version rule |
 | 4 | Dedupe the 38 rules that are byte-identical across platforms (`.visually-hidden`, the `dd.bubble` text formatting) |
 | 5 | Export UI: "one skin for everything" vs "just this platform", and the §9f copy fixes — one skin per work, globally unique titles |
 | 6 | **Save it on real AO3** and settle §5 |

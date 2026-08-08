@@ -7,9 +7,10 @@ what to do next.
 **Last reconciled: 8 Aug 2026.** Everything shipped up to commit `c30f97b`
 (iOS and Android work skins) is excluded.
 
-**Next up: item 6**, the first link in the master-skin chain (6 → 7 → 8 → 9 → 10).
-Item 8 is the one 5b was done for, and it is now cheap — but it needs 6 and 7
-underneath it first.
+**Next up: item 7**, `buildMasterWorkSkin`. Item 6 landed on 8 Aug 2026, so the
+namespacer and the platform class exist and are proven not to change a pixel;
+7 assembles them into one skin. Item 8 is what 5b was done for and is cheap once
+7 lands.
 
 **Items 5, 2d, 5a and 5b closed 7–8 Aug 2026.** The export-dialog copy; the
 site-skin export going comment-free once the instruction it carried had a better
@@ -113,11 +114,11 @@ unit tests all passed straight through these. Render it and look at it.
 Ordered; each depends on the one above. Items 1–3 above should land first.
 
 **This is the live chain now** — everything above it is closed except 5c and the
-opt-in features. Start at 6.
+opt-in features. 6 is done; start at 7.
 
 | # | Task | Where |
 | --- | --- | --- |
-| 6 | `namespaceCss(css, platform)` + platform class on `.chat` in `buildHTML`, with a PNG-unchanged check. **The 5b guard is the PNG-unchanged check**: snapshot `buildCSS`+`buildHTML` wide, refactor, require byte-identical (WORK-SKIN §10b) | MASTER §6a |
+| 6 | ✅ **done, 8 Aug 2026.** `namespaceCss(css, platform)` and `CONTAINER_CLASSES` in `workSkin.ts`; `buildHTML` emits `class="chat <platform>"` on every path. The PNG-unchanged check is `tests/namespace.spec.ts` — every computed style on every element, diffed three ways (class alone, rewrite alone, both under paragraph injection). **It caught two real bugs**: `.tweets` is a class on the container beside `.chat`, so prefixing made every `.tweet` rule match nothing; and namespacing must run *after* `absolutizeCssAssets` or Android's `url('/assets/…')` gets the whole skin refused. Both in MASTER §6a-i, along with why a blocked image made the harness flaky | MASTER §6a |
 | 7 | `buildMasterWorkSkin(project)` — shared block, four namespaced blocks, a version rule (a comment cannot carry it; AO3 deletes comments) | MASTER §6c, §7 |
 | 8 | Light/dark variant classes per platform — **5b is done, so both palettes are reachable as data and the override block can be *derived* by diffing `light` against `dark` rather than hand-written** | MASTER §6b, KNOWLEDGE §18 |
 | 9 | Dedupe the 38 byte-identical shared rules | MASTER §7 |
