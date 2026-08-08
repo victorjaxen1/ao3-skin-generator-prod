@@ -25,11 +25,45 @@ function hexToRgba(hex: string, alpha: number): string {
  * radius resolve against 0.9 x the bubble, not the bubble. `pre` and the block
  * elements resolve against the bubble itself.
  */
+/**
+ * COLOUR LIVES IN A TABLE, NOT IN THE RULE BODIES. This is the first of four
+ * such tables — one per stylesheet, plus this shared block — and the convention
+ * is the same in all of them:
+ *
+ *   - both variants sit side by side, so light and dark are readable against
+ *     each other rather than being twenty separate ternaries;
+ *   - the builder resolves the theme exactly once, into `colour`;
+ *   - **no rule body mentions `isDark`.** That is the invariant. `grep isDark`
+ *     inside a template literal should return nothing.
+ *
+ * The reason is not tidiness. Night mode in the canonical community skin is
+ * *five rules*, because its base stylesheet defines structure only and colour
+ * is layered on top. Ours bakes one theme throughout, which is why a quarter to
+ * a third of our rules are settings-dependent. With both palettes reachable as
+ * data, a dark override block can be *derived* by diffing the two — which is
+ * what makes the master skin's light/dark variants a handful of rules per
+ * platform instead of a doubled stylesheet. See WORK-SKIN §10b, KNOWLEDGE §18.
+ *
+ * The compiled CSS must not move a byte when you edit these tables. If it does,
+ * you changed a colour by accident.
+ */
+const TEXT_FORMATTING_COLOURS = {
+  light: {
+    codeBlockBg: 'rgba(0,0,0,0.05)',
+    codeBorder: 'rgba(0,0,0,0.1)',
+    blockquoteBorder: 'rgba(0,0,0,0.3)',
+    blockquoteBg: 'rgba(0,0,0,0.03)',
+  },
+  dark: {
+    codeBlockBg: 'rgba(255,255,255,0.1)',
+    codeBorder: 'rgba(255,255,255,0.15)',
+    blockquoteBorder: 'rgba(255,255,255,0.4)',
+    blockquoteBg: 'rgba(255,255,255,0.05)',
+  },
+} as const;
+
 function getTextFormattingCSS(isDark: boolean = false, bubbleFontPx: number = 15): string {
-  const codeBlockBg = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)';
-  const codeBorder = isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.1)';
-  const blockquoteBorder = isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.3)';
-  const blockquoteBg = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)';
+  const colour = TEXT_FORMATTING_COLOURS[isDark ? 'dark' : 'light'];
 
   const b = (px: number) => emFromPx(px, bubbleFontPx);        // against the bubble
   const c = (px: number) => emFromPx(px, bubbleFontPx * 0.9);  // against `code`, at 0.9em
@@ -38,10 +72,10 @@ function getTextFormattingCSS(isDark: boolean = false, bubbleFontPx: number = 15
 #workskin dd.bubble strong,#workskin dd.bubble b{font-weight:700;}
 #workskin dd.bubble em,#workskin dd.bubble i{font-style:italic;}
 #workskin dd.bubble s,#workskin dd.bubble strike,#workskin dd.bubble del{text-decoration:line-through;}
-#workskin dd.bubble code{font-family:'SF Mono','Menlo','Monaco','Consolas',monospace;font-size:0.9em;background:${codeBlockBg};padding:${c(2)} ${c(5)};border-radius:${c(4)};border:1px solid ${codeBorder};}
+#workskin dd.bubble code{font-family:'SF Mono','Menlo','Monaco','Consolas',monospace;font-size:0.9em;background:${colour.codeBlockBg};padding:${c(2)} ${c(5)};border-radius:${c(4)};border:1px solid ${colour.codeBorder};}
 #workskin dd.bubble pre{margin:${b(8)} 0;padding:0;}
 #workskin dd.bubble pre code{display:block;padding:${c(8)} ${c(10)};white-space:pre-wrap;word-break:break-word;border-radius:${c(6)};}
-#workskin dd.bubble blockquote{margin:${b(6)} 0;padding:${b(4)} 0 ${b(4)} ${b(10)};border-left:3px solid ${blockquoteBorder};background:${blockquoteBg};font-style:italic;}
+#workskin dd.bubble blockquote{margin:${b(6)} 0;padding:${b(4)} 0 ${b(4)} ${b(10)};border-left:3px solid ${colour.blockquoteBorder};background:${colour.blockquoteBg};font-style:italic;}
 #workskin dd.bubble ul,#workskin dd.bubble ol{margin:${b(6)} 0;padding-left:${b(20)};}
 #workskin dd.bubble li{margin:${b(2)} 0;}
 #workskin dd.bubble ul{list-style-type:disc;}
@@ -901,34 +935,82 @@ export function buildHTML(project: SkinProject): string {
   return `<div class="chat">${body}</div>`;
 }
 
+/**
+ * iOS colour, both themes side by side. See TEXT_FORMATTING_COLOURS for why.
+ *
+ * `recvBg` is a *parameter* rather than two more table entries because
+ * `receiverBubbleBg` and `typingBubbleBg` are not theme colours at all: in
+ * light mode they are whatever bubble colour reaches this builder, and dark
+ * mode overrides both with a fixed near-black. A static table would silently
+ * freeze that. (Today `buildCSS` pins iOS's received bubble to #E9E9EB for both
+ * iMessage and SMS, so the value is constant in practice — the parameter keeps
+ * the builder honest if that ever stops being true.)
+ *
+ * The four light-mode entries ending in `rgba(60,60,67,·)` are the ones that
+ * were wrong until 7 Aug 2026 — see the note on `dd.status-indicator` below.
+ */
+function iosColours(recvBg: string) {
+  return {
+    light: {
+      chatBg: '#fff',
+      messagesBg: '#fff',
+      headerLabelBg: '#fff',
+      headerLabelColor: '#86868b',
+      contactNameColor: '#000',
+      statusBarBg: '#f6f6f6',
+      statusBarColor: '#000',
+      statusBarBorder: '#e0e0e0',
+      timeBreakColor: '#86868b',
+      receiverBubbleBg: recvBg,
+      receiverTextColor: '#000',
+      receiverTimeColor: 'rgba(0,0,0,0.55)',
+      typingBubbleBg: recvBg,
+      inputBarBg: '#f6f6f6',
+      inputBarBorder: '#e0e0e0',
+      inputFieldBg: '#fff',
+      inputFieldBorder: '#c7c7cc',
+      inputPlaceholderColor: '#86868b',
+      senderNameColor: 'rgba(60,60,67,0.6)',
+      statusIndicatorColor: 'rgba(60,60,67,0.6)',
+      typingDotBg: 'rgba(60,60,67,0.6)',
+      typingLabelColor: 'rgba(60,60,67,0.6)',
+    },
+    dark: {
+      chatBg: '#000000',
+      messagesBg: '#000000',
+      headerLabelBg: '#1c1c1e',
+      headerLabelColor: '#8e8e93',
+      contactNameColor: '#fff',
+      statusBarBg: '#1c1c1e',
+      statusBarColor: '#fff',
+      statusBarBorder: '#38383a',
+      timeBreakColor: '#8e8e93',
+      receiverBubbleBg: '#262628',
+      receiverTextColor: '#fff',
+      receiverTimeColor: 'rgba(255,255,255,0.55)',
+      typingBubbleBg: '#262628',
+      inputBarBg: '#1c1c1e',
+      inputBarBorder: '#38383a',
+      inputFieldBg: '#2c2c2e',
+      inputFieldBorder: '#48484a',
+      inputPlaceholderColor: '#636366',
+      senderNameColor: 'rgba(255,255,255,0.5)',
+      statusIndicatorColor: 'rgba(255,255,255,0.45)',
+      typingDotBg: 'rgba(255,255,255,0.6)',
+      typingLabelColor: 'rgba(255,255,255,0.5)',
+    },
+  };
+}
+
 function buildIOSCSS(s: SkinProject['settings'], senderBg: string, recvBg: string, neutralBg: string, maxWidth: number): string {
   const isDark = s.iosDarkMode;
-  
-  // iOS Dark Mode color scheme
-  const chatBg = isDark ? '#000000' : '#fff';
-  const messagesBg = isDark ? '#000000' : '#fff';
-  const headerLabelBg = isDark ? '#1c1c1e' : '#fff';
-  const headerLabelColor = isDark ? '#8e8e93' : '#86868b';
-  const contactNameColor = isDark ? '#fff' : '#000';
-  const statusBarBg = isDark ? '#1c1c1e' : '#f6f6f6';
-  const statusBarColor = isDark ? '#fff' : '#000';
-  const statusBarBorder = isDark ? '#38383a' : '#e0e0e0';
-  const timeBreakColor = isDark ? '#8e8e93' : '#86868b';
-  const receiverBubbleBg = isDark ? '#262628' : recvBg;
-  const receiverTextColor = isDark ? '#fff' : '#000';
-  const receiverTimeColor = isDark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.55)';
-  const typingBubbleBg = isDark ? '#262628' : recvBg;
-  const inputBarBg = isDark ? '#1c1c1e' : '#f6f6f6';
-  const inputBarBorder = isDark ? '#38383a' : '#e0e0e0';
-  const inputFieldBg = isDark ? '#2c2c2e' : '#fff';
-  const inputFieldBorder = isDark ? '#48484a' : '#c7c7cc';
-  const inputPlaceholderColor = isDark ? '#636366' : '#86868b';
-  
+  const colour = iosColours(recvBg)[isDark ? 'dark' : 'light'];
+
   const headerBg = s.iosHeaderImageUrl ? `background:url('${s.iosHeaderImageUrl}') no-repeat top center;background-size:100% auto;` : 'background:#007aff;';
-  const footerBg = s.iosFooterImageUrl ? `background:url('${s.iosFooterImageUrl}') no-repeat bottom center;background-size:100% auto;` : `background:${inputBarBg};`;
-  
+  const footerBg = s.iosFooterImageUrl ? `background:url('${s.iosFooterImageUrl}') no-repeat bottom center;background-size:100% auto;` : `background:${colour.inputBarBg};`;
+
     return `/* Generated with AO3 Skin Generator - Free forever! https://wordfokus.com/ao3skingen */
-#workskin .chat{width:100%;max-width:${emFromPx(Math.min(maxWidth, 375))};min-width:20em;margin:0 auto;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;padding:0;background:${chatBg};}
+#workskin .chat{width:100%;max-width:${emFromPx(Math.min(maxWidth, 375))};min-width:20em;margin:0 auto;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;padding:0;background:${colour.chatBg};}
 ${PARAGRAPH_RESET_CSS}
 #workskin .ios-header{position:relative;${headerBg}height:4.063em;display:flex;align-items:center;padding:0;overflow:hidden;}
 #workskin .ios-header-avatar{position:absolute;left:4.063em;top:50%;transform:translateY(-50%);width:2.375em;height:2.375em;border-radius:50%;overflow:hidden;border:2px solid rgba(255,255,255,0.3);}
@@ -940,7 +1022,7 @@ ${PARAGRAPH_RESET_CSS}
    calc() is genuinely absent from AO3's value grammar, and this one bought
    nothing, so it goes rather than being approximated. */
 #workskin .ios-header-name{position:absolute;left:7.467em;right:4.333em;top:0;bottom:0;display:flex;align-items:center;font-size:0.938em;font-weight:600;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,0.4);line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-#workskin .ios-status-bar{background:${statusBarBg};padding:0.429em 1.143em 0.286em 1.143em;display:flex;justify-content:space-between;align-items:center;font-size:0.875em;font-weight:600;color:${statusBarColor};border-bottom:1px solid ${statusBarBorder};}
+#workskin .ios-status-bar{background:${colour.statusBarBg};padding:0.429em 1.143em 0.286em 1.143em;display:flex;justify-content:space-between;align-items:center;font-size:0.875em;font-weight:600;color:${colour.statusBarColor};border-bottom:1px solid ${colour.statusBarBorder};}
 /* Same trick as the Twitter metrics row, and for the same reason: AO3 collapses
    signal / time / battery into one paragraph, which becomes the only flex item.
    Measured before this rule existed — the bar grew 32px to 50px, the time lost
@@ -953,11 +1035,11 @@ ${PARAGRAPH_RESET_CSS}
 #workskin .ios-status-bar .status-icons{display:flex;align-items:center;font-size:0.857em;}
 #workskin .ios-status-bar .status-icons > *{margin-left:0.333em;}
 #workskin .ios-status-bar .status-icons > *:first-child{margin-left:0;}
-#workskin .chat-header{text-align:center;font-size:0.813em;color:${headerLabelColor};padding:0.615em 0.923em 0.462em 0.923em;margin-bottom:0.308em;font-weight:400;background:${headerLabelBg};}
-#workskin .chat-header .to-label{font-weight:400;color:${headerLabelColor};margin-right:0.308em;}
-#workskin .chat-header .contact-name{font-weight:600;color:${contactNameColor};display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-#workskin .chat-messages{padding:0.75em 0.5em;background:${messagesBg};}
-#workskin .time-break{text-align:center;font-size:0.688em;color:${timeBreakColor};margin:1.091em 0 0.727em 0;font-weight:500;}
+#workskin .chat-header{text-align:center;font-size:0.813em;color:${colour.headerLabelColor};padding:0.615em 0.923em 0.462em 0.923em;margin-bottom:0.308em;font-weight:400;background:${colour.headerLabelBg};}
+#workskin .chat-header .to-label{font-weight:400;color:${colour.headerLabelColor};margin-right:0.308em;}
+#workskin .chat-header .contact-name{font-weight:600;color:${colour.contactNameColor};display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#workskin .chat-messages{padding:0.75em 0.5em;background:${colour.messagesBg};}
+#workskin .time-break{text-align:center;font-size:0.688em;color:${colour.timeBreakColor};margin:1.091em 0 0.727em 0;font-weight:500;}
 #workskin .row{display:flex;margin:0 0 0 -0.375em;align-items:flex-end;flex-wrap:wrap;width:100%;}
 #workskin .row > *{margin-left:0.375em;}
 #workskin .row.single{margin:0.75em 0;}
@@ -974,7 +1056,7 @@ ${PARAGRAPH_RESET_CSS}
 /* was calc(70% - 36px). At the 375px card that resolves to 60.4%, and this is
    an ellipsised label rather than a load-bearing width, so a flat percentage is
    the honest approximation. See the note on .ios-header-name. */
-#workskin dt.sender{font-size:0.688em;color:${isDark ? 'rgba(255,255,255,0.5)' : 'rgba(60,60,67,0.6)'};margin:0.545em 0 0.182em 3.273em;font-weight:500;max-width:60%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#workskin dt.sender{font-size:0.688em;color:${colour.senderNameColor};margin:0.545em 0 0.182em 3.273em;font-weight:500;max-width:60%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 #workskin dd{margin:0;}
 #workskin dd.bubble{position:relative;display:inline-block;min-width:0;max-width:17.333em;padding:0.533em 0.8em;border-radius:1.2em;line-height:1.35;font-size:0.938em;white-space:normal;word-break:keep-all;overflow-wrap:anywhere;}
 #workskin dd.bubble.image-bubble{padding:0.533em 0.8em;max-width:60%;overflow:visible;}
@@ -986,11 +1068,11 @@ ${PARAGRAPH_RESET_CSS}
 #workskin dd.bubble.out{background:${senderBg};color:#fff;border-bottom-right-radius:0.267em;}
 #workskin dd.bubble.out .bubble-tail{display:none;}
 #workskin dd.bubble.out.has-tail .bubble-tail-out{display:block;position:absolute;right:-0.533em;bottom:-0.067em;color:${senderBg};}
-#workskin dd.bubble.in{background:${receiverBubbleBg};color:${receiverTextColor};border-bottom-left-radius:0.267em;}
+#workskin dd.bubble.in{background:${colour.receiverBubbleBg};color:${colour.receiverTextColor};border-bottom-left-radius:0.267em;}
 #workskin dd.bubble.in .bubble-tail{display:none;}
 /* pointer-events dropped from both tail rules — not on AO3's property list, and
    purely defensive: the tails are decorative and sit outside the bubble's text. */
-#workskin dd.bubble.in.has-tail .bubble-tail-in{display:block;position:absolute;left:-0.533em;bottom:-0.067em;color:${receiverBubbleBg};}
+#workskin dd.bubble.in.has-tail .bubble-tail-in{display:block;position:absolute;left:-0.533em;bottom:-0.067em;color:${colour.receiverBubbleBg};}
 /* TWO WAYS TO DRAW THE SAME TAIL, and both are needed.
    The SVG above is for the PNG: html2canvas cannot rasterise ::before/::after,
    which is the only reason an inline <svg> is in the markup at all.
@@ -1005,9 +1087,9 @@ ${PARAGRAPH_RESET_CSS}
    single-quoted form is the one we have actually watched survive the sanitizer
    intact. No reason to run two conventions. */
 #workskin .chat.css-tails dd.bubble.out.has-tail::after{content:'';position:absolute;right:-0.4em;bottom:0;width:0.533em;height:1.067em;border-right:8px solid ${senderBg};border-bottom-right-radius:1.067em 0.533em;}
-#workskin .chat.css-tails dd.bubble.in.has-tail::after{content:'';position:absolute;left:-0.4em;bottom:0;width:0.533em;height:1.067em;border-left:8px solid ${receiverBubbleBg};border-bottom-left-radius:1.067em 0.533em;}
+#workskin .chat.css-tails dd.bubble.in.has-tail::after{content:'';position:absolute;left:-0.4em;bottom:0;width:0.533em;height:1.067em;border-left:8px solid ${colour.receiverBubbleBg};border-bottom-left-radius:1.067em 0.533em;}
 #workskin dd.bubble.out .time{display:block;font-size:0.733em;color:rgba(255,255,255,0.65);margin-top:0.545em;font-weight:400;}
-#workskin dd.bubble.in .time{display:block;font-size:0.733em;color:${receiverTimeColor};margin-top:0.545em;font-weight:400;}
+#workskin dd.bubble.in .time{display:block;font-size:0.733em;color:${colour.receiverTimeColor};margin-top:0.545em;font-weight:400;}
 #workskin dd.bubble.image-bubble .time.image-time{position:absolute;bottom:0.727em;right:0.727em;margin:0;background:rgba(0,0,0,0.6);padding:0.182em 0.545em;border-radius:0.909em;font-size:0.733em;color:#fff;}
 #workskin dd.bubble .reaction{position:absolute;bottom:-0.625em;right:0.5em;background:rgba(44,44,46,0.95);border:1.5px solid rgba(255,255,255,0.1);border-radius:0.875em;padding:0.188em 0.5em;font-size:1.067em;box-shadow:0 2px 8px rgba(0,0,0,0.3);}
 /* LIGHT-MODE COLOUR, and it was wrong until 7 Aug 2026. This and three sibling
@@ -1017,7 +1099,7 @@ ${PARAGRAPH_RESET_CSS}
    painting near-white text on a white page. A real AO3 render showed "Read" as
    barely-there grey, and in light mode the typing dots and label were invisible
    outright. rgba(60,60,67,·) is the light-mode counterpart. */
-#workskin dd.status-indicator{font-size:0.625em;color:${isDark ? 'rgba(255,255,255,0.45)' : 'rgba(60,60,67,0.6)'};text-align:right;margin:0.2em 1em 0 0;font-weight:400;}
+#workskin dd.status-indicator{font-size:0.625em;color:${colour.statusIndicatorColor};text-align:right;margin:0.2em 1em 0 0;font-weight:400;}
 #workskin dd.attach{margin-top:0.125em;}
 #workskin img.attach-img{max-width:13.75em;border-radius:0.75em;display:block;}
 #workskin .row.typing{align-items:center;margin-left:-0.375em;}
@@ -1031,7 +1113,7 @@ ${PARAGRAPH_RESET_CSS}
    inline-block makes the size stick whether or not anything blockifies them,
    and the margin moves to a descendant selector so an injected <p> cannot
    intercept it. */
-#workskin .typing-bubble{background:${typingBubbleBg};padding:0.625em 0.875em;border-radius:1.125em;display:inline-block;line-height:0;border-bottom-left-radius:0.25em;}
+#workskin .typing-bubble{background:${colour.typingBubbleBg};padding:0.625em 0.875em;border-radius:1.125em;display:inline-block;line-height:0;border-bottom-left-radius:0.25em;}
 /* NOTE ON THE TYPING DOTS. Static, with the three dots at descending opacity —
    no animation, because AO3 allows neither the animation property nor
    @keyframes, and refuses the whole skin over either.
@@ -1042,16 +1124,16 @@ ${PARAGRAPH_RESET_CSS}
    Do not delete the :nth-child rules to "simplify" — a rule left with no
    declarations is an AO3 error, not a no-op, which is exactly how the
    animation-delay versions of these two failed. */
-#workskin .typing-bubble .dot{display:inline-block;vertical-align:middle;width:0.5em;height:0.5em;margin-left:0.25em;background:${isDark ? 'rgba(255,255,255,0.6)' : 'rgba(60,60,67,0.6)'};border-radius:50%;opacity:0.4;}
+#workskin .typing-bubble .dot{display:inline-block;vertical-align:middle;width:0.5em;height:0.5em;margin-left:0.25em;background:${colour.typingDotBg};border-radius:50%;opacity:0.4;}
 #workskin .typing-bubble .dot:first-child{margin-left:0;}
 #workskin .typing-bubble .dot:nth-child(1){opacity:0.85;}
 #workskin .typing-bubble .dot:nth-child(2){opacity:0.65;}
-#workskin .typing-label{font-size:0.688em;color:${isDark ? 'rgba(255,255,255,0.5)' : 'rgba(60,60,67,0.6)'};font-weight:400;}
-#workskin .ios-footer{position:relative;${footerBg}height:2.938em;border-top:1px solid ${inputBarBorder};}
-#workskin .ios-input-bar{background:${inputBarBg};padding:0.5em 0.75em;border-top:1px solid ${inputBarBorder};display:flex;align-items:center;}
+#workskin .typing-label{font-size:0.688em;color:${colour.typingLabelColor};font-weight:400;}
+#workskin .ios-footer{position:relative;${footerBg}height:2.938em;border-top:1px solid ${colour.inputBarBorder};}
+#workskin .ios-input-bar{background:${colour.inputBarBg};padding:0.5em 0.75em;border-top:1px solid ${colour.inputBarBorder};display:flex;align-items:center;}
 #workskin .ios-input-bar > *{margin-left:0.5em;}
 #workskin .ios-input-bar > *:first-child{margin-left:0;}
-#workskin .ios-input-bar .input-placeholder{flex:1;background:${inputFieldBg};border:1px solid ${inputFieldBorder};border-radius:1.286em;padding:0.571em 0.857em;font-size:0.875em;color:${inputPlaceholderColor};}
+#workskin .ios-input-bar .input-placeholder{flex:1;background:${colour.inputFieldBg};border:1px solid ${colour.inputFieldBorder};border-radius:1.286em;padding:0.571em 0.857em;font-size:0.875em;color:${colour.inputPlaceholderColor};}
 /* The gap property is spelled out as child margins: AO3 keeps a property only
    if it is on its list or CONTAINS a shorthand name, so column-gap passes and
    bare gap does not. Same substitution as the Twitter stylesheet. */
@@ -1066,51 +1148,84 @@ ${PARAGRAPH_RESET_CSS}
 #workskin dd.bubble .group-avatar-initials{width:2.5em;height:2.5em;border-radius:50%;display:flex !important;align-items:center;justify-content:center;font-size:0.533em;font-weight:700;flex-shrink:0;}
 #workskin dd.bubble .group-sender{font-size:0.733em;font-weight:600;line-height:1.2;opacity:0.9;display:inline-block !important;}
 ${getTextFormattingCSS(isDark, 15)}
-#workskin .wm{margin-top:1.778em;font-size:0.563em;opacity:0.45;text-align:center;color:${timeBreakColor};}
+#workskin .wm{margin-top:1.778em;font-size:0.563em;opacity:0.45;text-align:center;color:${colour.timeBreakColor};}
 ${VISUALLY_HIDDEN_CSS}`;
+}
+
+/**
+ * WhatsApp colour, both themes side by side. See TEXT_FORMATTING_COLOURS.
+ *
+ * `senderBg` and `recvBg` are parameters for the same reason iOS's `recvBg` is:
+ * in light mode both bubbles are the colour the author picked in settings, and
+ * dark mode replaces them with WhatsApp's own greens and slates. Unlike iOS,
+ * `buildCSS` does *not* pin these for Android — the setting reaches the
+ * stylesheet, so freezing them into a static table would be a visible bug.
+ *
+ * `bubbleShadow` is not a colour but it varies with the theme in exactly the
+ * same way, so it lives here rather than as the one surviving ternary.
+ */
+function androidColours(senderBg: string, recvBg: string) {
+  return {
+    light: {
+      chatBg: '#ece5dd',
+      headerBgColor: '#075e54',
+      footerBgColor: '#f0f0f0',
+      footerBorderColor: '#d1d7db',
+      senderBubbleBg: senderBg,
+      receiverBubbleBg: recvBg,
+      bubbleTextColor: '#000',
+      timeColor: 'rgba(0,0,0,0.45)',
+      senderNameColor: 'rgba(100,100,100,0.8)',
+      timeBreakColor: '#667781',
+      typingLabelColor: 'rgba(0,0,0,0.6)',
+      typingDotBg: 'rgba(0,0,0,0.4)',
+      avatarPlaceholderBg: '#128c7e',
+      bubbleShadow: '0 1px 2px rgba(0,0,0,0.1)',
+    },
+    dark: {
+      chatBg: '#0b141a',
+      headerBgColor: '#1f2c34',
+      footerBgColor: '#1f2c34',
+      footerBorderColor: '#2a3942',
+      senderBubbleBg: '#005c4b',
+      receiverBubbleBg: '#1f2c34',
+      bubbleTextColor: '#e9edef',
+      timeColor: 'rgba(255,255,255,0.6)',
+      senderNameColor: 'rgba(255,255,255,0.7)',
+      timeBreakColor: '#8696a0',
+      typingLabelColor: 'rgba(255,255,255,0.6)',
+      typingDotBg: 'rgba(255,255,255,0.4)',
+      avatarPlaceholderBg: '#00a884',
+      bubbleShadow: '0 1px 2px rgba(0,0,0,0.3)',
+    },
+  };
 }
 
 function buildAndroidCSS(s: SkinProject['settings'], senderBg: string, recvBg: string, neutralBg: string, maxWidth: number): string {
   const isDark = s.androidDarkMode;
-  
-  // WhatsApp dark theme colors
-  const chatBg = isDark ? '#0b141a' : '#ece5dd';
-  const headerBgColor = isDark ? '#1f2c34' : '#075e54';
-  const headerBg = s.androidHeaderImageUrl ? `background:url('${s.androidHeaderImageUrl}') no-repeat top center;background-size:100% auto;` : `background:${headerBgColor};`;
-  const footerBgColor = isDark ? '#1f2c34' : '#f0f0f0';
-  const footerBg = s.androidFooterImageUrl ? `background:url('${s.androidFooterImageUrl}') no-repeat bottom center;background-size:contain;` : `background:${footerBgColor};`;
-  const footerBorderColor = isDark ? '#2a3942' : '#d1d7db';
-  
-  // Bubble colors
-  const senderBubbleBg = isDark ? '#005c4b' : senderBg;
-  const receiverBubbleBg = isDark ? '#1f2c34' : recvBg;
-  const bubbleTextColor = isDark ? '#e9edef' : '#000';
-  const timeColor = isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.45)';
-  const senderNameColor = isDark ? 'rgba(255,255,255,0.7)' : 'rgba(100,100,100,0.8)';
-  const timeBreakColor = isDark ? '#8696a0' : '#667781';
-  const typingLabelColor = isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.6)';
-  const typingDotBg = isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)';
-  const avatarPlaceholderBg = isDark ? '#00a884' : '#128c7e';
-  const bubbleShadow = isDark ? '0 1px 2px rgba(0,0,0,0.3)' : '0 1px 2px rgba(0,0,0,0.1)';
-  
+  const colour = androidColours(senderBg, recvBg)[isDark ? 'dark' : 'light'];
+
+  const headerBg = s.androidHeaderImageUrl ? `background:url('${s.androidHeaderImageUrl}') no-repeat top center;background-size:100% auto;` : `background:${colour.headerBgColor};`;
+  const footerBg = s.androidFooterImageUrl ? `background:url('${s.androidFooterImageUrl}') no-repeat bottom center;background-size:contain;` : `background:${colour.footerBgColor};`;
+
     return `/* Generated with AO3 Skin Generator - Free forever! https://wordfokus.com/ao3skingen */
-#workskin .chat{width:100%;max-width:${emFromPx(Math.min(maxWidth, 400))};min-width:20em;margin:0 auto;display:flex;flex-direction:column;font-family:${s.fontFamily};background:${chatBg};padding:0;}
+#workskin .chat{width:100%;max-width:${emFromPx(Math.min(maxWidth, 400))};min-width:20em;margin:0 auto;display:flex;flex-direction:column;font-family:${s.fontFamily};background:${colour.chatBg};padding:0;}
 ${PARAGRAPH_RESET_CSS}
 #workskin .android-header{position:relative;${headerBg}height:3.75em;display:flex;align-items:center;padding:0;overflow:visible;}
 #workskin .android-header-avatar{position:absolute;left:3.75em;top:0;bottom:0;margin:auto 0;width:2.5em;height:2.5em;border-radius:50%;overflow:hidden;border:2px solid rgba(255,255,255,0.2);}
 #workskin .android-header-avatar img{width:100%;height:100%;}
-#workskin .android-header-avatar-placeholder{position:absolute;left:3.75em;top:0;bottom:0;margin:auto 0;width:2.5em;height:2.5em;border-radius:50%;background:${avatarPlaceholderBg};display:flex;align-items:center;justify-content:center;color:#fff;font-size:1em;font-weight:600;border:2px solid rgba(255,255,255,0.2);}
+#workskin .android-header-avatar-placeholder{position:absolute;left:3.75em;top:0;bottom:0;margin:auto 0;width:2.5em;height:2.5em;border-radius:50%;background:${colour.avatarPlaceholderBg};display:flex;align-items:center;justify-content:center;color:#fff;font-size:1em;font-weight:600;border:2px solid rgba(255,255,255,0.2);}
 /* max-width dropped for the same reason as .ios-header-name: 170 was
    left(110) + right(60), constraining the box to the width it already had. */
 #workskin .android-header-name{position:absolute;left:6.875em;right:3.75em;top:0;bottom:0;display:flex;align-items:center;font-size:1em;font-weight:600;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,0.3);line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0.25em 0;}
 #workskin .android-header-name-wrapper{position:absolute;left:6.875em;right:3.75em;top:0;bottom:0;display:flex;flex-direction:column;justify-content:center;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,0.3);padding:0.25em 0;}
 #workskin .android-header-name-wrapper .android-header-name{position:static;font-size:1em;font-weight:600;line-height:1.4;padding:0;max-width:100%;overflow:visible;}
 #workskin .android-header-subtitle{font-size:0.75em;opacity:0.8;line-height:1.2;margin-top:0.167em;}
-#workskin .chat-header{padding:0.5em 0.75em;background:${headerBgColor};color:#fff;margin-bottom:0.75em;}
+#workskin .chat-header{padding:0.5em 0.75em;background:${colour.headerBgColor};color:#fff;margin-bottom:0.75em;}
 #workskin .chat-header .contact-name{font-size:1em;font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;}
 #workskin .chat-header .status{font-size:0.75em;opacity:0.8;display:block;margin-top:0.167em;}
-#workskin .chat-messages{padding:0.75em 0.5em;background:${chatBg};}
-#workskin .time-break{text-align:center;font-size:0.688em;color:${timeBreakColor};margin:1.091em 0 0.727em 0;font-weight:500;}
+#workskin .chat-messages{padding:0.75em 0.5em;background:${colour.chatBg};}
+#workskin .time-break{text-align:center;font-size:0.688em;color:${colour.timeBreakColor};margin:1.091em 0 0.727em 0;font-weight:500;}
 #workskin .row{display:flex;margin:0 0 0 -0.375em;align-items:flex-end;flex-wrap:wrap;width:100%;}
 #workskin .row > *{margin-left:0.375em;}
 #workskin .row.single{margin:0.75em 0;}
@@ -1125,17 +1240,17 @@ ${PARAGRAPH_RESET_CSS}
 #workskin .row.out dl.msg{align-items:flex-end;}
 #workskin .row.in dl.msg{align-items:flex-start;}
 /* was calc(75% - 8px), which resolves to 73% at the 400px card. */
-#workskin dt.sender{font-size:0.75em;color:${senderNameColor};margin:0 0 0.333em 0.667em;padding:0.333em 0;font-weight:600;max-width:73%;overflow:visible;white-space:nowrap;line-height:1.4;}
+#workskin dt.sender{font-size:0.75em;color:${colour.senderNameColor};margin:0 0 0.333em 0.667em;padding:0.333em 0;font-weight:600;max-width:73%;overflow:visible;white-space:nowrap;line-height:1.4;}
 #workskin dd{margin:0;}
-#workskin dd.bubble{position:relative;display:inline-block;min-width:0;max-width:20em;padding:0.5em 0.714em;border-radius:0.571em;line-height:1.4;font-size:0.875em;box-shadow:${bubbleShadow};white-space:normal;word-break:keep-all;overflow-wrap:anywhere;}
+#workskin dd.bubble{position:relative;display:inline-block;min-width:0;max-width:20em;padding:0.5em 0.714em;border-radius:0.571em;line-height:1.4;font-size:0.875em;box-shadow:${colour.bubbleShadow};white-space:normal;word-break:keep-all;overflow-wrap:anywhere;}
 #workskin dd.bubble.image-bubble{padding:0.5em 0.714em;max-width:70%;overflow:visible;margin-top:0.286em;}
 #workskin dd.bubble.image-bubble img.message-image{width:100%;height:auto;display:block;border-radius:0.429em;margin-top:0.429em;}
 #workskin dd.bubble.image-bubble.out{border-bottom-right-radius:0.143em;}
 #workskin dd.bubble.image-bubble.out img.message-image{border-bottom-right-radius:0.143em;}
 #workskin dd.bubble.image-bubble.in{border-bottom-left-radius:0.143em;}
 #workskin dd.bubble.image-bubble.in img.message-image{border-bottom-left-radius:0.143em;}
-#workskin dd.bubble.out{background:${senderBubbleBg};color:${bubbleTextColor};border-top-right-radius:0.571em;border-bottom-right-radius:0.143em;border-bottom-left-radius:0.571em;border-top-left-radius:0.571em;}
-#workskin dd.bubble.in{background:${receiverBubbleBg};color:${bubbleTextColor};border-top-left-radius:0.571em;border-bottom-left-radius:0.143em;border-bottom-right-radius:0.571em;border-top-right-radius:0.571em;}
+#workskin dd.bubble.out{background:${colour.senderBubbleBg};color:${colour.bubbleTextColor};border-top-right-radius:0.571em;border-bottom-right-radius:0.143em;border-bottom-left-radius:0.571em;border-top-left-radius:0.571em;}
+#workskin dd.bubble.in{background:${colour.receiverBubbleBg};color:${colour.bubbleTextColor};border-top-left-radius:0.571em;border-bottom-left-radius:0.143em;border-bottom-right-radius:0.571em;border-top-right-radius:0.571em;}
 /* The gap property is spelled out as child margins: AO3 keeps a property only
    if it is on its list or CONTAINS a shorthand name, so column-gap passes and
    bare gap does not. Same substitution as the Twitter stylesheet. */
@@ -1149,12 +1264,12 @@ ${PARAGRAPH_RESET_CSS}
 #workskin dd.bubble .group-avatar{width:1.429em;height:1.429em;border-radius:50%;flex-shrink:0;display:block !important;}
 #workskin dd.bubble .group-avatar-initials{width:2.5em;height:2.5em;border-radius:50%;display:flex !important;align-items:center;justify-content:center;font-size:0.571em;font-weight:700;flex-shrink:0;}
 #workskin dd.bubble .group-sender{font-size:0.786em;font-weight:600;line-height:1.2;opacity:0.9;display:inline-block !important;}
-#workskin dd.bubble .time{display:block;font-size:0.714em;color:${timeColor};margin-top:0.4em;text-align:right;font-weight:400;padding-right:2em;}
+#workskin dd.bubble .time{display:block;font-size:0.714em;color:${colour.timeColor};margin-top:0.4em;text-align:right;font-weight:400;padding-right:2em;}
 #workskin dd.bubble.image-bubble .time.image-time{position:absolute;bottom:0.6em;right:0.8em;margin:0;background:rgba(0,0,0,0.5);padding:0.2em 0.6em;border-radius:0.8em;font-size:0.714em;color:#fff;padding-right:2.4em;}
 #workskin dd.bubble.out .check-icon{position:absolute;bottom:0.429em;right:0.429em;height:1em;width:auto;opacity:0.7;}
 #workskin dd.bubble.image-bubble.out .check-icon{bottom:0.571em;right:0.571em;z-index:1;}
 #workskin dd.bubble .reaction{position:absolute;bottom:-0.444em;left:0.444em;background:transparent;border:none;border-radius:0;padding:0;font-size:1.286em;box-shadow:none;}
-#workskin dd.status-indicator{font-size:0.625em;color:${timeColor};text-align:right;margin:0.2em 1em 0 0;font-weight:400;}
+#workskin dd.status-indicator{font-size:0.625em;color:${colour.timeColor};text-align:right;margin:0.2em 1em 0 0;font-weight:400;}
 #workskin dd.attach{margin-top:0.25em;}
 #workskin img.attach-img{max-width:12.5em;border-radius:0.5em;display:block;}
 #workskin .row.typing{align-items:center;margin-left:-0.375em;}
@@ -1162,32 +1277,53 @@ ${PARAGRAPH_RESET_CSS}
 /* inline-block, not flex — an injected <p> makes the dots stop being flex
    items and an inline span ignores width/height, so the indicator renders 0x0.
    See the longer note in buildIOSCSS. */
-#workskin .typing-bubble{background:${receiverBubbleBg};padding:0.625em 0.875em;border-radius:0.5em;display:inline-block;line-height:0;box-shadow:${bubbleShadow};}
+#workskin .typing-bubble{background:${colour.receiverBubbleBg};padding:0.625em 0.875em;border-radius:0.5em;display:inline-block;line-height:0;box-shadow:${colour.bubbleShadow};}
 /* Static dots at descending opacity — see the note in buildIOSCSS. */
-#workskin .typing-bubble .dot{display:inline-block;vertical-align:middle;width:0.5em;height:0.5em;margin-left:0.25em;background:${typingDotBg};border-radius:50%;opacity:0.4;}
+#workskin .typing-bubble .dot{display:inline-block;vertical-align:middle;width:0.5em;height:0.5em;margin-left:0.25em;background:${colour.typingDotBg};border-radius:50%;opacity:0.4;}
 #workskin .typing-bubble .dot:first-child{margin-left:0;}
 #workskin .typing-bubble .dot:nth-child(1){opacity:0.85;}
 #workskin .typing-bubble .dot:nth-child(2){opacity:0.65;}
-#workskin .typing-label{font-size:0.688em;color:${typingLabelColor};}
-#workskin .android-footer{position:relative;${footerBg}height:3.75em;border-top:1px solid ${footerBorderColor};overflow:visible;background-position:center;}
+#workskin .typing-label{font-size:0.688em;color:${colour.typingLabelColor};}
+#workskin .android-footer{position:relative;${footerBg}height:3.75em;border-top:1px solid ${colour.footerBorderColor};overflow:visible;background-position:center;}
 ${getTextFormattingCSS(isDark, 14)}
-#workskin .wm{margin-top:1.333em;font-size:0.563em;opacity:0.45;text-align:center;color:${timeBreakColor};}
+#workskin .wm{margin-top:1.333em;font-size:0.563em;opacity:0.45;text-align:center;color:${colour.timeBreakColor};}
 ${VISUALLY_HIDDEN_CSS}`;
 }
 
+/**
+ * Twitter colour, both themes side by side. See TEXT_FORMATTING_COLOURS.
+ *
+ * The only fully static table of the four: nothing here falls back to the
+ * author's bubble colour, so it needs no parameters. (`buildTwitterCSS` still
+ * takes `senderBg`; it does not use it.)
+ */
+const TWITTER_COLOURS = {
+  light: {
+    bgColor: '#fff',
+    bgHover: '#f7f9f9',
+    textPrimary: '#0f1419',
+    textSecondary: '#536471',
+    borderColor: '#eff3f4',
+    handleColor: '#71767b',
+    quoteHover: '#f7f9f9',
+    replyLineColor: '#cfd9de',
+  },
+  dark: {
+    bgColor: '#15202b',
+    bgHover: '#1c2e3f',
+    textPrimary: '#e7e9ea',
+    textSecondary: '#8b98a5',
+    borderColor: '#38444d',
+    handleColor: '#8b98a5',
+    quoteHover: '#1c2e3f',
+    replyLineColor: '#38444d',
+  },
+} as const;
+
 function buildTwitterCSS(s: SkinProject['settings'], senderBg: string, maxWidth: number): string {
   const isDark = s.twitterDarkMode;
-  
-  // Color scheme
-  const bgColor = isDark ? '#15202b' : '#fff';
-  const bgHover = isDark ? '#1c2e3f' : '#f7f9f9';
-  const textPrimary = isDark ? '#e7e9ea' : '#0f1419';
-  const textSecondary = isDark ? '#8b98a5' : '#536471';
-  const borderColor = isDark ? '#38444d' : '#eff3f4';
-  const handleColor = isDark ? '#8b98a5' : '#71767b';
-  const quoteHover = isDark ? '#1c2e3f' : '#f7f9f9';
-  const replyLineColor = isDark ? '#38444d' : '#cfd9de';
-  
+  const colour = TWITTER_COLOURS[isDark ? 'dark' : 'light'];
+
   return `/* Generated with AO3 Skin Generator - Free forever! https://wordfokus.com/ao3skingen */
 /* NOTE ON UNITS. Sizes here are em, not px, and that is the whole reason this
    card works on a phone. AO3 forbids @media blocks in skin CSS — media is a
@@ -1213,11 +1349,11 @@ function buildTwitterCSS(s: SkinProject['settings'], senderBg: string, maxWidth:
    lint — which tokenises rather than re-scanning — rejects it. 0.938em is fine. */
 #workskin .chat{width:34.375em;max-width:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;margin:0 auto;box-sizing:border-box;}
 ${PARAGRAPH_RESET_CSS}
-#workskin .tweets .tweet{background:${bgColor};border:1px solid ${borderColor};border-radius:1em;padding:1em;margin:0 0 0.75em 0;position:relative;box-sizing:border-box;transition:background-color 0.2s;}
-#workskin .tweets .tweet:hover{background:${bgHover};}
+#workskin .tweets .tweet{background:${colour.bgColor};border:1px solid ${colour.borderColor};border-radius:1em;padding:1em;margin:0 0 0.75em 0;position:relative;box-sizing:border-box;transition:background-color 0.2s;}
+#workskin .tweets .tweet:hover{background:${colour.bgHover};}
 #workskin .tweets .tweet.reply{margin-left:2.75em;margin-top:-0.5em;}
-#workskin .tweets .tweet.reply::before{content:'';position:absolute;left:-2em;top:-0.5em;bottom:0.75em;width:2px;background:${replyLineColor};}
-#workskin .tweets .tweet.reply::after{content:'';position:absolute;left:-2em;top:1.25em;width:1.25em;height:2px;background:${replyLineColor};}
+#workskin .tweets .tweet.reply::before{content:'';position:absolute;left:-2em;top:-0.5em;bottom:0.75em;width:2px;background:${colour.replyLineColor};}
+#workskin .tweets .tweet.reply::after{content:'';position:absolute;left:-2em;top:1.25em;width:1.25em;height:2px;background:${colour.replyLineColor};}
 /* NOTE ON GAP. AO3 accepts a property only if it is on its list or CONTAINS
    one of its shorthand names as a substring. column-gap passes (it contains
    "column"); bare gap matches nothing and is rejected — and AO3 refuses the
@@ -1252,7 +1388,7 @@ ${PARAGRAPH_RESET_CSS}
    same reason. */
 #workskin .tweet .name-line .name,#workskin .tweet .name-line .verified-container,#workskin .tweet .name-line .handle,#workskin .tweet .name-line .follow-dot,#workskin .tweet .name-line .follow-btn,#workskin .tweet .name-line .twitter-logo{display:inline-block;vertical-align:middle;margin-right:0.25em;}
 #workskin .tweet .name-line .twitter-logo{margin-right:0;}
-#workskin .tweet .name{font-weight:700;color:${textPrimary};font-size:0.938em;line-height:1.333;white-space:nowrap;}
+#workskin .tweet .name{font-weight:700;color:${colour.textPrimary};font-size:0.938em;line-height:1.333;white-space:nowrap;}
 #workskin .tweet .verified-container{display:inline-block;vertical-align:middle;}
 /* THE VERIFIED TICK IS DRAWN, NOT FETCHED. It used to be an 18px PNG on our
    CDN, and every chrome image is a request from inside a published fic — a
@@ -1275,21 +1411,21 @@ ${PARAGRAPH_RESET_CSS}
    as an empty blue disc. Padding is measured the same way by both renderers.
    Verified by exporting a PNG, not by reasoning about it. */
 #workskin .tweet .verified-badge{display:inline-block;vertical-align:middle;font-size:0.688em;width:1.636em;line-height:1;padding:0.318em 0;text-align:center;font-weight:700;color:#fff;background:#1d9bf0;border-radius:50%;}
-#workskin .tweet .handle{color:${handleColor};font-weight:400;font-size:0.938em;line-height:1.333;white-space:nowrap;}
-#workskin .tweet .follow-dot{color:${handleColor};font-size:0.938em;line-height:1.333;}
+#workskin .tweet .handle{color:${colour.handleColor};font-weight:400;font-size:0.938em;line-height:1.333;white-space:nowrap;}
+#workskin .tweet .follow-dot{color:${colour.handleColor};font-size:0.938em;line-height:1.333;}
 #workskin .tweet .follow-btn{background:transparent;color:#1d9bf0;font-weight:700;font-size:0.938em;padding:0;border:none;cursor:pointer;line-height:1.333;flex-shrink:0;white-space:nowrap;}
 #workskin .tweet .follow-btn:hover{color:#1a8cd8;text-decoration:underline;}
 #workskin .tweet .twitter-logo{width:1.25em;height:1.25em;display:inline-block;vertical-align:middle;}
-#workskin .tweet .body{margin-top:0.8em;font-size:0.938em;line-height:1.333;color:${textPrimary};word-wrap:break-word;white-space:pre-wrap;}
+#workskin .tweet .body{margin-top:0.8em;font-size:0.938em;line-height:1.333;color:${colour.textPrimary};word-wrap:break-word;white-space:pre-wrap;}
 #workskin .tweet .body .hashtag{color:#1d9bf0;font-weight:400;}
 #workskin .tweet .body .mention{color:#1d9bf0;font-weight:400;}
-#workskin .tweet .tweet-image{width:100%;max-width:100%;height:auto;max-height:17.813em;border-radius:1em;margin-top:0.75em;border:1px solid ${borderColor};display:block;}
-#workskin .tweet .time-line{margin-top:1.067em;font-size:0.938em;color:${textSecondary};padding-bottom:1.067em;border-bottom:1px solid ${borderColor};}
+#workskin .tweet .tweet-image{width:100%;max-width:100%;height:auto;max-height:17.813em;border-radius:1em;margin-top:0.75em;border:1px solid ${colour.borderColor};display:block;}
+#workskin .tweet .time-line{margin-top:1.067em;font-size:0.938em;color:${colour.textSecondary};padding-bottom:1.067em;border-bottom:1px solid ${colour.borderColor};}
 #workskin .tweet.no-metrics .time-line{padding-bottom:0;border-bottom:none;}
 /* Flex is kept HERE only because its failure mode is graceful: if the
    archive drops it, the metric chips fall back to inline-block and bunch to
    the left, which still reads fine. The header above could not tolerate that. */
-#workskin .tweet .metrics{display:flex;justify-content:space-between;padding:0.857em 0;font-size:0.875em;color:${textSecondary};border-bottom:1px solid ${borderColor};width:100%;}
+#workskin .tweet .metrics{display:flex;justify-content:space-between;padding:0.857em 0;font-size:0.875em;color:${colour.textSecondary};border-bottom:1px solid ${colour.borderColor};width:100%;}
 /* THE ONE RULE THAT ONLY EXISTS FOR AO3, and it costs the PNG nothing.
    We never emit a <p> inside .metrics — but AO3 does. It collapses the whole
    run of chips into a SINGLE paragraph, which then becomes the only flex item,
@@ -1323,7 +1459,7 @@ ${PARAGRAPH_RESET_CSS}
    1.286em of the 14px metrics context is 18px, which is the size the real
    site uses and close enough to the 20px images that the row does not jump. */
 #workskin .tweet .glyph-icon{font-size:1.286em;line-height:1;margin-right:0.222em;vertical-align:-0.111em;}
-#workskin .tweet .metric-count{color:${textSecondary};font-weight:400;font-size:1em;line-height:1.429;vertical-align:middle;}
+#workskin .tweet .metric-count{color:${colour.textSecondary};font-weight:400;font-size:1em;line-height:1.429;vertical-align:middle;}
 #workskin .tweet .metric:hover .metric-count{text-decoration:underline;}
 #workskin .tweet .metric.replies:hover{color:#1d9bf0;}
 #workskin .tweet .metric.replies:hover .metric-icon{opacity:1;filter:none;}
@@ -1333,9 +1469,9 @@ ${PARAGRAPH_RESET_CSS}
 #workskin .tweet .metric.likes:hover .metric-icon{opacity:1;filter:none;}
 #workskin .tweet .metric.bookmarks:hover{color:#1d9bf0;}
 #workskin .tweet .metric.bookmarks:hover .metric-icon{opacity:1;filter:none;}
-#workskin .tweet .metric.views:hover{color:${textSecondary};}
+#workskin .tweet .metric.views:hover{color:${colour.textSecondary};}
 #workskin .tweet .metric.views:hover .metric-icon{opacity:1;}
-#workskin .tweet .replying-to{font-size:0.813em;color:${textSecondary};margin:0.615em 0 0.308em 0;line-height:1.231;}
+#workskin .tweet .replying-to{font-size:0.813em;color:${colour.textSecondary};margin:0.615em 0 0.308em 0;line-height:1.231;}
 #workskin .tweet .replying-to .reply-handle{color:#1d9bf0;text-decoration:none;}
 #workskin .tweet .replying-to .reply-handle:hover{text-decoration:underline;}
 #workskin .tweet.expanded{padding:1em;display:flex;margin-left:-0.75em;}
@@ -1345,18 +1481,18 @@ ${PARAGRAPH_RESET_CSS}
 #workskin .tweet.expanded .expanded-name{display:flex;align-items:center;margin-bottom:0.125em;margin-left:-0.25em;}
 #workskin .tweet.expanded .expanded-name p{display:contents;}
 #workskin .tweet.expanded .expanded-name .name,#workskin .tweet.expanded .expanded-name .verified-container{margin-left:0.25em;}
-#workskin .tweet.expanded .expanded-name .name{font-weight:700;color:${textPrimary};font-size:1.25em;line-height:1.2;}
+#workskin .tweet.expanded .expanded-name .name{font-weight:700;color:${colour.textPrimary};font-size:1.25em;line-height:1.2;}
 /* 20px instead of 18px, stated once as a font-size — the badge's own geometry
    is in em of this, so the circle follows the glyph. */
 #workskin .tweet.expanded .expanded-name .verified-badge{font-size:0.764em;}
 
-#workskin .tweet.expanded .expanded-handle{color:${textSecondary};font-size:0.938em;line-height:1.333;margin-bottom:0.267em;}
+#workskin .tweet.expanded .expanded-handle{color:${colour.textSecondary};font-size:0.938em;line-height:1.333;margin-bottom:0.267em;}
 #workskin .tweet.expanded .replying-to{margin:0 0 0.923em 0;}
-#workskin .tweet.expanded .expanded-body{font-size:1.438em;line-height:1.217;color:${textPrimary};word-wrap:break-word;white-space:pre-wrap;}
+#workskin .tweet.expanded .expanded-body{font-size:1.438em;line-height:1.217;color:${colour.textPrimary};word-wrap:break-word;white-space:pre-wrap;}
 #workskin .tweet.expanded .tweet-image{margin-top:1em;}
 #workskin .tweet.expanded .time-line{border:none;padding:0;margin-top:1.067em;}
-#workskin .tweet .quote{border:1px solid ${borderColor};border-radius:0.75em;padding:0.75em;margin-top:0.75em;transition:background-color 0.2s;cursor:pointer;}
-#workskin .tweet .quote:hover{background:${quoteHover};}
+#workskin .tweet .quote{border:1px solid ${colour.borderColor};border-radius:0.75em;padding:0.75em;margin-top:0.75em;transition:background-color 0.2s;cursor:pointer;}
+#workskin .tweet .quote:hover{background:${colour.quoteHover};}
 #workskin .tweet .quote-head{display:flex;align-items:center;font-size:0.875em;line-height:1.143;margin-bottom:0.286em;margin-left:-0.286em;}
 /* Descendant selectors plus display:contents — this row needs BOTH fixes.
    contents makes the injected paragraph stop being the single flex item;
@@ -1365,17 +1501,17 @@ ${PARAGRAPH_RESET_CSS}
    quote handle slid 3px left and the line shifted 1px. */
 #workskin .tweet .quote-head p{display:contents;}
 #workskin .tweet .quote-head .quote-avatar,#workskin .tweet .quote-head .quote-name,#workskin .tweet .quote-head .quote-verified-container,#workskin .tweet .quote-head .quote-handle{margin-left:0.286em;}
-#workskin .tweet .quote-name{font-weight:700;color:${textPrimary};}
+#workskin .tweet .quote-name{font-weight:700;color:${colour.textPrimary};}
 #workskin .tweet .quote-avatar{width:1.429em;height:1.429em;border-radius:50%;overflow:hidden;}
 #workskin .tweet .quote-verified-container{display:inline-flex;align-items:center;margin-left:-0.143em;}
 #workskin .tweet .quote-verified-container > *{margin-left:0.143em;}
 /* Same drawn badge, 16px inside a 14px quote head. */
 #workskin .tweet .quote-verified-badge{display:inline-block;vertical-align:middle;font-size:0.699em;width:1.636em;line-height:1;padding:0.318em 0;text-align:center;font-weight:700;color:#fff;background:#1d9bf0;border-radius:50%;}
 
-#workskin .tweet .quote-handle{color:${textSecondary};font-weight:400;font-size:1em;}
-#workskin .tweet .quote-body{margin-top:0.267em;font-size:0.938em;line-height:1.333;color:${textPrimary};}
-#workskin .tweet .quote-image{width:100%;height:auto;border-radius:0.75em;margin-top:0.75em;border:1px solid ${borderColor};}
-#workskin .tweets .wm{margin-top:1.2em;font-size:0.563em;opacity:0.45;text-align:center;color:${textSecondary};}
+#workskin .tweet .quote-handle{color:${colour.textSecondary};font-weight:400;font-size:1em;}
+#workskin .tweet .quote-body{margin-top:0.267em;font-size:0.938em;line-height:1.333;color:${colour.textPrimary};}
+#workskin .tweet .quote-image{width:100%;height:auto;border-radius:0.75em;margin-top:0.75em;border:1px solid ${colour.borderColor};}
+#workskin .tweets .wm{margin-top:1.2em;font-size:0.563em;opacity:0.45;text-align:center;color:${colour.textSecondary};}
 #workskin .link{text-decoration:none;color:#1d9bf0;}
 ${VISUALLY_HIDDEN_CSS}`;
 }

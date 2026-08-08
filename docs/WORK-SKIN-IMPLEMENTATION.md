@@ -10,8 +10,8 @@ what is **different** for work skins.
 **Written 6 Aug 2026** against otwarchive `master`; **substantially revised
 7 Aug 2026**, when all four platforms were saved on the real archive for the
 first time and the stored CSS was read back; **extended 8 Aug 2026** with the
-export-dialog copy, the drawn chrome, and three bugs in the *image* export that
-no test here could see.
+export-dialog copy, the drawn chrome, three bugs in the *image* export that
+no test here could see, and the colour/structure split in §10b.
 
 > **If you are new to this file, read five things and skip the rest until you
 > need it:** §2 (where it stands), §12 (AO3 injects `<p>`, which is what breaks
@@ -96,6 +96,11 @@ unaided, and the *image* export got three bug fixes it badly needed:
   been clipping the tweet name line in *every export this app has ever made*.
 - **Site skins are comment-free too** (§13f), closing the §13 exposure for the
   other product.
+- **Colour is a table, not a ternary per declaration** (§10b). 48 `isDark ? … : …`
+  became four palettes with both variants side by side, compiled output
+  byte-identical. Nothing renders differently; it is the precondition for
+  light/dark variants in the master skin costing five rules instead of a second
+  stylesheet.
 
 **Release gate, still open:** the *HTML* half. Nothing has been checked with
 Creator's Style off, downloaded as EPUB, or re-parsed by editing a posted work
@@ -518,6 +523,7 @@ closed; the HTML half is not.
 | The dialog tells an author what AO3 will not | ✅ (§9f) |
 | Chrome images per tweet | ✅ **one** — the X logo (§14) |
 | The PNG renders what the browser renders | ✅ all four, exported and read at zoom (§14a–14b) |
+| Colour separated from structure | ✅ four palette tables, both variants data (§10b) |
 | Creator's Style **off** / EPUB download | ❌ **never checked** |
 | Re-parse after editing a posted work | ❌ **never checked** |
 
@@ -630,7 +636,7 @@ about.
 | `px` on three platforms | ✅ all four in `em`, 381 lengths, verified within 0.3px |
 | Google's HTML is 9 lines | ✅ one line, with a test that no platform emits `
 ` |
-| Colour is baked, not layered | ⬜ BACKLOG 5b — 24–32% of rules settings-dependent |
+| Colour is baked, not layered | ✅ four palette tables, §10b — both variants are data now |
 | Five CDN images per tweet | ✅ **one** — the X logo. §14 |
 | One dead anchor `<a href="#">` | ⬜ BACKLOG 5c |
 
@@ -701,34 +707,41 @@ The order that matters now that the live bugs are cleared:
    fetched. It also turned up two PNG bugs nothing we own could see, including
    a name line that has been sliced in half in every export this app has ever
    produced (§14a).
-3. **BACKLOG 5b — separate structure from colour.** ⬅ **START HERE.** The
-   recipe is below; it was scoped on 8 Aug 2026 but deliberately not started,
-   because it is one large mechanical edit and half-doing it is worse than not
-   starting.
-4. **Then the master skin** (BACKLOG 6–10).
+3. ✅ **done, 8 Aug 2026 — BACKLOG 5b, structure separated from colour** (§10b).
+   48 theme ternaries became four palette tables, with the compiled CSS *and*
+   HTML byte-identical across 96 variants. No rule body mentions `isDark` any
+   more, and both palettes are reachable as data — which is the precondition
+   BACKLOG 8 was waiting on.
+4. **The master skin** (BACKLOG 6–10). ⬅ **START HERE**, at 6: `namespaceCss`.
+   8 is the item 5b was done for, but it depends on 6 and 7 landing first.
+5. **The two small correctness items**, BACKLOG 5c (the dead `<a href="#">`)
+   and the paragraph-reset question in §9d, whenever they are convenient. They
+   are independent of the master-skin chain.
 
-### 10b. The recipe for 5b, scoped but not started (8 Aug 2026)
+### 10b. 5b — **done, 8 Aug 2026.** Structure and colour are separated
 
-**It is in better shape than the backlog implies.** Colour is *already* hoisted
-into named consts at the top of each builder — `buildIOSCSS` lines ~879–896,
-`buildAndroidCSS` ~1048–1065, `buildTwitterCSS` ~1153–1160. What is left:
+The recipe below is kept as written, because it was accurate and it is the
+method to reuse for any comparable refactor. **48 theme ternaries collapsed into
+four tables** — one per stylesheet, plus the shared text-formatting block — and
+the compiled output came out byte-identical across all 96 variants tested.
 
-1. **Hoist the strays.** Four inline `${isDark ? … : …}` remain in `buildIOSCSS`
-   (`dt.sender`, `dd.status-indicator`, `.typing-bubble .dot`, `.typing-label`)
-   and four in `getTextFormattingCSS`. After this, **no rule body mentions
-   `isDark`** — grep is the check.
-2. **Make each builder's block a palette with two variants**, rather than twenty
+1. ✅ **Hoist the strays.** Four inline `${isDark ? … : …}` remained in
+   `buildIOSCSS` (`dt.sender`, `dd.status-indicator`, `.typing-bubble .dot`,
+   `.typing-label`) and four in `getTextFormattingCSS`. After this, **no rule
+   body mentions `isDark`** — grep is the check, and `grep '\${isDark'` now
+   returns nothing.
+2. ✅ **Make each builder's block a palette with two variants**, rather than twenty
    ternaries: `TWITTER_COLOURS = { light: {…}, dark: {…} }` and one
    `const c = TWITTER_COLOURS[isDark ? 'dark' : 'light']`. This is the step that
    pays: with *both* palettes reachable, a dark override block is derivable
    instead of hand-written, which is what makes BACKLOG 8 five rules per
    platform rather than a doubled stylesheet (KNOWLEDGE §18).
-3. **Watch the settings-driven slots.** A few entries are not theme colours at
+3. ✅ **Watch the settings-driven slots.** A few entries are not theme colours at
    all — iOS `receiverBubbleBg`/`typingBubbleBg` and Android
    `senderBubbleBg`/`receiverBubbleBg` fall back to the user's own bubble colour
    in light mode and are overridden by fixed values in dark. They cannot live in
    a static table; take them as arguments and document why at the call site.
-4. Google has no dark mode. Leave `buildGoogleCSS` alone.
+4. ✅ Google has no dark mode. `buildGoogleCSS` was left alone.
 
 **The invariant that makes this safe: the compiled CSS must come out
 byte-identical**, for all four platforms in *both* modes, before and after. Snapshot
@@ -737,7 +750,37 @@ then compare. This is pure hygiene — if a single byte moves, you changed a col
 by accident. Do not commit the snapshot; it is a refactor guard, not a test the
 repo wants to carry.
 
-Only once that lands is BACKLOG 8 worth attempting.
+#### What the recipe did not anticipate
+
+- **The settings-driven slots want to be a palette *function*, not consts
+  beside the table.** Step 3 says "take them as arguments", which reads as *keep
+  them out of the table* — and doing that would have cost step 2 its entire
+  payoff, because a table with four holes in it is not something you can diff to
+  derive an override block. So `iosColours(recvBg)` and
+  `androidColours(senderBg, recvBg)` are functions returning **both** complete
+  variants, and the settings-dependence shows up as a parameter rather than as
+  an absence. `TWITTER_COLOURS` and `TEXT_FORMATTING_COLOURS` need no arguments
+  and stay plain consts.
+- **Pin the HTML too, and vary more than the eight pairs.** 96 variants were
+  used: theme × three bubble palettes × `useDarkNeutral` × `iosMode`, with the
+  optional chrome switched on. The extra axes are the whole point — a table that
+  had frozen a settings-driven slot passes all eight theme pairs happily and
+  only fails once the author picks a different bubble colour. And snapshotting
+  `buildHTML` alongside `buildCSS` is what makes it possible to say **the PNG is
+  unchanged without exporting one**, which is otherwise the only way this
+  project can know (§14a).
+- **`c` is taken.** `getTextFormattingCSS` already uses `c` for its
+  `code`-relative em helper, so the palette is `colour` — the same name in all
+  four builders, so every rule body reads the same way.
+- **Two things found by reading, neither of them looked for.** iOS's
+  "settings-driven" slots are not currently settings-driven at all: `buildCSS`
+  pins the received bubble to `#E9E9EB` at opacity 1 for both iMessage and SMS,
+  so Android's are the only ones that genuinely reach a stylesheet. And
+  `buildTwitterCSS` takes a `senderBg` it never uses. **Neither was touched** —
+  byte-identical means byte-identical, and a refactor is the wrong commit to
+  smuggle a behaviour change into.
+
+BACKLOG 8 is now worth attempting.
 
 ### The flex question — **settled, 7 Aug 2026**
 

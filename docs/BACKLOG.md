@@ -7,16 +7,23 @@ what to do next.
 **Last reconciled: 8 Aug 2026.** Everything shipped up to commit `c30f97b`
 (iOS and Android work skins) is excluded.
 
-**Next up: item 5b**, and the recipe for it — including the invariant that makes
-it safe — is written out in **WORK-SKIN §10b**. It was scoped and deliberately
-not started, because it is one large mechanical edit.
+**Next up: item 6**, the first link in the master-skin chain (6 → 7 → 8 → 9 → 10).
+Item 8 is the one 5b was done for, and it is now cheap — but it needs 6 and 7
+underneath it first.
 
-**Items 5, 2d and 5a closed 7–8 Aug 2026.** The export-dialog copy; the site-skin
-export going comment-free once the instruction it carried had a better home; and
-Twitter's chrome dropping from five fetched images per tweet to one. 5a also
-turned up bugs in the *image* export that no test here could see — see the next
-section, and note the method that found them: **export a real PNG and diff it
-against a baseline.**
+**Items 5, 2d, 5a and 5b closed 7–8 Aug 2026.** The export-dialog copy; the
+site-skin export going comment-free once the instruction it carried had a better
+home; Twitter's chrome dropping from five fetched images per tweet to one; and
+colour separating from structure into four palette tables. 5a also turned up
+bugs in the *image* export that no test here could see — see the next section,
+and note the method that found them: **export a real PNG and diff it against a
+baseline.**
+
+**The method that made 5b safe is worth reusing** for any large mechanical edit
+here: snapshot `buildCSS` *and* `buildHTML` across a wide variant matrix into
+the scratchpad, refactor, and require the output byte-identical. Pinning the
+HTML as well is what lets you claim the PNG is unchanged without exporting one.
+Do not commit the guard. Full account in WORK-SKIN §10b.
 
 ---
 
@@ -98,18 +105,21 @@ unit tests all passed straight through these. Render it and look at it.
 | 4 | ✅ **done — all four platforms.** 381 lengths converted, each against **its own rule's font-size context measured in a browser**, not guessed. Verified by geometry diff at a 16px base: google 0.02px, iOS 0.17px, android 0.28px worst-case on a default project — inside the 0.5px bar Twitter set. `getTextFormattingCSS` now takes the bubble size, because it is shared by iOS (15px) and Android (14px) and no single em is right for both. Only border widths, shadows and values ≤2px stay px |  AO3 forbids `@media` in skin CSS, so `em` is the only responsive lever. Method is in `buildTwitterCSS`'s header comment; assertion to copy is in `tests/work-skin.unit.spec.ts`. **Convert against each rule's own font-size context** or every card resizes; keep em values to three decimals | WORK-SKIN §10 |
 | 5 | ✅ **done, 7–8 Aug 2026.** All three are in the work-skin modal: an amber note under step 1 carries the unique-title rule with a per-platform example (`yourname — WhatsApp`) and the one-skin-per-work merge instruction, and the footnote now says plainly that the icons load from our host, that AO3 keeps no copy, and that **"Copy for AO3" does not avoid this** — it uploads to ImgBB, which the old copy implied was the safe option. The image path's own modal says the same in one line. Pinned by *"the modal states the three things AO3 will not"* in `work-skin.spec.ts` | Three factual errors an author meets on their first paste. UI copy, not compiler work | WORK-SKIN §9f, KNOWLEDGE §7 |
 | 5a | ✅ **done, 8 Aug 2026 — five to ONE, not two.** Both verified badges are `✔` in a CSS circle. The whole metric row became characters — `↩ ⇄ ♡` — which the author preferred to keeping our blue discs, and which looks more like the real site. Only the X logo is still fetched (a trademark we should not draw). Views and bookmarks stay images: opt-in extras, no character reads right. Pinned by *"a tweet fetches one chrome image, not five"*. **Two PNG bugs came out of this, both in WORK-SKIN §14a** — including a tweet name line that has been clipped in every PNG this app ever exported. ~~**Cut the chrome images from five per tweet to two.** Verified badge → CSS circle with `✔`; like icon → the character `❤`. Keep reply/retweet glyphs and the X logo as images~~ | A twenty-tweet thread is currently **100 requests to `media.publit.io`** inside somebody's published fic, forever. The WhatsApp author had exactly this break when Cloudinary cut them off, and every fic using their skin lost its images at once. gadaursan's skin needs **no chrome images at all** | KNOWLEDGE §11, §19 |
-| 5b | **Separate structure from colour** in the four stylesheets, so `isDark ? x : y` collapses into a small override block rather than being evaluated throughout | Night mode in the canonical skin is **five rules**, because its base defines structure only. Ours bakes one theme, which is why settings-dependence is 24–32%. Worth doing on its own merits, and it makes item 8 cheap instead of a doubling | KNOWLEDGE §18 |
+| 5b | ✅ **done, 8 Aug 2026.** **48 theme ternaries became four palette tables** — `TEXT_FORMATTING_COLOURS`, `iosColours(recvBg)`, `androidColours(senderBg, recvBg)`, `TWITTER_COLOURS` — each holding light and dark side by side, with the theme resolved once into `colour`. **No rule body mentions `isDark`**; `grep '\${isDark'` returns nothing. The settings-driven slots are palette *parameters* rather than entries kept outside the table, so **both variants stay reachable as data**, which is the whole precondition for item 8. Verified by snapshotting `buildCSS` *and* `buildHTML` for 96 variants — theme × three bubble palettes × `useDarkNeutral` × `iosMode`, optional chrome on — and requiring byte-identical output; pinning the HTML too is what proves the PNG is unchanged without exporting one. Google left alone (no dark mode). Recipe and what it did not anticipate: WORK-SKIN §10b. ~~**Separate structure from colour** in the four stylesheets~~ | Night mode in the canonical skin is **five rules**, because its base defines structure only. Ours bakes one theme, which is why settings-dependence is 24–32%. Worth doing on its own merits, and it makes item 8 cheap instead of a doubling | KNOWLEDGE §18 |
 | 5c | **Replace `<a href="#" class="reply-handle">` with a `<span>`** — our only anchor | A link that goes nowhere: screen readers announce it as a link, and clicking scrolls the reader to the top of the page. Separately, AO3's parser has historically had trouble with `<a>` as a sibling of `<div>` and re-runs on every edit | KNOWLEDGE §22 |
 
 ## The master skin
 
 Ordered; each depends on the one above. Items 1–3 above should land first.
 
+**This is the live chain now** — everything above it is closed except 5c and the
+opt-in features. Start at 6.
+
 | # | Task | Where |
 | --- | --- | --- |
-| 6 | `namespaceCss(css, platform)` + platform class on `.chat` in `buildHTML`, with a PNG-unchanged check | MASTER §6a |
+| 6 | `namespaceCss(css, platform)` + platform class on `.chat` in `buildHTML`, with a PNG-unchanged check. **The 5b guard is the PNG-unchanged check**: snapshot `buildCSS`+`buildHTML` wide, refactor, require byte-identical (WORK-SKIN §10b) | MASTER §6a |
 | 7 | `buildMasterWorkSkin(project)` — shared block, four namespaced blocks, a version rule (a comment cannot carry it; AO3 deletes comments) | MASTER §6c, §7 |
-| 8 | Light/dark variant classes per platform — cheap once 5b is done | MASTER §6b, KNOWLEDGE §18 |
+| 8 | Light/dark variant classes per platform — **5b is done, so both palettes are reachable as data and the override block can be *derived* by diffing `light` against `dark` rather than hand-written** | MASTER §6b, KNOWLEDGE §18 |
 | 9 | Dedupe the 38 byte-identical shared rules | MASTER §7 |
 | 10 | Export UI: "one skin for everything" vs "just this platform" | MASTER §7 |
 
