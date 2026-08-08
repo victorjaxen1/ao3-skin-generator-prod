@@ -1,5 +1,12 @@
 import { SkinProject } from './schema';
-import { buildCSS, buildHTML } from './generator';
+import {
+  buildCSS,
+  buildHTML,
+  platformTheme,
+  SkinTheme,
+  withPlatformLook,
+  withPlatformTheme,
+} from './generator';
 import { lintAo3Css, stripCssComments, Violation } from './siteSkin/ao3Css';
 
 /**
@@ -268,7 +275,16 @@ function stripExportComments(css: string): string {
  * precisely the failure this exists to prevent, and silence is how it would
  * reach a published fic.
  */
-export function namespaceCss(css: string, platform: WorkSkinTemplate): string {
+export function namespaceCss(
+  css: string,
+  platform: WorkSkinTemplate,
+  /**
+   * Scope to one theme as well, for a derived override block: every selector
+   * gains `.theme-dark` (or `.theme-light`) beside the platform class. Omit it
+   * for the base block, which applies whichever theme the container carries.
+   */
+  theme?: SkinTheme
+): string {
   return stripCssComments(css).replace(
     /([^{}]*)(\{[^{}]*\})/g,
     (_whole, selectorList: string, body: string) => {
@@ -277,7 +293,7 @@ export function namespaceCss(css: string, platform: WorkSkinTemplate): string {
       if (!list.trim()) return lead + body;
       const scoped = list
         .split(',')
-        .map((one) => namespaceSelector(one.trim(), platform))
+        .map((one) => namespaceSelector(one.trim(), platform, theme))
         .join(',');
       return lead + scoped + body;
     }
@@ -298,20 +314,35 @@ const ROOT = '#workskin';
  * Exported so `work-skin.unit.spec.ts` can check it against the markup that is
  * actually emitted, rather than trusting this list to be kept up to date.
  */
-export const CONTAINER_CLASSES: readonly string[] = ['chat', 'tweets', 'css-tails'];
+export const CONTAINER_CLASSES: readonly string[] = [
+  'chat',
+  'tweets',
+  'css-tails',
+  'theme-light',
+  'theme-dark',
+];
 
-function namespaceSelector(selector: string, platform: WorkSkinTemplate): string {
+function namespaceSelector(
+  selector: string,
+  platform: WorkSkinTemplate,
+  theme?: SkinTheme
+): string {
   if (!selector.startsWith(ROOT)) {
     throw new Error(`namespaceCss: selector is not scoped to ${ROOT}: ${selector}`);
   }
+  // Both classes join the container's own compound, so a theme override is one
+  // class more specific than the base rule it overrides and wins regardless of
+  // source order. Nothing here depends on the blocks being emitted in any
+  // particular sequence.
+  const scope = `.${platform}${theme ? `.theme-${theme}` : ''}`;
   const rest = selector.slice(ROOT.length).trim();
-  if (!rest) return `${ROOT} .chat.${platform}`;
+  if (!rest) return `${ROOT} .chat${scope}`;
 
   const compound = /^[^\s>+~]+/.exec(rest)![0];
   if (isContainerCompound(compound)) {
-    return `${ROOT} ${compound}.${platform}${rest.slice(compound.length)}`;
+    return `${ROOT} ${compound}${scope}${rest.slice(compound.length)}`;
   }
-  return `${ROOT} .chat.${platform} ${rest}`;
+  return `${ROOT} .chat${scope} ${rest}`;
 }
 
 /** True only for a compound built purely of the container's own classes. */
@@ -325,15 +356,229 @@ function isContainerCompound(compound: string): boolean {
   return classes.length > 0 && classes.every((c) => CONTAINER_CLASSES.includes(c));
 }
 
-export function buildWorkSkin(project: SkinProject): WorkSkinExport {
-  const css = stripExportComments(absolutizeCssAssets(buildCSS(project)));
-  const html = appendCredit(
+/**
+ * One platform's stylesheet, in the state AO3 has to accept it.
+ *
+ * **The order is the load-bearing part.** `absolutizeCssAssets` must run before
+ * anything downstream reads the sheet: Android reaches `buildCSS` with
+ * `url('/assets/…')`, which AO3 refuses outright, and one refused declaration
+ * loses the whole skin — all four platforms at once, in the master case.
+ */
+function platformCss(project: SkinProject): string {
+  return stripExportComments(absolutizeCssAssets(buildCSS(project)));
+}
+
+/** One platform's markup, with the four export-only rewrites applied. */
+function platformHtml(project: SkinProject): string {
+  return appendCredit(
     useCssBubbleTails(absolutizeAssets(stripEditorAttributes(buildHTML(project))))
   );
+}
+
+export function buildWorkSkin(project: SkinProject): WorkSkinExport {
+  const css = platformCss(project);
+  const html = platformHtml(project);
 
   return {
     css,
     html,
+    violations: lintAo3Css(css, 'work'),
+  };
+}
+
+/**
+ * The platforms a master skin covers, in the order their blocks are emitted.
+ *
+ * Order is cosmetic rather than a cascade concern — every block is scoped to
+ * its own platform class, so no rule in one can match an element in another —
+ * but it is fixed so the output is reproducible and diffable between runs.
+ */
+export const MASTER_TEMPLATES: readonly WorkSkinTemplate[] = [
+  'twitter',
+  'google',
+  'ios',
+  'android',
+];
+
+/**
+ * The version stamp the master skin carries, and the class contract it names.
+ *
+ * **Bump it whenever the classes `buildHTML` emits change**, because that is
+ * the failure this exists to catch: the author saved the skin once, months ago,
+ * and is now pasting freshly generated HTML that expects classes their stored
+ * CSS does not carry. Nothing else tells them — AO3 shows no error, the work
+ * saves, and the fic renders half-styled.
+ *
+ * It is a *rule* rather than a comment because **AO3 deletes every comment on
+ * save** (§13), so `/* Generated with … *​/` has never once reached the
+ * archive. A real rule set survives, which is Rosé Pine's trick; the class
+ * matches no element we emit, and is not meant to.
+ *
+ * Single quotes on the `content` value: that is the form we have watched come
+ * back out of AO3's editor intact, and the unit suite pins it.
+ *
+ * **2** because `buildHTML` began emitting `theme-light` / `theme-dark` on the
+ * container. No v1 skin can exist anywhere — nothing in the UI has ever
+ * produced one — so this bump is free; it is here because the rule is
+ * mechanical, and reasoning about what is "really released" is how a version
+ * stamp stops being trustworthy.
+ */
+export const MASTER_SKIN_VERSION = 2;
+
+function versionRule(): string {
+  return `#workskin .ao3skingen-v${MASTER_SKIN_VERSION}::after{content:'${MASTER_SKIN_VERSION}';}`;
+}
+
+/**
+ * The block that lets one saved skin serve both themes.
+ *
+ * Work skins ban custom properties and `var()` outright, so the community
+ * answer to two palettes in one skin is to **enumerate them as classes** — the
+ * WhatsApp skin does it for light/dark, the Twitter skin for night mode, and a
+ * third does it for sixteen quote colours (KNOWLEDGE §3, §12). A hand-writer
+ * can afford a handful of variants; we generate, so it is a loop.
+ *
+ * What it buys, concretely: a work can use only one skin (§9f), so an author
+ * with a light tweet in chapter 1 and a dark one in chapter 4 had to choose.
+ * Now each block carries its own `theme-*` class and one saved skin serves both.
+ *
+ * ## Why this is the whole stylesheet and not a diff
+ *
+ * It was a diff first, and the diff was **wrong** — measured, not suspected.
+ * KNOWLEDGE §18 records that the canonical skin's entire night mode is five
+ * rules, and 5b put both palettes in a table so ours could be derived the same
+ * way. Deriving it produced 64 rules of pure colour, and one of them broke a
+ * render:
+ *
+ * ```text
+ * base       #workskin .chat.twitter .tweet .time-line             1 id, 4 classes
+ * base       #workskin .chat.twitter .tweet.no-metrics .time-line  1 id, 5 classes  border:none
+ * override   #workskin .chat.twitter.theme-dark .tweet .time-line  1 id, 5 classes  border:1px …
+ * ```
+ *
+ * The override **ties** with `.no-metrics` and comes later, so it reinstated a
+ * border the base sheet had deliberately removed — a hairline under a tweet
+ * with no metrics, in one theme only. That is the hazard MASTER §6a-i named
+ * when the namespacer landed: *specificity does not rise uniformly*, so rules
+ * that previously tied can swap. A hand-writer avoids it by knowing their own
+ * cascade. A generator has no such knowledge, and no lint can see it.
+ *
+ * **A whole variant block is sound by construction, and the argument is short.**
+ * Every rule in it is the corresponding base rule plus exactly one class, in the
+ * same order, so for an element carrying the theme class: the variant's winner
+ * for a property beats its own base twin (one class more); it beats every other
+ * variant rule exactly as its twin did (all shifted equally); and it beats every
+ * other base rule, because it already beat or tied its twin, which beat or tied
+ * that rule. So the winner is the same rule the variant stylesheet alone would
+ * pick, with the variant's value.
+ *
+ * The price is size — about 26 KB across the three themed platforms, taking the
+ * master skin to roughly 61 KB against the 104 KB skin AO3 serves today. Item 9
+ * (dedupe) is worth more now than it was, and this is the reason.
+ *
+ * **What it still does not buy: switching a posted block's theme by editing a
+ * class.** Twitter's X logo is chosen in `buildHTML` — grey for dark, colour
+ * for light — so a block that changes theme needs regenerating, not
+ * re-classing. That is one image, and it is the honest limit of a CSS-only
+ * variant.
+ */
+/**
+ * The project one block of the master skin is built from.
+ *
+ * **The open platform keeps the author's settings; the other three wear their
+ * own look.** Bubble colours, opacity, the body font and iOS's message mode are
+ * shared fields, so building all four blocks from one project gives three of
+ * them a colour chosen for the fourth — and the author never sees it, because
+ * those blocks style markup they will paste chapters later.
+ *
+ * That is not hypothetical. A skin saved on 8 Aug 2026 from a project carrying
+ * `#007AFF` and `iosMode: 'sms'` put **blue bubbles in the WhatsApp block** and
+ * **SMS green in the iMessage block**, on a real posted work. Both were faithful
+ * to the settings and wrong on the page.
+ *
+ * The exception matters as much as the rule: the block for the platform the
+ * author is looking at must match their preview and their PNG exactly, so it is
+ * built from the project untouched. See `withPlatformLook`.
+ */
+function blockProject(project: SkinProject, template: WorkSkinTemplate): SkinProject {
+  return template === project.template
+    ? { ...project, template }
+    : withPlatformLook(project, template);
+}
+
+function themeVariantCss(project: SkinProject, template: WorkSkinTemplate): string {
+  const scoped = blockProject(project, template);
+  const theme = platformTheme(scoped);
+  if (!theme) return ''; // Google has no theme, so there is nothing to vary.
+
+  // The base block already serves the author's own setting; only the theme they
+  // did *not* pick needs carrying. Symmetric: an author working in dark mode
+  // gets the light variant, not "a dark mode added".
+  const other: SkinTheme = theme === 'dark' ? 'light' : 'dark';
+  return namespaceCss(platformCss(withPlatformTheme(scoped, other)), template, other);
+}
+
+/**
+ * One skin, saved once, covering all four platforms.
+ *
+ * A work can use **only one skin** (§9f), so an author with an iOS chat in
+ * chapter 1 and a tweet in chapter 4 cannot save two of ours. This is the
+ * export that serves them: every platform's stylesheet, each scoped to
+ * `.chat.<platform>` so they cannot reach each other, plus the markup for the
+ * platform they are currently looking at.
+ *
+ * It covers **both themes**, not just the one the author has selected: each
+ * themed platform also carries a variant block for the theme they did not pick
+ * — see `themeVariantCss` — so one saved skin serves a light tweet in chapter 1
+ * and a dark one in chapter 4.
+ *
+ * ## Why this was assembly rather than invention
+ *
+ * `namespaceCss` scopes a stylesheet and is proven by computed-style diff not
+ * to move a pixel (MASTER §6a); `buildHTML` already emits the matching platform
+ * class on every path, including the PNG, so **no markup change was needed at
+ * all**. This function is the composition of two things that already existed.
+ *
+ * ## What it is deliberately not doing
+ *
+ * - **Not merging the four blocks' shared rules.** Four paragraph resets, four
+ *   `.visually-hidden` blocks and four `.wm` credits survive namespacing as
+ *   distinct selectors, so they are redundant rather than conflicting —
+ *   measured at 26 rules and 3.4 KB of 34.5 KB, about a tenth. That is
+ *   BACKLOG 9, and hand-merging early would give the single-platform export and
+ *   this one two code paths that can disagree, which is the failure
+ *   `SITE-SKIN-IMPLEMENTATION.md` §5 is about.
+ * - **Not cleaning up the iOS tail rules when serving Twitter.** `.css-tails`
+ *   is added by the export rather than by `buildHTML`, and a master skin
+ *   carries every platform's rules by definition. Namespaced, they match
+ *   nothing outside iOS.
+ * - **Not deciding which export the author gets.** That choice — "one skin for
+ *   everything" against "just this platform" — is BACKLOG 10, and it is not
+ *   optional, because the author has exactly one skin slot to spend.
+ *
+ * The invariant, measured in `tests/master-skin.spec.ts`: a master skin must
+ * render each platform **identically to that platform's own single-platform
+ * skin**, including under AO3's paragraph injection.
+ */
+export function buildMasterWorkSkin(project: SkinProject): WorkSkinExport {
+  const blocks = MASTER_TEMPLATES.map((template) =>
+    namespaceCss(platformCss(blockProject(project, template)), template)
+  );
+
+  // Every theme variant goes after every base block. Specificity already
+  // decides this — a variant rule carries one class more than its base twin —
+  // so the order is for whoever reads the skin, not for the cascade.
+  const variants = MASTER_TEMPLATES
+    .map((template) => themeVariantCss(project, template))
+    .filter(Boolean);
+
+  const css = [versionRule(), ...blocks, ...variants].join('\n');
+
+  return {
+    css,
+    // The credit lives in the HTML, and there is one block of HTML, so there is
+    // one credit — concatenating the four stylesheets cannot multiply it.
+    html: platformHtml(project),
     violations: lintAo3Css(css, 'work'),
   };
 }

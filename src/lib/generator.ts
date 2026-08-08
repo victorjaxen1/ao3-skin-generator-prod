@@ -334,6 +334,34 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
   
   // Only show sender name for templates that need it (not WhatsApp 1-on-1)
   const who = (template === 'android' && !isGroupMode) ? '' : `<dt class="sender">${msg.sender}</dt>`;
+
+  /**
+   * The hidden speaker label, and when to leave it out.
+   *
+   * `<dt class="visually-hidden">Alex: </dt>` exists because a bubble carries
+   * its speaker in colour and alignment alone, so with no CSS the conversation
+   * is unattributed lines (§9a). In a **group** chat that reasoning does not
+   * apply: the row already renders the speaker's name as visible text, right
+   * above what they said.
+   *
+   * Emitting both was measured on a real posted work with Hide Creator's Style
+   * on, and it read:
+   *
+   * ```text
+   * Alex:                                  <- this label
+   * AL                                     <- the avatar monogram
+   * Alex                                   <- the visible group name
+   * Anyone free for coffee tomorrow? 11:30 AM
+   * ```
+   *
+   * Three names for one speaker. The monogram is a picture standing in for a
+   * missing avatar and has to stay real text — AO3 allows no `aria-hidden` and
+   * `content:` would vanish from the PNG (§9c) — so the label is the one to
+   * drop. With the skin *on* nothing changes: this element was always clipped.
+   */
+  const hiddenSpeaker = senderNameHTML
+    ? ''
+    : `<dt class="visually-hidden">${sanitizeText(msg.sender || (msg.outgoing ? 'You' : 'Them'))}: </dt>`;
   
   // iOS/Android grouping logic
   let isFirstInGroup = true;
@@ -632,7 +660,7 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
     // <dt> is the right element rather than a span: this is already a <dl>,
     // where the term is the speaker and the definition is what they said. AO3
     // allows dt, and unstyled browsers indent dd under dt for free.
-    return `${timeBreak}<div class="${rowClass} ${groupClass}" data-message-id="${msg.id}"><dl class="msg"><dt class="visually-hidden">${sanitizeText(msg.sender || (msg.outgoing ? 'You' : 'Them'))}: </dt>${bubble}${reaction}${statusIndicator}</dl></div>`;
+    return `${timeBreak}<div class="${rowClass} ${groupClass}" data-message-id="${msg.id}"><dl class="msg">${hiddenSpeaker}${bubble}${reaction}${statusIndicator}</dl></div>`;
   }
   
   // Android and other templates: show avatar and sender name (with grouping for Android)
@@ -675,7 +703,7 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
     }
     
     // Hidden speaker, as in the iOS branch above.
-    return `${timeBreak}<div class="${rowClass} ${groupClass}" data-message-id="${msg.id}"><dl class="msg"><dt class="visually-hidden">${sanitizeText(msg.sender || (msg.outgoing ? 'You' : 'Them'))}: </dt>${finalBubble}${statusIndicator}</dl></div>`;
+    return `${timeBreak}<div class="${rowClass} ${groupClass}" data-message-id="${msg.id}"><dl class="msg">${hiddenSpeaker}${finalBubble}${statusIndicator}</dl></div>`;
   }
   
   // Other templates: basic row structure
@@ -683,25 +711,146 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
   return `${timeBreak}<div class="${rowClass}" data-message-id="${msg.id}">${avatar}<dl class="msg">${who}${bubble}${statusIndicator}</dl></div>`;
 }
 
+export type SkinTheme = 'light' | 'dark';
+
 /**
- * The container class, carrying the platform.
+ * Which settings field carries each platform's theme.
+ *
+ * Three separate booleans rather than one, which is not an oversight: an author
+ * can perfectly well want a light tweet and a dark iMessage in the same work,
+ * and the master skin relies on being able to build each platform's block with
+ * the settings that actually belong to it.
+ *
+ * **Google is absent on purpose** — it has no theme at all, so it gets no theme
+ * class and no variant block, and the derived override for it comes out empty.
+ */
+const THEME_SETTING = {
+  ios: 'iosDarkMode',
+  android: 'androidDarkMode',
+  twitter: 'twitterDarkMode',
+} as const;
+
+/** The theme this project's platform is set to, or null if it has none. */
+export function platformTheme(project: SkinProject): SkinTheme | null {
+  const field = THEME_SETTING[project.template as keyof typeof THEME_SETTING];
+  if (!field) return null;
+  return project.settings[field] ? 'dark' : 'light';
+}
+
+/**
+ * The same project with its platform's theme forced.
+ *
+ * `buildMasterWorkSkin` derives a dark override block by compiling a platform
+ * twice and diffing, so it needs to ask for the theme the author did *not*
+ * pick. Returns the project untouched for a platform with no theme.
+ */
+export function withPlatformTheme(project: SkinProject, theme: SkinTheme): SkinProject {
+  const field = THEME_SETTING[project.template as keyof typeof THEME_SETTING];
+  if (!field) return project;
+  return { ...project, settings: { ...project.settings, [field]: theme === 'dark' } };
+}
+
+/**
+ * What makes each platform look like the app it is imitating.
+ *
+ * **The problem this solves is specific to the master skin.** Bubble colours,
+ * opacity, the body font and iOS's message mode are *shared* settings — one set
+ * of fields for all four platforms — which is fine while an author is looking at
+ * one platform, because whatever they pick is what the preview and the PNG show.
+ * A master skin builds all four blocks from that one set, so three of them get a
+ * colour chosen for the fourth, **and the author never sees it** — those blocks
+ * style markup they will paste chapters later.
+ *
+ * Observed on a real posted work, 8 Aug 2026: a project carrying the iOS
+ * example's `#007AFF` gave the **WhatsApp** block blue outgoing bubbles instead
+ * of green, and `iosMode: 'sms'` gave the iMessage block SMS green. Both were
+ * faithful to the settings and wrong on the page.
+ *
+ * These values are the ones `examples.ts` uses for each platform, which is what
+ * an author sees when they open that platform for the first time.
+ */
+export const PLATFORM_LOOK: Record<SkinProject['template'], Partial<SkinProject['settings']>> = {
+  twitter: {
+    senderColor: '#1DA1F2',
+    receiverColor: '#f5f8fa',
+    bubbleOpacity: 1,
+    useDarkNeutral: false,
+  },
+  // Google has no bubbles and hardcodes its own font stack; the entry exists so
+  // this map is total and a new platform cannot be forgotten.
+  google: {},
+  ios: {
+    senderColor: '#007AFF',
+    receiverColor: '#E9E9EB',
+    bubbleOpacity: 1,
+    iosMode: 'imessage',
+    useDarkNeutral: false,
+  },
+  android: {
+    // WhatsApp's outgoing bubble is green. `buildAndroidCSS` is the only builder
+    // that takes `fontFamily` from settings, so it is reset here too — an iOS
+    // font stack on a WhatsApp card is the same class of leak as the colour.
+    senderColor: '#dcf8c6',
+    receiverColor: '#ffffff',
+    bubbleOpacity: 1,
+    fontFamily: 'Arial, Helvetica, sans-serif',
+    useDarkNeutral: false,
+  },
+};
+
+/**
+ * A clone set to `template`, wearing that platform's own look.
+ *
+ * Used by `buildMasterWorkSkin` for every platform **except** the one the author
+ * is currently looking at. That exception is the important half: the open
+ * platform's block must keep the author's real settings, because the modal shows
+ * its CSS beside a preview and a PNG built from them, and two renderings that
+ * can disagree is the failure `SITE-SKIN-IMPLEMENTATION.md` §5 is about.
+ *
+ * Theme flags are deliberately *not* reset — `iosDarkMode`, `androidDarkMode`
+ * and `twitterDarkMode` are already per-platform, so they are the author's
+ * genuine choice for that platform. Nor is `maxWidthPx`: a narrower card is a
+ * size preference rather than a platform's identity, and each builder clamps it
+ * to its own maximum anyway.
+ */
+export function withPlatformLook(project: SkinProject, template: SkinProject['template']): SkinProject {
+  return {
+    ...project,
+    template,
+    settings: { ...project.settings, ...PLATFORM_LOOK[template] },
+  };
+}
+
+/**
+ * The container class, carrying the platform and the theme.
  *
  * The platform class is what lets one master skin hold four stylesheets without
  * them colliding — `namespaceCss` in `workSkin.ts` rewrites every selector to
- * sit under `.chat.<platform>`, and this is the hook it aims at.
+ * sit under `.chat.<platform>`, and this is the hook it aims at. The theme class
+ * is the second half of the same idea: work skins ban `var()`, so the community
+ * idiom for carrying two palettes in one skin is to **enumerate them as
+ * classes**, and three independently published skins do exactly this
+ * (KNOWLEDGE §3, §12, §18).
  *
- * **It is added here rather than at the export boundary**, and that is
+ * **Both are added here rather than at the export boundary**, and that is
  * deliberate: one stylesheet drives the preview, the PNG and the work skin, so
  * markup that only the export sees is markup nothing renders in anger until an
  * author is looking at it. The cost of putting it here is that the class ships
  * to every path immediately; the benefit is that all three paths agree.
  *
- * Until a master skin exists it is inert — no selector anywhere matches `.ios`
- * or `.google`, on our pages or in AO3's own stylesheets, which was checked
- * before adding it. `tests/namespace.spec.ts` pins the rendering either way.
+ * Both are inert outside a master skin — the single-platform stylesheet has one
+ * theme compiled into it, and no selector anywhere matches a bare `.ios` or
+ * `.theme-dark`, on our pages or in AO3's own stylesheets. `namespace.spec.ts`
+ * pins the rendering either way, class by class.
+ *
+ * `theme-` is prefixed rather than plain `.dark`, which is what the community
+ * skins use. They can afford the short name because they choose every class on
+ * the page; ours sits inside a reader's site skin as well as AO3's own CSS, and
+ * `.dark` is a plausible thing for someone else to have styled.
  */
-function chatClass(template: string, extra?: string): string {
-  return `chat ${template}${extra ? ` ${extra}` : ''}`;
+function chatClass(project: SkinProject, extra?: string): string {
+  const theme = platformTheme(project);
+  return `chat ${project.template}${theme ? ` theme-${theme}` : ''}${extra ? ` ${extra}` : ''}`;
 }
 
 export function buildHTML(project: SkinProject): string {
@@ -806,7 +955,7 @@ export function buildHTML(project: SkinProject): string {
     // Wrap messages in container for iOS and Android
     const messagesContainer = (isIOS || !isIOS) ? `<div class="chat-messages">${body}${typing}</div>` : `${body}${typing}`;
     
-    return `<div class="${chatClass(project.template)}">${header}${messagesContainer}${footer}</div>`;
+    return `<div class="${chatClass(project)}">${header}${messagesContainer}${footer}</div>`;
   }
   
   if (project.template === 'google') {
@@ -914,7 +1063,7 @@ export function buildHTML(project: SkinProject): string {
     }).join('');
     
     const body = `<div class="${logoClass}">${logoHtml}</div><div class="search-wrap">${searchComponent}${tabs}${stats}${dym}${results}</div>`;
-    return `<div class="${chatClass(project.template)}">${body}</div>`;
+    return `<div class="${chatClass(project)}">${body}</div>`;
   }
   
   if (project.template === 'twitter') {
@@ -944,16 +1093,16 @@ export function buildHTML(project: SkinProject): string {
       
       // Render all top-level tweets and their threads
       const tweets = topLevelTweets.map(tweet => renderTweetThread(tweet)).join('');
-      return `<div class="${chatClass(project.template, 'tweets')}">${tweets}</div>`;
+      return `<div class="${chatClass(project, 'tweets')}">${tweets}</div>`;
     } else {
       // Simple mode: each message becomes its own tweet
       const tweets = project.messages.map(m => msgHTML(m, 'twitter', project)).join('');
-      return `<div class="${chatClass(project.template, 'tweets')}">${tweets}</div>`;
+      return `<div class="${chatClass(project, 'tweets')}">${tweets}</div>`;
     }
   }
 
   const body = project.messages.map(m => msgHTML(m, project.template, project)).join('');
-  return `<div class="${chatClass(project.template)}">${body}</div>`;
+  return `<div class="${chatClass(project)}">${body}</div>`;
 }
 
 /**

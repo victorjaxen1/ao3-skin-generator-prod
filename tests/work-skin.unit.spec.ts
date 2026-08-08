@@ -1,7 +1,15 @@
 import { test, expect } from '@playwright/test';
-import { buildWorkSkin, CONTAINER_CLASSES, namespaceCss, supportsWorkSkin } from '../src/lib/workSkin';
+import {
+  buildMasterWorkSkin,
+  buildWorkSkin,
+  CONTAINER_CLASSES,
+  MASTER_SKIN_VERSION,
+  MASTER_TEMPLATES,
+  namespaceCss,
+  supportsWorkSkin,
+} from '../src/lib/workSkin';
 import { defaultProject } from '../src/lib/schema';
-import { buildCSS, buildHTML } from '../src/lib/generator';
+import { buildCSS, buildHTML, withPlatformLook } from '../src/lib/generator';
 import { lintAo3Css, isAo3Safe, stripCssComments } from '../src/lib/siteSkin/ao3Css';
 
 /**
@@ -658,7 +666,11 @@ test.describe('which platforms are offered', () => {
     // to be spliced into the literal string `class="chat"`, which stopped
     // existing when buildHTML began emitting the platform class, and would have
     // failed silently: SVGs gone, tails never switched on.
-    expect(html).toContain('class="chat ios css-tails"');
+    // Appended to whatever the container carries, which is now three classes
+    // and was one when this was written — the literal match is the bug, not the
+    // string. Asserted as "last on the container" so it keeps working the next
+    // time something joins that list.
+    expect(html).toMatch(/<div class="chat ios(?: [\w-]+)* css-tails">/);
     expect(css).toMatch(/\.css-tails dd\.bubble\.out\.has-tail::after/);
     expect(css).toMatch(/\.css-tails dd\.bubble\.in\.has-tail::after/);
   });
@@ -783,5 +795,324 @@ test.describe('namespacing a platform stylesheet', () => {
       expect(buildHTML(p), `${template}: container is missing its platform class`)
         .toMatch(new RegExp(`<div class="chat ${template}[ "]`));
     }
+  });
+});
+
+/**
+ * The master skin — MASTER §6c, WORK-SKIN §10c, BACKLOG 7.
+ *
+ * One skin an author saves **once**, covering all four platforms, because a
+ * work can use only one skin (§9f) and a fic with a tweet in chapter 1 and an
+ * iMessage in chapter 4 otherwise has to choose.
+ *
+ * These assert the assembly. What they cannot see is whether four stylesheets
+ * sharing one cascade still *render* like four separate ones — a rule that
+ * escapes its block matches silently and looks exactly like a rule nobody
+ * wrote. That is `tests/master-skin.spec.ts`, in a browser.
+ */
+test.describe('the master work skin', () => {
+  function master(template: 'ios' | 'android' | 'twitter' | 'google' = 'twitter') {
+    const p = defaultProject();
+    p.template = template;
+    return buildMasterWorkSkin(p);
+  }
+
+  test('is legal, in both lint modes', () => {
+    // AO3 refuses the entire skin over one bad property, and a master skin
+    // stakes all four platforms on that single verdict rather than one.
+    for (const template of MASTER_TEMPLATES) {
+      const { css, violations } = master(template);
+      expect(violations, template).toEqual([]);
+      expect(lintAo3Css(css, 'site'), template).toEqual([]);
+    }
+  });
+
+  /**
+   * This used to assert the whole stylesheet was identical whichever platform
+   * was open — the author saves it once, so a sheet that varied under them was
+   * worth ruling out.
+   *
+   * **That property was wrong, and a posted work proved it.** Holding it meant
+   * every block took the open project's shared bubble colours, so a Twitter
+   * project put blue bubbles in the WhatsApp block and SMS green in the
+   * iMessage one (WORK-SKIN §16). A stylesheet that never changes is worth
+   * nothing if three quarters of it is the wrong colour.
+   *
+   * What survives is the useful half: **a platform the author is not looking at
+   * is identical no matter which of the other three they have open.** Only the
+   * open platform's own block tracks their settings, which it must, because the
+   * modal shows its CSS beside a preview built from them.
+   */
+  test('a block is stable across every platform the author might have open', () => {
+    for (const subject of MASTER_TEMPLATES) {
+      const others = MASTER_TEMPLATES.filter((t) => t !== subject);
+      const blocks = others.map((open) => {
+        const css = master(open).css;
+        const rules = css.split('\n').filter((line) => line.includes(`.${subject}`));
+        expect(rules.length, `${subject}: no rules while ${open} was open`).toBeGreaterThan(10);
+        return rules.join('\n');
+      });
+      for (const block of blocks) {
+        expect(block, `${subject} changes depending on which other platform is open`)
+          .toBe(blocks[0]);
+      }
+    }
+  });
+
+  test('carries all four platforms, each scoped to its own container', () => {
+    const { css } = master();
+
+    const selectors = [...css.matchAll(/([^{}]+)\{[^{}]*\}/g)]
+      .flatMap((m) => m[1].split(',').map((s) => s.trim()))
+      .filter(Boolean);
+    expect(selectors.length, 'found no rules').toBeGreaterThan(200);
+
+    const seen = new Set<string>();
+    for (const sel of selectors) {
+      // The version stamp is deliberately platform-less: it describes the skin,
+      // not one block of it, and matches no element we emit.
+      if (sel.includes('ao3skingen-v')) continue;
+
+      const first = /^#workskin\s+([^\s>+~]+)/.exec(sel);
+      expect(first, `${sel} is not rooted at #workskin`).not.toBeNull();
+      const classes = first![1].split('.').slice(1);
+      const platform = MASTER_TEMPLATES.find((t) => classes.includes(t));
+      // An unscoped rule here would apply to all four platforms at once, which
+      // is precisely what namespacing exists to prevent.
+      expect(platform, `${sel} belongs to no platform`).toBeDefined();
+      seen.add(platform!);
+    }
+    expect([...seen].sort()).toEqual([...MASTER_TEMPLATES].sort());
+  });
+
+  test('each block is that platform\'s own export, namespaced — not a second code path', () => {
+    // The single-platform export and the master skin must not be two
+    // generators that can disagree. Byte-identical containment is the strongest
+    // form of that available without a browser: every rule in the master skin
+    // for a given platform is exactly what `buildWorkSkin` emits for it, run
+    // through the same `namespaceCss` the render diff already vouches for.
+    const { css } = master();
+    for (const template of MASTER_TEMPLATES) {
+      // The block for the platform the author has open keeps their settings;
+      // the other three wear their own platform's look, so that is what to
+      // compare against. Without `withPlatformLook` here this test passed
+      // happily while the WhatsApp block carried iOS blue — which is what
+      // reached a posted work.
+      const open = defaultProject();
+      open.template = 'twitter'; // what `master()` builds from
+      const source = template === 'twitter'
+        ? { ...open, template }
+        : withPlatformLook(open, template);
+      const block = namespaceCss(buildWorkSkin(source).css, template);
+
+      expect(css, `${template}: the master block is not this platform's own export`)
+        .toContain(block);
+    }
+  });
+
+  /**
+   * The leak that reached a posted work — WORK-SKIN §16.
+   *
+   * Bubble colours, opacity, the body font and `iosMode` are *shared* settings.
+   * A master skin builds four blocks from one project, so three of them used to
+   * get whatever was chosen for the fourth — **unseen**, because those blocks
+   * style markup the author pastes chapters later. On the archive that meant
+   * blue WhatsApp bubbles and an SMS-green iMessage, from a project carrying
+   * `#007AFF` and `iosMode: 'sms'`.
+   */
+  test('a platform the author is not looking at keeps its own colours', () => {
+    const p = defaultProject();
+    p.template = 'twitter';
+    p.settings.senderColor = '#007AFF'; // the iOS example's blue
+    p.settings.bubbleOpacity = 1;
+    p.settings.iosMode = 'sms';         // green, and nothing to do with WhatsApp
+    p.settings.fontFamily = '-apple-system, BlinkMacSystemFont, sans-serif';
+
+    const { css } = buildMasterWorkSkin(p);
+    const body = (sel: string) => {
+      const i = css.indexOf(sel + '{');
+      expect(i, `missing rule: ${sel}`).toBeGreaterThan(-1);
+      return css.slice(i + sel.length + 1, css.indexOf('}', i));
+    };
+
+    // WhatsApp is green, whatever the shared bubble colour says.
+    expect(body('#workskin .chat.android dd.bubble.out')).toContain('rgba(220, 248, 198, 1)');
+    // iMessage is blue: `iosMode` belongs to the iOS template, and this author
+    // is on Twitter, so their SMS toggle must not reach this block.
+    expect(body('#workskin .chat.ios dd.bubble.out')).toContain('rgba(0, 122, 255, 1)');
+    // And WhatsApp keeps its own font rather than an iOS stack.
+    expect(body('#workskin .chat.android')).toContain('Arial, Helvetica, sans-serif');
+  });
+
+  test('but the platform the author IS looking at keeps their settings', () => {
+    // The other half, and the one that stops the modal showing CSS that
+    // disagrees with the preview beside it. An author on iOS who has chosen SMS
+    // must get SMS green in the skin they save.
+    const p = defaultProject();
+    p.template = 'ios';
+    p.settings.iosMode = 'sms';
+
+    const { css } = buildMasterWorkSkin(p);
+    const i = css.indexOf('#workskin .chat.ios dd.bubble.out{');
+    expect(css.slice(i, css.indexOf('}', i))).toContain('rgba(52, 199, 89, 1)');
+  });
+
+  test('stamps its version as a rule, because AO3 deletes comments', () => {
+    // `/* Generated with … */` has never once reached the archive: AO3 rebuilds
+    // the sheet from rule sets, so nothing outside a rule survives. A real rule
+    // set does, which is how the app can tell a stale saved skin from a current
+    // one when an author pastes their CSS back in.
+    const { css } = master();
+    expect(css).toContain(
+      `#workskin .ao3skingen-v${MASTER_SKIN_VERSION}::after{content:'${MASTER_SKIN_VERSION}';}`
+    );
+    // Single-quoted, like every other content value we emit — that is the form
+    // we have read back out of AO3's editor intact.
+    expect(css).not.toMatch(/content:\s*"/);
+  });
+
+  test('carries no comments at all', () => {
+    // The one construct proven to make AO3 silently drop rules — eleven
+    // consecutive ones, on a skin that saved without error (§13). A master skin
+    // has four times the surface for it.
+    const { css } = master();
+    expect(css).not.toContain('/*');
+    expect(css).toBe(stripCssComments(css));
+  });
+
+  test('carries one credit, not four', () => {
+    // The credit lives in the HTML and there is one block of HTML, so this
+    // holds by construction — asserted because a later "merge the four blocks"
+    // change is exactly the kind that would break it.
+    for (const template of MASTER_TEMPLATES) {
+      const p = defaultProject();
+      p.template = template;
+      const { html } = buildMasterWorkSkin(p);
+
+      expect(html.match(/class="wm"/g)?.length, template).toBe(1);
+      // And it is the same markup the single-platform export hands over: the
+      // master skin changes the stylesheet, not what goes in the chapter.
+      expect(html, template).toBe(buildWorkSkin(p).html);
+    }
+  });
+
+  /**
+   * BACKLOG 8 — both themes in one skin.
+   *
+   * Work skins ban custom properties and `var()`, so the community idiom for
+   * two palettes in one skin is to enumerate them as classes; three published
+   * skins do exactly that (KNOWLEDGE §3, §12, §18). The base block stays as the
+   * author's settings compiled it, and the theme they did *not* pick is carried
+   * as a second, one-class-more-specific copy.
+   *
+   * It was a *diff* of the two builds first — 64 rules instead of 244 — and
+   * that was wrong: an override tied on specificity with a more specific base
+   * rule and, coming later, beat it. `themeVariantCss` has the worked example.
+   * The whole-block form is sound by construction, which is worth more than the
+   * 26 KB it costs.
+   */
+  test('carries the opposite theme as a variant block, for each themed platform', () => {
+    const p = defaultProject();
+    p.template = 'twitter';
+    p.settings.twitterDarkMode = false;
+    p.settings.iosDarkMode = false;
+    p.settings.androidDarkMode = true; // the other direction, in the same skin
+    const { css } = buildMasterWorkSkin(p);
+
+    expect(css, 'twitter: no dark override').toMatch(/#workskin [^{]*\.twitter\.theme-dark/);
+    expect(css, 'ios: no dark override').toMatch(/#workskin [^{]*\.ios\.theme-dark/);
+    // Android is already dark, so it is the LIGHT variant that has to be
+    // carried — the derivation is symmetric, not "add a dark mode".
+    expect(css, 'android: no light override').toMatch(/#workskin [^{]*\.android\.theme-light/);
+    expect(css, 'android: dark is the base, so it needs no override')
+      .not.toMatch(/\.android\.theme-dark/);
+    // Google has no theme at all, so it gets no variant and no class.
+    expect(css, 'google has no theme to vary').not.toMatch(/\.google\.theme-/);
+  });
+
+  test('each variant block is that platform\'s other-theme export, namespaced', () => {
+    // The same containment the base blocks carry, and for the same reason: the
+    // variant must be the platform's own stylesheet compiled with the other
+    // theme, not a transformation of the base that could disagree with it.
+    //
+    // This is also what makes the cascade argument hold. Every rule in the
+    // variant is its base twin plus exactly one class, in the same order — so
+    // the variant's winner for any property beats its own twin, beats every
+    // other variant rule exactly as its twin did, and therefore beats every
+    // base rule too. A *diff* of the two builds has no such guarantee, which is
+    // how the first version of this shipped a border the base sheet removed.
+    const p = defaultProject();
+    p.template = 'twitter';
+    const { css } = buildMasterWorkSkin(p);
+
+    for (const template of ['twitter', 'ios', 'android'] as const) {
+      const other = defaultProject();
+      other.template = template;
+      other.settings.twitterDarkMode = true;
+      other.settings.iosDarkMode = true;
+      other.settings.androidDarkMode = true;
+
+      const block = namespaceCss(buildWorkSkin(other).css, template, 'dark');
+      expect(css, `${template}: the dark variant is not this platform's own export`)
+        .toContain(block);
+    }
+  });
+
+  test('no rule in the skin is empty, which AO3 reports as an error', () => {
+    // The trap that made the typing animation's two `animation-delay` rules
+    // undeletable (§9e): AO3 refuses a skin over an empty rule set, and a
+    // master skin stakes all four platforms on that one verdict.
+    const p = defaultProject();
+    p.template = 'twitter';
+    for (const [rule, body] of buildMasterWorkSkin(p).css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      expect(body.trim(), `empty rule: ${rule}`).not.toBe('');
+    }
+  });
+
+  test('every container class the CSS aims at is one buildHTML emits', () => {
+    // The three-way contract in WORK-SKIN §10, point 7: `buildHTML` writes the
+    // class string, `useCssBubbleTails` appends to it, `namespaceCss` splices
+    // into it. Change one and the other two are wrong, silently. The theme
+    // class is the newest member of that list.
+    for (const template of MASTER_TEMPLATES) {
+      const p = defaultProject();
+      p.template = template;
+      const classes = buildWorkSkin(p).html.match(/<div class="([^"]*)"/)![1].split(/\s+/);
+
+      expect(classes, template).toContain('chat');
+      if (template === 'google') {
+        expect(classes.some((c) => c.startsWith('theme-')), 'google has no theme').toBe(false);
+      } else {
+        expect(classes, `${template} is missing its theme class`).toContain('theme-light');
+      }
+      for (const cls of classes) {
+        if (cls === template) continue;
+        expect(CONTAINER_CLASSES, `${template}: .${cls} is not in CONTAINER_CLASSES`)
+          .toContain(cls);
+      }
+    }
+  });
+
+  test('a dark project emits the dark class, and the skin still lints', () => {
+    for (const template of ['twitter', 'ios', 'android'] as const) {
+      const p = defaultProject();
+      p.template = template;
+      p.settings.twitterDarkMode = true;
+      p.settings.iosDarkMode = true;
+      p.settings.androidDarkMode = true;
+
+      const { html, violations } = buildMasterWorkSkin(p);
+      expect(html, template).toMatch(new RegExp(`<div class="chat ${template} theme-dark[ "]`));
+      expect(violations, template).toEqual([]);
+    }
+  });
+
+  test('keeps Android\'s asset urls absolute, which is why order matters', () => {
+    // Namespacing runs last, after absolutizeCssAssets. Android reaches
+    // buildCSS with `url('/assets/…')`, which AO3 refuses outright — and in a
+    // master skin that one declaration loses all four platforms at once.
+    const { css } = master('android');
+    expect(css).not.toContain("url('/assets/");
+    expect(css).toMatch(/url\('https:\/\/media\.publit\.io/);
   });
 });
