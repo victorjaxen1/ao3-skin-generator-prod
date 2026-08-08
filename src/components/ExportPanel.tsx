@@ -7,6 +7,7 @@ import { ProUpgradeModal } from './ProUpgradeModal';
 import { useToast, ToastContainer } from './Toast';
 import { uploadToImgBB, ImageUploadError } from '../lib/imgbb';
 import { inlineCrossOriginImages, FailedImage } from '../lib/imageProxy';
+import { PLATFORM_ASSETS } from '../lib/platformAssets';
 
 interface Props {
   project: SkinProject;
@@ -75,6 +76,21 @@ function applyWatermark(canvas: HTMLCanvasElement, skipWatermark: boolean): HTML
   );
   return out;
 }
+
+/**
+ * An example skin title, per platform.
+ *
+ * AO3 skin titles are unique across the **entire archive**, not per account, so
+ * an author who types "Twitter" gets a validation error from a name somebody
+ * claimed years ago. AO3's own FAQ answers this by telling people to include
+ * their username, and the dialog says so with a title they can nearly paste.
+ */
+const SKIN_TITLE_EXAMPLE: Record<SkinProject['template'], string> = {
+  twitter: 'yourname — Twitter',
+  google: 'yourname — Google',
+  ios: 'yourname — iMessage',
+  android: 'yourname — WhatsApp',
+};
 
 // ---------------------------------------------------------------------------
 // Core render function — unified off-screen clone for ALL templates.
@@ -198,6 +214,45 @@ async function renderChunk(
 
   // Twitter html2canvas layout fixes
   if (project.template === 'twitter') {
+    // The verified badges are drawn in CSS now — a character centred in a blue
+    // circle — so that a published fic stops fetching them (BACKLOG 5a). The
+    // metric icons went further and became plain characters, which need
+    // nothing here: html2canvas rasterises ordinary inline text correctly, and
+    // it is only the centred-in-a-box case that it cannot do.
+    //
+    // The PNG puts the badge image back, and only the PNG. html2canvas measures
+    // boxes with the real layout engine but draws text itself, and it lands a
+    // glyph well below a small circle: the tick rasterised as white-on-white
+    // outside a plain blue disc, and the heart came out clipped at the bottom
+    // edge. Line-height centring and padding centring both failed the same
+    // way, so this is not a value to tune.
+    //
+    // Nothing is lost by swapping. The reason to drop a chrome image is that a
+    // reader fetches it from our CDN every time they open the chapter, forever
+    // — a PNG is rendered once, on the author's own machine, from assets the
+    // app already ships. This is the same trade `useCssBubbleTails` makes in
+    // workSkin.ts, in the other direction: SVG for the raster, CSS for AO3.
+    const drawnGlyphs: [selector: string, src: string, size: number][] = [
+      ['.tweet .verified-badge', PLATFORM_ASSETS.twitter.verifiedBadge, 18],
+      ['.tweet .quote-verified-badge', PLATFORM_ASSETS.twitter.verifiedBadge, 16],
+    ];
+    for (const [selector, src, size] of drawnGlyphs) {
+      clone.querySelectorAll(selector).forEach(el => {
+        const img = document.createElement('img');
+        img.src = src;
+        img.alt = '';
+        img.className = el.className;
+        // Inline, so it beats the drawn-badge rules the class still carries —
+        // otherwise the image sits on a blue disc inflated by its padding.
+        // Only what an image must not inherit is overridden: display and
+        // vertical-align are left to the class, which is what the old <img>
+        // used, so the raster lands on the same pixels.
+        img.style.cssText =
+          `width:${size}px;height:${size}px;background:none;padding:0;line-height:normal`;
+        el.replaceWith(img);
+      });
+    }
+
     clone.querySelectorAll('.tweet').forEach(el => {
       (el as HTMLElement).style.cssText += ';position:relative;box-sizing:border-box;width:100%;max-width:100%';
     });
@@ -207,6 +262,25 @@ async function renderChunk(
     });
     clone.querySelectorAll('.tweet .name-line').forEach(el => {
       (el as HTMLElement).style.cssText += ';display:flex;align-items:center;gap:4px;flex-wrap:nowrap';
+    });
+    // THE NAME LINE WAS BEING CUT IN HALF IN EVERY PNG THIS APP HAS EXPORTED.
+    // `.head` is only 20px tall — one line box — and html2canvas draws text a
+    // few pixels lower than the browser does, so `overflow:hidden` sliced the
+    // bottom off "Taylor Swift", the handle and "Follow" alike. It looked like
+    // a font problem and it was a clipping problem.
+    //
+    // Only the raster needs this. `.head{overflow:hidden}` is load-bearing in
+    // the stylesheet — it is the block formatting context that sits beside the
+    // avatar float, which is precisely why the float layout survives AO3's
+    // paragraph injection (WORK-SKIN §12d) — so it must not be touched there.
+    // In the clone it is redundant anyway: `.name-line` is forced to
+    // `display:flex` above, and a flex container is already a BFC, so the head
+    // still sits beside the float without it. The outer
+    // `.tweet-header{overflow:hidden}` still contains the float; removing THAT
+    // one lets the avatar overlap the body text, which is what the first
+    // attempt at this did.
+    clone.querySelectorAll('.tweet .head').forEach(el => {
+      (el as HTMLElement).style.cssText += ';overflow:visible';
     });
     clone
       .querySelectorAll('.tweet .name,.tweet .handle,.tweet .follow-dot,.tweet .follow-btn')
@@ -233,9 +307,35 @@ async function renderChunk(
     clone.querySelectorAll('.tweet .metric-icon').forEach(el => {
       (el as HTMLElement).style.cssText += ';width:20px;height:20px;display:block;flex-shrink:0';
     });
+    // The glyph icons take the same lift as the counts beside them. That -6px
+    // is an html2canvas nudge with no equivalent in the stylesheet, so a text
+    // icon that does not get it lands 6px below its own number — which is
+    // exactly how the first glyph raster came out.
+    clone.querySelectorAll('.tweet .glyph-icon').forEach(el => {
+      (el as HTMLElement).style.cssText += ';position:relative;top:-6px';
+    });
     clone.querySelectorAll('.tweet .metric-count').forEach(el => {
       (el as HTMLElement).style.cssText +=
         ';font-size:14px;line-height:20px;position:relative;top:-6px';
+    });
+  }
+
+  // Google html2canvas layout fixes
+  if (project.template === 'google') {
+    // The same bug as the tweet name line, in the one place Google clips: the
+    // search query lost the bottom of its descenders in every PNG. `.search-text`
+    // is `overflow:hidden` so `text-overflow:ellipsis` can truncate a long
+    // query, and overflow clips in BOTH directions — so html2canvas drawing
+    // text a few pixels low means the glyph bottoms fall outside the box.
+    //
+    // Padding rather than `overflow:visible`, because the ellipsis has to keep
+    // working: a long query would otherwise run out of the rounded bar in the
+    // raster instead of truncating. Overflow clips at the padding edge, so
+    // 5px of padding-bottom gives the descenders room without changing what is
+    // shown. The stylesheet is untouched — the browser and AO3 never had this
+    // problem.
+    clone.querySelectorAll('.search-text').forEach(el => {
+      (el as HTMLElement).style.cssText += ';padding-bottom:5px';
     });
   }
 
@@ -765,6 +865,17 @@ export const ExportPanel: React.FC<Props> = ({
                   <p>4. Preview your chapter, then post!</p>
                 </div>
               )}
+
+              {/* The tag above points at ImgBB, not at AO3 — AO3 never copies
+                  an image, it links to one. A free host that hits a quota or
+                  loses an account takes the picture out of a fic that has been
+                  posted for months, silently (KNOWLEDGE §7). Saying so costs a
+                  line; finding out costs a chapter. */}
+              <p className="text-[11px] text-stone-400 text-center leading-relaxed">
+                The picture is hosted by ImgBB, not AO3. If it ever stops serving the file, your
+                chapter loses the image — use <strong className="text-stone-500">Save Image</strong>{' '}
+                to keep a copy you can re-upload.
+              </p>
             </div>
           </div>
         </div>
@@ -842,6 +953,31 @@ export const ExportPanel: React.FC<Props> = ({
                   Paste this into the CSS box, give it a title, and submit. You only do this once —
                   the same skin can be attached to every fic you post.
                 </p>
+
+                {/* The two things AO3 will not tell an author until it has
+                    already cost them something: a title collision is a
+                    validation error at submit, and a second work skin on a fic
+                    that already has one is silent — AO3 applies whichever is
+                    selected and the other simply never runs. Both come from
+                    AO3's own work-skin FAQ. */}
+                <div className="ml-7 mb-2 bg-amber-50 border border-amber-200 rounded-lg p-2.5 space-y-2 text-[11px] text-amber-900 leading-relaxed">
+                  <p>
+                    <strong>Put your username in the title.</strong> Titles have to be
+                    unique across the whole of AO3, not just your account, so a plain
+                    name was claimed years ago and AO3 rejects it when you submit.
+                    Something like{' '}
+                    <code className="bg-amber-100 px-1 rounded">
+                      {SKIN_TITLE_EXAMPLE[project.template]}
+                    </code>{' '}
+                    works.
+                  </p>
+                  <p>
+                    <strong>Already using a work skin on this fic?</strong> A work can
+                    only have one. Add this CSS to the end of that skin instead of
+                    making a second one — if you create a new skin, the fic loses
+                    whatever the old one was doing.
+                  </p>
+                </div>
                 <textarea
                   readOnly
                   value={workSkin.css}
@@ -877,7 +1013,7 @@ export const ExportPanel: React.FC<Props> = ({
                 </div>
                 <p className="text-xs text-stone-500 mb-2 ml-7 leading-relaxed">
                   In your chapter editor, switch to <strong className="text-stone-700">HTML mode</strong> and
-                  paste this where the tweets should appear. Then set{' '}
+                  paste this where the conversation should appear. Then set{' '}
                   <strong className="text-stone-700">Select Work Skin</strong> to the skin you made
                   in step 1 — without that, this is unstyled text.
                 </p>
@@ -908,9 +1044,20 @@ export const ExportPanel: React.FC<Props> = ({
                 </button>
               </div>
 
+              {/* The third thing an author is never told, and the one that
+                  breaks a fic that has been up for a year. AO3 never copies an
+                  image — it links to wherever it lives. A skin author on
+                  Cloudinary went over the free tier and every image in every
+                  fic using their skin died at once (KNOWLEDGE §7). This does
+                  not pretend "Copy for AO3" avoids it: that path uploads to
+                  ImgBB, which is one file rather than many, and still not AO3. */}
               <p className="text-[11px] text-stone-400 mt-5 leading-relaxed">
-                The icons stay hosted by us. If you would rather nothing outside AO3 loads inside
-                your fic, use &ldquo;Copy for AO3&rdquo; instead — that uploads one flat picture.
+                <strong className="text-stone-500">About the icons.</strong> They load from our
+                image host each time somebody reads your fic — AO3 never keeps its own copy. If a
+                host ever stops serving a file, it disappears from every chapter you have already
+                posted, with no warning. It has happened to popular skins before.
+                &ldquo;Copy for AO3&rdquo; is one picture instead of many, but it is hosted off
+                AO3 too, so keep the PNG somewhere you can re-upload it from.
               </p>
             </div>
           </div>

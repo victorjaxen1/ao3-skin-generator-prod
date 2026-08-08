@@ -54,6 +54,32 @@ test('the modal hands over two pieces, each with its own destination', async ({ 
   await expect(page.getByRole('button', { name: 'Copy the HTML' })).toBeEnabled();
 });
 
+/**
+ * The three facts AO3 does not tell an author until it has cost them something.
+ *
+ * None of these is compiler work — they are the last thing standing between a
+ * clean export and somebody using it unaided (BACKLOG 5). Each has a specific
+ * failure: a duplicate title is a validation error at submit, a second work
+ * skin silently replaces the one the fic was using, and an image host that
+ * stops serving takes the pictures out of an already-posted chapter.
+ */
+test('the modal states the three things AO3 will not', async ({ page }) => {
+  await openTemplate(page, 'twitter-verified-account');
+  await page.getByRole('button', { name: /work skin/i }).click();
+
+  const dialog = page.getByRole('dialog', { name: 'Work skin' });
+
+  // Unique across the whole archive, not per account.
+  await expect(dialog).toContainText('unique across the whole of AO3');
+  await expect(dialog).toContainText('yourname — Twitter');
+
+  // One skin per work: an author who has one already must merge, not create.
+  await expect(dialog).toContainText('A work can only have one');
+
+  // The images are not AO3's, and the modal must not pretend otherwise.
+  await expect(dialog).toContainText('AO3 never keeps its own copy');
+});
+
 test('the exported CSS and HTML are what AO3 will accept', async ({ page }) => {
   await openTemplate(page, 'twitter-verified-account');
   await page.getByRole('button', { name: /work skin/i }).click();
