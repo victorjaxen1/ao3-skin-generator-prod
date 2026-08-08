@@ -550,9 +550,14 @@ further "defects" turned out to be the measurement, not the export (§16c).
 | 3b | ✅ **done, 8 Aug 2026.** Both themes in one skin — the theme class, `namespaceCss`'s theme argument, and a variant block per themed platform. §6b-i is the one to read: the *derived diff* this was scoped as is unsound, and the render diff is what caught it |
 | 4 | Dedupe the rules that are byte-identical across platforms (`.visually-hidden`, the paragraph reset, the `dd.bubble` text formatting). Measured at **26 distinct rules, 3.4 KB** when the skin was 34.5 KB over 293 rules; the variant blocks of 3b doubled the structural rules, so **re-measure against 537 before starting**. Worth more than it was, and still not worth blocking 5 on |
 | 5 | ✅ **done, 8 Aug 2026.** The work-skin modal offers **Just \<platform\>** (default) against **All four platforms**, with the title example and the follow-up guidance following the choice. The §9f copy fixes shipped earlier, in item 5 of `BACKLOG.md`. §6e records what the choice had to say and why the default is the narrow one |
-| 6 | ⬅ **next, and the only thing left.** **Save it on real AO3** and settle §5 |
+| 6 | ✅ **done, 8 Aug 2026 — §6f.** Saved on real AO3 (537/537 rules stored), a four-platform work posted and read with the skin on and off, and §5 settled: `display:flex` lays out correctly on a real page. **All six phases complete, and deployed.** What the render found is WORK-SKIN §16 |
 
-Phases 0 and 1 are worth doing regardless of whether the master skin ships.
+Phases 0 and 1 were worth doing regardless of whether the master skin shipped.
+It shipped: `main` at `b5b5975`, deployed at the end of 8 Aug 2026. **The only
+item left in this document's scope is phase 4 (dedupe)**, which is hygiene rather
+than a size problem now that AO3 has accepted a 67 KB paste whole — and it must
+be re-measured against 537 rules, since the theme variants of §6b-i doubled the
+structural ones.
 
 ---
 

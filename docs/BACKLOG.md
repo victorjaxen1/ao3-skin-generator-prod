@@ -4,8 +4,11 @@
 last column; this file exists so nobody has to read four documents to find out
 what to do next.
 
-**Last reconciled: 8 Aug 2026.** Everything shipped up to commit `c30f97b`
-(iOS and Android work skins) is excluded.
+**Last reconciled: end of 8 Aug 2026, against `main` at `b5b5975`.** Everything
+shipped up to `c30f97b` (iOS and Android work skins) is excluded, and everything
+in this file that says "done" is **deployed to production** — that push happened
+at the end of 8 Aug 2026 and closed the "nothing is released" caveat that ran
+through these docs all day.
 
 **The master-skin chain is done — built, shipped in the UI, and proven on the
 archive.** Items 6, 7, 8 and 10 landed on 8 Aug 2026, and **18a closed the same
@@ -13,9 +16,16 @@ day**: the 67 KB skin was saved on real AO3, read back **537 of 537 rules and
 2,019 of 2,019 declarations, in order, nothing dropped**, and a single work
 carrying all four platforms renders correctly from it.
 
-**Next up: item 5d** (rounded corners in the PNG that AO3 does not have) and
-**5c**, both small, then item 9 (dedupe — hygiene now, not a size problem: AO3
-took the 67 KB paste whole).
+**Nothing left is on a critical path.** Both exports work, both are proven on the
+archive, both are live. In order of what is worth doing next:
+
+1. **5d** — decide whether iOS/Android round their corners everywhere or nowhere.
+   The only *decision* on this list; everything else is mechanical.
+2. **The EPUB text** (18) — two minutes when AO3 stops returning 525s.
+3. **5c** — one anchor becomes a span.
+4. **9** — dedupe, re-measured against 537 rules rather than 292.
+5. **11–16b** — the optional features, none urgent. The scrollable chat window
+   (11) is the highest-value one.
 
 **Item 18 is mostly closed too.** A work with all four platforms was posted and
 read with **Creator's Style off**: our markup survives, none of our CSS is
