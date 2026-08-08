@@ -9,13 +9,16 @@ what is **different** for work skins.
 
 **Written 6 Aug 2026** against otwarchive `master`; **substantially revised
 7 Aug 2026**, when all four platforms were saved on the real archive for the
-first time and the stored CSS was read back.
+first time and the stored CSS was read back; **extended 8 Aug 2026** with the
+export-dialog copy, the drawn chrome, and three bugs in the *image* export that
+no test here could see.
 
-> **If you are new to this file, read four things and skip the rest until you
+> **If you are new to this file, read five things and skip the rest until you
 > need it:** §2 (where it stands), §12 (AO3 injects `<p>`, which is what breaks
 > layouts), §13 (comments make AO3 drop rules — the one bug the lint cannot
-> see), and §10 (handoff: what to do next and the traps that have already cost
-> time).
+> see), §14a–14b (html2canvas is not the browser, and the only way to catch it
+> is to look at a picture), and §10 (handoff: what to do next, the recipe for
+> it in §10b, and the traps that have already cost time).
 >
 > Sections 5–9 are the historical record of how each platform got here. They are
 > accurate and mostly no longer actionable.
@@ -80,6 +83,19 @@ AO3's editor and diffed against what we emit):
 - **One exception, and it is a big one: comments make AO3 drop rules.** See §13.
   This is the only case we have found of the archive silently discarding legal
   CSS, and the lint cannot see it.
+
+**What changed on 8 Aug 2026** — the export is now something an author can use
+unaided, and the *image* export got three bug fixes it badly needed:
+
+- **The export dialog says the three things AO3 does not** (§9f): titles are
+  unique across the whole archive, a work can use only one skin, and the images
+  are somebody else's server — "Copy for AO3" included.
+- **Twitter fetches one chrome image instead of five** (§14). Both badges and
+  the whole metric row are drawn.
+- **Three PNG bugs, none of which any test here could see** (§14a–14b). One had
+  been clipping the tweet name line in *every export this app has ever made*.
+- **Site skins are comment-free too** (§13f), closing the §13 exposure for the
+  other product.
 
 **Release gate, still open:** the *HTML* half. Nothing has been checked with
 Creator's Style off, downloaded as EPUB, or re-parsed by editing a posted work
@@ -210,7 +226,7 @@ and the name line from flex to inline-block.
 **This was empirical, and the cause was not understood at the time.** The flex version rendered
 correctly in this app and in the AO3 simulation of §6, but wrong on the real
 archive: the name line right-aligned and the X logo dropped to its own line.
-Every established AO3 Twitter work skin — see §14 — uses float and none use
+Every established AO3 Twitter work skin — see §15 — uses float and none use
 flex. That is accumulated community knowledge about what survives on the
 archive, and it is worth more than a local render that says the flex version is
 fine.
@@ -455,15 +471,29 @@ is already a `<dl>`, so the term/definition pairing is the honest one, `dt` is
 on AO3's allowed element list, and an unstyled browser indents the `dd` under it
 for free.
 
-### 9f. Two facts the export dialog does not yet say — **the next job**
+### 9f. Two facts the export dialog did not say — **shipped, 7–8 Aug 2026**
 
 - **A work can only use one skin.** An author who already has one must *merge*
-  our CSS into it. The iOS tutorial leads with this. Our dialog says "create a
+  our CSS into it. The iOS tutorial leads with this. Our dialog said "create a
   work skin", which silently breaks those users.
 - **Skin titles must be unique across all of AO3**, not per account. AO3
   recommends including your username.
 
-Neither is implemented — they are UI copy, not compiler work.
+Both now sit in an amber note under step 1 of the work-skin modal, which is
+where the author is standing when each one bites: the title is rejected at
+submit, and the second skin is worse than rejected — AO3 applies whichever is
+selected and the fic silently loses what the old skin was doing.
+
+The title advice is concrete rather than general. It shows an example built from
+the current platform (`yourname — WhatsApp`), because "make it unique" does not
+tell anyone what to type.
+
+**A third fact went in with them, from KNOWLEDGE §7:** AO3 never keeps a copy of
+an image, so a host that stops serving one takes it out of every chapter already
+posted. The old footnote made this worse than saying nothing — it offered "Copy
+for AO3" as the option where *"nothing outside AO3 loads inside your fic"*, and
+that path uploads to ImgBB. One picture instead of many, and just as much
+somebody else's server. Both dialogs now say so.
 
 ---
 
@@ -484,11 +514,14 @@ closed; the HTML half is not.
 | Sized in `em` | ✅ all four |
 | Survives AO3's `<p>` injection | ✅ all four, measured (§12) |
 | Saved on real AO3, stored CSS diffed | ✅ all four, zero drift |
-| Exported CSS is comment-free | ✅ (§13 — this was a real bug) |
+| Exported CSS is comment-free | ✅ both products (§13, §13f) |
+| The dialog tells an author what AO3 will not | ✅ (§9f) |
+| Chrome images per tweet | ✅ **one** — the X logo (§14) |
+| The PNG renders what the browser renders | ✅ all four, exported and read at zoom (§14a–14b) |
 | Creator's Style **off** / EPUB download | ❌ **never checked** |
 | Re-parse after editing a posted work | ❌ **never checked** |
 
-### The five things worth knowing before you touch anything
+### The six things worth knowing before you touch anything
 
 1. **Read the stored CSS.** AO3 keeps the *cleaned* CSS, so reopening a saved
    skin in AO3's editor is a direct readout of what the sanitizer kept and
@@ -506,6 +539,14 @@ closed; the HTML half is not.
 5. **One stylesheet drives the preview, the PNG and the work skin.** Change CSS
    in `generator.ts`, never at the export boundary. `SITE-SKIN-IMPLEMENTATION.md`
    §5 explains what two renderings that can disagree cost the other product.
+   The exception, and it is narrow: `renderChunk`'s html2canvas fix blocks
+   compensate for the **rasteriser**, not for the design. Everything in them is
+   there because html2canvas disagrees with the browser, and each one says so.
+6. **Render it and look at it** (§14a–14b, added 8 Aug 2026). Three bugs in one
+   session were invisible to the lint, to the injection harness and to 169
+   passing unit tests, and two of them reached the author before they reached
+   us. The unit suite proves the CSS is *legal*; only a picture proves it is
+   *right*. Export a PNG, and diff it against one from before your change.
 
 ### The traps that have already cost time
 
@@ -526,19 +567,51 @@ closed; the HTML half is not.
   and measure that context in a browser rather than reasoning about the cascade.
   `tests/_ctx`-style harnesses are cheap; a third of rules matched no element on
   the first pass and would have been guesses.
+- **Never put a backtick in `generator.ts`'s CSS.** The stylesheets are template
+  literals, so a backtick inside a CSS comment ends the string and the build
+  fails with a parse error pointing at the comment. Cost two builds on
+  8 Aug 2026. Write `content:''`, not the same thing in backticks.
+- **Do not reach for `git stash --keep-index` to split a commit.** It stashes
+  everything and leaves the index, so the next `--amend` silently swallows the
+  staged files. Stage by path and commit; the recovery is `reset --soft` plus
+  `git checkout stash@{0} -- <paths>`, but do not need it.
 
 ### How to verify a change
 
 ```bash
-npx playwright test --project=unit                              # ~10s, no browser
+npx playwright test --project=unit                              # ~15s, no browser
 npx playwright test --project=desktop tests/ao3-injection.spec.ts # <p> injection
 npm run build
 ```
 
 The unit project asserts every platform lints clean in both modes, emits no
-banned property, reads as prose unstyled, is `em`-sized to three decimals, and
-carries exactly one plain-text credit. The injection project needs a browser
-because that failure is geometric and **the lint cannot see it**.
+banned property, reads as prose unstyled, is `em`-sized to three decimals,
+fetches no chrome image beyond the X logo, and carries exactly one plain-text
+credit. The injection project needs a browser because that failure is geometric
+and **the lint cannot see it**.
+
+The browser projects point at the deployed site by default, so for local work:
+
+```bash
+npx next dev -p 3000
+UX_BASE_URL=http://localhost:3000 npx playwright test --project=desktop tests/work-skin.spec.ts
+```
+
+**Then export a PNG and look at it** (§14a–14b). Nothing above can see a
+rasteriser bug, and three shipped ones were found this way in a single session.
+The loop that found them, worth rebuilding in the scratchpad rather than
+committing:
+
+1. Drive the real **Save Image** button with Playwright and catch the download —
+   the export path has fixes the preview does not, so a preview screenshot
+   proves nothing about the PNG.
+2. `git stash` your change, export again, and keep that as the baseline.
+3. Diff the two by loading both into a canvas and counting differing pixels,
+   then crop the differing region at 6× to judge it. **A few dozen differing
+   pixels on an edge is antialiasing; a horizontal slice through text is a
+   clipping bug.**
+4. Do it for the states no default fixture shows: group chat, threaded replies,
+   typing, read receipts, long names that ellipsise.
 
 Then the part no test can do: **save it on AO3 and read the CSS back.**
 
@@ -558,7 +631,7 @@ about.
 | Google's HTML is 9 lines | ✅ one line, with a test that no platform emits `
 ` |
 | Colour is baked, not layered | ⬜ BACKLOG 5b — 24–32% of rules settings-dependent |
-| Five CDN images per tweet | ⬜ BACKLOG 5a — 100 requests per 20-tweet thread, forever |
+| Five CDN images per tweet | ✅ **one** — the X logo. §14 |
 | One dead anchor `<a href="#">` | ⬜ BACKLOG 5c |
 
 **What the audit cleared.** Not everything needed revisiting:
@@ -590,6 +663,13 @@ and wrong about comments — see §13f.
 - **html2canvas cannot rasterise `::before`/`::after`.** Anything you move into
   a pseudo-element vanishes from the PNG. This is why the iOS tails are an
   inline `<svg>`, and why §9c's otherwise-elegant `content:` trick is unusable.
+- **html2canvas cannot centre a glyph inside a small box either** (found
+  8 Aug 2026, §14a). Ordinary inline text rasterises perfectly; a character
+  centred in an 18px circle is drawn *below* the circle. The verified tick came
+  out as an empty blue disc — white on white, invisible, and the work skin was
+  clean, so no test we own could see it. **Line-height centring and padding
+  centring fail identically, so it is not a value to tune.** Either keep the
+  glyph as plain inline text, or let the image path swap an image back in.
 - **The skin is absent more often than you think.** Every download is a
   skin-off rendering (§9a). Test with the CSS thrown away, not just with it on.
 - **AO3 rewrites your HTML, and re-runs the parser on every edit** — a new
@@ -609,22 +689,55 @@ one and drifted out of date within a day.
 
 The order that matters now that the live bugs are cleared:
 
-1. **BACKLOG 5 + 2d together — the export dialog.** Three things an author meets
-   on their first paste and we do not say: a work can use **only one skin** (so
-   anyone who already has one must *merge*, not create), skin titles are unique
-   **across all of AO3** rather than per account, and a quota-limited image host
-   will break a published fic silently. 2d rides along: the site skin's
-   "leave the skin type on add on to archive skin" instruction moves out of a
-   CSS comment and into the dialog, and then the comments can go (§13f). This is
-   the last thing standing between the current state and an author using this
-   unaided.
-2. **BACKLOG 5a — cut the chrome images.** A 20-tweet thread is 100 requests to
-   `media.publit.io` inside somebody's published fic, forever, and the WhatsApp
-   skin author had exactly this break when Cloudinary cut them off. The
-   canonical Twitter skin needs no chrome images at all.
-3. **BACKLOG 5b — separate structure from colour**, which makes the master skin
-   cheap instead of a doubling.
+1. ✅ **done, 7–8 Aug 2026 — BACKLOG 5 + 2d, the export dialog.** All three facts
+   an author meets on their first paste are now said: a work can use **only one
+   skin** (§9f), titles are unique **across all of AO3** (§9f), and the images
+   are somebody else's server, "Copy for AO3" included (§9f). 2d rode along —
+   the site skin's instruction was already in its dialog, so `compile()` now
+   emits no comments (§13f). *This was the last thing standing between the
+   current state and an author using this unaided.*
+2. ✅ **done, 8 Aug 2026 — BACKLOG 5a, five chrome images down to one** (§14).
+   Both badges and the whole metric row are drawn now; only the X logo is
+   fetched. It also turned up two PNG bugs nothing we own could see, including
+   a name line that has been sliced in half in every export this app has ever
+   produced (§14a).
+3. **BACKLOG 5b — separate structure from colour.** ⬅ **START HERE.** The
+   recipe is below; it was scoped on 8 Aug 2026 but deliberately not started,
+   because it is one large mechanical edit and half-doing it is worse than not
+   starting.
 4. **Then the master skin** (BACKLOG 6–10).
+
+### 10b. The recipe for 5b, scoped but not started (8 Aug 2026)
+
+**It is in better shape than the backlog implies.** Colour is *already* hoisted
+into named consts at the top of each builder — `buildIOSCSS` lines ~879–896,
+`buildAndroidCSS` ~1048–1065, `buildTwitterCSS` ~1153–1160. What is left:
+
+1. **Hoist the strays.** Four inline `${isDark ? … : …}` remain in `buildIOSCSS`
+   (`dt.sender`, `dd.status-indicator`, `.typing-bubble .dot`, `.typing-label`)
+   and four in `getTextFormattingCSS`. After this, **no rule body mentions
+   `isDark`** — grep is the check.
+2. **Make each builder's block a palette with two variants**, rather than twenty
+   ternaries: `TWITTER_COLOURS = { light: {…}, dark: {…} }` and one
+   `const c = TWITTER_COLOURS[isDark ? 'dark' : 'light']`. This is the step that
+   pays: with *both* palettes reachable, a dark override block is derivable
+   instead of hand-written, which is what makes BACKLOG 8 five rules per
+   platform rather than a doubled stylesheet (KNOWLEDGE §18).
+3. **Watch the settings-driven slots.** A few entries are not theme colours at
+   all — iOS `receiverBubbleBg`/`typingBubbleBg` and Android
+   `senderBubbleBg`/`receiverBubbleBg` fall back to the user's own bubble colour
+   in light mode and are overridden by fixed values in dark. They cannot live in
+   a static table; take them as arguments and document why at the call site.
+4. Google has no dark mode. Leave `buildGoogleCSS` alone.
+
+**The invariant that makes this safe: the compiled CSS must come out
+byte-identical**, for all four platforms in *both* modes, before and after. Snapshot
+`buildCSS()` for the eight combinations into a scratchpad file first, refactor,
+then compare. This is pure hygiene — if a single byte moves, you changed a colour
+by accident. Do not commit the snapshot; it is a refactor guard, not a test the
+repo wants to carry.
+
+Only once that lands is BACKLOG 8 worth attempting.
 
 ### The flex question — **settled, 7 Aug 2026**
 
@@ -846,17 +959,29 @@ the PNG still carry every word.
 Do not "restore" comments to the export without re-saving on real AO3 and
 diffing the stored CSS rule by rule.
 
-### 13f. The site-skin product has the same exposure
+### 13f. The site-skin product had the same exposure — **closed, 7–8 Aug 2026**
 
-`compile.ts` emits a comment per annotated rule plus three header comments, and
-**this has never been checked on AO3** (BACKLOG 20). The risk is lower — none of
-its five comments contains a `property: value` pair — but the class is identical.
+`compile.ts` used to emit a comment per annotated rule plus three header
+comments, and **that was never checked on AO3** (BACKLOG 20). The risk was lower
+— none of its five comments contained a `property: value` pair — but the class
+was identical.
 
-It was deliberately *not* stripped blind, because one of those comments is
+It was deliberately *not* stripped blind, because one of those comments was
 load-bearing UI copy: *"leave the skin type on add on to archive skin"* is only
-ever seen in the paste box, since AO3 deletes it on save. Removing it would
-trade a possible bug for a certain one. Filed as **BACKLOG 2d**, to be done with
-the export-dialog copy (item 5), which is where that instruction belongs anyway.
+ever seen in the paste box, since AO3 deletes it on save. Removing it would have
+traded a possible bug for a certain one.
+
+**The precondition turned out to be met already.** `ExportSkinDialog`'s numbered
+steps have carried both that instruction and *"Preferences → Skins → Create Site
+Skin"* since it shipped, and `tests/site-skin.spec.ts` pins them there — so the
+comments were duplicating guidance the user was already being given somewhere
+they would actually read it. The header comments and the `note` field on `Rule`
+are gone; the two notes worth keeping are ordinary source comments now.
+
+`compile()` therefore emits **no comments at all**, pinned by *"the export
+carries no comments at all"* in `site-skin.unit.spec.ts`. The same rule as the
+work skin applies: do not put them back without saving on real AO3 and diffing
+the stored CSS rule by rule.
 
 **Nothing is unmeasured any more.** Group chat was the last case, and it is the
 one the rule *predicts* is safe: `.group-sender-row` is a flex row of inline
@@ -871,7 +996,117 @@ trivially when there is nothing on the page to move.
 
 ---
 
-## 14. Sources
+## 14. Twitter's chrome is drawn, not fetched (8 Aug 2026)
+
+A tweet used to pull **five images from `media.publit.io`** — verified badge, X
+logo, reply, retweet, like. A twenty-tweet thread was a hundred requests from
+inside somebody's published fic, **forever**, and that is a failure with a body
+count: the WhatsApp skin author outgrew a free Cloudinary tier and every image
+in every fic using their skin broke at once, with readers told to relink
+(KNOWLEDGE §7, §19).
+
+**It is one image now: the X logo**, which stays an image because it is a
+trademark we should not be drawing ourselves. Views and bookmarks are also
+still images — opt-in extras rather than part of a standard tweet, and neither
+has a character that reads right.
+
+| Was | Is |
+| --- | --- |
+| `twitter-verifiedBadge.png` ×2 (tweet, quote) | `✔` centred in a CSS circle |
+| `twitter-replyIcon.png` | `↩` |
+| `twitter-retweetIcon.png` | `⇄` |
+| `twitter-likeIcon.png` | `♡` |
+
+The metric row is **grey outline glyphs, not the blue discs it replaced** —
+closer to the real site, and the author's call when offered the choice between
+matching our existing icons and matching Twitter. Three bonuses fell out of it:
+the hover tints now reach the icon, dark mode needs no second set of files, and
+a reader who blocks images still sees the row.
+
+### 14a. Two PNG bugs, both invisible to every test we own
+
+Neither is an AO3 problem. Both are html2canvas, and both were found by
+exporting a real PNG and comparing it against a stashed baseline.
+
+**1. html2canvas cannot centre a glyph inside a small box.** The tick was drawn
+*below* its blue circle — white on a white card, so the badge rasterised as an
+empty blue disc. The heart came out clipped at the bottom edge. **Line-height
+centring and padding centring fail identically**, so it is not a value to tune.
+Two fixes, and which one applies depends on the shape:
+
+- **Plain inline text rasterises perfectly.** This is why the metric glyphs
+  carry no box at all — no width, no height, no line-height centring. It is a
+  deliberate constraint on that rule, not a style choice.
+- **A glyph that genuinely needs a box gets an image back, in the raster only.**
+  `renderChunk` swaps both verified badges for the PNG before capture. The
+  trade is sound: the reason to drop a chrome image is that a *reader* fetches
+  it on every visit, forever, and a PNG is rendered once on the author's own
+  machine. Same trade `useCssBubbleTails` makes in the other direction.
+
+The one cost, recorded honestly: the badge is a **plain circle** on AO3 and a
+**starburst** in the PNG, because the starburst cannot be drawn without an
+image. Both read as "verified"; a CSS starburst is possible (`transform` is
+legal, and pseudo-elements are safe here since the raster never sees this rule)
+and is the obvious refinement if it ever matters.
+
+**2. The tweet name line was being cut in half in every PNG this app has ever
+exported.** Reported by the author, reproduced on a pre-change baseline, so it
+long predates this work. `.head` is one line box tall and `overflow:hidden`, and
+html2canvas draws text a few pixels lower than the browser — so the bottoms of
+"Taylor Swift", the handle and "Follow" were sliced off. It read as a font
+problem and was a clipping problem.
+
+Fixed in the export clone with `.head{overflow:visible}`, and **only** there:
+that `overflow:hidden` is the block formatting context sitting beside the avatar
+float, which is exactly why the float layout survives AO3's paragraph injection
+(§12d). It is redundant in the clone because `.name-line` is forced to
+`display:flex`, and a flex container is already a BFC. **Do not remove the outer
+`.tweet-header{overflow:hidden}`** — that one contains the float, and dropping
+it lets the avatar overlap the body text. That was the first attempt.
+
+**Google had the same bug in one place**, also reported by the author: the
+search query lost its descenders. `.search-text` is `overflow:hidden` so
+`text-overflow:ellipsis` can truncate a long query, and overflow clips
+vertically too. Fixed with `padding-bottom` rather than `overflow:visible`,
+because the ellipsis has to keep working — overflow clips at the padding edge,
+so the descenders get room and nothing else changes. iOS and Android were
+checked and are clean.
+
+**The lesson worth keeping: export a real PNG and diff it against a baseline.**
+The lint cannot see any of this, the injection harness cannot see it, and the
+unit suite passed 170 green through both bugs.
+
+### 14b. The audit that followed, and the third bug
+
+Both reports came from the author looking at exports, so every template was
+then exported and read at zoom — including the states no default fixture shows:
+group chat, threaded replies, typing, read receipts. Twitter and Google were the
+two clipping bugs above. Android, group chat and iOS bubbles are clean.
+
+**iOS turned up something that was not a rasteriser problem at all.**
+`isTyping` is a per-message flag; it has been in the schema from the start and
+the editor has always honoured it. `buildHTML` never did. So the shipped
+example named **"iOS Typing Indicators"** — the one whose entire purpose is to
+demonstrate the feature — exported a bubble containing the literal text `...`,
+in the PNG and on AO3 alike, while the stylesheet's full indicator (three
+descending-opacity dots, §9d) went unused.
+
+On AO3 it was worse than ugly. The dots are CSS shapes, so with the skin off
+the indicator is *nothing at all* — the hidden `Riley is typing…` line is the
+whole skin-off story for that element (§9a), and it was never emitted.
+
+Fixed by making `msgHTML` return the indicator for a typing message, reusing
+`typingRowHTML` — **one copy of that markup**, shared with the chat-level
+`chatShowTyping` setting, so the geometry pinned in §12c and the injection
+rules apply to both without a second set of anything. Pinned by *"a message
+flagged as typing renders the indicator, not three dots of text"*.
+
+Three bugs in one session, all found by looking at pictures, none visible to
+169 passing tests. **Render the thing and look at it.**
+
+---
+
+## 15. Sources
 
 Community work skins read while building this — the source of §4a and §5a:
 

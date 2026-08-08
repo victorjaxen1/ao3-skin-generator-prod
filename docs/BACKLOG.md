@@ -4,8 +4,19 @@
 last column; this file exists so nobody has to read four documents to find out
 what to do next.
 
-**Last reconciled: 7 Aug 2026.** Everything shipped up to commit `c30f97b`
+**Last reconciled: 8 Aug 2026.** Everything shipped up to commit `c30f97b`
 (iOS and Android work skins) is excluded.
+
+**Next up: item 5b**, and the recipe for it — including the invariant that makes
+it safe — is written out in **WORK-SKIN §10b**. It was scoped and deliberately
+not started, because it is one large mechanical edit.
+
+**Items 5, 2d and 5a closed 7–8 Aug 2026.** The export-dialog copy; the site-skin
+export going comment-free once the instruction it carried had a better home; and
+Twitter's chrome dropping from five fetched images per tweet to one. 5a also
+turned up bugs in the *image* export that no test here could see — see the next
+section, and note the method that found them: **export a real PNG and diff it
+against a baseline.**
 
 ---
 
@@ -62,7 +73,22 @@ matters; it does not, because the fix is to send no comments.
 | # | Task | Why | Where |
 | --- | --- | --- | --- |
 | 2c | ✅ **done for work skins.** `stripExportComments` in `workSkin.ts` | AO3 deletes every comment on save, so they reach nobody — the `generator.ts` copy is untouched and the preview and PNG still carry them | this section |
-| 2d | **Site skins have the same exposure and it is unverified.** `compile.ts:342` emits a comment per annotated rule, plus three header comments | Lower risk than the work skin — none of the five contains a `property: value` pair — but the class is identical and BACKLOG 20 has never been run. **One of them is load-bearing UI copy**: *"leave the skin type on add on to archive skin"* is only ever seen in the paste box, since AO3 deletes it on save. So this is not a blind strip: move that instruction into the export dialog (item 5) and drop the comments in the same change | MASTER, this section |
+| 2d | ✅ **done, 7–8 Aug 2026.** `compile()` now emits **no comments at all** — the three header comments and the `note` field on `Rule` are gone, and the two notes that were worth keeping are ordinary source comments. Pinned by *"the export carries no comments at all"* in `site-skin.unit.spec.ts`. The precondition was already met: `ExportSkinDialog`'s numbered steps have carried both *"Preferences → Skins → Create Site Skin"* and *"add on to archive skin"* since it shipped, and `site-skin.spec.ts` pins them there — so nothing was traded away. ~~**Site skins have the same exposure and it is unverified.** `compile.ts:342` emits a comment per annotated rule, plus three header comments~~ | Lower risk than the work skin — none of the five contains a `property: value` pair — but the class is identical and BACKLOG 20 has never been run. **One of them is load-bearing UI copy**: *"leave the skin type on add on to archive skin"* is only ever seen in the paste box, since AO3 deletes it on save. So this is not a blind strip: move that instruction into the export dialog (item 5) and drop the comments in the same change | MASTER, this section |
+
+## Fixed by looking at the exports — 8 Aug 2026
+
+Three bugs, none of which any test here could see, all found by exporting a PNG
+and reading it at zoom. Two were reported by the author. Full account in
+WORK-SKIN §14a–14b.
+
+| Bug | Where it lived |
+| --- | --- |
+| ✅ **The tweet name line was clipped in every PNG this app has ever exported.** `.head` is one line box tall and `overflow:hidden`; html2canvas draws text lower than the browser | `ExportPanel`, raster only — the stylesheet's `overflow:hidden` is the BFC that survives AO3's paragraph injection (§12d) and must stay |
+| ✅ **Google's search query lost its descenders.** `.search-text` is `overflow:hidden` for its ellipsis, which clips vertically too | `ExportPanel`, `padding-bottom` so the ellipsis keeps working |
+| ✅ **The "iOS Typing Indicators" example rendered a bubble saying `...`.** `isTyping` was in the schema and honoured by the editor; `buildHTML` ignored it, so the indicator — and the hidden *"is typing…"* line AO3 needs with the skin off — never shipped | `generator.ts`, `typingRowHTML` now shared with `chatShowTyping` |
+
+**The method is the finding.** The lint, the injection harness and 169 green
+unit tests all passed straight through these. Render it and look at it.
 
 ## Correctness and hygiene
 
@@ -70,8 +96,8 @@ matters; it does not, because the fix is to send no comments.
 | --- | --- | --- | --- |
 | 3 | ✅ **done.** **`stripCssComments()` in `ao3Css.ts`** — exported, documented with all four failures it prevents, and now the single copy of that regex in the codebase. Wired into `lintAo3Css` and the five test sites that each had their own. Five tests cover it, including the guard on the guard: **a real `@media` outside a comment is still caught**, so stripping cannot blind the lint |  Failing to strip comments before matching has produced **four** wrong answers: `lintAo3Css` refusing a stylesheet whose comment said `@media`, two tests reading values out of comments, and the namespacing prototype missing seven rules | MASTER §6a |
 | 4 | ✅ **done — all four platforms.** 381 lengths converted, each against **its own rule's font-size context measured in a browser**, not guessed. Verified by geometry diff at a 16px base: google 0.02px, iOS 0.17px, android 0.28px worst-case on a default project — inside the 0.5px bar Twitter set. `getTextFormattingCSS` now takes the bubble size, because it is shared by iOS (15px) and Android (14px) and no single em is right for both. Only border widths, shadows and values ≤2px stay px |  AO3 forbids `@media` in skin CSS, so `em` is the only responsive lever. Method is in `buildTwitterCSS`'s header comment; assertion to copy is in `tests/work-skin.unit.spec.ts`. **Convert against each rule's own font-size context** or every card resizes; keep em values to three decimals | WORK-SKIN §10 |
-| 5 | **Export dialog copy.** A work can only use one skin (an author who already has one must *merge*); skin titles are unique across all of AO3; a quota-limited image host will break a published fic silently | Three factual errors an author meets on their first paste. UI copy, not compiler work | WORK-SKIN §9f, KNOWLEDGE §7 |
-| 5a | **Cut the chrome images from five per tweet to two.** Verified badge → CSS circle with `✔`; like icon → the character `❤`. Keep reply/retweet glyphs and the X logo as images | A twenty-tweet thread is currently **100 requests to `media.publit.io`** inside somebody's published fic, forever. The WhatsApp author had exactly this break when Cloudinary cut them off, and every fic using their skin lost its images at once. gadaursan's skin needs **no chrome images at all** | KNOWLEDGE §11, §19 |
+| 5 | ✅ **done, 7–8 Aug 2026.** All three are in the work-skin modal: an amber note under step 1 carries the unique-title rule with a per-platform example (`yourname — WhatsApp`) and the one-skin-per-work merge instruction, and the footnote now says plainly that the icons load from our host, that AO3 keeps no copy, and that **"Copy for AO3" does not avoid this** — it uploads to ImgBB, which the old copy implied was the safe option. The image path's own modal says the same in one line. Pinned by *"the modal states the three things AO3 will not"* in `work-skin.spec.ts` | Three factual errors an author meets on their first paste. UI copy, not compiler work | WORK-SKIN §9f, KNOWLEDGE §7 |
+| 5a | ✅ **done, 8 Aug 2026 — five to ONE, not two.** Both verified badges are `✔` in a CSS circle. The whole metric row became characters — `↩ ⇄ ♡` — which the author preferred to keeping our blue discs, and which looks more like the real site. Only the X logo is still fetched (a trademark we should not draw). Views and bookmarks stay images: opt-in extras, no character reads right. Pinned by *"a tweet fetches one chrome image, not five"*. **Two PNG bugs came out of this, both in WORK-SKIN §14a** — including a tweet name line that has been clipped in every PNG this app ever exported. ~~**Cut the chrome images from five per tweet to two.** Verified badge → CSS circle with `✔`; like icon → the character `❤`. Keep reply/retweet glyphs and the X logo as images~~ | A twenty-tweet thread is currently **100 requests to `media.publit.io`** inside somebody's published fic, forever. The WhatsApp author had exactly this break when Cloudinary cut them off, and every fic using their skin lost its images at once. gadaursan's skin needs **no chrome images at all** | KNOWLEDGE §11, §19 |
 | 5b | **Separate structure from colour** in the four stylesheets, so `isDark ? x : y` collapses into a small override block rather than being evaluated throughout | Night mode in the canonical skin is **five rules**, because its base defines structure only. Ours bakes one theme, which is why settings-dependence is 24–32%. Worth doing on its own merits, and it makes item 8 cheap instead of a doubling | KNOWLEDGE §18 |
 | 5c | **Replace `<a href="#" class="reply-handle">` with a `<span>`** — our only anchor | A link that goes nowhere: screen readers announce it as a link, and clicking scrolls the reader to the top of the page. Separately, AO3's parser has historically had trouble with `<a>` as a sibling of `<div>` and re-runs on every edit | KNOWLEDGE §22 |
 
