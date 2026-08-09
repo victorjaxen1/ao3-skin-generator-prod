@@ -187,22 +187,27 @@ the two platforms correctly use different ones. It was verified to fail against 
 broken CSS before being kept (all 8 cases, `chip is overlapping "yes" by 1.5px`), and
 it is what caught the iOS regression above.
 
-**What is verified, and what is not.** The full unit suite (197) passes, which
-includes `lintAo3Css` over every platform in both themes and the master skin;
-`namespace`, `master-skin`, `ao3-injection` and `skin-off` all pass; and each of the
-six variants was rendered and read by eye. **None of that is the check §11 asks
-for.** `.reaction` was one of the eleven rules that vanished from a real saved skin
-on 7 Aug 2026 and the cause is still unknown, so this is not closed until somebody
-**saves the skin on real AO3, reads the stored CSS back, and diffs it rule by rule** —
-paying particular attention to `.reaction`, the two new `margin` rules, and the
-`dd.bubble.out .reaction` / `dd.bubble.in .reaction` pair. `docs/BACKLOG.md` item 21
-now tracks that save, not the work.
+**Verified on the archive, 9 Aug 2026.** The skin was saved on real AO3 and the
+stored CSS read back and diffed: **549 rules sent, 549 stored; 2,039 declarations
+sent, 2,039 stored; zero selectors missing in either direction and zero declarations
+dropped.** All sixteen reaction rules survived whole, keeping every construct worth
+worrying about — `position:absolute`, negative `top`/`bottom` offsets, `box-shadow`
+with `rgba()`, `z-index`, an `rgba` border. Every canary from the 7 Aug loss is
+present: bubble tails 8, `.time` 22, `.reaction` 12, `has-reaction` 4,
+`.status-indicator` 4, `.attach` 8, typing 32.
 
-Encouraging but not sufficient: item 18a saved 537 rules and got 537 back with
-comments already stripped, which is good evidence the 7 Aug loss was comment-related
-and is fixed. It was also the *master* build path, and this rule feeds
-`buildIOSCSS`/`buildAndroidCSS` for eleven stylesheet builds inside
-`buildMasterWorkSkin` — so a silent breakage here is eleven silent breakages.
+That check is no longer a manual afternoon. `tests/ao3-readback.unit.spec.ts` does it:
+drop the readback into the repo root as `ao3 master workskin*.txt` and run
+`npx playwright test --project=unit -g "AO3 readback"`. It compares selectors and
+per-rule declarations, asserts the canaries by name, and **skips** when no readback is
+present, since it needs a human to have talked to the archive. It was verified
+non-vacuous by deleting a single rule from a copy and watching it fail. It compares
+structure, not values — a value AO3 silently rewrote would still get past it.
+
+Worth keeping in mind for the next `buildCSS` change: this is the second clean save
+since comments were stripped from the export (item 18a was the first), which is now
+the best evidence the 7 Aug loss was comment-related. It is evidence, not a diagnosis
+— the rule stands.
 
 ### C5 — do **not** put a full `AvatarSelector` on every participant row
 
