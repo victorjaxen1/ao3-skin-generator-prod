@@ -10,6 +10,7 @@ import { recordExport, recordPromptShown } from '../lib/donationPrompt';
 import { PlatformPicker } from '../components/PlatformPicker';
 import { WorkspaceHeader } from '../components/WorkspaceHeader';
 import { SettingsSheet } from '../components/SettingsSheet';
+import { CastPanel } from '../components/CastPanel';
 import { ComposeBar } from '../components/ComposeBar';
 import { MessageTimeline } from '../components/MessageTimeline';
 
@@ -50,6 +51,7 @@ export default function HomePage() {
   const [saveStatus, setSaveStatus] = useState<'saved' | 'unsaved' | 'saving' | 'failed'>('saved');
   const [saveError, setSaveError] = useState('');
   const [showCharacters, setShowCharacters] = useState(false);
+  const [showCast, setShowCast] = useState(false);
   const [showMobilePreview, setShowMobilePreview] = useState(true);
   // True when the picker was reached from the workspace, i.e. there is work
   // a selection would discard. On a first visit there is nothing to lose.
@@ -296,14 +298,81 @@ export default function HomePage() {
     setUniversalCharacters(u); saveChars(u);
   };
 
+  /**
+   * Renaming the other person rewrites the messages they have already sent.
+   *
+   * Their name is stamped onto each incoming message at send time (ComposeBar),
+   * and it is what a reader sees with the skin off or in a downloaded ebook.
+   * Changing the setting alone would leave every existing bubble labelled with
+   * the old name — the header would say Steve and the work would still read
+   * "Bucky: …".
+   *
+   * Only *untouched* messages are rewritten. Anything explicitly assigned to a
+   * group participant belongs to that participant, and anything already bearing
+   * a different name was deliberately set to it.
+   */
+  const handleRenameContact = useCallback((name: string) => {
+    setProject(prev => {
+      const key = prev.template === 'ios' ? 'iosContactName' : 'androidContactName';
+      const previous =
+        (prev.settings as any)[key] || prev.settings.chatContactName || 'Them';
+      return {
+        ...prev,
+        settings: { ...prev.settings, [key]: name },
+        messages: prev.messages.map(m =>
+          !m.outgoing && !m.participantId && (!m.sender || m.sender === previous)
+            ? { ...m, sender: name }
+            : m
+        ),
+      };
+    });
+  }, []);
+
+  const handleAddParticipant = useCallback((name: string, avatarUrl: string) => {
+    setProject(prev => {
+      const field =
+        prev.template === 'ios' ? 'iosGroupParticipants' : 'androidGroupParticipants';
+      const existing = prev.settings[field] || [];
+      const colors = ['#FF5733', '#33A1FF', '#33FF57', '#FF33A1', '#FFC733', '#8B33FF'];
+      return {
+        ...prev,
+        settings: {
+          ...prev.settings,
+          [field]: [
+            ...existing,
+            {
+              id: `p-${Date.now()}`,
+              name,
+              color: colors[existing.length % colors.length],
+              ...(avatarUrl ? { avatarUrl } : {}),
+            },
+          ],
+        },
+      };
+    });
+  }, []);
+
   const handleSetAsContact = useCallback((name: string, avatarUrl: string) => {
+    // In group mode the contact name is rendered nowhere and the avatar field is
+    // THE GROUP'S photo, not a person's (generator.ts, the iOS/Android header
+    // blocks). Writing them here would set a name nothing shows and replace the
+    // group picture with one member's face — so a group chat adds a participant
+    // instead, which is what "use this character" means there.
+    const isGroup =
+      (project.template === 'ios' && project.settings.iosGroupMode) ||
+      (project.template === 'android' && project.settings.androidGroupMode);
+    if (isGroup && (project.template === 'ios' || project.template === 'android')) {
+      handleAddParticipant(name, avatarUrl);
+      return;
+    }
+
     switch (project.template) {
       case 'ios':
-        handleUpdateSettings('iosContactName', name);
+        handleRenameContact(name);
         handleUpdateSettings('iosAvatarUrl', avatarUrl);
         break;
       case 'android':
-        handleUpdateSettings('androidContactName', name);
+        handleRenameContact(name);
         handleUpdateSettings('androidAvatarUrl', avatarUrl);
         break;
       case 'twitter':
@@ -314,7 +383,14 @@ export default function HomePage() {
         handleUpdateSettings('googleQuery', name);
         break;
     }
-  }, [project.template, handleUpdateSettings]);
+  }, [
+    project.template,
+    project.settings.iosGroupMode,
+    project.settings.androidGroupMode,
+    handleUpdateSettings,
+    handleRenameContact,
+    handleAddParticipant,
+  ]);
 
   // The compose bar's "posting as" list. Template presets were previously the
   // only source, so the feature existed only if you happened to load one of
@@ -339,11 +415,34 @@ export default function HomePage() {
   // The header title edits one field per template — the one that names the
   // thing on screen. Twitter uses the display name rather than the handle:
   // the handle is still in Settings, and a tweet leads with the name.
-  const contactNameKey = project.template === 'ios' ? 'iosContactName'
-    : project.template === 'android' ? 'androidContactName'
-    : project.template === 'twitter' ? 'twitterDisplayName'
-    : 'googleQuery';
+  //
+  // In group mode the header renders the GROUP's name, not the contact's — so
+  // this used to edit a field nothing on screen was showing. Turn group chat on
+  // and the title control silently stopped matching the preview.
+  const isGroupChat =
+    (project.template === 'ios' && !!project.settings.iosGroupMode) ||
+    (project.template === 'android' && !!project.settings.androidGroupMode);
+
+  const contactNameKey =
+    project.template === 'ios'
+      ? (project.settings.iosGroupMode ? 'iosGroupName' : 'iosContactName')
+      : project.template === 'android'
+      ? (project.settings.androidGroupMode ? 'androidGroupName' : 'androidContactName')
+      : project.template === 'twitter' ? 'twitterDisplayName'
+      : 'googleQuery';
   const displayContactName = (project.settings as any)[contactNameKey] || '';
+
+  // The header can't see settings, so the label that describes what the title
+  // is currently editing has to be computed here.
+  const headerFieldLabel = isGroupChat
+    ? 'Group name'
+    : project.template === 'ios' || project.template === 'android'
+    ? 'Contact name'
+    : project.template === 'twitter' ? 'Display name'
+    : 'Search query';
+  const headerFieldPlaceholder = isGroupChat
+    ? (project.template === 'ios' ? 'Family Chat' : 'Work Team')
+    : undefined;
 
   // Hold the first paint until storage has been read, so returning visitors
   // don't see the picker flash past before it's dismissed.
@@ -367,13 +466,22 @@ export default function HomePage() {
       {/* ─── Header ─────────────────────────────────────────────────── */}
       <WorkspaceHeader
         contactName={displayContactName}
-        onContactNameChange={(name) => handleUpdateSettings(contactNameKey as any, name)}
+        onContactNameChange={(name) =>
+          // Only the 1-on-1 chat case rewrites existing messages. A group name
+          // labels nobody, and Twitter/Google are plain settings writes.
+          (project.template === 'ios' || project.template === 'android') && !isGroupChat
+            ? handleRenameContact(name)
+            : handleUpdateSettings(contactNameKey as any, name)
+        }
         onBack={() => { setCameFromWorkspace(true); setShowPicker(true); }}
         onSettingsOpen={() => setShowSettings(true)}
         onCharactersOpen={() => setShowCharacters(true)}
+        onCastOpen={() => setShowCast(true)}
         template={project.template}
         saveStatus={saveStatus}
         messageCount={project.messages.length}
+        fieldLabel={headerFieldLabel}
+        fieldPlaceholder={headerFieldPlaceholder}
       />
 
       {/* A refused save means this work disappears on reload, so it is worth
@@ -514,6 +622,21 @@ export default function HomePage() {
         onUpdateCharacter={handleUpdateCharacter}
         onDeleteCharacter={handleDeleteCharacter}
         onSetAsContact={handleSetAsContact}
+      />
+
+      {/* ─── People / Cast panel ────────────────────────────────────── */}
+      {/* Google never opens this — its header button still goes to the
+          Character Library, which is the only place that feature is reachable
+          from and is genuinely useful there. */}
+      <CastPanel
+        isOpen={showCast}
+        onClose={() => setShowCast(false)}
+        template={project.template}
+        settings={project.settings}
+        onUpdateSettings={handleUpdateSettings}
+        onRenameContact={handleRenameContact}
+        universalCharacters={universalCharacters}
+        onOpenCharacterLibrary={() => { setShowCast(false); setShowCharacters(true); }}
       />
 
       {/* ─── Settings sheet ─────────────────────────────────────────── */}

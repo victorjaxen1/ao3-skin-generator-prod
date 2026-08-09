@@ -374,6 +374,13 @@ async function renderChunk(
       (el as HTMLElement).style.cssText +=
         ';border-radius:8px;padding:7px 10px;display:inline-block;max-width:280px;box-shadow:0 1px 2px rgba(0,0,0,0.1)';
     });
+    // NOTE: that `padding` shorthand is an INLINE style, so it beats anything
+    // `buildAndroidCSS` says about a bubble's padding. It briefly mattered: an
+    // earlier reaction chip reserved space INSIDE the bubble with padding, and
+    // this line silently deleted the reserve in the export only. The chip now
+    // sits entirely below the bubble and needs nothing from the bubble's own
+    // box, so there is nothing to re-assert — but if you ever add padding to a
+    // bubble in the stylesheet, it will not survive this line.
     clone.querySelectorAll('.row.out').forEach(el => {
       (el as HTMLElement).style.cssText += ';display:flex;justify-content:flex-end';
     });
@@ -547,6 +554,16 @@ export const ExportPanel: React.FC<Props> = ({
   const [showWorkSkin, setShowWorkSkin] = useState(false);
   const [copiedPart, setCopiedPart] = useState<'css' | 'html' | null>(null);
   /**
+   * The quality switch is a popover rather than a row.
+   *
+   * It is the control least used per session and it cost a full row of a fixed
+   * bar that sits over the composer on every viewport. Unlike the help panel it
+   * must **never** open by itself, which is what lets it float
+   * (`absolute bottom-full`) instead of taking height — see the comment on the
+   * help panel below for why that one has to stay in flow.
+   */
+  const [showQuality, setShowQuality] = useState(false);
+  /**
    * Which skin the author is taking. A work can use **only one skin**, so this
    * is a real choice rather than a preference: "just this platform" is the
    * smallest thing that works for a fic that stays on one app, and "all four"
@@ -600,6 +617,21 @@ export const ExportPanel: React.FC<Props> = ({
       return next;
     });
   };
+
+  // A popover that outlives its trigger is worse than no popover. The trigger's
+  // own wrapper stops mousedown propagating, so clicking inside the menu — or on
+  // the button that opened it — does not count as "outside".
+  useEffect(() => {
+    if (!showQuality) return;
+    const close = () => setShowQuality(false);
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setShowQuality(false); };
+    document.addEventListener('mousedown', close);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', close);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [showQuality]);
 
   // Publish this bar's height so the layout can reserve space for it.
   // The bar is fixed-position, so without this it sits on top of the compose
@@ -720,115 +752,167 @@ export const ExportPanel: React.FC<Props> = ({
       {/* ------------------------------------------------------------------ */}
       <div
         ref={barRef}
-        className="fixed bottom-0 left-0 right-0 bg-white border-t border-stone-200 shadow-[0_-4px_24px_rgba(0,0,0,0.08)] z-50"
+        // The safe-area padding below keeps the row off the iOS home
+        // indicator. It is inside the measured element on purpose:
+        // --export-bar-h has to include it, or the layout reserves less space
+        // than the bar actually occupies.
+        //
+        // Do not abbreviate that class name in a comment. Tailwind's scanner is
+        // a regex over raw file text, not a parser — it reads comments, and an
+        // elided `pb-[env(…)]` written with dots generates a literal
+        // `padding-bottom: env(...)` rule that fails the CSS build.
+        className="fixed bottom-0 left-0 right-0 bg-white border-t border-stone-200 shadow-[0_-4px_24px_rgba(0,0,0,0.08)] z-50 pb-[env(safe-area-inset-bottom)]"
       >
-        <div className="max-w-4xl mx-auto px-4 py-3">
+        <div className="max-w-4xl mx-auto px-3 py-2">
+          {/* One row. Everything that isn't a primary action is behind a
+              popover, so the bar's height doesn't depend on how many options
+              exist. This used to be four stacked rows — ~148px of fixed bar
+              over the composer, for controls used once at the end of a session. */}
+          <div className="flex items-center gap-2">
 
-          {/* Quality + help row */}
-          <div className="flex items-center justify-between mb-2.5">
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] text-stone-400 font-medium uppercase tracking-wide mr-1">Quality</span>
-              {[1, 2, 4].map(s => (
-                <button
-                  key={s}
-                  onClick={() => setExportScale(s)}
-                  disabled={s === 4 && !proStatus.isPro}
-                  title={s === 4 && !proStatus.isPro ? 'Upgrade for 4× quality' : `${s}× resolution`}
-                  className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all ${
-                    exportScale === s
-                      ? 'bg-violet-600 text-white'
-                      : s === 4 && !proStatus.isPro
-                      ? 'bg-stone-100 text-stone-300 cursor-not-allowed'
-                      : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
-                  }`}
-                >
-                  {s}×{s === 4 && !proStatus.isPro ? ' ✦' : ''}
-                </button>
-              ))}
-            </div>
-
-            <div className="flex items-center gap-2">
-              {!proStatus.isPro && (
-                <button
-                  onClick={() => setShowProModal(true)}
-                  className="text-[11px] text-violet-600 font-semibold hover:underline hidden sm:block"
-                >
-                  Upgrade
-                </button>
-              )}
+            {/* Quality — a chip, not a row. */}
+            <div className="relative flex-shrink-0" onMouseDown={e => e.stopPropagation()}>
               <button
-                onClick={toggleHelp}
-                aria-expanded={showHelp}
-                className={`text-[11px] px-2.5 py-1 rounded-lg font-medium transition-all ${
-                  showHelp
-                    ? 'bg-stone-800 text-white'
-                    : 'bg-stone-100 text-stone-500 hover:bg-stone-200'
-                }`}
+                type="button"
+                onClick={() => setShowQuality(v => !v)}
+                aria-haspopup="menu"
+                aria-expanded={showQuality}
+                aria-label={`Export quality, currently ${exportScale}×`}
+                title="Export quality"
+                className="px-2.5 py-2 rounded-lg text-xs font-semibold bg-stone-100 text-stone-600 hover:bg-stone-200 transition-colors"
               >
-                How to use
+                {exportScale}×
               </button>
-            </div>
-          </div>
 
-          {/* Two main action buttons */}
-          <div className="flex gap-2.5">
+              {showQuality && (
+                // bottom-full: floats above the bar rather than adding to it.
+                // It must never be in flow — that is what made the old layout
+                // 148px tall.
+                <div
+                  role="menu"
+                  className="absolute bottom-full left-0 mb-2 w-44 bg-white rounded-xl shadow-lg border border-stone-200 p-2 z-10"
+                >
+                  <p className="text-[10px] font-semibold text-stone-400 uppercase tracking-wide px-1 pb-1.5">Quality</p>
+                  {[1, 2, 4].map(s => {
+                    const locked = s === 4 && !proStatus.isPro;
+                    return (
+                      <button
+                        key={s}
+                        type="button"
+                        role="menuitemradio"
+                        aria-checked={exportScale === s}
+                        onClick={() => { setExportScale(s); setShowQuality(false); }}
+                        disabled={locked}
+                        title={locked ? 'Upgrade for 4× quality' : `${s}× resolution`}
+                        className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                          exportScale === s
+                            ? 'bg-violet-600 text-white'
+                            : locked
+                            ? 'text-stone-300 cursor-not-allowed'
+                            : 'text-stone-600 hover:bg-stone-100'
+                        }`}
+                      >
+                        <span>{s}× resolution</span>
+                        {locked && <span>✦</span>}
+                      </button>
+                    );
+                  })}
+                  {!proStatus.isPro && (
+                    <button
+                      type="button"
+                      onClick={() => { setShowQuality(false); setShowProModal(true); }}
+                      className="w-full mt-1 pt-1.5 border-t border-stone-100 text-[11px] font-semibold text-violet-600 hover:underline"
+                    >
+                      Upgrade for 4×
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
             <button
               onClick={handleDownloadImage}
               disabled={isExporting}
-              className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-semibold text-sm transition-all ${
+              aria-label="Save Image"
+              className={`flex-1 min-w-0 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg font-semibold text-[13px] transition-all ${
                 isExporting
                   ? 'bg-stone-100 text-stone-300 cursor-not-allowed'
-                  : 'bg-stone-800 text-white hover:bg-stone-900 shadow-sm hover:shadow'
+                  : 'bg-stone-800 text-white hover:bg-stone-900'
               }`}
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              <span>Save Image</span>
+              <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              <span className="truncate">Save Image</span>
             </button>
 
             <button
               onClick={handleGetAO3Code}
               disabled={isExporting}
-              className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-semibold text-sm transition-all ${
+              aria-label="Copy for AO3"
+              className={`flex-1 min-w-0 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg font-semibold text-[13px] transition-all ${
                 isExporting
                   ? 'bg-violet-300 text-white cursor-not-allowed'
-                  : 'bg-violet-600 text-white hover:bg-violet-700 shadow-sm hover:shadow'
+                  : 'bg-violet-600 text-white hover:bg-violet-700'
               }`}
             >
               {isExporting ? (
                 <>
-                  <svg className="animate-spin" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                  <svg className="animate-spin flex-shrink-0" xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                  {/* truncate is load-bearing, not decoration: a Twitter thread
+                      chunks into more parts than a chat does, so this reads
+                      "Uploading 4/7" while the row must not reflow. */}
                   <span className="truncate">{progressLabel || 'Working…'}</span>
                 </>
               ) : (
                 <>
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
-                  <span>Copy for AO3</span>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                  <span className="truncate">Copy for AO3</span>
                 </>
               )}
             </button>
+
+            {/* Two words and a tooltip, not a sentence. Conditional on
+                `workSkin` being non-null — a *build* result, not a platform
+                check. All four platforms support work skins, so this is never
+                hidden by template and the row never reflows between them. */}
+            {workSkin && (
+              <button
+                onClick={() => setShowWorkSkin(true)}
+                // Set unconditionally, so the accessible name does not vary
+                // with viewport the way the visible text does.
+                aria-label="Work skin"
+                title="Use a work skin instead — real selectable text that reflows on a phone, rather than an image"
+                className="flex-shrink-0 flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-[13px] font-medium text-stone-600 bg-stone-50 border border-stone-200 hover:bg-stone-100 transition-colors"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                <span className="hidden sm:inline">Work skin</span>
+              </button>
+            )}
+
+            <button
+              onClick={toggleHelp}
+              aria-expanded={showHelp}
+              aria-label="How to use"
+              title="How to use"
+              className={`flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-sm font-bold transition-colors ${
+                showHelp ? 'bg-stone-800 text-white' : 'bg-stone-100 text-stone-500 hover:bg-stone-200'
+              }`}
+            >
+              ?
+            </button>
           </div>
 
-          {/* Third option, shown only where the CSS actually passes AO3's
-              rules. It is a secondary row rather than a third primary button:
-              the image is the reliable default, and this trades that for
-              selectable text and a layout that reflows on a phone. */}
-          {workSkin && (
-            <button
-              onClick={() => setShowWorkSkin(true)}
-              className="mt-2 w-full flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-[13px] font-medium text-stone-600 bg-stone-50 border border-stone-200 hover:bg-stone-100 hover:border-stone-300 transition-all"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-              <span>Or use a work skin — real text, not an image</span>
-            </button>
-          )}
-
-          {/* Help panel */}
+          {/* Still in flow, and still open by default for a newcomer.
+              Deliberate: getting output into an AO3 work is the genuinely
+              confusing part of this domain, and polish.spec.ts asserts a
+              first-time visitor sees this guidance without clicking. So a
+              newcomer still lands on a tall bar — the complaint this phase
+              answers is the *returning* author who dismissed it once and kept
+              paying 148px for it. They now get ~52px forever. */}
           {showHelp && (
-            <div className="mt-3 pt-3 border-t border-stone-100">
-              <div className="bg-stone-50 border border-stone-200 rounded-xl p-3 space-y-1.5 text-xs text-stone-600">
-                <p><strong className="text-stone-800">Save Image</strong> — downloads a PNG to your device. Share on Tumblr, Twitter, etc.</p>
-                <p><strong className="text-stone-800">Copy for AO3</strong> — renders and uploads your conversation automatically, then gives you an <code className="bg-stone-200 px-1 rounded">&lt;img&gt;</code> tag ready to paste into AO3's HTML editor. <strong className="text-stone-800">No work skin needed.</strong></p>
-              </div>
+            <div className="mt-2 bg-stone-50 border border-stone-200 rounded-lg p-2.5 space-y-1 text-[11px] text-stone-600 leading-relaxed">
+              <p><strong className="text-stone-800">Save Image</strong> — downloads a PNG. Share it anywhere.</p>
+              <p><strong className="text-stone-800">Copy for AO3</strong> — uploads it and gives you an <code className="bg-stone-200 px-1 rounded">&lt;img&gt;</code> tag to paste into AO3&apos;s HTML editor. No work skin needed.</p>
+              {workSkin && <p><strong className="text-stone-800">Work skin</strong> — real text instead of a picture. Two pastes, one on your AO3 preferences page.</p>}
             </div>
           )}
         </div>

@@ -125,6 +125,23 @@ export interface SkinSettings {
   googleDidYouMean?: string; // correction term (Captain Jack Sparrow)
   googleEngineVariant?: 'google' | 'google-old' | 'naver';
   // iOS/Android chat enhancements
+  /**
+   * What the author is called in their own conversation. **iOS and Android
+   * only** — Twitter's equivalent is `twitterDisplayName`, and Google has no
+   * such concept.
+   *
+   * iMessage and WhatsApp never draw your own name on screen, which makes this
+   * look cosmetic. It is not: it is the hidden speaker label
+   * `<dt class="visually-hidden">You: </dt>` — exactly what a reader gets with
+   * **Hide Creator's Style** on, and in a downloaded EPUB. An author writing in
+   * first person as Rhys was shipping "You:" to those readers with no way to
+   * change it.
+   *
+   * Left empty by default rather than defaulting to 'You', so the generator
+   * keeps 'You' as its own fallback and skin-off output is unchanged for every
+   * project that never sets this.
+   */
+  chatYourName?: string;
   chatContactName?: string; // "Conversation with..." header (shown at top)
   chatShowTyping?: boolean; // show typing indicator
   chatTypingName?: string; // who is typing (not needed for 1-on-1)
@@ -202,6 +219,7 @@ export const defaultProject = (): SkinProject => ({
     googleShowDidYouMean: false,
     googleDidYouMean: '',
     googleEngineVariant: 'google',
+    chatYourName: '',
     chatContactName: '',
     chatShowTyping: false,
     chatTypingName: '',

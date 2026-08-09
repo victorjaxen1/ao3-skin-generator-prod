@@ -5,10 +5,19 @@ interface Props {
   onContactNameChange: (name: string) => void;
   onBack: () => void;
   onSettingsOpen: () => void;
+  /** Google only — see the button below. Do not delete it with the Cast panel. */
   onCharactersOpen: () => void;
+  onCastOpen: () => void;
   template: 'ios' | 'android' | 'twitter' | 'google';
   saveStatus: 'saved' | 'unsaved' | 'saving' | 'failed';
   messageCount: number;
+  /**
+   * What this one field is currently editing, e.g. "Contact name" or "Group
+   * name". Passed in rather than derived from `template` here, because on iOS
+   * and Android it depends on group mode — and the header cannot see settings.
+   */
+  fieldLabel?: string;
+  fieldPlaceholder?: string;
 }
 
 export const WorkspaceHeader: React.FC<Props> = ({
@@ -17,9 +26,12 @@ export const WorkspaceHeader: React.FC<Props> = ({
   onBack,
   onSettingsOpen,
   onCharactersOpen,
+  onCastOpen,
   template,
   saveStatus,
   messageCount,
+  fieldLabel: fieldLabelProp,
+  fieldPlaceholder: fieldPlaceholderProp,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(contactName);
@@ -77,7 +89,11 @@ export const WorkspaceHeader: React.FC<Props> = ({
     google: 'What was searched for',
   };
 
-  const fieldLabel = fieldLabels[template] || 'Name';
+  // The caller wins where it has more context than we do — on iOS and Android
+  // the title edits the GROUP's name when group mode is on, and calling that
+  // "contact name" in the aria-label would be wrong.
+  const fieldLabel = fieldLabelProp || fieldLabels[template] || 'Name';
+  const fieldPlaceholder = fieldPlaceholderProp || fieldPlaceholders[template];
   const displayName = contactName || templateLabels[template] || 'Untitled';
 
   return (
@@ -105,7 +121,7 @@ export const WorkspaceHeader: React.FC<Props> = ({
               onBlur={handleSave}
               onKeyDown={handleKeyDown}
               className="text-sm font-semibold text-center text-stone-900 bg-stone-100 rounded-lg px-3 py-1 w-full max-w-[200px] border-0 outline-none focus:ring-2 focus:ring-violet-500"
-              placeholder={fieldPlaceholders[template]}
+              placeholder={fieldPlaceholder}
               aria-label={fieldLabel}
             />
           ) : (
@@ -139,11 +155,16 @@ export const WorkspaceHeader: React.FC<Props> = ({
 
         {/* Right: Settings + Characters */}
         <div className="flex items-center gap-1">
+          {/* One button, two destinations, chosen by the only platform that has
+              no people in it. Google has no cast — but the Character Library is
+              legitimately useful there ("Set as contact" fills the search query
+              with a character's name), so hiding the button would strand the
+              feature rather than tidy it away. */}
           <button
-            onClick={onCharactersOpen}
+            onClick={template === 'google' ? onCharactersOpen : onCastOpen}
             className="flex items-center justify-center w-8 h-8 rounded-full text-stone-500 hover:text-violet-700 hover:bg-violet-50 transition-colors"
-            title="Characters"
-            aria-label="Open character library"
+            title={template === 'google' ? 'Characters' : 'People in this conversation'}
+            aria-label={template === 'google' ? 'Open character library' : 'Open people'}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />

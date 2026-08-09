@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Message, SkinSettings } from '../lib/schema';
 import { ImageUrlInput } from './ImageUrlInput';
+import { ReactionPicker } from './ReactionPicker';
 
 interface Props {
   messages: Message[];
@@ -119,6 +120,12 @@ export const MessageTimeline: React.FC<Props> = ({
     );
   }
 
+  // What the author calls themselves. iMessage and WhatsApp never draw this on
+  // screen, so the editor is one of only two places it is visible at all (the
+  // other is the compose chip) — leaving it as a literal "You" here is half of
+  // the "my own name lives nowhere" complaint.
+  const youLabel = settings.chatYourName?.trim() || 'You';
+
   const getSenderLabel = (msg: Message) => {
     if (template === 'twitter') {
       // Mirror how the generator resolves identity, or a tweet that follows the
@@ -129,7 +136,7 @@ export const MessageTimeline: React.FC<Props> = ({
       return name || 'You';
     }
     if (template === 'google') return msg.googleResultUrl || msg.content;
-    return msg.outgoing ? 'You' : msg.sender;
+    return msg.outgoing ? youLabel : msg.sender;
   };
 
   const getSenderColor = (msg: Message) => {
@@ -228,21 +235,20 @@ export const MessageTimeline: React.FC<Props> = ({
                         placeholder="Timestamp"
                         className="text-xs bg-white border border-stone-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-violet-500"
                       />
-                      <input
-                        value={msg.reaction || ''}
-                        onChange={(e) => onUpdateMessage(msg.id, { reaction: e.target.value })}
-                        placeholder="Reaction"
-                        className="text-xs bg-white border border-stone-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-violet-500"
-                      />
+                      {/* The reaction moved out of this grid and below it —
+                          six chips do not fit a half-width cell. Three cells
+                          now lay out 2+1, with the status select as the odd
+                          one, which is the least surprising of the three to
+                          sit alone. */}
                       <select
                         value={msg.outgoing ? 'outgoing' : 'incoming'}
                         onChange={(e) => onUpdateMessage(msg.id, {
                           outgoing: e.target.value === 'outgoing',
-                          sender: e.target.value === 'outgoing' ? 'You' : msg.sender,
+                          sender: e.target.value === 'outgoing' ? youLabel : msg.sender,
                         })}
                         className="text-xs bg-white border border-stone-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-violet-500"
                       >
-                        <option value="outgoing">You (outgoing)</option>
+                        <option value="outgoing">{youLabel} (outgoing)</option>
                         <option value="incoming">Them (incoming)</option>
                       </select>
                       <select
@@ -283,6 +289,12 @@ export const MessageTimeline: React.FC<Props> = ({
                         aria-label="Handle for this post"
                         className="text-xs bg-white border border-stone-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-violet-500"
                       />
+                      {/* Only when the metrics actually render. With "Show
+                          metrics" off the generator emits none of these, so
+                          four number inputs per tweet were editing values that
+                          appear nowhere. */}
+                      {settings.twitterShowMetrics !== false && (
+                      <>
                       <input
                         type="number"
                         min={0}
@@ -319,6 +331,8 @@ export const MessageTimeline: React.FC<Props> = ({
                         aria-label="Views"
                         className="text-xs bg-white border border-stone-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-violet-500"
                       />
+                      </>
+                      )}
                     </>
                   )}
 
@@ -340,6 +354,19 @@ export const MessageTimeline: React.FC<Props> = ({
                     </>
                   )}
                 </div>
+
+                {/* Outside the grid: six chips plus a custom field need the
+                    full width. Narrowed to the two platforms with a reaction
+                    rendering path — TypeScript enforces it rather than a
+                    comment (see ReactionPicker's Props). */}
+                {(template === 'ios' || template === 'android') && (
+                  <ReactionPicker
+                    template={template}
+                    value={msg.reaction || ''}
+                    onChange={(v) => onUpdateMessage(msg.id, { reaction: v })}
+                    idPrefix={msg.id}
+                  />
+                )}
 
                 {/* Image attachment — iOS / Android / Twitter */}
                 {template !== 'google' && (

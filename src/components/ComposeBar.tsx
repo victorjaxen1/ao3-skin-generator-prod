@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Message, SkinSettings, GroupParticipant, TwitterCharacter } from '../lib/schema';
 import { normalizeImageUrl } from '../lib/urlNormalize';
 import { ImageUrlInput } from './ImageUrlInput';
+import { ReactionPicker } from './ReactionPicker';
 
 interface Props {
   template: 'ios' | 'android' | 'twitter' | 'google';
@@ -54,6 +55,16 @@ export const ComposeBar: React.FC<Props> = ({
       ? settings.androidGroupParticipants || []
       : [];
 
+  // The two names the direction chip shows. iOS/Android only — the chip does
+  // not render for Twitter or Google. This is the one place in the workspace
+  // where the author sees who they are currently writing as, so a literal
+  // "You"/"Them" here was the visible half of "your own name lives nowhere".
+  const youLabel = settings.chatYourName?.trim() || 'You';
+  const themLabel =
+    (template === 'ios'
+      ? settings.iosContactName || settings.chatContactName
+      : settings.androidContactName || settings.chatContactName) || 'Them';
+
   const handleSend = () => {
     const trimmedContent = content.trim();
     const normalizedImage = normalizeImageUrl(imageUrl.trim());
@@ -104,11 +115,7 @@ export const ComposeBar: React.FC<Props> = ({
         ? settings.iosAutoAlternate !== false
         : settings.androidAutoAlternate !== false;
 
-      let senderName = isOutgoing ? 'You' : (
-        template === 'ios'
-          ? settings.iosContactName || settings.chatContactName || 'Them'
-          : settings.androidContactName || settings.chatContactName || 'Them'
-      );
+      let senderName = isOutgoing ? youLabel : themLabel;
 
       if (isGroupMode && participantId && !isOutgoing) {
         const participant = groupParticipants.find(p => p.id === participantId);
@@ -198,13 +205,6 @@ export const ComposeBar: React.FC<Props> = ({
                   aria-label="Timestamp"
                   className="flex-1 min-w-0 text-xs bg-white border border-stone-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-violet-500 focus:border-transparent"
                 />
-                <input
-                  value={reaction}
-                  onChange={(e) => setReaction(e.target.value)}
-                  placeholder="❤️"
-                  aria-label="Reaction emoji"
-                  className="w-14 flex-shrink-0 text-xs bg-white border border-stone-200 rounded-lg px-2 py-2 text-center focus:ring-2 focus:ring-violet-500"
-                />
                 <select
                   value={status}
                   onChange={(e) => setStatus(e.target.value as 'sent' | 'delivered' | 'read')}
@@ -216,6 +216,11 @@ export const ComposeBar: React.FC<Props> = ({
                   <option value="read">Read</option>
                 </select>
               </div>
+              {/* iOS SMS mode still gets the picker. Classic SMS had no
+                  tapbacks, but RCS does, the CSS renders identically, and a fic
+                  author choosing green bubbles has not asked us to police their
+                  reactions. Decided, not overlooked. */}
+              <ReactionPicker template={template} value={reaction} onChange={setReaction} />
               <ImageUrlInput
                 value={imageUrl}
                 onChange={setImageUrl}
@@ -275,10 +280,15 @@ export const ComposeBar: React.FC<Props> = ({
                 ? 'bg-violet-100 text-violet-700'
                 : 'bg-stone-100 text-stone-600'
             }`}
-            title={isOutgoing ? 'Sending as: You' : 'Sending as: Them'}
-            aria-label={`Sending as ${isOutgoing ? 'You' : 'Them'} — tap to switch`}
+            title={`Sending as: ${isOutgoing ? youLabel : themLabel}`}
+            aria-label={`Sending as ${isOutgoing ? youLabel : themLabel} — tap to switch`}
           >
-            {isOutgoing ? 'You' : 'Them'}
+            {/* Capped: a long name must not push the send button off a 360px
+                screen. friction.spec.ts finds that button with
+                `button:right-of(textarea)`, which is unaffected either way. */}
+            <span className="block max-w-[80px] truncate">
+              {isOutgoing ? youLabel : themLabel}
+            </span>
           </button>
         )}
 

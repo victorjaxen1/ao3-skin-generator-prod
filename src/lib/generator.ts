@@ -359,9 +359,38 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
    * `content:` would vanish from the PNG (§9c) — so the label is the one to
    * drop. With the skin *on* nothing changes: this element was always clipped.
    */
+  /*
+   * Who "you" are, resolved at render time rather than stamped at send time.
+   *
+   * Renaming yourself in the People panel therefore updates messages you have
+   * already written — the same reasoning, and the same fix, as the Twitter
+   * identity block further down, which had exactly this bug.
+   *
+   * Fenced to iOS and Android on purpose. This is the **shared** section of
+   * msgHTML, which runs for all four platforms; only the iOS and Android
+   * branches consume `hiddenSpeaker` today, so an unfenced version happens to
+   * be harmless — but that is an accident of which branch returns first, and
+   * the next template added above them would silently inherit a name that means
+   * nothing to it. The platform test belongs here, not in the reader's head.
+   *
+   * The **incoming** side stays stamped. `tests/skin-off.spec.ts` asserts
+   * 'Sam: hey 10:23' from a message whose sender is 'Sam' with no contact name
+   * in settings; resolving incoming from settings would break that. Renaming
+   * *them* retroactively is handled by rewriting the messages instead — see
+   * handleRenameContact in index.tsx.
+   */
+  const isChatTemplate = template === 'ios' || template === 'android';
+  const youName = (project.settings.chatYourName || '').trim() || 'You';
+  const speaker = msg.outgoing
+    // On a chat template the setting wins over whatever was stamped on the
+    // message, which is what makes the rename retroactive. Everywhere else the
+    // stamped value is preserved exactly as before.
+    ? (isChatTemplate ? youName : (msg.sender || 'You'))
+    : (msg.sender || 'Them');
+
   const hiddenSpeaker = senderNameHTML
     ? ''
-    : `<dt class="visually-hidden">${sanitizeText(msg.sender || (msg.outgoing ? 'You' : 'Them'))}: </dt>`;
+    : `<dt class="visually-hidden">${sanitizeText(speaker)}: </dt>`;
   
   // iOS/Android grouping logic
   let isFirstInGroup = true;
@@ -393,7 +422,8 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
 
   // Build the message bubble with text content
   const hasAttachment = (template === 'ios' || template === 'android') && msg.attachments && msg.attachments.length > 0;
-  const bubbleClasses = `bubble ${msg.outgoing?'out':'in'}${hasAttachment ? ' image-bubble' : ''}`;
+  const hasReaction = (template === 'ios' || template === 'android') && !!msg.reaction;
+  const bubbleClasses = `bubble ${msg.outgoing?'out':'in'}${hasAttachment ? ' image-bubble' : ''}${hasReaction ? ' has-reaction' : ''}`;
   let bubble = `<dd class="${bubbleClasses}">`;
   
   // Add group sender name INSIDE bubble (at top)
@@ -637,19 +667,39 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
       }
     }
     
-    const bubbleClass = hasImage ? `bubble ${msg.outgoing?'out':'in'} ${tailClass} image-bubble` : `bubble ${msg.outgoing?'out':'in'} ${tailClass}`;
-    const bubble = `<dd class="${bubbleClass}">${bubbleContent}${tailSvg}</dd>`;
-    
-    
+    /**
+     * The reaction goes INSIDE the bubble, not beside it.
+     *
+     * The only rule that styles this is `#workskin dd.bubble .reaction`, a
+     * **descendant** selector. This branch used to emit the span as a sibling of
+     * the bubble, inside `<dl class="msg">`, so that rule matched nothing and
+     * every iMessage tapback rendered as unstyled inline text trailing the
+     * bubble — in the preview, in the PNG and on AO3 alike. The feature looked
+     * implemented and was not.
+     *
+     * `dd.bubble` is already `position:relative` and `.image-bubble` is
+     * explicitly `overflow:visible`, so a chip hanging over the edge is what the
+     * stylesheet was always written for.
+     */
+    const reaction = msg.reaction ? `<span class="reaction">${msg.reaction}</span>` : '';
+
+    // `has-reaction` exists so the stylesheet can reserve the space the chip
+    // hangs into. The chip is absolutely positioned and therefore out of flow,
+    // so without a class on the bubble itself the only way to select "a bubble
+    // with a reaction" is :has(), which is not worth betting an AO3 skin on.
+    const reactionClass = msg.reaction ? ' has-reaction' : '';
+    const bubbleClass = hasImage
+      ? `bubble ${msg.outgoing?'out':'in'} ${tailClass} image-bubble${reactionClass}`
+      : `bubble ${msg.outgoing?'out':'in'} ${tailClass}${reactionClass}`;
+    const bubble = `<dd class="${bubbleClass}">${bubbleContent}${tailSvg}${reaction}</dd>`;
+
+
     // Add status indicators
     let statusIndicator = '';
     if (msg.outgoing && project.settings.iosShowReadReceipt && msg.status === 'read' && isLastInGroup) {
       statusIndicator = `<dd class="status-indicator">Read</dd>`;
     }
-    
-    // Add reaction if present
-    const reaction = msg.reaction ? `<span class="reaction">${msg.reaction}</span>` : '';
-    
+
     // Who is speaking, for when no CSS applies.
     //
     // A bubble carries its speaker entirely in colour and alignment, so with
@@ -660,7 +710,7 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
     // <dt> is the right element rather than a span: this is already a <dl>,
     // where the term is the speaker and the definition is what they said. AO3
     // allows dt, and unstyled browsers indent dd under dt for free.
-    return `${timeBreak}<div class="${rowClass} ${groupClass}" data-message-id="${msg.id}"><dl class="msg">${hiddenSpeaker}${bubble}${reaction}${statusIndicator}</dl></div>`;
+    return `${timeBreak}<div class="${rowClass} ${groupClass}" data-message-id="${msg.id}"><dl class="msg">${hiddenSpeaker}${bubble}${statusIndicator}</dl></div>`;
   }
   
   // Android and other templates: show avatar and sender name (with grouping for Android)
@@ -695,8 +745,17 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
       
       // Add checkmarks
       bubbleContent += checkmarkHTML;
-      
-      finalBubble = `<dd class="bubble ${msg.outgoing?'out':'in'} image-bubble">${bubbleContent}</dd>`;
+
+      // The text branch gets this from the shared builder above, which appends
+      // it to `bubble`. This branch throws `bubble` away and rebuilds from an
+      // empty string, so it used to drop the reaction on the floor: any
+      // WhatsApp message carrying both an image and a reaction rendered the
+      // image and silently lost the emoji.
+      if (msg.reaction) {
+        bubbleContent += `<span class="reaction">${msg.reaction}</span>`;
+      }
+
+      finalBubble = `<dd class="bubble ${msg.outgoing?'out':'in'} image-bubble${msg.reaction ? ' has-reaction' : ''}">${bubbleContent}</dd>`;
     } else {
       // Use the text bubble already built (already includes senderNameHTML)
       finalBubble = bubble;
@@ -905,7 +964,11 @@ export function buildHTML(project: SkinProject): string {
       const isGroupMode = s.androidGroupMode;
       const contactName = isGroupMode
         ? (s.androidGroupName || 'Group Chat')
-        : (s.chatContactName || s.androidContactName || '');
+        // androidContactName first, matching iOS above and ComposeBar. The old
+        // order was inverted relative to everything else in the app, so a
+        // legacy project carrying BOTH fields had a WhatsApp header and its own
+        // messages disagreeing about who you were talking to.
+        : (s.androidContactName || s.chatContactName || '');
       const avatarUrl = s.androidAvatarUrl || '';
 
       if (s.androidHeaderImageUrl || contactName || avatarUrl) {
@@ -914,8 +977,9 @@ export function buildHTML(project: SkinProject): string {
           : (contactName ? `<div class="android-header-avatar-placeholder">${getInitials(contactName)}</div>` : '');
 
         // Group chats show the member count where a 1-on-1 shows "online".
-        const subtitleText = isGroupMode && s.androidGroupParticipants?.length
-          ? `${s.androidGroupParticipants.length} participants`
+        const participantCount = s.androidGroupParticipants?.length ?? 0;
+        const subtitleText = isGroupMode && participantCount
+          ? `${participantCount} participant${participantCount === 1 ? '' : 's'}`
           : (s.androidShowStatus !== false ? (s.androidStatusText || 'online') : '');
         const subtitle = subtitleText
           ? `<div class="android-header-subtitle">${sanitizeText(subtitleText)}</div>`
@@ -1144,6 +1208,12 @@ function iosColours(recvBg: string) {
       statusIndicatorColor: 'rgba(60,60,67,0.6)',
       typingDotBg: 'rgba(60,60,67,0.6)',
       typingLabelColor: 'rgba(60,60,67,0.6)',
+      // The tapback chip. It was a hardcoded near-black in both themes, which
+      // is the same class of bug as the near-white text fixed here on 7 Aug
+      // 2026: a dark chip drawn on a white page.
+      reactionChipBg: '#e9e9eb',
+      reactionChipColor: '#000',
+      reactionChipBorder: '#fff',
     },
     dark: {
       chatBg: '#000000',
@@ -1168,6 +1238,9 @@ function iosColours(recvBg: string) {
       statusIndicatorColor: 'rgba(255,255,255,0.45)',
       typingDotBg: 'rgba(255,255,255,0.6)',
       typingLabelColor: 'rgba(255,255,255,0.5)',
+      reactionChipBg: '#2c2c2e',
+      reactionChipColor: '#fff',
+      reactionChipBorder: '#000',
     },
   };
 }
@@ -1261,7 +1334,40 @@ ${PARAGRAPH_RESET_CSS}
 #workskin dd.bubble.out .time{display:block;font-size:0.733em;color:rgba(255,255,255,0.65);margin-top:0.545em;font-weight:400;}
 #workskin dd.bubble.in .time{display:block;font-size:0.733em;color:${colour.receiverTimeColor};margin-top:0.545em;font-weight:400;}
 #workskin dd.bubble.image-bubble .time.image-time{position:absolute;bottom:0.727em;right:0.727em;margin:0;background:rgba(0,0,0,0.6);padding:0.182em 0.545em;border-radius:0.909em;font-size:0.733em;color:#fff;}
-#workskin dd.bubble .reaction{position:absolute;bottom:-0.625em;right:0.5em;background:rgba(44,44,46,0.95);border:1.5px solid rgba(255,255,255,0.1);border-radius:0.875em;padding:0.188em 0.5em;font-size:1.067em;box-shadow:0 2px 8px rgba(0,0,0,0.3);}
+/* THE TAPBACK CHIP, and where iMessage actually draws one.
+   Until 8 Aug 2026 this rule matched nothing: the iOS branch emitted the span
+   as a SIBLING of the bubble and the selector is a descendant. Once the markup
+   was fixed the rule applied for the first time and brought two defects with
+   it. Both are fixed here.
+   1. It was bottom-right for BOTH directions — and an outgoing bubble's tail is
+      also bottom-right, so the chip landed on the tail and on the "Read"
+      receipt underneath it. iMessage puts a tapback on the TOP corner, on the
+      side away from the tail: top-left for an outgoing bubble, top-right for an
+      incoming one. That clears the tail in both directions by construction
+      rather than by tuning offsets.
+   2. The background was a hardcoded near-black in light mode as well as dark.
+      It is a palette entry now, like the 22 around it. */
+#workskin dd.bubble .reaction{position:absolute;top:-0.75em;background:${colour.reactionChipBg};color:${colour.reactionChipColor};border:0.125em solid ${colour.reactionChipBorder};border-radius:0.875em;padding:0.063em 0.375em;font-size:0.875em;line-height:1.35;box-shadow:0 1px 3px rgba(0,0,0,0.2);z-index:2;}
+#workskin dd.bubble.out .reaction{left:-0.5em;}
+#workskin dd.bubble.in .reaction{right:-0.5em;}
+/* Reserve the strip the chip sits in with PADDING, not margin.
+   Margin only pushes the neighbouring row away; it leaves the chip lying on
+   the bubble's own first line, because the chip is out of flow and the text
+   is not. It looked survivable in the browser only because the chip's lower
+   edge landed within a pixel of where the text began -- and a pixel is not a
+   margin. html2canvas draws text a few px lower than the browser does, so in
+   every PNG the chip sat on top of the words; a narrow bubble, a larger
+   reader font or AO3's paragraph injection would each have done the same on
+   the archive. Padding makes the clearance real in every renderer.
+   Only the reserve was wrong -- the chip's POSITION was always right, sitting
+   mostly outside the bubble on the corner away from the tail. Pulling it up to
+   -0.35em to make room was a mistake: it moved the chip inside and then needed
+   a strip so tall the bubble looked hollow. The chip is ~1.5em tall and hangs
+   0.75em out, so it reaches ~0.75em in; 0.95em covers that plus a descender.
+   The margin is the OTHER direction: the chip sticks 0.75em ABOVE the bubble,
+   into the previous message. 0.5em was not enough and it overlapped by 1.3px
+   -- caught by measuring, not by looking, which is the point of that test. */
+#workskin dd.bubble.has-reaction{padding-top:0.95em;margin-top:1.2em;}
 /* LIGHT-MODE COLOUR, and it was wrong until 7 Aug 2026. This and three sibling
    rules — dt.sender, .typing-label, .typing-bubble .dot — chose between
    rgba(255,255,255,x) and rgba(235,235,245,x). Both are near-white: 235,235,245
@@ -1351,6 +1457,10 @@ function androidColours(senderBg: string, recvBg: string) {
       typingDotBg: 'rgba(0,0,0,0.4)',
       avatarPlaceholderBg: '#128c7e',
       bubbleShadow: '0 1px 2px rgba(0,0,0,0.1)',
+      // WhatsApp draws the reaction as a pill in the surface colour, attached
+      // to the bubble — not as a bare emoji floating under it.
+      reactionChipBg: '#fff',
+      reactionChipBorder: 'rgba(0,0,0,0.08)',
     },
     dark: {
       chatBg: '#0b141a',
@@ -1367,6 +1477,8 @@ function androidColours(senderBg: string, recvBg: string) {
       typingDotBg: 'rgba(255,255,255,0.4)',
       avatarPlaceholderBg: '#00a884',
       bubbleShadow: '0 1px 2px rgba(0,0,0,0.3)',
+      reactionChipBg: '#233138',
+      reactionChipBorder: 'rgba(255,255,255,0.08)',
     },
   };
 }
@@ -1438,7 +1550,30 @@ ${PARAGRAPH_RESET_CSS}
 #workskin dd.bubble.image-bubble .time.image-time{position:absolute;bottom:0.6em;right:0.8em;margin:0;background:rgba(0,0,0,0.5);padding:0.2em 0.6em;border-radius:0.8em;font-size:0.714em;color:#fff;padding-right:2.4em;}
 #workskin dd.bubble.out .check-icon{position:absolute;bottom:0.429em;right:0.429em;height:1em;width:auto;opacity:0.7;}
 #workskin dd.bubble.image-bubble.out .check-icon{bottom:0.571em;right:0.571em;z-index:1;}
-#workskin dd.bubble .reaction{position:absolute;bottom:-0.444em;left:0.444em;background:transparent;border:none;border-radius:0;padding:0;font-size:1.286em;box-shadow:none;}
+/* WhatsApp's reaction, measured off a real WhatsApp screenshot rather than
+   reasoned about -- two earlier attempts got it wrong from first principles.
+   Three things the real app does, all of which we had wrong:
+   1. The pill sits ENTIRELY BELOW the bubble, in the gap between rows. It does
+      not straddle the bubble's edge and it does not sit inside it.
+   2. Therefore the bubble's own layout is COMPLETELY UNCHANGED by a reaction.
+      No reserved strip, no extra padding, no taller bubble, and the time and
+      ticks stay exactly where they are. Reserving space inside the bubble --
+      which is what the first two attempts did -- is what made a group bubble
+      with no timestamp read as a hollow box with a chip lost in its corner.
+   3. It sits on the SENDER'S OWN side: bottom-right for an outgoing message,
+      bottom-left for an incoming one. The old comment here claimed WhatsApp
+      always attaches lower-left "regardless of who sent it". It does not.
+   Because the pill is outside the bubble entirely, it cannot land on the text,
+   which is the whole class of bug the previous two versions kept producing.
+   What it CAN land on is the next row, and the margin below is what stops it.
+   (No backticks in this comment: it lives inside a template literal.) */
+#workskin dd.bubble .reaction{position:absolute;bottom:-1.6em;background:${colour.reactionChipBg};border:0.071em solid ${colour.reactionChipBorder};border-radius:0.857em;padding:0.071em 0.286em;font-size:0.857em;line-height:1.4;box-shadow:0 1px 2px rgba(0,0,0,0.15);z-index:2;}
+#workskin dd.bubble.out .reaction{right:0.75em;}
+#workskin dd.bubble.in .reaction{left:0.75em;}
+/* The pill is ~1.43em tall and hangs 1.6em down, so it clears the bubble by a
+   little and needs ~1.6em of room beneath it. Margin is correct HERE, where
+   padding was not: the thing being pushed away really is the next row. */
+#workskin dd.bubble.has-reaction{margin-bottom:2em;}
 #workskin dd.status-indicator{font-size:0.625em;color:${colour.timeColor};text-align:right;margin:0.2em 1em 0 0;font-weight:400;}
 #workskin dd.attach{margin-top:0.25em;}
 #workskin img.attach-img{max-width:12.5em;border-radius:0.5em;display:block;}
