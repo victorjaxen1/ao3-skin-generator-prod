@@ -83,10 +83,10 @@ test('mood filters narrow the gallery', async ({ page }) => {
   await expect(page.getByRole('button', { name: /Paper & Ink/ })).toHaveCount(1);
 });
 
-test('the editor opens with the chosen template and reports it AO3-safe', async ({ page }) => {
+test('the editor opens with the chosen template and reports reviewed checks passed', async ({ page }) => {
   await openEditor(page);
   await expect(page.getByText('Moonlit Library')).toBeVisible();
-  await expect(page.getByRole('status').filter({ hasText: 'AO3-safe' })).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: 'Checks passed' })).toBeVisible();
 });
 
 test('the preview renders AO3 markup inside an isolated iframe', async ({ page }) => {
@@ -171,7 +171,7 @@ test('a low-contrast accent is warned about, and the fix repairs it', async ({ p
   await expect(warning).toBeVisible();
 
   // Readability is not a safety question: the skin still saves on AO3.
-  await expect(page.getByRole('status').filter({ hasText: 'AO3-safe' })).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: 'Checks passed' })).toBeVisible();
 
   await page.getByRole('button', { name: 'Fix accent colour' }).click();
   await expect(warning).toHaveCount(0);
@@ -181,7 +181,7 @@ test('the export dialog copies the CSS and explains the AO3 step', async ({ page
   await openEditor(page);
   await page.getByRole('button', { name: 'Copy to AO3' }).click();
 
-  await expect(page.getByText('AO3-safe check passed')).toBeVisible();
+  await expect(page.getByText(/Passes the bundled AO3 CSS checks/)).toBeVisible();
 
   // Scoped to the instruction steps, and these two assertions are the reason
   // the export can be comment-free: both phrases used to ship as CSS comments

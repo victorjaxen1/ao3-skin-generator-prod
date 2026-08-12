@@ -45,7 +45,7 @@ test('the modal hands over two pieces, each with its own destination', async ({ 
   await openTemplate(page, 'twitter-verified-account');
   await page.getByRole('button', { name: /work skin/i }).click();
 
-  await expect(page.getByText('AO3-safe check passed')).toBeVisible();
+  await expect(page.getByText(/Passes the bundled AO3 CSS checks/)).toBeVisible();
   await expect(page.getByText('Preferences → Skins → Create Work Skin')).toBeVisible();
   // The step everyone forgets: the HTML does nothing without the skin attached.
   await expect(page.getByText('Select Work Skin')).toBeVisible();
@@ -153,6 +153,6 @@ test('the image export still works alongside it', async ({ page }) => {
   // The work skin is an addition, not a replacement — the two primary
   // buttons must survive it.
   await openTemplate(page, 'twitter-verified-account');
-  await expect(page.getByRole('button', { name: 'Save Image' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Copy for AO3' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Save PNG' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Get AO3 image code' })).toBeVisible();
 });

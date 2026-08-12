@@ -1252,7 +1252,7 @@ function buildIOSCSS(s: SkinProject['settings'], senderBg: string, recvBg: strin
   const headerBg = s.iosHeaderImageUrl ? `background:url('${s.iosHeaderImageUrl}') no-repeat top center;background-size:100% auto;` : 'background:#007aff;';
   const footerBg = s.iosFooterImageUrl ? `background:url('${s.iosFooterImageUrl}') no-repeat bottom center;background-size:100% auto;` : `background:${colour.inputBarBg};`;
 
-    return `/* Generated with AO3 Skin Generator - Free forever! https://wordfokus.com/ao3skingen */
+    return `/* Generated with AO3 SkinGen */
 #workskin .chat{width:100%;max-width:${emFromPx(Math.min(maxWidth, 375))};min-width:20em;margin:0 auto;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;padding:0;background:${colour.chatBg};}
 ${PARAGRAPH_RESET_CSS}
 #workskin .ios-header{position:relative;${headerBg}height:4.063em;display:flex;align-items:center;padding:0;overflow:hidden;}
@@ -1490,7 +1490,7 @@ function buildAndroidCSS(s: SkinProject['settings'], senderBg: string, recvBg: s
   const headerBg = s.androidHeaderImageUrl ? `background:url('${s.androidHeaderImageUrl}') no-repeat top center;background-size:100% auto;` : `background:${colour.headerBgColor};`;
   const footerBg = s.androidFooterImageUrl ? `background:url('${s.androidFooterImageUrl}') no-repeat bottom center;background-size:contain;` : `background:${colour.footerBgColor};`;
 
-    return `/* Generated with AO3 Skin Generator - Free forever! https://wordfokus.com/ao3skingen */
+    return `/* Generated with AO3 SkinGen */
 #workskin .chat{width:100%;max-width:${emFromPx(Math.min(maxWidth, 400))};min-width:20em;margin:0 auto;display:flex;flex-direction:column;font-family:${s.fontFamily};background:${colour.chatBg};padding:0;}
 ${PARAGRAPH_RESET_CSS}
 #workskin .android-header{position:relative;${headerBg}height:3.75em;display:flex;align-items:center;padding:0;overflow:visible;}
@@ -1629,7 +1629,7 @@ function buildTwitterCSS(s: SkinProject['settings'], senderBg: string, maxWidth:
   const isDark = s.twitterDarkMode;
   const colour = TWITTER_COLOURS[isDark ? 'dark' : 'light'];
 
-  return `/* Generated with AO3 Skin Generator - Free forever! https://wordfokus.com/ao3skingen */
+  return `/* Generated with AO3 SkinGen */
 /* NOTE ON UNITS. Sizes here are em, not px, and that is the whole reason this
    card works on a phone. AO3 forbids @media blocks in skin CSS — media is a
    field on the skin record, not something you can write here — so a breakpoint
@@ -1822,7 +1822,7 @@ ${VISUALLY_HIDDEN_CSS}`;
 }
 
 function buildGoogleCSS(maxWidth: number): string {
-  return `/* Generated with AO3 Skin Generator - Free forever! https://wordfokus.com/ao3skingen */
+  return `/* Generated with AO3 SkinGen */
 #workskin .chat{width:100%;min-width:20em;max-width:${emFromPx(Math.min(maxWidth, 600))};margin:0 auto;font-family:Arial,Helvetica,sans-serif;box-sizing:border-box;padding:1.25em 0;}
 ${PARAGRAPH_RESET_CSS}
 #workskin .logo-container{text-align:center;margin:0 0 1.625em 0;padding:1.25em 0;}

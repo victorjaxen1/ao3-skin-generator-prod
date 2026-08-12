@@ -597,35 +597,33 @@ test.describe('which platforms are offered', () => {
    * never reached the archive: AO3 deletes comments, confirmed by reading all
    * four saved skins back out of its own editor.
    */
-  test('every platform carries a plain-text credit, and nothing more', () => {
+  test('tool credit is absent by default and can be added as neutral plain text', () => {
     for (const template of ['ios', 'android', 'twitter', 'google'] as const) {
       const p = defaultProject();
       p.template = template;
-      const { html, css } = buildWorkSkin(p);
+      const defaultExport = buildWorkSkin(p);
+      const creditedExport = buildWorkSkin(p, { includeCredit: true });
 
-      // The root domain, not the subdomain the tool is served from. This string
-      // is frozen in the author's work the moment they paste it, so it has to
-      // be the address we are surest still resolves years from now — and a
-      // subdomain is the part most likely to move. See CREDIT in workSkin.ts.
-      expect(html, template).toContain('<div class="wm">made by wordfokus.com/ao3skingen</div>');
-      expect(html, template).not.toContain('ao3skingen.wordfokus.com');
+      expect(defaultExport.html, template).not.toContain('class="wm"');
+      expect(creditedExport.html, template).toContain('<div class="wm">Made with AO3 SkinGen</div>');
+      expect(creditedExport.html, template).not.toContain('wordfokus.com');
 
       // Exactly once per exported block — an author pasting several blocks into
       // one chapter should not accumulate a column of credits.
-      expect(html.match(/class="wm"/g)?.length, template).toBe(1);
+      expect(creditedExport.html.match(/class="wm"/g)?.length, template).toBe(1);
 
       // Not a link: a bare string is a credit, an outbound anchor is promotion.
-      expect(html, template).not.toMatch(/<a[^>]*wordfokus/);
+      expect(creditedExport.html, template).not.toMatch(/<a\b/);
 
       // No solicitation inside somebody's published fic. The donate ask belongs
       // in our own UI, and the CSS comment that carries it is deleted by AO3
       // anyway.
-      expect(html, template).not.toContain('donate');
+      expect(creditedExport.html.toLowerCase(), template).not.toContain('donate');
 
       // Visible and deletable. Hidden promotional text would surface in the
       // reader's EPUB and screen reader without the author ever seeing it.
-      expect(html, template).not.toMatch(/visually-hidden[^>]*>[^<]*wordfokus/);
-      expect(css, template).toMatch(/#workskin (\.tweets )?\.wm\{/);
+      expect(creditedExport.html, template).not.toMatch(/visually-hidden[^>]*>[^<]*AO3 SkinGen/i);
+      expect(creditedExport.css, template).toMatch(/#workskin (\.tweets )?\.wm\{/);
     }
   });
 
@@ -980,7 +978,7 @@ test.describe('the master work skin', () => {
     expect(css).toBe(stripCssComments(css));
   });
 
-  test('carries one credit, not four', () => {
+  test('master skin keeps optional credit off by default and adds it once', () => {
     // The credit lives in the HTML and there is one block of HTML, so this
     // holds by construction — asserted because a later "merge the four blocks"
     // change is exactly the kind that would break it.
@@ -988,11 +986,14 @@ test.describe('the master work skin', () => {
       const p = defaultProject();
       p.template = template;
       const { html } = buildMasterWorkSkin(p);
+      const credited = buildMasterWorkSkin(p, { includeCredit: true }).html;
 
-      expect(html.match(/class="wm"/g)?.length, template).toBe(1);
+      expect(html, template).not.toContain('class="wm"');
+      expect(credited.match(/class="wm"/g)?.length, template).toBe(1);
       // And it is the same markup the single-platform export hands over: the
       // master skin changes the stylesheet, not what goes in the chapter.
       expect(html, template).toBe(buildWorkSkin(p).html);
+      expect(credited, template).toBe(buildWorkSkin(p, { includeCredit: true }).html);
     }
   });
 

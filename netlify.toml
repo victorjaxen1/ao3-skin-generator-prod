@@ -7,8 +7,9 @@
 
 [build.environment]
   NEXT_TELEMETRY_DISABLED = "1"
-  # Set NEXT_PUBLIC_IMGBB_API_KEY in the Netlify dashboard UI (Environment variables section)
-  # Get a free API key at https://api.imgbb.com/
+  # Set server-only IMGBB_API_KEY in the Netlify dashboard. Never prefix it NEXT_PUBLIC_.
+  # Optional controls: IMAGE_UPLOADS_ENABLED, IMAGE_UPLOAD_DAILY_LIMIT,
+  # IMAGE_UPLOAD_DAILY_BYTES, and IMAGE_UPLOAD_ALLOWED_ORIGINS.
 
 [[headers]]
   for = "/sw.js"
@@ -19,4 +20,4 @@
 [[headers]]
   for = "/*"
   [headers.values]
-    Content-Security-Policy = "img-src 'self' data: blob: https:; default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https:"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://www.googletagmanager.com https://www.google-analytics.com; frame-ancestors 'none'; object-src 'none'; form-action 'self'; base-uri 'self'; upgrade-insecure-requests"

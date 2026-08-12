@@ -6,7 +6,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint . --ext .ts,.tsx"
+    "lint": "eslint . --ext .ts,.tsx",
+    "typecheck": "tsc --noEmit",
+    "test": "playwright test",
+    "test:unit": "playwright test --project=unit",
+    "test:smoke": "playwright test --project=desktop tests/landing.spec.ts tests/work-skin.spec.ts tests/site-skin.spec.ts",
+    "audit:ao3-css": "node scripts/check-ao3-css-ruleset.mjs"
   },
   "dependencies": {
     "dompurify": "^3.3.0",

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Head from 'next/head';
+import { AO3_RULESET } from '../lib/ao3Compatibility';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { SiteSkinTheme } from '../lib/siteSkin/theme';
@@ -184,7 +185,7 @@ export default function SiteSkinPage() {
       <title>AO3 Site Skin Maker — AO3 SkinGen</title>
       <meta
         name="description"
-        content="Pick a look, personalise it, and copy an AO3-safe site skin. No CSS, no account."
+        content="Pick a look, personalise it, and copy a site skin checked against bundled AO3 compatibility rules. No CSS knowledge or account required."
       />
     </Head>
   );
@@ -241,7 +242,7 @@ export default function SiteSkinPage() {
                 : 'bg-red-50 border-red-200 text-red-800'
             }`}
           >
-            {violations.length === 0 ? 'AO3-safe' : `${violations.length} blocked`}
+            {violations.length === 0 ? `Checks passed · ${AO3_RULESET.reviewedOn}` : `${violations.length} blocked`}
           </span>
 
           <span className="ml-auto flex items-center gap-2">

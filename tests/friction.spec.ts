@@ -53,7 +53,7 @@ test('TASK: cold start → iMessage with 2 messages → export', async ({ page }
   await expect(page.getByText('hey are you awake').first()).toBeVisible();
 
   // Step 6: export
-  const saveImage = page.getByRole('button', { name: 'Save Image' });
+  const saveImage = page.getByRole('button', { name: 'Save PNG' });
   await expect(saveImage).toBeVisible();
   steps++;
 

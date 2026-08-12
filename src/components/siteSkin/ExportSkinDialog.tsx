@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Violation } from '../../lib/siteSkin/ao3Css';
+import { AO3_RULESET_STATUS } from '../../lib/ao3Compatibility';
 
 interface Props {
   isOpen: boolean;
@@ -127,9 +128,9 @@ export const ExportSkinDialog: React.FC<Props> = ({
             <div className="bg-green-50 border border-green-200 rounded-xl p-3 mb-4 flex items-start gap-2">
               <span className="text-green-600 font-bold">✓</span>
               <div>
-                <p className="text-sm font-semibold text-green-900">AO3-safe check passed</p>
+                <p className="text-sm font-semibold text-green-900">{AO3_RULESET_STATUS}</p>
                 <p className="text-xs text-green-800 mt-0.5">
-                  Every property and value here is on AO3&apos;s allowed list.
+                  The generated CSS passes this app&apos;s reviewed compatibility rules.
                 </p>
               </div>
             </div>

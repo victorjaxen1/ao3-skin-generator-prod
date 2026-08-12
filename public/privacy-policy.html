@@ -132,7 +132,7 @@ h2 { margin-top: 2rem; }
           </svg>
           <div class="logo-text">AO3 <span class="highlight">Skin Generator</span></div>
         </a>
-        <a href="/" class="btn btn-primary" style="padding: 10px 20px; font-size: 15px;">Back to Generator</a>
+        <a href="https://ao3skingen.netlify.app/" class="btn btn-primary" style="padding: 10px 20px; font-size: 15px;">Back to Generator</a>
       </div>
     </header>
 
@@ -151,7 +151,7 @@ h2 { margin-top: 2rem; }
           </div>
 
           <div class="info-box">
-            <p><strong>TL;DR:</strong> Your work stays on your device. We don't collect, store, or sell your creative content. We use Google Analytics to understand how people use the tool (anonymously), and we use ImgBB for image hosting when you upload an image or export your work. That's it.</p>
+            <p><strong>TL;DR:</strong> No account is required. Editable text and settings stay in this browser. Pasted image addresses may use our proxy during export, and hosted image features upload content only when you choose them. Content-free analytics measures tool usage, not story content.</p>
           </div>
 
           <h2>1. Introduction</h2>
@@ -161,9 +161,10 @@ h2 { margin-top: 2rem; }
           <h2>2. Information We Collect</h2>
           
           <h3>2.1 Information You Provide Directly</h3>
-          <p><strong>Creative Content:</strong> All text, styling, and configurations you create in the generator are stored locally in your browser using localStorage. We never transmit this data to our servers.</p>
-          <p><strong>Images You Upload:</strong> If you choose to upload an image, or use "Copy for AO3" (which needs a public link to the finished picture), the image is sent to ImgBB, a third-party image hosting service. Images hosted there are publicly accessible to anyone with the link. We do not store these images on our servers.</p>
-          <p><strong>Image Addresses You Paste:</strong> When you export, any image address you have pasted is fetched by our server so the picture can be embedded directly in the exported file. The address and the image pass through our server at that moment; neither is stored afterwards.</p>
+          <p><strong>Editable Projects:</strong> Editable project text and settings are stored in your browser using localStorage. Clearing browser data can delete this local copy.</p>
+          <p><strong>Images You Upload:</strong> If you upload a file, that file is sent to our image-upload service and ImgBB. Images hosted there are publicly accessible to anyone with the link.</p>
+          <p><strong>Hosted AO3 Image Code:</strong> If you choose “Get AO3 image code,” the finished rendered scene — including any visible story text — is uploaded to ImgBB so it has a public image address.</p>
+          <p><strong>Image Addresses You Paste:</strong> Pasted image addresses are requested from their host for preview and may be sent to our image proxy when an export needs them. The proxy does not intentionally retain the address or image after the request.</p>
 
           <h3>2.2 Information Collected Automatically</h3>
           <p><strong>Analytics Data:</strong> We use Google Analytics to understand how visitors interact with our service. This includes:</p>
@@ -175,7 +176,7 @@ h2 { margin-top: 2rem; }
             <li>Geographic location (country/city level, not precise)</li>
             <li>Referral source (how you found us)</li>
           </ul>
-          <p>This data is collected anonymously and aggregated. We cannot identify individual users from this data.</p>
+          <p>Analytics events may record which tool, template, and export type were used. We do not include story text, names, handles, image addresses, or generated code in those event parameters.</p>
 
           <h3>2.3 Information We Do NOT Collect</h3>
           <ul>
@@ -190,7 +191,7 @@ h2 { margin-top: 2rem; }
           <ul>
             <li><strong>Improve the service:</strong> Analytics help us understand which features are popular and where users encounter issues</li>
             <li><strong>Fix bugs:</strong> Error tracking helps us identify and resolve technical problems</li>
-            <li><strong>Provide the service:</strong> Image hosting via ImgBB enables uploads and the "Copy for AO3" export</li>
+            <li><strong>Provide the service:</strong> Image hosting via ImgBB enables uploads and the “Get AO3 image code” export</li>
             <li><strong>Make strategic decisions:</strong> Usage patterns inform which features to build next</li>
           </ul>
 
@@ -199,8 +200,8 @@ h2 { margin-top: 2rem; }
           <h3>4.1 Local Storage</h3>
           <p>Your creative work is stored in your browser's localStorage. This means:</p>
           <ul>
-            <li>Data stays on your device</li>
-            <li>We cannot access it</li>
+            <li>The editable project stays in this browser unless you choose a feature that uploads content</li>
+            <li>Hosted image exports contain the visible rendered scene, but not the editable project file</li>
             <li>Clearing your browser data will delete your saved work</li>
             <li>Different browsers/devices have separate storage</li>
           </ul>

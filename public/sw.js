@@ -45,6 +45,11 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
+  // Remote user-supplied images are governed by the page's img-src policy.
+  // Do not intercept them here: a service-worker fetch would instead require
+  // broad connect-src permission and would put creative assets in our cache.
+  if (url.origin !== self.location.origin) return;
+
   // Skip non-GET requests
   if (request.method !== 'GET') return;
 

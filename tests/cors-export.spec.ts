@@ -46,16 +46,16 @@ test('EXPORT: non-CORS image survives, and is actually in the output', async ({ 
   }, NO_CORS_IMAGE);
   console.log(`  [MEASURE] preview img: ${imgState}`);
 
-  // Now export. Save Image triggers a download on success.
+  // Now export. Save PNG triggers a download on success.
   const downloadPromise = page
     .waitForEvent('download', { timeout: 45000 })
     .then(() => 'DOWNLOAD')
     .catch(() => 'NO DOWNLOAD');
 
-  await page.getByRole('button', { name: 'Save Image' }).click();
+  await page.getByRole('button', { name: 'Save PNG' }).click();
   const result = await downloadPromise;
 
-  console.log(`  [MEASURE] Save Image result: ${result}`);
+  console.log(`  [MEASURE] Save PNG result: ${result}`);
   console.log(`  [MEASURE] page errors: ${pageErrors.length ? pageErrors.join(' | ') : '(none)'}`);
 
   const tainted = pageErrors.some((e) => /SecurityError|tainted|insecure/i.test(e));

@@ -1,8 +1,9 @@
 /**
  * AO3's CSS allowlist, copied verbatim from otwarchive.
  *
- * Source: config/config.yml on otwcode/otwarchive master, fetched 6 August 2026.
- *   SUPPORTED_CSS_PROPERTIES           -> AO3_PROPERTIES (181 entries)
+ * Source: config/config.yml at otwcode/otwarchive commit
+ * cf1d7f997047eaca14370985dafd156a91696313, reviewed 12 August 2026.
+ *   SUPPORTED_CSS_PROPERTIES           -> AO3_PROPERTIES (182 entries)
  *   SUPPORTED_CSS_SHORTHAND_PROPERTIES -> AO3_SHORTHANDS (20 entries)
  *
  * This is DATA, not judgement. Do not add entries because a property "should"
@@ -14,6 +15,7 @@
 
 export const AO3_PROPERTIES: readonly string[] = [
   '-replace', '-use-link-source', 'accelerator', 'accent-color',
+  'aspect-ratio',
   'align-content', 'align-items', 'align-self', 'alignment-adjust',
   'alignment-baseline', 'appearance', 'azimuth', 'baseline-shift',
   'behavior', 'binding', 'bookmark-label', 'bookmark-level',

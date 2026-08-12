@@ -116,7 +116,7 @@ export const PlatformPicker: React.FC<Props> = ({
           AO3 SkinGen
         </h1>
         <p className="text-stone-500 mt-2 text-sm sm:text-base max-w-xs mx-auto leading-relaxed">
-          Fake screenshots for your fanfics
+          Social-media scenes for AO3 — export as an image or accessible real text.
         </p>
       </div>
 
@@ -210,7 +210,8 @@ export const PlatformPicker: React.FC<Props> = ({
 
       {/* Footer */}
       <div className="mt-12 text-center space-y-1">
-        <p className="text-xs text-stone-400">Free &amp; open source · No account needed</p>
+        <p className="text-xs text-stone-400">No account required. Editable text and settings stay in this browser.</p>
+        <p className="text-xs text-stone-400">Hosted image features upload only when you choose them.</p>
         <p className="text-xs text-stone-300">
           <a href="/privacy-policy.html" className="hover:text-stone-500 transition-colors">Privacy</a>
           {' · '}

@@ -9,7 +9,8 @@
  * stray declaration turns "copy this into AO3" into a dead end at the exact
  * moment the user expects a payoff. Everything we emit must pass this first.
  *
- * The rules encoded here (verified against otwarchive master, 6 Aug 2026):
+ * The rules encoded here (verified against otwarchive commit
+ * cf1d7f997047eaca14370985dafd156a91696313, 12 Aug 2026):
  *
  *   legal_property?(p)          p is in SUPPORTED_CSS_PROPERTIES, or matches
  *                               -(moz|ms|o|webkit)-<supported> as a SUBSTRING

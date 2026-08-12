@@ -19,7 +19,7 @@ import { AO3_PROPERTIES, AO3_SHORTHANDS } from '../src/lib/siteSkin/ao3Propertie
 
 test.describe('the allowlist data', () => {
   test('matches the counts copied from otwarchive', () => {
-    expect(AO3_PROPERTIES).toHaveLength(181);
+    expect(AO3_PROPERTIES).toHaveLength(182);
     expect(AO3_SHORTHANDS).toHaveLength(20);
   });
 
@@ -33,7 +33,7 @@ test.describe('the allowlist data', () => {
 
 test.describe('property acceptance', () => {
   // Exact members of SUPPORTED_CSS_PROPERTIES.
-  for (const p of ['color', 'display', 'content', 'opacity', 'box-shadow', 'filter', 'position', 'width', 'z-index']) {
+  for (const p of ['color', 'display', 'content', 'opacity', 'box-shadow', 'filter', 'position', 'width', 'z-index', 'aspect-ratio']) {
     test(`accepts "${p}" (listed outright)`, () => {
       expect(isPropertyAllowed(p)).toBe(true);
     });
@@ -59,7 +59,7 @@ test.describe('property acceptance', () => {
   }
 
   // The ones people reach for that AO3 will refuse.
-  for (const p of ['gap', 'animation', 'pointer-events', 'backdrop-filter', 'aspect-ratio']) {
+  for (const p of ['gap', 'animation', 'pointer-events', 'backdrop-filter']) {
     test(`rejects "${p}"`, () => {
       expect(isPropertyAllowed(p)).toBe(false);
     });

@@ -89,7 +89,13 @@ export interface SkinSettings {
   fontFamily: string;
   maxWidthPx: number;
   useDarkNeutral: boolean;
-  watermark: boolean;
+  /** Safety label rendered into PNG exports. Recommended for realistic scenes. */
+  fictionLabel?: boolean;
+  fictionLabelText?: string;
+  /** Optional neutral AO3 SkinGen credit rendered into PNG exports. */
+  toolAttribution?: boolean;
+  /** Legacy project field. Kept readable during migration but no longer used. */
+  watermark?: boolean;
   
   // UNIVERSAL CHARACTER LIBRARY (all templates)
   universalCharacters?: UniversalCharacter[]; // Global character library
@@ -194,7 +200,9 @@ export const defaultProject = (): SkinProject => ({
     fontFamily: 'Arial, Helvetica, sans-serif',
     maxWidthPx: 400,
     useDarkNeutral: true,
-    watermark: true,
+    fictionLabel: true,
+    fictionLabelText: 'Fictional scene',
+    toolAttribution: false,
     twitterHandle: '',
     twitterVerified: false,
     twitterLikes: 0,

@@ -397,10 +397,24 @@ export const SettingsSheet: React.FC<Props> = ({
             </div>
           </div>
           <ToggleRow
-            label="Watermark"
-            sublabel="Remove with Pro"
-            checked={settings.watermark !== false}
-            onChange={(v) => onUpdateSettings('watermark', v)}
+            label="Fiction label"
+            sublabel="Recommended for realistic mockups; removing it can make the image look real"
+            checked={settings.fictionLabel !== false}
+            onChange={(v) => onUpdateSettings('fictionLabel', v)}
+          />
+          {settings.fictionLabel !== false && (
+            <TextRow
+              label="Fiction label text"
+              value={settings.fictionLabelText || 'Fictional scene'}
+              placeholder="Fictional scene"
+              onChange={(v) => onUpdateSettings('fictionLabelText', v)}
+            />
+          )}
+          <ToggleRow
+            label="Tool credit"
+            sublabel="Optional · adds “Made with AO3 SkinGen” to PNGs"
+            checked={settings.toolAttribution === true}
+            onChange={(v) => onUpdateSettings('toolAttribution', v)}
           />
         </AdvancedSection>
       </div>

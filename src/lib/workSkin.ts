@@ -55,6 +55,11 @@ export interface WorkSkinExport {
   violations: Violation[];
 }
 
+export interface WorkSkinOptions {
+  /** Neutral plain-text credit. Off by default so AO3-bound output is opt-in. */
+  includeCredit?: boolean;
+}
+
 /**
  * AO3's HTML sanitizer drops attributes it does not recognise, silently — no
  * error, unlike the CSS path. `data-message-id` is one of those: it exists so
@@ -135,58 +140,11 @@ function useCssBubbleTails(html: string): string {
 }
 
 /**
- * A one-line credit at the foot of the block.
- *
- * ## Why it has to be here, in the HTML
- *
- * Every stylesheet opens with a `/* Generated with AO3 Skin Generator … *​/`
- * comment, and **AO3 deletes comments** — confirmed 7 Aug 2026 by reading all
- * four skins back out of AO3's own editor, where not one of them survived. So
- * the credit we thought we were shipping has never once reached the archive.
- * HTML text is the only carrier that does.
- *
- * ## Why it is shaped exactly like this
- *
- * AO3's Terms of Service prohibit using a work to advertise or solicit, and the
- * community's own convention is that skin credit belongs in the author's notes
- * rather than welded into the fic. That does not forbid an attribution line,
- * but it does decide its form, and each of these is deliberate:
- *
- * - **Plain text, not an `<a href>`.** A bare string reads as a credit; a live
- *   outbound link reads as promotion. (Anchors are separately unwanted here —
- *   see BACKLOG 5c.)
- * - **No donate URL.** Asking for money inside somebody's published fic is the
- *   part that would actually be advertising. That ask belongs in our own UI.
- * - **Visible, and never `.visually-hidden`.** Hidden promotional text that
- *   surfaces in a reader's EPUB and screen reader — text the author never saw
- *   and did not agree to — is the version that earns complaints. This is one
- *   plain element at the end of the block: the author can see it, and can
- *   delete it with one keystroke if they would rather credit us in their notes.
- * - **Work-skin path only.** The PNG has its own footnote and `buildHTML` is
- *   shared with the preview, so adding it there would double up in the image.
- *
- * `.wm` is already defined in all four stylesheets and has never been emitted
- * by anything; this fills the slot it was built for.
- *
- * ## Why the root domain and not the subdomain the tool lives on
- *
- * The tool is served from `ao3skingen.wordfokus.com`. This credit deliberately
- * does **not** point there, and the reason is durability rather than branding.
- *
- * Once an author pastes this line into their fic, the string is frozen in their
- * work permanently — we cannot edit it, and they cannot be expected to. It is
- * the only genuinely irreversible thing this export produces. So the address in
- * it should be the one we are most confident still resolves in a decade, which
- * is the root domain: a subdomain is exactly the part most likely to move in a
- * rebrand or a reshuffle.
- *
- * `wordfokus.com/ao3skingen` must therefore be a REAL PAGE, not a 301 to the
- * subdomain — a redirect puts the subdomain straight back in the reader's
- * address bar and re-couples the permanent string to the thing most likely to
- * change. Kept as a page, we can re-point it internally whenever we like
- * without touching a single published work.
+ * Optional AO3-bound attribution. It is deliberately plain, unlinked,
+ * commercial-neutral, visible, and off by default. CSS comments cannot carry
+ * this credit because AO3 removes them when saving a skin.
  */
-const CREDIT = 'made by wordfokus.com/ao3skingen';
+const CREDIT = 'Made with AO3 SkinGen';
 
 function appendCredit(html: string): string {
   const close = html.lastIndexOf('</div>');
@@ -369,15 +327,14 @@ function platformCss(project: SkinProject): string {
 }
 
 /** One platform's markup, with the four export-only rewrites applied. */
-function platformHtml(project: SkinProject): string {
-  return appendCredit(
-    useCssBubbleTails(absolutizeAssets(stripEditorAttributes(buildHTML(project))))
-  );
+function platformHtml(project: SkinProject, options: WorkSkinOptions = {}): string {
+  const html = useCssBubbleTails(absolutizeAssets(stripEditorAttributes(buildHTML(project))));
+  return options.includeCredit ? appendCredit(html) : html;
 }
 
-export function buildWorkSkin(project: SkinProject): WorkSkinExport {
+export function buildWorkSkin(project: SkinProject, options: WorkSkinOptions = {}): WorkSkinExport {
   const css = platformCss(project);
-  const html = platformHtml(project);
+  const html = platformHtml(project, options);
 
   return {
     css,
@@ -560,7 +517,10 @@ function themeVariantCss(project: SkinProject, template: WorkSkinTemplate): stri
  * render each platform **identically to that platform's own single-platform
  * skin**, including under AO3's paragraph injection.
  */
-export function buildMasterWorkSkin(project: SkinProject): WorkSkinExport {
+export function buildMasterWorkSkin(
+  project: SkinProject,
+  options: WorkSkinOptions = {}
+): WorkSkinExport {
   const blocks = MASTER_TEMPLATES.map((template) =>
     namespaceCss(platformCss(blockProject(project, template)), template)
   );
@@ -578,7 +538,7 @@ export function buildMasterWorkSkin(project: SkinProject): WorkSkinExport {
     css,
     // The credit lives in the HTML, and there is one block of HTML, so there is
     // one credit — concatenating the four stylesheets cannot multiply it.
-    html: platformHtml(project),
+    html: platformHtml(project, options),
     violations: lintAo3Css(css, 'work'),
   };
 }

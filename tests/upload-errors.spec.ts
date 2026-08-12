@@ -1,11 +1,11 @@
 import { test, expect } from '@playwright/test';
 
 /**
- * A failed image upload used to produce nothing at all: the client retries
- * twice with 5s then 10s backoff, so a dead network meant up to ~35 seconds of
- * spinner followed by silence. Both call sites threw the error message away.
+ * A failed image upload used to produce nothing at all. Uploads now cross the
+ * same-origin server boundary, and both entry points explain the transfer
+ * before it begins and surface a fixed safe error when it fails.
  *
- * These block the ImgBB API and assert a human-readable message appears.
+ * These stub the same-origin upload boundary and assert consent plus errors.
  */
 
 const ONE_PIXEL_PNG = Buffer.from(
@@ -13,14 +13,16 @@ const ONE_PIXEL_PNG = Buffer.from(
   'base64'
 );
 
-async function blockImgbb(page: import('@playwright/test').Page) {
-  await page.route(/api\.imgbb\.com/, (route) => route.abort('failed'));
+async function failUploadRoute(page: import('@playwright/test').Page) {
+  await page.route('**/api/image-upload', route => route.fulfill({
+    status: 502,
+    contentType: 'application/json',
+    body: JSON.stringify({ ok: false, error: { code: 'PROVIDER_UNAVAILABLE', message: 'The image host could not accept this upload. Try again later.' } }),
+  }));
 }
 
 test('compose bar reports a failed upload instead of failing silently', async ({ page }) => {
-  // Retries with backoff mean the failure surfaces ~15s after the click.
-  test.setTimeout(90000);
-  await blockImgbb(page);
+  await failUploadRoute(page);
 
   await page.goto('/');
   await page.getByRole('button', { name: 'Start a blank iMessage conversation' }).click();
@@ -30,11 +32,29 @@ test('compose bar reports a failed upload instead of failing silently', async ({
     .getByLabel('Upload an image file')
     .setInputFiles({ name: 'test.png', mimeType: 'image/png', buffer: ONE_PIXEL_PNG });
 
+  await expect(page.getByRole('dialog', { name: 'Confirm public image upload' })).toBeVisible();
+  await page.getByRole('button', { name: 'Upload publicly' }).click();
+
   // Any wording is fine; the requirement is that something explains itself.
   // Scoped to the compose area — Next's route announcer is also role=alert.
   await expect(
     page.locator('[role="alert"]').filter({ hasText: /upload|network|connection/i })
-  ).toBeVisible({ timeout: 60000 });
+  ).toBeVisible();
+});
+
+test('hosted scene stays local until the disclosure is accepted', async ({ page }) => {
+  let requests = 0;
+  await page.route('**/api/image-upload', route => {
+    requests += 1;
+    return route.fulfill({ status: 502, contentType: 'application/json', body: JSON.stringify({ ok: false, error: { code: 'PROVIDER_UNAVAILABLE', message: 'Upload unavailable.' } }) });
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Start a blank iMessage conversation' }).click();
+  await page.getByRole('button', { name: 'Get AO3 image code' }).click();
+  await expect(page.getByRole('dialog', { name: 'Confirm hosted image upload' })).toBeVisible();
+  expect(requests).toBe(0);
+  await page.getByRole('button', { name: 'Cancel' }).click();
+  expect(requests).toBe(0);
 });
 
 test('a bad image address is called out rather than silently ignored', async ({ page }) => {

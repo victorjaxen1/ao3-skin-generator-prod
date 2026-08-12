@@ -6,7 +6,6 @@ import { loadStoredProject, persistProject, hasStoredProject } from '../lib/stor
 import { PLATFORM_LOOK } from '../lib/generator';
 import { TEMPLATE_EXAMPLES } from '../lib/examples';
 import { CharacterLibrary } from '../components/CharacterLibrary';
-import { recordExport, recordPromptShown } from '../lib/donationPrompt';
 import { PlatformPicker } from '../components/PlatformPicker';
 import { WorkspaceHeader } from '../components/WorkspaceHeader';
 import { SettingsSheet } from '../components/SettingsSheet';
@@ -16,9 +15,6 @@ import { MessageTimeline } from '../components/MessageTimeline';
 
 // Lazy load heavy components
 const ExportPanel = dynamic(() => import('../components/ExportPanel').then(mod => ({ default: mod.ExportPanel })), {
-  ssr: false,
-});
-const SuccessModal = dynamic(() => import('../components/SuccessModal').then(mod => ({ default: mod.SuccessModal })), {
   ssr: false,
 });
 const PreviewPane = dynamic(() => import('../components/PreviewPane').then(mod => ({ default: mod.PreviewPane })), {
@@ -46,8 +42,6 @@ export default function HomePage() {
   const [showPicker, setShowPicker] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
   const [showCodeModal, setShowCodeModal] = useState(false);
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [successAction, setSuccessAction] = useState<'image' | 'ao3code'>('image');
   const [saveStatus, setSaveStatus] = useState<'saved' | 'unsaved' | 'saving' | 'failed'>('saved');
   const [saveError, setSaveError] = useState('');
   const [showCharacters, setShowCharacters] = useState(false);
@@ -653,20 +647,7 @@ export default function HomePage() {
         project={project}
         showCodeModal={showCodeModal}
         setShowCodeModal={setShowCodeModal}
-        onSuccess={(action) => {
-          setSuccessAction(action);
-          const shouldShow = recordExport();
-          if (shouldShow) { recordPromptShown(); setShowSuccessModal(true); }
-        }}
       />
-
-      {/* ─── Success modal ──────────────────────────────────────────── */}
-      <SuccessModal
-        show={showSuccessModal}
-        onClose={() => setShowSuccessModal(false)}
-        actionType={successAction}
-      />
-
 
     </div>
   );

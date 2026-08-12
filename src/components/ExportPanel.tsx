@@ -2,18 +2,16 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { SkinProject } from '../lib/schema';
 import { buildCSS, buildHTML } from '../lib/generator';
 import { buildMasterWorkSkin, buildWorkSkin, supportsWorkSkin } from '../lib/workSkin';
-import { getProStatus, getProFeatures, ProStatus } from '../lib/proFeatures';
-import { ProUpgradeModal } from './ProUpgradeModal';
 import { useToast, ToastContainer } from './Toast';
 import { uploadToImgBB, ImageUploadError } from '../lib/imgbb';
 import { inlineCrossOriginImages, FailedImage } from '../lib/imageProxy';
 import { PLATFORM_ASSETS } from '../lib/platformAssets';
+import { AO3_RULESET_STATUS } from '../lib/ao3Compatibility';
 
 interface Props {
   project: SkinProject;
   showCodeModal: boolean;
   setShowCodeModal: (show: boolean) => void;
-  onSuccess?: (action: 'image' | 'ao3code') => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -44,12 +42,19 @@ function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
 }
 
 /**
- * Apply a watermark strip to a canvas.
- * Returns a new canvas — the original is unchanged.
- * Pro users: returns the original canvas unmodified.
+ * Apply independently controlled safety and neutral attribution labels.
+ * Returns a new canvas; the original is unchanged.
  */
-function applyWatermark(canvas: HTMLCanvasElement, skipWatermark: boolean): HTMLCanvasElement {
-  if (skipWatermark) return canvas;
+function applyImageLabels(
+  canvas: HTMLCanvasElement,
+  fictionLabel: string | null,
+  includeToolAttribution: boolean
+): HTMLCanvasElement {
+  const labels = [
+    fictionLabel?.trim() || null,
+    includeToolAttribution ? 'Made with AO3 SkinGen' : null,
+  ].filter((label): label is string => Boolean(label));
+  if (labels.length === 0) return canvas;
 
   const watermarkHeight = 28;
   const out = document.createElement('canvas');
@@ -65,12 +70,7 @@ function applyWatermark(canvas: HTMLCanvasElement, skipWatermark: boolean): HTML
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(
-    // Root domain, matching the work-skin credit in workSkin.ts, and for the
-    // same reason: this text is rasterised into the PNG and uploaded, so it is
-    // frozen in the author's fic exactly as the pasted credit line is. The
-    // address has to be the one likeliest to still resolve years from now,
-    // which is the root domain rather than the subdomain we serve from.
-    '★ Made with wordfokus.com/ao3skingen — Free Social Media AU Generator',
+    labels.join(' · '),
     out.width / 2,
     canvas.height + watermarkHeight / 2
   );
@@ -102,6 +102,8 @@ const PLATFORM_NAME: Record<SkinProject['template'], string> = {
   ios: 'iMessage',
   android: 'WhatsApp',
 };
+
+const HOSTED_SCENE_ACK = 'ao3skin_imgbb_scene_ack';
 
 // ---------------------------------------------------------------------------
 // Core render function — unified off-screen clone for ALL templates.
@@ -472,12 +474,17 @@ async function renderAllChunks(
 async function exportAsImage(
   project: SkinProject,
   scale: number,
-  skipWatermark: boolean,
   onImageWarning?: (failed: FailedImage[]) => void
 ): Promise<void> {
   const canvas = await renderChunk(project, scale, onImageWarning);
-  const watermarked = applyWatermark(canvas, skipWatermark);
-  const blob = await canvasToBlob(watermarked);
+  const labelled = applyImageLabels(
+    canvas,
+    project.settings.fictionLabel === false
+      ? null
+      : project.settings.fictionLabelText || 'Fictional scene',
+    project.settings.toolAttribution === true
+  );
+  const blob = await canvasToBlob(labelled);
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -493,7 +500,6 @@ async function exportAsImage(
 async function exportAsAO3(
   project: SkinProject,
   scale: number,
-  skipWatermark: boolean,
   onProgress: (stage: string, current: number, total: number) => void,
   onImageWarning?: (failed: FailedImage[]) => void
 ): Promise<string> {
@@ -508,14 +514,22 @@ async function exportAsAO3(
     onImageWarning
   );
 
-  const watermarked = canvases.map(c => applyWatermark(c, skipWatermark));
-  const blobs = await Promise.all(watermarked.map(canvasToBlob));
+  const labelled = canvases.map(canvas =>
+    applyImageLabels(
+      canvas,
+      project.settings.fictionLabel === false
+        ? null
+        : project.settings.fictionLabelText || 'Fictional scene',
+      project.settings.toolAttribution === true
+    )
+  );
+  const blobs = await Promise.all(labelled.map(canvasToBlob));
 
   // Upload sequentially to avoid hitting rate limits
   const urls: string[] = [];
   for (let i = 0; i < blobs.length; i++) {
     onProgress('Uploading', i, blobs.length);
-    const url = await uploadToImgBB(blobs[i]);
+    const url = await uploadToImgBB(blobs[i], 'rendered-scene');
     urls.push(url);
     onProgress('Uploading', i + 1, blobs.length);
   }
@@ -539,19 +553,18 @@ export const ExportPanel: React.FC<Props> = ({
   project,
   showCodeModal,
   setShowCodeModal,
-  onSuccess,
 }) => {
   const barRef = useRef<HTMLDivElement>(null);
   const [showHelp, setShowHelp] = useState(false);
-  const [showProModal, setShowProModal] = useState(false);
-  const [proStatus, setProStatus] = useState<ProStatus>({ isPro: false });
   const [exportScale, setExportScale] = useState(2);
   const [isExporting, setIsExporting] = useState(false);
   const [progressLabel, setProgressLabel] = useState('');
   const [ao3Code, setAo3Code] = useState('');
   const [copiedCode, setCopiedCode] = useState(false);
   const [showHowTo, setShowHowTo] = useState(false);
+  const [showHostedConsent, setShowHostedConsent] = useState(false);
   const [showWorkSkin, setShowWorkSkin] = useState(false);
+  const [includeWorkSkinCredit, setIncludeWorkSkinCredit] = useState(false);
   const [copiedPart, setCopiedPart] = useState<'css' | 'html' | null>(null);
   /**
    * The quality switch is a popover rather than a row.
@@ -578,8 +591,11 @@ export const ExportPanel: React.FC<Props> = ({
   // The third export. Cheap to compute — no rendering, no upload — so it is
   // derived rather than triggered, and the button can open instantly.
   const workSkin = useMemo(
-    () => (supportsWorkSkin(project.template) ? buildWorkSkin(project) : null),
-    [project]
+    () =>
+      supportsWorkSkin(project.template)
+        ? buildWorkSkin(project, { includeCredit: includeWorkSkinCredit })
+        : null,
+    [project, includeWorkSkinCredit]
   );
 
   // The master skin is eleven stylesheet builds rather than one, and `project`
@@ -589,9 +605,9 @@ export const ExportPanel: React.FC<Props> = ({
   const masterSkin = useMemo(
     () =>
       showWorkSkin && skinScope === 'all' && supportsWorkSkin(project.template)
-        ? buildMasterWorkSkin(project)
+        ? buildMasterWorkSkin(project, { includeCredit: includeWorkSkinCredit })
         : null,
-    [project, showWorkSkin, skinScope]
+    [project, showWorkSkin, skinScope, includeWorkSkinCredit]
   );
 
   // The HTML is identical either way — the choice is about the stylesheet, and
@@ -599,7 +615,6 @@ export const ExportPanel: React.FC<Props> = ({
   const skin = masterSkin ?? workSkin;
 
   useEffect(() => {
-    setProStatus(getProStatus());
     // Getting output into an AO3 work is the genuinely confusing part of this
     // domain, so show the guidance to newcomers instead of hiding it behind a
     // click. Once someone dismisses it, respect that.
@@ -655,8 +670,6 @@ export const ExportPanel: React.FC<Props> = ({
     };
   }, []);
 
-  const skipWatermark = getProFeatures().watermarkFree;
-
   // An image the proxy can't fetch is missing from the PNG. That used to
   // happen silently — the preview looked right and the export had a hole.
   const warnAboutImages = (failed: FailedImage[]) => {
@@ -677,15 +690,13 @@ export const ExportPanel: React.FC<Props> = ({
     setIsExporting(true);
     setProgressLabel('Rendering...');
     try {
-      await exportAsImage(project, exportScale, skipWatermark, warnAboutImages);
-      success('Downloaded!');
-      onSuccess?.('image');
+      await exportAsImage(project, exportScale, warnAboutImages);
+      success('PNG download started.');
       if (typeof window !== 'undefined' && (window as any).gtag) {
         (window as any).gtag('event', 'export_image', {
           event_category: 'Export',
           event_label: project.template,
           scale: exportScale,
-          is_pro: proStatus.isPro,
         });
       }
     } catch (err) {
@@ -707,7 +718,6 @@ export const ExportPanel: React.FC<Props> = ({
       const code = await exportAsAO3(
         project,
         exportScale,
-        skipWatermark,
         (stage, current, total) => {
           setProgressLabel(total <= 1 ? `${stage}...` : `${stage} ${current}/${total}`);
         },
@@ -715,13 +725,11 @@ export const ExportPanel: React.FC<Props> = ({
       );
       setAo3Code(code);
       setShowCodeModal(true);
-      onSuccess?.('ao3code');
       if (typeof window !== 'undefined' && (window as any).gtag) {
         (window as any).gtag('event', 'export_ao3_code', {
           event_category: 'Export',
           event_label: project.template,
           scale: exportScale,
-          is_pro: proStatus.isPro,
         });
       }
     } catch (err) {
@@ -736,6 +744,19 @@ export const ExportPanel: React.FC<Props> = ({
       setIsExporting(false);
       setProgressLabel('');
     }
+  };
+
+  const beginHostedSceneUpload = () => {
+    let acknowledged = false;
+    try { acknowledged = localStorage.getItem(HOSTED_SCENE_ACK) === '1'; } catch { /* ignore */ }
+    if (acknowledged) void handleGetAO3Code();
+    else setShowHostedConsent(true);
+  };
+
+  const confirmHostedSceneUpload = () => {
+    try { localStorage.setItem(HOSTED_SCENE_ACK, '1'); } catch { /* ignore */ }
+    setShowHostedConsent(false);
+    void handleGetAO3Code();
   };
 
   const handleCopyCode = () => {
@@ -793,8 +814,7 @@ export const ExportPanel: React.FC<Props> = ({
                   className="absolute bottom-full left-0 mb-2 w-44 bg-white rounded-xl shadow-lg border border-stone-200 p-2 z-10"
                 >
                   <p className="text-[10px] font-semibold text-stone-400 uppercase tracking-wide px-1 pb-1.5">Quality</p>
-                  {[1, 2, 4].map(s => {
-                    const locked = s === 4 && !proStatus.isPro;
+                  {[1, 2].map(s => {
                     return (
                       <button
                         key={s}
@@ -802,30 +822,17 @@ export const ExportPanel: React.FC<Props> = ({
                         role="menuitemradio"
                         aria-checked={exportScale === s}
                         onClick={() => { setExportScale(s); setShowQuality(false); }}
-                        disabled={locked}
-                        title={locked ? 'Upgrade for 4× quality' : `${s}× resolution`}
+                        title={`${s}× resolution`}
                         className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                           exportScale === s
                             ? 'bg-violet-600 text-white'
-                            : locked
-                            ? 'text-stone-300 cursor-not-allowed'
                             : 'text-stone-600 hover:bg-stone-100'
                         }`}
                       >
                         <span>{s}× resolution</span>
-                        {locked && <span>✦</span>}
                       </button>
                     );
                   })}
-                  {!proStatus.isPro && (
-                    <button
-                      type="button"
-                      onClick={() => { setShowQuality(false); setShowProModal(true); }}
-                      className="w-full mt-1 pt-1.5 border-t border-stone-100 text-[11px] font-semibold text-violet-600 hover:underline"
-                    >
-                      Upgrade for 4×
-                    </button>
-                  )}
                 </div>
               )}
             </div>
@@ -833,7 +840,7 @@ export const ExportPanel: React.FC<Props> = ({
             <button
               onClick={handleDownloadImage}
               disabled={isExporting}
-              aria-label="Save Image"
+              aria-label="Save PNG"
               className={`flex-1 min-w-0 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg font-semibold text-[13px] transition-all ${
                 isExporting
                   ? 'bg-stone-100 text-stone-300 cursor-not-allowed'
@@ -841,13 +848,13 @@ export const ExportPanel: React.FC<Props> = ({
               }`}
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              <span className="truncate">Save Image</span>
+              <span className="truncate">Save PNG</span>
             </button>
 
             <button
-              onClick={handleGetAO3Code}
+              onClick={beginHostedSceneUpload}
               disabled={isExporting}
-              aria-label="Copy for AO3"
+              aria-label="Get AO3 image code"
               className={`flex-1 min-w-0 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg font-semibold text-[13px] transition-all ${
                 isExporting
                   ? 'bg-violet-300 text-white cursor-not-allowed'
@@ -865,7 +872,7 @@ export const ExportPanel: React.FC<Props> = ({
               ) : (
                 <>
                   <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
-                  <span className="truncate">Copy for AO3</span>
+                  <span className="truncate">Get AO3 image code</span>
                 </>
               )}
             </button>
@@ -879,12 +886,12 @@ export const ExportPanel: React.FC<Props> = ({
                 onClick={() => setShowWorkSkin(true)}
                 // Set unconditionally, so the accessible name does not vary
                 // with viewport the way the visible text does.
-                aria-label="Work skin"
+                aria-label="Accessible work skin"
                 title="Use a work skin instead — real selectable text that reflows on a phone, rather than an image"
                 className="flex-shrink-0 flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-[13px] font-medium text-stone-600 bg-stone-50 border border-stone-200 hover:bg-stone-100 transition-colors"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-                <span className="hidden sm:inline">Work skin</span>
+                <span className="hidden sm:inline">Accessible work skin</span>
               </button>
             )}
 
@@ -901,6 +908,10 @@ export const ExportPanel: React.FC<Props> = ({
             </button>
           </div>
 
+          <p className="mt-1.5 text-center text-[10px] leading-snug text-stone-400">
+            Hosted AO3 image code uploads the finished scene, including visible text, to ImgBB.
+          </p>
+
           {/* Still in flow, and still open by default for a newcomer.
               Deliberate: getting output into an AO3 work is the genuinely
               confusing part of this domain, and polish.spec.ts asserts a
@@ -910,13 +921,32 @@ export const ExportPanel: React.FC<Props> = ({
               paying 148px for it. They now get ~52px forever. */}
           {showHelp && (
             <div className="mt-2 bg-stone-50 border border-stone-200 rounded-lg p-2.5 space-y-1 text-[11px] text-stone-600 leading-relaxed">
-              <p><strong className="text-stone-800">Save Image</strong> — downloads a PNG. Share it anywhere.</p>
-              <p><strong className="text-stone-800">Copy for AO3</strong> — uploads it and gives you an <code className="bg-stone-200 px-1 rounded">&lt;img&gt;</code> tag to paste into AO3&apos;s HTML editor. No work skin needed.</p>
-              {workSkin && <p><strong className="text-stone-800">Work skin</strong> — real text instead of a picture. Two pastes, one on your AO3 preferences page.</p>}
+              <p><strong className="text-stone-800">Save PNG</strong> — renders locally and downloads a PNG. Nothing is uploaded.</p>
+              <p><strong className="text-stone-800">Get AO3 image code</strong> — uploads the finished scene to ImgBB, then gives you an <code className="bg-stone-200 px-1 rounded">&lt;img&gt;</code> tag. Visible story text is included in that upload.</p>
+              {workSkin && <p><strong className="text-stone-800">Accessible work skin</strong> — real selectable text with a readable skin-off fallback. Two pastes, one on your AO3 preferences page.</p>}
             </div>
           )}
         </div>
       </div>
+
+      {showHostedConsent && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-60 p-4" role="dialog" aria-modal="true" aria-label="Confirm hosted image upload" onClick={() => setShowHostedConsent(false)}>
+          <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-2xl" onClick={event => event.stopPropagation()}>
+            <h3 className="text-base font-semibold text-stone-900">Upload the finished scene?</h3>
+            <p className="mt-2 text-sm leading-relaxed text-stone-600">
+              To create AO3 image code, the finished scene image — including its visible text — will be uploaded to ImgBB. AO3 links to that hosted file and does not keep its own copy. Save a local PNG as a backup.
+            </p>
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row-reverse">
+              <button type="button" onClick={confirmHostedSceneUpload} className="rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-violet-700">
+                Upload and get AO3 code
+              </button>
+              <button type="button" onClick={() => setShowHostedConsent(false)} className="rounded-xl border border-stone-200 px-4 py-2.5 text-sm font-semibold text-stone-700 hover:bg-stone-50">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ------------------------------------------------------------------ */}
       {/* AO3 Code modal                                                      */}
@@ -994,7 +1024,7 @@ export const ExportPanel: React.FC<Props> = ({
                   line; finding out costs a chapter. */}
               <p className="text-[11px] text-stone-400 text-center leading-relaxed">
                 The picture is hosted by ImgBB, not AO3. If it ever stops serving the file, your
-                chapter loses the image — use <strong className="text-stone-500">Save Image</strong>{' '}
+                chapter loses the image — use <strong className="text-stone-500">Save PNG</strong>{' '}
                 to keep a copy you can re-upload.
               </p>
             </div>
@@ -1040,7 +1070,7 @@ export const ExportPanel: React.FC<Props> = ({
                   <p className="text-xs text-red-800 mt-1 leading-relaxed">
                     AO3 rejects a whole skin when it meets CSS it doesn&apos;t allow. This is a
                     bug in the generator, not something you did — please report it, and use
-                    &ldquo;Copy for AO3&rdquo; in the meantime.
+                    &ldquo;Get AO3 image code&rdquo; in the meantime.
                   </p>
                   <ul className="mt-2 space-y-1">
                     {skin.violations.slice(0, 4).map((v, i) => (
@@ -1054,7 +1084,7 @@ export const ExportPanel: React.FC<Props> = ({
                 <div className="bg-green-50 border border-green-200 rounded-xl p-3 mb-4 flex items-start gap-2">
                   <span className="text-green-600 font-bold">✓</span>
                   <div>
-                    <p className="text-sm font-semibold text-green-900">AO3-safe check passed</p>
+                    <p className="text-sm font-semibold text-green-900">{AO3_RULESET_STATUS}</p>
                     <p className="text-xs text-green-800 mt-0.5">
                       Your readers get selectable text that reflows on a phone, instead of a
                       picture they have to zoom into.
@@ -1062,6 +1092,19 @@ export const ExportPanel: React.FC<Props> = ({
                   </div>
                 </div>
               )}
+
+              <label className="mb-5 flex items-start gap-2 rounded-xl border border-stone-200 bg-stone-50 p-3 text-xs text-stone-600">
+                <input
+                  type="checkbox"
+                  checked={includeWorkSkinCredit}
+                  onChange={e => setIncludeWorkSkinCredit(e.target.checked)}
+                  className="mt-0.5 accent-violet-600"
+                />
+                <span>
+                  <strong className="text-stone-800">Add optional tool credit</strong>
+                  <span className="block mt-0.5">Adds plain “Made with AO3 SkinGen” text to the chapter HTML. No link or commercial message.</span>
+                </span>
+              </label>
 
               {/* Step 1 — CSS */}
               <div className="mb-5">
@@ -1234,29 +1277,20 @@ export const ExportPanel: React.FC<Props> = ({
                   image — it links to wherever it lives. A skin author on
                   Cloudinary went over the free tier and every image in every
                   fic using their skin died at once (KNOWLEDGE §7). This does
-                  not pretend "Copy for AO3" avoids it: that path uploads to
+                  not pretend "Get AO3 image code" avoids it: that path uploads to
                   ImgBB, which is one file rather than many, and still not AO3. */}
               <p className="text-[11px] text-stone-400 mt-5 leading-relaxed">
                 <strong className="text-stone-500">About the icons.</strong> They load from our
                 image host each time somebody reads your fic — AO3 never keeps its own copy. If a
                 host ever stops serving a file, it disappears from every chapter you have already
                 posted, with no warning. It has happened to popular skins before.
-                &ldquo;Copy for AO3&rdquo; is one picture instead of many, but it is hosted off
+                &ldquo;Get AO3 image code&rdquo; is one picture instead of many, but it is hosted off
                 AO3 too, so keep the PNG somewhere you can re-upload it from.
               </p>
             </div>
           </div>
         </div>
       )}
-
-      {/* ------------------------------------------------------------------ */}
-      {/* Pro modal                                                           */}
-      {/* ------------------------------------------------------------------ */}
-      <ProUpgradeModal
-        isOpen={showProModal}
-        onClose={() => setShowProModal(false)}
-        onStatusChange={status => setProStatus(status)}
-      />
 
       <ToastContainer toasts={toasts} removeToast={removeToast} />
     </>

@@ -29,8 +29,8 @@ const nextConfig = {
       "font-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com data:",
       // Images: any HTTPS source (user can paste images from anywhere)
       "img-src 'self' data: blob: https:",
-      // Connections: any HTTPS (ImgBB upload + any image host the SW may fetch)
-      "connect-src 'self' https:",
+      // Uploads now cross the same-origin server boundary; only analytics connects externally.
+      "connect-src 'self' https://www.googletagmanager.com https://www.google-analytics.com",
       // Prevent framing (clickjacking protection)
       "frame-ancestors 'none'",
       // Block object/embed (Flash, etc.)

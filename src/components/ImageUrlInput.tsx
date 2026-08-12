@@ -17,6 +17,9 @@ import {
 } from '../lib/urlNormalize';
 import { uploadToImgBB, ImageUploadError } from '../lib/imgbb';
 
+const FILE_UPLOAD_ACK = 'ao3skin_imgbb_file_ack';
+const FILE_UPLOAD_DISCLOSURE = 'This file will be uploaded to ImgBB and will be publicly accessible to anyone with its link. Do not upload private material or images you do not have the right to use.';
+
 interface Props {
   value: string;
   onChange: (url: string) => void;
@@ -63,6 +66,7 @@ export const ImageUrlInput: React.FC<Props> = ({
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [loadFailed, setLoadFailed] = useState(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
 
   // Keep in step when the value changes from outside (preset picked, message
   // switched, project loaded).
@@ -93,7 +97,7 @@ export const ImageUrlInput: React.FC<Props> = ({
     setIsUploading(true);
     setUploadError('');
     try {
-      const url = await uploadToImgBB(file);
+      const url = await uploadToImgBB(file, 'selected-file');
       setDraft(url);
       setNormalizedFrom(null);
       onChange(url);
@@ -106,6 +110,26 @@ export const ImageUrlInput: React.FC<Props> = ({
     } finally {
       setIsUploading(false);
     }
+  };
+
+  const handleFileSelected = (file: File) => {
+    setUploadError('');
+    if (file.size > 8 * 1024 * 1024) {
+      setUploadError('That image is larger than the 8 MB upload limit.');
+      return;
+    }
+    let acknowledged = false;
+    try { acknowledged = localStorage.getItem(FILE_UPLOAD_ACK) === '1'; } catch { /* ignore */ }
+    if (acknowledged) void handleUpload(file);
+    else setPendingFile(file);
+  };
+
+  const confirmPendingUpload = () => {
+    const file = pendingFile;
+    if (!file) return;
+    try { localStorage.setItem(FILE_UPLOAD_ACK, '1'); } catch { /* ignore */ }
+    setPendingFile(null);
+    void handleUpload(file);
   };
 
   const expiringWarning = getExpiringUrlWarning(draft);
@@ -162,12 +186,12 @@ export const ImageUrlInput: React.FC<Props> = ({
           >
             <input
               type="file"
-              accept="image/*"
+              accept="image/png,image/jpeg,image/webp,image/gif"
               className="hidden"
               disabled={isUploading}
               onChange={(e) => {
                 const file = e.target.files?.[0];
-                if (file) handleUpload(file);
+                if (file) handleFileSelected(file);
                 e.target.value = '';
               }}
             />
@@ -201,6 +225,21 @@ export const ImageUrlInput: React.FC<Props> = ({
 
       {uploadError && (
         <p role="alert" className="text-xs text-red-600 leading-snug">{uploadError}</p>
+      )}
+
+      {pendingFile && (
+        <div role="dialog" aria-label="Confirm public image upload" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+          <p className="leading-relaxed">{FILE_UPLOAD_DISCLOSURE}</p>
+          <p className="mt-1 truncate text-amber-700">Selected: {pendingFile.name}</p>
+          <div className="mt-2 flex gap-2">
+            <button type="button" onClick={confirmPendingUpload} className="rounded-lg bg-violet-600 px-3 py-1.5 font-semibold text-white hover:bg-violet-700">
+              Upload publicly
+            </button>
+            <button type="button" onClick={() => setPendingFile(null)} className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 font-semibold text-amber-900 hover:bg-amber-100">
+              Cancel
+            </button>
+          </div>
+        </div>
       )}
 
       {normalizedFrom && (
