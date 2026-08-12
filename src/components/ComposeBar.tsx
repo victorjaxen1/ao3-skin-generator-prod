@@ -23,6 +23,8 @@ export const ComposeBar: React.FC<Props> = ({
   const [timestamp, setTimestamp] = useState('');
   const [reaction, setReaction] = useState('');
   const [imageUrl, setImageUrl] = useState('');
+  const [imageAlt, setImageAlt] = useState('');
+  const [imageDecorative, setImageDecorative] = useState(false);
   const [status, setStatus] = useState<'sent' | 'delivered' | 'read'>('sent');
   const [participantId, setParticipantId] = useState('');
   // '' means "post as the account itself", i.e. follow the Twitter settings.
@@ -105,7 +107,7 @@ export const ComposeBar: React.FC<Props> = ({
         }),
       };
       if (normalizedImage) {
-        msg.attachments = [{ type: 'image', url: normalizedImage }];
+        msg.attachments = [{ type: 'image', url: normalizedImage, alt: imageDecorative ? '' : imageAlt.trim(), decorative: imageDecorative }];
       }
       onAddMessage(msg);
     } else {
@@ -134,7 +136,7 @@ export const ComposeBar: React.FC<Props> = ({
       };
 
       if (normalizedImage) {
-        msg.attachments = [{ type: 'image', url: normalizedImage }];
+        msg.attachments = [{ type: 'image', url: normalizedImage, alt: imageDecorative ? '' : imageAlt.trim(), decorative: imageDecorative }];
       }
 
       onAddMessage(msg);
@@ -149,6 +151,8 @@ export const ComposeBar: React.FC<Props> = ({
     setTimestamp('');
     setReaction('');
     setImageUrl('');
+    setImageAlt('');
+    setImageDecorative(false);
     setShowDetails(false);
     inputRef.current?.focus();
   };
@@ -227,6 +231,23 @@ export const ComposeBar: React.FC<Props> = ({
                 ariaLabel="Image address for this message"
                 placeholder="Paste an image address (optional)"
               />
+              {imageUrl.trim() && (
+                <div className="space-y-1.5">
+                  <input
+                    value={imageAlt}
+                    onChange={event => setImageAlt(event.target.value)}
+                    disabled={imageDecorative}
+                    maxLength={500}
+                    aria-label="Image description"
+                    placeholder="Describe the image for readers"
+                    className="w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-xs disabled:bg-stone-100 disabled:text-stone-400"
+                  />
+                  <label className="flex items-center gap-2 text-xs text-stone-600">
+                    <input type="checkbox" checked={imageDecorative} onChange={event => setImageDecorative(event.target.checked)} className="accent-violet-600" />
+                    Decorative image — use empty alt text
+                  </label>
+                </div>
+              )}
             </>
           )}
 
@@ -245,6 +266,23 @@ export const ComposeBar: React.FC<Props> = ({
                 ariaLabel="Image address for this post"
                 placeholder="Paste an image address (optional)"
               />
+              {imageUrl.trim() && (
+                <div className="space-y-1.5">
+                  <input
+                    value={imageAlt}
+                    onChange={event => setImageAlt(event.target.value)}
+                    disabled={imageDecorative}
+                    maxLength={500}
+                    aria-label="Image description"
+                    placeholder="Describe the image for readers"
+                    className="w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-xs disabled:bg-stone-100 disabled:text-stone-400"
+                  />
+                  <label className="flex items-center gap-2 text-xs text-stone-600">
+                    <input type="checkbox" checked={imageDecorative} onChange={event => setImageDecorative(event.target.checked)} className="accent-violet-600" />
+                    Decorative image — use empty alt text
+                  </label>
+                </div>
+              )}
             </div>
           )}
 

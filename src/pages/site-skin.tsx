@@ -297,6 +297,14 @@ export default function SiteSkinPage() {
         themeName={theme.meta.name}
         templateId={theme.meta.id}
         violations={violations}
+        theme={theme}
+        onReplaceTheme={(nextTheme) => {
+          setTheme(nextTheme);
+          setHistory([nextTheme]);
+          setHistoryIndex(0);
+          setHasSaved(true);
+          setShowGallery(false);
+        }}
       />
     </>
   );

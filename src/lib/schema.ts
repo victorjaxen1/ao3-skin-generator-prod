@@ -1,6 +1,12 @@
 import { PLATFORM_ASSETS } from './platformAssets';
 
-export type Attachment = { type: 'image'; url: string; alt?: string };
+export type Attachment = {
+  type: 'image';
+  url: string;
+  alt?: string;
+  /** Empty alt is intentional, rather than an unfinished description. */
+  decorative?: boolean;
+};
 
 export interface TwitterCharacter {
   id: string;
@@ -97,9 +103,6 @@ export interface SkinSettings {
   /** Legacy project field. Kept readable during migration but no longer used. */
   watermark?: boolean;
   
-  // UNIVERSAL CHARACTER LIBRARY (all templates)
-  universalCharacters?: UniversalCharacter[]; // Global character library
-  
   // Twitter specific settings
   twitterDisplayName?: string; // e.g., "John Doe"
   twitterHandle?: string; // e.g., "@johndoe"
@@ -190,8 +193,15 @@ export interface SkinProject {
   messages: Message[];
 }
 
+function localProjectId(): string {
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  } catch { /* use the local fallback */ }
+  return `project-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 export const defaultProject = (): SkinProject => ({
-  id: 'default-project',
+  id: localProjectId(),
   template: 'ios',
   settings: {
     bubbleOpacity: 0.9,

@@ -1,5 +1,5 @@
 import { SkinProject, Message } from './schema';
-import { sanitizeText, sanitizeUrl, formatMessageText } from './sanitize';
+import { sanitizeAttribute, sanitizeText, sanitizeUrl, formatMessageText } from './sanitize';
 import { PLATFORM_ASSETS, FALLBACK_TEXT } from './platformAssets';
 
 function hexToRgba(hex: string, alpha: number): string {
@@ -255,6 +255,14 @@ function typingRowHTML(name?: string): string {
   return `<div class="row typing"><div class="typing-bubble"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>${label}${srOnly(`${named ? ' is' : 'Someone is'} typing…`)}</div>`;
 }
 
+function attachmentAlt(attachment: { alt?: string; decorative?: boolean }): string {
+  return attachment.decorative ? '' : sanitizeAttribute(attachment.alt || '');
+}
+
+function safeCssColor(value: string | undefined, fallback: string): string {
+  return value && /^#[0-9a-f]{6}$/i.test(value.trim()) ? value.trim() : fallback;
+}
+
 function msgHTML(msg: Message, template: string, project: SkinProject, options?: { index?: number; allMessages?: Message[]; isReply?: boolean }): string {
   // Time break (iOS/Android)
   const timeBreak = msg.showTimeBreak && msg.timeBreakText
@@ -283,7 +291,7 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
   
   // Use formatMessageText for rich formatting (bold, italic, strikethrough, code, lists, quotes)
   const sanitized = formatMessageText(msg.content);
-  const avatar = msg.avatarUrl ? `<img src="${sanitizeUrl(msg.avatarUrl)}" alt="${sanitizeText(msg.sender)} avatar" class="avatar" />` : '';
+  const avatar = msg.avatarUrl ? `<img src="${sanitizeUrl(msg.avatarUrl)}" alt="${sanitizeAttribute(msg.sender)} avatar" class="avatar" />` : '';
   
   // Group Chat: Show sender name with avatar/initials for incoming messages (WhatsApp & iOS)
   const isGroupMode = (template === 'android' && project.settings.androidGroupMode) ||
@@ -319,15 +327,16 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
         // The width/height ATTRIBUTES are the ones that matter on AO3: `style`
         // is on no allowed-attribute list, so the sanitizer strips it silently
         // and the inline sizing below never reaches the archive at all.
-        avatarHTML = `<img src="${sanitizeUrl(participant.avatarUrl)}" alt="${sanitizeText(participant.name)}" class="group-avatar" width="20" height="20" style="width:20px;height:20px;border-radius:50%;object-fit:cover;flex-shrink:0;display:block !important;" />`;
+        avatarHTML = `<img src="${sanitizeUrl(participant.avatarUrl)}" alt="${sanitizeAttribute(participant.name)}" class="group-avatar" width="20" height="20" style="width:20px;height:20px;border-radius:50%;object-fit:cover;flex-shrink:0;display:block !important;" />`;
       } else {
         // Generate initials (first 2 chars of name)
         const initials = participant.name.substring(0, 2).toUpperCase();
-        avatarHTML = `<div class="group-avatar-initials" style="width:20px;height:20px;border-radius:50%;display:flex !important;align-items:center;justify-content:center;font-size:8px;font-weight:700;flex-shrink:0;background-color:${participant.color}20;color:${participant.color};">${sanitizeText(initials)}</div>`;
+        const participantColor = safeCssColor(participant.color, '#777777');
+        avatarHTML = `<div class="group-avatar-initials" style="width:20px;height:20px;border-radius:50%;display:flex !important;align-items:center;justify-content:center;font-size:8px;font-weight:700;flex-shrink:0;background-color:${participantColor}20;color:${participantColor};">${sanitizeText(initials)}</div>`;
       }
       
       // Use roleColor from message or fall back to participant color
-      const displayColor = msg.roleColor || participant.color;
+      const displayColor = safeCssColor(msg.roleColor, safeCssColor(participant.color, '#777777'));
       senderNameHTML = `<div class="group-sender-row" style="display:flex !important;align-items:center;gap:6px;margin-bottom:4px;visibility:visible !important;">${avatarHTML}<div class="group-sender" style="color: ${displayColor};">${sanitizeText(msg.sender)}</div></div>`;
     }
   }
@@ -440,14 +449,14 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
   if ((template === 'ios' || template === 'android') && msg.attachments && msg.attachments.length > 0) {
     const att = msg.attachments[0];
     if (att.type === 'image') {
-      bubble += `<img src="${sanitizeUrl(att.url)}" alt="${sanitizeText(att.alt||'')}" class="message-image" />`;
+      bubble += `<img src="${sanitizeUrl(att.url)}" alt="${attachmentAlt(att)}" class="message-image" />`;
     }
   }
   
   // Add timestamp (iOS/Android). Hidden space so the time does not weld itself
   // to the message text when no CSS puts it on its own line — see srOnly().
   if ((template === 'ios' || template === 'android') && msg.timestamp) {
-    bubble += `${srOnly(' ')}<span class="time">${msg.timestamp||''}</span>`;
+    bubble += `${srOnly(' ')}<span class="time">${sanitizeText(msg.timestamp || '')}</span>`;
   }
   
   // Add checkmarks outside timestamp for absolute positioning (Android only)
@@ -457,7 +466,7 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
   
   // Add reaction if present (iOS/Android)
   if ((template === 'ios' || template === 'android') && msg.reaction) {
-    bubble += `<span class="reaction">${msg.reaction}</span>`;
+    bubble += `<span class="reaction">${sanitizeText(msg.reaction)}</span>`;
   }
   
   bubble += `</dd>`;
@@ -468,7 +477,7 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
     statusIndicator = `<dd class="status-indicator">Read</dd>`;
   }
   
-  const atts = (msg.attachments||[]).map(a => `<dd class="attach"><span class="visually-hidden">Image:</span><img src="${sanitizeUrl(a.url)}" alt="${sanitizeText(a.alt||'')}" class="attach-img"/></dd>`).join('');
+  const atts = (msg.attachments||[]).map(a => `<dd class="attach"><span class="visually-hidden">Image:</span><img src="${sanitizeUrl(a.url)}" alt="${attachmentAlt(a)}" class="attach-img"/></dd>`).join('');
   
   if (template === 'twitter') {
     // Identity is resolved here, at render time.
@@ -498,6 +507,7 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
     
     // Override avatar if using main identity
     const effectiveAvatar = displayAvatar ? `<img src="${sanitizeUrl(displayAvatar)}" alt="Avatar" class="avatar" width="40" height="40" />` : '';
+    const safeDisplayName = sanitizeText(displayName);
     
     // Handle logic: if using custom identity and has custom handle, use it; otherwise generate from name or use main handle
     const handle = msg.useCustomIdentity 
@@ -520,7 +530,7 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
     // Build tweet image from attachments array
     let tweetImage = '';
     if (msg.attachments && msg.attachments.length > 0 && msg.attachments[0].type === 'image') {
-      tweetImage = `<img src="${sanitizeUrl(msg.attachments[0].url)}" alt="${sanitizeText(msg.attachments[0].alt || '')}" class="tweet-image" />`;
+      tweetImage = `<img src="${sanitizeUrl(msg.attachments[0].url)}" alt="${attachmentAlt(msg.attachments[0])}" class="tweet-image" />`;
     }
     
     // Enhanced metrics with icons - use per-tweet metrics if available, otherwise fall back to global
@@ -564,7 +574,7 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
       const qVerified = project.settings.twitterQuoteVerified ? `<span class="verified-container quote-verified-container"><span class="quote-verified-badge" title="Verified">✔</span></span>` : '';
       const qText = sanitizeText(project.settings.twitterQuoteText || '');
       const qImage = project.settings.twitterQuoteImage ? `<img src="${sanitizeUrl(project.settings.twitterQuoteImage)}" alt="Quote image" class="quote-image" />` : '';
-      quote = `<div class="quote"><div class="quote-head">${qAvatar}<span class="quote-name">${sanitizeText(project.settings.twitterQuoteName||'')}</span>${qVerified}<span class="quote-handle">${qHandle}</span></div><div class="quote-body">${highlightTwitterText(qText)}${qImage}</div></div>`;
+      quote = `<div class="quote"><div class="quote-head">${qAvatar}<span class="quote-name">${sanitizeText(project.settings.twitterQuoteName||'')}</span>${qVerified}<span class="quote-handle">${sanitizeText(qHandle)}</span></div><div class="quote-body">${highlightTwitterText(qText)}${qImage}</div></div>`;
     }
     const bodyWithFormatting = highlightTwitterText(sanitized);
 
@@ -591,7 +601,7 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
     // Reply indicator - show "Replying to @handles" if this is a reply
     let replyingTo = '';
     if (isReply && msg.replyToHandles && msg.replyToHandles.length > 0) {
-      const handles = msg.replyToHandles.map(h => `<a href="#" class="reply-handle">@${h.replace(/^@/, '')}</a>`);
+      const handles = msg.replyToHandles.map(h => `<a href="#" class="reply-handle">@${sanitizeText(h.replace(/^@/, ''))}</a>`);
       if (handles.length === 1) {
         replyingTo = `<div class="replying-to">Replying to ${handles[0]}</div>`;
       } else if (handles.length === 2) {
@@ -611,7 +621,7 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
     // Check if this should be displayed as expanded view (clicked-into reply)
     if (msg.expandedView) {
       // Expanded view: avatar on left, larger text, no header/metrics, content indented
-      return `<div class="tweet expanded" data-message-id="${msg.id}">${effectiveAvatar}<div class="expanded-content"><div class="expanded-name"><b class="name">${displayName}</b>${verified}</div><div class="expanded-handle">${openParen}${handle}${closeParen}</div>${replyingTo}${attribution}<div class="expanded-body">${bodyWithFormatting}${tweetImage}${quote}</div>${timestampLine ? `<div class="time-line">${timestampLine}</div>`:''}</div></div>`;
+      return `<div class="tweet expanded" data-message-id="${sanitizeAttribute(msg.id)}">${effectiveAvatar}<div class="expanded-content"><div class="expanded-name"><b class="name">${safeDisplayName}</b>${verified}</div><div class="expanded-handle">${openParen}${sanitizeText(handle)}${closeParen}</div>${replyingTo}${attribution}<div class="expanded-body">${bodyWithFormatting}${tweetImage}${quote}</div>${timestampLine ? `<div class="time-line">${sanitizeText(timestampLine)}</div>`:''}</div></div>`;
     }
     
     // Add reply class if this is a threaded reply. `no-metrics` suppresses the
@@ -621,7 +631,7 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
       .filter(Boolean)
       .join(' ');
     
-    return `<div class="${tweetClass}" data-message-id="${msg.id}"><div class="tweet-header">${effectiveAvatar}<div class="head"><div class="head-content"><div class="name-line"><b class="name">${displayName}</b> ${verified} ${openParen}<span class="handle">${handle}</span>${closeParen}<span class="follow-dot">·</span>${chromeGap}${followBtn}<img src="${xLogo}" alt="" class="twitter-logo" width="20" height="20" /></div></div></div></div>${replyingTo}${attribution}<div class="body">${bodyWithFormatting}${tweetImage}${quote}</div>${timestampLine ? `<div class="time-line">${timestampLine}</div>`:''}${metrics}</div>`;
+    return `<div class="${tweetClass}" data-message-id="${sanitizeAttribute(msg.id)}"><div class="tweet-header">${effectiveAvatar}<div class="head"><div class="head-content"><div class="name-line"><b class="name">${safeDisplayName}</b> ${verified} ${openParen}<span class="handle">${sanitizeText(handle)}</span>${closeParen}<span class="follow-dot">·</span>${chromeGap}${followBtn}<img src="${xLogo}" alt="" class="twitter-logo" width="20" height="20" /></div></div></div></div>${replyingTo}${attribution}<div class="body">${bodyWithFormatting}${tweetImage}${quote}</div>${timestampLine ? `<div class="time-line">${sanitizeText(timestampLine)}</div>`:''}${metrics}</div>`;
   }
   
   if (template === 'google') {
@@ -644,7 +654,7 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
     // Add image inline if present
     if (hasImage) {
       const imgUrl = sanitizeUrl(msg.attachments[0].url);
-      bubbleContent += `<img src="${imgUrl}" alt="" class="message-image" />`;
+      bubbleContent += `<img src="${imgUrl}" alt="${attachmentAlt(msg.attachments[0])}" class="message-image" />`;
     }
     
     // Add timestamp. The hidden space is what stops "hey10:23" when no CSS
@@ -652,7 +662,7 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
     // from the message text in the markup. See srOnly().
     if (isLastInGroup && msg.timestamp) {
       const timeClass = hasImage ? 'time image-time' : 'time';
-      bubbleContent += `${srOnly(' ')}<span class="${timeClass}">${msg.timestamp}</span>`;
+      bubbleContent += `${srOnly(' ')}<span class="${timeClass}">${sanitizeText(msg.timestamp)}</span>`;
     }
     
     // Add inline SVG tail for html2canvas compatibility (::after doesn't render in canvas)
@@ -681,7 +691,7 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
      * explicitly `overflow:visible`, so a chip hanging over the edge is what the
      * stylesheet was always written for.
      */
-    const reaction = msg.reaction ? `<span class="reaction">${msg.reaction}</span>` : '';
+    const reaction = msg.reaction ? `<span class="reaction">${sanitizeText(msg.reaction)}</span>` : '';
 
     // `has-reaction` exists so the stylesheet can reserve the space the chip
     // hangs into. The chip is absolutely positioned and therefore out of flow,
@@ -710,7 +720,7 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
     // <dt> is the right element rather than a span: this is already a <dl>,
     // where the term is the speaker and the definition is what they said. AO3
     // allows dt, and unstyled browsers indent dd under dt for free.
-    return `${timeBreak}<div class="${rowClass} ${groupClass}" data-message-id="${msg.id}"><dl class="msg">${hiddenSpeaker}${bubble}${statusIndicator}</dl></div>`;
+    return `${timeBreak}<div class="${rowClass} ${groupClass}" data-message-id="${sanitizeAttribute(msg.id)}"><dl class="msg">${hiddenSpeaker}${bubble}${statusIndicator}</dl></div>`;
   }
   
   // Android and other templates: show avatar and sender name (with grouping for Android)
@@ -736,7 +746,7 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
       
       // Add image
       const imgUrl = sanitizeUrl(msg.attachments[0].url);
-      bubbleContent += `<img src="${imgUrl}" alt="" class="message-image" />`;
+      bubbleContent += `<img src="${imgUrl}" alt="${attachmentAlt(msg.attachments[0])}" class="message-image" />`;
       
       // Add timestamp
       if (msg.timestamp) {
@@ -752,7 +762,7 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
       // WhatsApp message carrying both an image and a reaction rendered the
       // image and silently lost the emoji.
       if (msg.reaction) {
-        bubbleContent += `<span class="reaction">${msg.reaction}</span>`;
+        bubbleContent += `<span class="reaction">${sanitizeText(msg.reaction)}</span>`;
       }
 
       finalBubble = `<dd class="bubble ${msg.outgoing?'out':'in'} image-bubble${msg.reaction ? ' has-reaction' : ''}">${bubbleContent}</dd>`;
@@ -762,12 +772,12 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
     }
     
     // Hidden speaker, as in the iOS branch above.
-    return `${timeBreak}<div class="${rowClass} ${groupClass}" data-message-id="${msg.id}"><dl class="msg">${hiddenSpeaker}${finalBubble}${statusIndicator}</dl></div>`;
+    return `${timeBreak}<div class="${rowClass} ${groupClass}" data-message-id="${sanitizeAttribute(msg.id)}"><dl class="msg">${hiddenSpeaker}${finalBubble}${statusIndicator}</dl></div>`;
   }
   
   // Other templates: basic row structure
   const rowClass = msg.outgoing ? 'row out' : 'row in';
-  return `${timeBreak}<div class="${rowClass}" data-message-id="${msg.id}">${avatar}<dl class="msg">${who}${bubble}${statusIndicator}</dl></div>`;
+  return `${timeBreak}<div class="${rowClass}" data-message-id="${sanitizeAttribute(msg.id)}">${avatar}<dl class="msg">${who}${bubble}${statusIndicator}</dl></div>`;
 }
 
 export type SkinTheme = 'light' | 'dark';
@@ -954,7 +964,7 @@ export function buildHTML(project: SkinProject): string {
       if (s.iosHeaderImageUrl || contactName || avatarUrl) {
         const avatarOverlay = avatarUrl
           ? `<img src="${sanitizeUrl(avatarUrl)}" alt="avatar" class="ios-header-avatar" width="38" height="38" />`
-          : (contactName ? `<div class="ios-header-avatar-placeholder">${getInitials(contactName)}</div>` : '');
+          : (contactName ? `<div class="ios-header-avatar-placeholder">${sanitizeText(getInitials(contactName))}</div>` : '');
         const nameOverlay = contactName
           ? `<div class="ios-header-name">${sanitizeText(contactName)}</div>`
           : '';
@@ -974,7 +984,7 @@ export function buildHTML(project: SkinProject): string {
       if (s.androidHeaderImageUrl || contactName || avatarUrl) {
         const avatarOverlay = avatarUrl
           ? `<img src="${sanitizeUrl(avatarUrl)}" alt="avatar" class="android-header-avatar" width="40" height="40" />`
-          : (contactName ? `<div class="android-header-avatar-placeholder">${getInitials(contactName)}</div>` : '');
+          : (contactName ? `<div class="android-header-avatar-placeholder">${sanitizeText(getInitials(contactName))}</div>` : '');
 
         // Group chats show the member count where a 1-on-1 shows "online".
         const participantCount = s.androidGroupParticipants?.length ?? 0;

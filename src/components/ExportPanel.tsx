@@ -8,11 +8,16 @@ import { inlineCrossOriginImages, FailedImage } from '../lib/imageProxy';
 import { PLATFORM_ASSETS } from '../lib/platformAssets';
 import { AO3_RULESET_STATUS } from '../lib/ao3Compatibility';
 import { mapUploadErrorCode, trackAnalytics } from '../lib/analytics';
+import { buildSceneTranscript, defaultSceneAlt } from '../lib/transcript';
+import { buildWorkSkinPreflight } from '../lib/preflight';
+import { hasProjectBackup } from '../lib/backupStatus';
+import { downloadTextFile, safeFilenamePart } from '../lib/download';
 
 interface Props {
   project: SkinProject;
   showCodeModal: boolean;
   setShowCodeModal: (show: boolean) => void;
+  onBackupProject: (suffix?: string) => boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -39,6 +44,24 @@ function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
       if (blob) resolve(blob);
       else reject(new Error('canvas.toBlob() returned null'));
     }, 'image/png', 0.95);
+  });
+}
+
+function escapeHtmlAttribute(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+export function updateHostedImageAlt(code: string, sceneAlt: string, project: SkinProject): string {
+  const total = code.match(/<img\b/gi)?.length || 1;
+  let index = 0;
+  return code.replace(/(<img\b[^>]*\balt=")[^"]*(")/gi, (_match, before: string, after: string) => {
+    const base = sceneAlt.trim() || defaultSceneAlt(project);
+    const alt = total > 1 ? `${base} Part ${++index} of ${total}.` : base;
+    return `${before}${escapeHtmlAttribute(alt)}${after}`;
   });
 }
 
@@ -501,6 +524,7 @@ async function exportAsImage(
 async function exportAsAO3(
   project: SkinProject,
   scale: number,
+  sceneAlt: string,
   onProgress: (stage: string, current: number, total: number) => void,
   onImageWarning?: (failed: FailedImage[]) => void
 ): Promise<string> {
@@ -537,9 +561,10 @@ async function exportAsAO3(
 
   const isMultiple = urls.length > 1;
   const imgTags = urls.map((url, i) => {
-    const alt = isMultiple
-      ? `[Conversation screenshot, part ${i + 1} of ${urls.length}]`
-      : '[Conversation screenshot]';
+    const baseAlt = sceneAlt.trim() || defaultSceneAlt(project);
+    const alt = escapeHtmlAttribute(isMultiple
+      ? `${baseAlt} Part ${i + 1} of ${urls.length}.`
+      : baseAlt);
     return `<img src="${url}" alt="${alt}" style="max-width:100%;display:block;margin:0 auto 8px;" />`;
   });
 
@@ -554,6 +579,7 @@ export const ExportPanel: React.FC<Props> = ({
   project,
   showCodeModal,
   setShowCodeModal,
+  onBackupProject,
 }) => {
   const barRef = useRef<HTMLDivElement>(null);
   const [showHelp, setShowHelp] = useState(false);
@@ -565,6 +591,10 @@ export const ExportPanel: React.FC<Props> = ({
   const [showHowTo, setShowHowTo] = useState(false);
   const [showHostedConsent, setShowHostedConsent] = useState(false);
   const [showWorkSkin, setShowWorkSkin] = useState(false);
+  const [workSkinPreview, setWorkSkinPreview] = useState<'styled' | 'fallback'>('styled');
+  const [sceneAlt, setSceneAlt] = useState(() => defaultSceneAlt(project));
+  const [sceneAltEdited, setSceneAltEdited] = useState(false);
+  const [backupRevision, setBackupRevision] = useState(0);
   const [includeWorkSkinCredit, setIncludeWorkSkinCredit] = useState(false);
   const [copiedPart, setCopiedPart] = useState<'css' | 'html' | null>(null);
   const workSkinPartsCopiedRef = useRef(new Set<'css' | 'html'>());
@@ -590,6 +620,11 @@ export const ExportPanel: React.FC<Props> = ({
    */
   const [skinScope, setSkinScope] = useState<'platform' | 'all'>('platform');
   const { toasts, removeToast, success, error: showError } = useToast();
+  const transcript = useMemo(() => buildSceneTranscript(project), [project]);
+
+  useEffect(() => {
+    if (!sceneAltEdited) setSceneAlt(defaultSceneAlt(project));
+  }, [project, sceneAltEdited]);
 
   // The third export. Cheap to compute — no rendering, no upload — so it is
   // derived rather than triggered, and the button can open instantly.
@@ -616,6 +651,11 @@ export const ExportPanel: React.FC<Props> = ({
   // The HTML is identical either way — the choice is about the stylesheet, and
   // `tests/master-skin.spec.ts` pins that the markup does not move.
   const skin = masterSkin ?? workSkin;
+  const preflight = useMemo(
+    () => skin ? buildWorkSkinPreflight(project, skin.html, skin.violations, hasProjectBackup(project)) : [],
+    [project, skin, backupRevision]
+  );
+  const workSkinBlocked = preflight.some(item => item.severity === 'block' && item.status === 'fail');
 
   useEffect(() => {
     // Getting output into an AO3 work is the genuinely confusing part of this
@@ -718,6 +758,7 @@ export const ExportPanel: React.FC<Props> = ({
       const code = await exportAsAO3(
         project,
         exportScale,
+        sceneAlt,
         (stage, current, total) => {
           setProgressLabel(total <= 1 ? `${stage}...` : `${stage} ${current}/${total}`);
         },
@@ -775,6 +816,26 @@ export const ExportPanel: React.FC<Props> = ({
     trackAnalytics({ name: 'export_started', outputType: 'work_skin', templateId: project.template });
     trackAnalytics({ name: 'export_ready', outputType: 'work_skin', templateId: project.template });
     setShowWorkSkin(true);
+  };
+
+  const backupProject = () => {
+    const ok = onBackupProject();
+    if (ok) {
+      setBackupRevision(value => value + 1);
+      success('Project backup download started.');
+    } else {
+      showError('Your browser could not start the project backup download.');
+    }
+  };
+
+  const downloadTranscript = () => {
+    const ok = downloadTextFile(
+      transcript,
+      `ao3skingen-${safeFilenamePart(project.template)}-transcript.txt`,
+      'text/plain;charset=utf-8'
+    );
+    if (ok) success('Transcript download started.');
+    else showError('Your browser could not start the transcript download.');
   };
 
   const copyWorkSkinPart = async (part: 'css' | 'html') => {
@@ -966,6 +1027,15 @@ export const ExportPanel: React.FC<Props> = ({
             <p className="mt-2 text-sm leading-relaxed text-stone-600">
               To create AO3 image code, the finished scene image — including its visible text — will be uploaded to ImgBB. AO3 links to that hosted file and does not keep its own copy. Save a local PNG as a backup.
             </p>
+            <label htmlFor="hosted-scene-alt-before-upload" className="mt-4 block text-xs font-semibold text-stone-800">Short image description</label>
+            <textarea
+              id="hosted-scene-alt-before-upload"
+              value={sceneAlt}
+              maxLength={500}
+              rows={2}
+              onChange={event => { setSceneAlt(event.target.value); setSceneAltEdited(true); }}
+              className="mt-2 w-full resize-none rounded-lg border border-stone-200 px-3 py-2 text-sm focus:ring-2 focus:ring-violet-500"
+            />
             <div className="mt-4 flex flex-col gap-2 sm:flex-row-reverse">
               <button type="button" onClick={confirmHostedSceneUpload} className="rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-violet-700">
                 Upload and get AO3 code
@@ -1007,7 +1077,7 @@ export const ExportPanel: React.FC<Props> = ({
             </div>
 
             {/* Code area */}
-            <div className="p-5">
+            <div className="p-5 space-y-4 overflow-y-auto">
               <textarea
                 readOnly
                 value={ao3Code}
@@ -1015,6 +1085,36 @@ export const ExportPanel: React.FC<Props> = ({
                 className="w-full font-mono text-xs bg-gray-950 text-green-400 border border-gray-700 rounded-lg p-3 resize-none focus:outline-none"
                 onClick={e => (e.target as HTMLTextAreaElement).select()}
               />
+              <div>
+                <label htmlFor="hosted-scene-alt" className="text-xs font-semibold text-stone-800">Short image description</label>
+                <p className="mt-0.5 text-[11px] leading-relaxed text-stone-500">
+                  Written locally. For multiple image parts, the part number is added automatically.
+                </p>
+                <textarea
+                  id="hosted-scene-alt"
+                  value={sceneAlt}
+                  maxLength={500}
+                  rows={2}
+                  onChange={event => {
+                    const next = event.target.value;
+                    setSceneAlt(next);
+                    setSceneAltEdited(true);
+                    setAo3Code(current => updateHostedImageAlt(current, next, project));
+                  }}
+                  className="mt-2 w-full resize-none rounded-lg border border-stone-200 px-3 py-2 text-sm focus:ring-2 focus:ring-violet-500"
+                />
+                <p className="mt-1 text-[11px] text-green-700">
+                  Changes update the code above immediately; the image itself is not uploaded again.
+                </p>
+              </div>
+
+              <details className="rounded-xl border border-stone-200 bg-stone-50 p-3">
+                <summary className="cursor-pointer text-xs font-semibold text-stone-800">Full selectable transcript</summary>
+                <textarea readOnly value={transcript} rows={8} aria-label="Scene transcript" className="mt-3 w-full resize-y rounded-lg border border-stone-200 bg-white p-3 font-mono text-xs" onClick={event => event.currentTarget.select()} />
+                <button type="button" onClick={downloadTranscript} className="mt-2 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-xs font-semibold text-stone-700 hover:bg-stone-100">
+                  Download transcript (.txt)
+                </button>
+              </details>
             </div>
 
             {/* Actions */}
@@ -1057,6 +1157,9 @@ export const ExportPanel: React.FC<Props> = ({
                 chapter loses the image — use <strong className="text-stone-500">Save PNG</strong>{' '}
                 to keep a copy you can re-upload.
               </p>
+              <button type="button" onClick={backupProject} className="w-full rounded-xl border border-stone-200 px-4 py-2.5 text-sm font-semibold text-stone-700 hover:bg-stone-50">
+                Back up editable project
+              </button>
             </div>
           </div>
         </div>
@@ -1094,6 +1197,26 @@ export const ExportPanel: React.FC<Props> = ({
             </div>
 
             <div className="p-5 overflow-y-auto">
+              <section className="mb-4 rounded-xl border border-stone-200 p-3" aria-label="Publishing preflight">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-stone-900">Publishing preflight</p>
+                    <p className="mt-0.5 text-[11px] text-stone-500">Blocks are generator/identity failures. Warnings are guidance, not claims that AO3 will reject the work.</p>
+                  </div>
+                  <button type="button" onClick={backupProject} className="flex-shrink-0 rounded-lg border border-stone-200 px-3 py-2 text-xs font-semibold text-stone-700 hover:bg-stone-50">
+                    Back up project
+                  </button>
+                </div>
+                <ul className="mt-3 space-y-1.5">
+                  {preflight.map(item => (
+                    <li key={item.id} className={`flex items-start gap-2 text-xs ${item.status === 'pass' ? 'text-green-800' : item.severity === 'block' ? 'text-red-800' : 'text-amber-800'}`}>
+                      <span aria-hidden="true">{item.status === 'pass' ? '✓' : item.severity === 'block' ? '✕' : '!'}</span>
+                      <span><strong className="uppercase text-[10px]">{item.severity}</strong> · {item.message}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+
               {skin.violations.length > 0 ? (
                 <div role="alert" className="bg-red-50 border border-red-200 rounded-xl p-3 mb-4">
                   <p className="text-sm font-semibold text-red-900">AO3 would refuse this skin</p>
@@ -1135,6 +1258,34 @@ export const ExportPanel: React.FC<Props> = ({
                   <span className="block mt-0.5">Adds plain “Made with AO3 SkinGen” text to the chapter HTML. No link or commercial message.</span>
                 </span>
               </label>
+
+              <section className="mb-5 rounded-xl border border-stone-200 p-3">
+                <div role="tablist" aria-label="Work skin preview" className="flex rounded-lg bg-stone-100 p-1">
+                  <button type="button" role="tab" aria-selected={workSkinPreview === 'styled'} onClick={() => setWorkSkinPreview('styled')} className={`flex-1 rounded-md px-3 py-2 text-xs font-semibold ${workSkinPreview === 'styled' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500'}`}>
+                    Styled
+                  </button>
+                  <button type="button" role="tab" aria-selected={workSkinPreview === 'fallback'} onClick={() => { setWorkSkinPreview('fallback'); trackAnalytics({ name: 'fallback_preview_opened', templateId: project.template }); }} className={`flex-1 rounded-md px-3 py-2 text-xs font-semibold ${workSkinPreview === 'fallback' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500'}`}>
+                    Without work skin / downloads
+                  </button>
+                </div>
+                {workSkinPreview === 'styled' ? (
+                  <div className="mt-3 max-h-72 overflow-auto rounded-lg border border-stone-200 bg-white p-3">
+                    <style dangerouslySetInnerHTML={{ __html: skin.css }} />
+                    <div id="workskin" dangerouslySetInnerHTML={{ __html: skin.html }} />
+                  </div>
+                ) : (
+                  <div className="mt-3 space-y-3">
+                    <p className="text-xs leading-relaxed text-stone-600">
+                      This is the reading order and text your export is designed to preserve when a reader hides the work skin or downloads the work. AO3 conversion can still change presentation.
+                    </p>
+                    <div className="max-h-56 overflow-auto rounded-lg border border-stone-200 bg-white p-3" dangerouslySetInnerHTML={{ __html: skin.html }} />
+                    <textarea readOnly value={transcript} rows={8} aria-label="Scene transcript" className="w-full resize-y rounded-lg border border-stone-200 bg-white p-3 font-mono text-xs" onClick={event => event.currentTarget.select()} />
+                    <button type="button" onClick={downloadTranscript} className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-xs font-semibold text-stone-700 hover:bg-stone-100">
+                      Download transcript (.txt)
+                    </button>
+                  </div>
+                )}
+              </section>
 
               {/* Step 1 — CSS */}
               <div className="mb-5">
@@ -1236,9 +1387,9 @@ export const ExportPanel: React.FC<Props> = ({
                 />
                 <button
                   onClick={() => void copyWorkSkinPart('css')}
-                  disabled={skin.violations.length > 0}
+                  disabled={workSkinBlocked}
                   className={`w-full mt-2 py-2.5 rounded-xl font-semibold text-sm transition-all ${
-                    skin.violations.length > 0
+                    workSkinBlocked
                       ? 'bg-stone-100 text-stone-400 cursor-not-allowed'
                       : copiedPart === 'css'
                       ? 'bg-green-500 text-white'
@@ -1281,9 +1432,9 @@ export const ExportPanel: React.FC<Props> = ({
                 />
                 <button
                   onClick={() => void copyWorkSkinPart('html')}
-                  disabled={skin.violations.length > 0}
+                  disabled={workSkinBlocked}
                   className={`w-full mt-2 py-2.5 rounded-xl font-semibold text-sm transition-all ${
-                    skin.violations.length > 0
+                    workSkinBlocked
                       ? 'bg-stone-100 text-stone-400 cursor-not-allowed'
                       : copiedPart === 'html'
                       ? 'bg-green-500 text-white'

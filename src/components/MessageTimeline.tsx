@@ -374,12 +374,45 @@ export const MessageTimeline: React.FC<Props> = ({
                     value={msg.attachments?.[0]?.url || ''}
                     onChange={(url) =>
                       onUpdateMessage(msg.id, {
-                        attachments: url ? [{ type: 'image', url }] : [],
+                        attachments: url
+                          ? [{
+                              type: 'image',
+                              url,
+                              alt: msg.attachments?.[0]?.alt || '',
+                              decorative: msg.attachments?.[0]?.decorative || false,
+                            }]
+                          : [],
                       })
                     }
                     ariaLabel="Image address for this message"
                     placeholder="Paste an image address (optional)"
                   />
+                )}
+                {template !== 'google' && msg.attachments?.[0]?.url && (
+                  <div className="space-y-1.5">
+                    <input
+                      value={msg.attachments[0].alt || ''}
+                      onChange={event => onUpdateMessage(msg.id, {
+                        attachments: [{ ...msg.attachments![0], alt: event.target.value }],
+                      })}
+                      disabled={msg.attachments[0].decorative === true}
+                      maxLength={500}
+                      aria-label="Image description"
+                      placeholder="Describe the image for readers"
+                      className="w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-xs disabled:bg-stone-100 disabled:text-stone-400"
+                    />
+                    <label className="flex items-center gap-2 text-xs text-stone-600">
+                      <input
+                        type="checkbox"
+                        checked={msg.attachments[0].decorative === true}
+                        onChange={event => onUpdateMessage(msg.id, {
+                          attachments: [{ ...msg.attachments![0], decorative: event.target.checked, ...(event.target.checked ? { alt: '' } : {}) }],
+                        })}
+                        className="accent-violet-600"
+                      />
+                      Decorative image — use empty alt text
+                    </label>
+                  </div>
                 )}
               </div>
             )}

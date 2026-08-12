@@ -105,9 +105,13 @@ export function loadStoredProject<T extends SkinProject>(fallback: () => T): T {
     };
     
     // Sanitize URL fields in settings
+    const importedSettings = { ...parsed.settings };
+    // Read old persisted projects without carrying the retired duplicate
+    // character-library field into the live settings object.
+    delete importedSettings.universalCharacters;
     const sanitizedSettings = {
       ...defaults.settings,
-      ...parsed.settings,
+      ...importedSettings,
       // Ensure header/footer image URLs exist and are sanitized, fixing old broken URLs
       iosHeaderImageUrl: sanitizeStoredUrl(parsed.settings.iosHeaderImageUrl) || defaults.settings.iosHeaderImageUrl,
       iosFooterImageUrl: sanitizeStoredUrl(parsed.settings.iosFooterImageUrl) || defaults.settings.iosFooterImageUrl,
@@ -122,6 +126,10 @@ export function loadStoredProject<T extends SkinProject>(fallback: () => T): T {
     
     return {
       ...parsed,
+      id:
+        typeof parsed.id === 'string' && parsed.id && parsed.id !== 'default-project'
+          ? sanitizeString(parsed.id, 100)
+          : defaults.id,
       settings: sanitizedSettings,
       messages: sanitizedMessages,
     } as T;

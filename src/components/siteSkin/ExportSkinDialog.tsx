@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
 import { Violation } from '../../lib/siteSkin/ao3Css';
+import { SiteSkinTheme } from '../../lib/siteSkin/theme';
+import { parseSiteThemeFile, ProjectFileError, PROJECT_FILE_MAX_BYTES, serializeSiteThemeFile } from '../../lib/projectFile';
+import { downloadTextFile, safeFilenamePart } from '../../lib/download';
 import { AO3_RULESET_STATUS } from '../../lib/ao3Compatibility';
 import { trackAnalytics } from '../../lib/analytics';
 
@@ -11,6 +14,8 @@ interface Props {
   templateId: string;
   /** Non-empty means the skin will not save on AO3. Blocks copy. */
   violations: Violation[];
+  theme: SiteSkinTheme;
+  onReplaceTheme: (theme: SiteSkinTheme) => void;
 }
 
 const STEPS: { title: string; body: React.ReactNode }[] = [
@@ -61,13 +66,51 @@ export const ExportSkinDialog: React.FC<Props> = ({
   themeName,
   templateId,
   violations,
+  theme,
+  onReplaceTheme,
 }) => {
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
+  const [importCandidate, setImportCandidate] = useState<{ theme: SiteSkinTheme; exportedAt: string } | null>(null);
 
   if (!isOpen) return null;
 
   const blocked = violations.length > 0;
+
+  const downloadThemeBackup = (suffix = '') => {
+    const filename = `ao3skingen-site-theme-${safeFilenamePart(theme.meta.name)}${suffix ? `-${safeFilenamePart(suffix)}` : ''}.json`;
+    const ok = downloadTextFile(serializeSiteThemeFile(theme), filename);
+    setError(ok ? '' : 'Your browser could not start the theme backup download.');
+    if (ok) trackAnalytics({ name: 'project_backup_exported', schemaVersion: 1 });
+    return ok;
+  };
+
+  const selectThemeFile = async (file: File | undefined) => {
+    setImportCandidate(null);
+    setError('');
+    if (!file) return;
+    if (file.size > PROJECT_FILE_MAX_BYTES) {
+      setError('That backup is larger than the 2 MB import limit.');
+      return;
+    }
+    try {
+      const parsed = parseSiteThemeFile(await file.text());
+      setImportCandidate({ theme: parsed.theme, exportedAt: parsed.exportedAt });
+    } catch (cause) {
+      setError(cause instanceof ProjectFileError ? cause.message : 'That theme backup could not be read.');
+    }
+  };
+
+  const replaceTheme = () => {
+    if (!importCandidate) return;
+    if (!downloadThemeBackup('before-import')) {
+      setError('The safety backup could not be downloaded, so the current theme was not replaced.');
+      return;
+    }
+    onReplaceTheme(importCandidate.theme);
+    trackAnalytics({ name: 'project_backup_imported', schemaVersion: 1 });
+    setImportCandidate(null);
+  };
 
   const handleCopy = async () => {
     try {
@@ -109,6 +152,31 @@ export const ExportSkinDialog: React.FC<Props> = ({
           >
             ×
           </button>
+
+          <section className="mt-5 rounded-xl border border-stone-200 p-4">
+            <h4 className="text-sm font-semibold text-stone-900">Theme backup</h4>
+            <p className="mt-1 text-xs leading-relaxed text-stone-500">Download or restore this editable theme locally. It is separate from scene-project backups.</p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <button type="button" onClick={() => downloadThemeBackup()} className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-xs font-semibold text-stone-700 hover:bg-stone-50">
+                Download theme backup
+              </button>
+              <label className="cursor-pointer rounded-lg border border-stone-300 bg-white px-3 py-2 text-center text-xs font-semibold text-stone-700 hover:bg-stone-50">
+                Restore theme backup
+                <input type="file" accept=".json,application/json" className="sr-only" onChange={event => { void selectThemeFile(event.target.files?.[0]); event.currentTarget.value = ''; }} />
+              </label>
+            </div>
+            {importCandidate && (
+              <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                <p><strong>{importCandidate.theme.meta.name}</strong></p>
+                <p className="mt-1">Exported {new Date(importCandidate.exportedAt).toLocaleString()} · Banner link {importCandidate.theme.header.bannerUrl ? 'included' : 'not included'}</p>
+                <p className="mt-1 text-[11px]">Replacing downloads the current theme first. No merge is performed.</p>
+                <div className="mt-2 flex gap-2">
+                  <button type="button" onClick={replaceTheme} className="rounded-lg bg-amber-700 px-3 py-2 font-semibold text-white">Replace current theme</button>
+                  <button type="button" onClick={() => setImportCandidate(null)} className="rounded-lg border border-amber-300 bg-white px-3 py-2 font-semibold">Cancel</button>
+                </div>
+              </div>
+            )}
+          </section>
         </div>
 
         <div className="p-5 overflow-y-auto">

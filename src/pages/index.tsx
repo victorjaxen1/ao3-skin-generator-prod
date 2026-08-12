@@ -8,6 +8,10 @@ import { PLATFORM_LOOK } from '../lib/generator';
 import { TEMPLATE_EXAMPLES } from '../lib/examples';
 import { parseBlankPlatform } from '../lib/deepLinks';
 import { trackAnalytics } from '../lib/analytics';
+import { loadCharacterLibrary, persistCharacterLibrary } from '../lib/characterStorage';
+import { serializeProjectFile, PROJECT_FILE_SCHEMA_VERSION } from '../lib/projectFile';
+import { downloadTextFile, safeFilenamePart } from '../lib/download';
+import { markProjectBackedUp } from '../lib/backupStatus';
 import { CharacterLibrary } from '../components/CharacterLibrary';
 import { PlatformPicker } from '../components/PlatformPicker';
 import { WorkspaceHeader } from '../components/WorkspaceHeader';
@@ -15,6 +19,7 @@ import { SettingsSheet } from '../components/SettingsSheet';
 import { CastPanel } from '../components/CastPanel';
 import { ComposeBar } from '../components/ComposeBar';
 import { MessageTimeline } from '../components/MessageTimeline';
+import { ProjectBackupDialog } from '../components/ProjectBackupDialog';
 
 // Lazy load heavy components
 const ExportPanel = dynamic(() => import('../components/ExportPanel').then(mod => ({ default: mod.ExportPanel })), {
@@ -50,6 +55,7 @@ export default function HomePage() {
   const [showCharacters, setShowCharacters] = useState(false);
   const [showCast, setShowCast] = useState(false);
   const [showMobilePreview, setShowMobilePreview] = useState(true);
+  const [showBackup, setShowBackup] = useState(false);
   // True when the picker was reached from the workspace, i.e. there is work
   // a selection would discard. On a first visit there is nothing to lose.
   const [cameFromWorkspace, setCameFromWorkspace] = useState(false);
@@ -72,10 +78,7 @@ export default function HomePage() {
   // ── Mount: load characters ──────────────────────────────────────────────
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const stored = localStorage.getItem('ao3skin_universal_characters');
-    if (stored) {
-      try { setUniversalCharacters(JSON.parse(stored)); } catch { /* ignore */ }
-    }
+    setUniversalCharacters(loadCharacterLibrary());
     // Remember whether the mobile preview was collapsed.
     if (localStorage.getItem('ao3skin_mobile_preview') === 'collapsed') {
       setShowMobilePreview(false);
@@ -290,7 +293,7 @@ export default function HomePage() {
 
   // ── Character handlers ──────────────────────────────────────────────────
   const saveChars = (chars: UniversalCharacter[]) => {
-    if (typeof window !== 'undefined') localStorage.setItem('ao3skin_universal_characters', JSON.stringify(chars));
+    persistCharacterLibrary(chars);
   };
   const handleAddCharacter = (c: UniversalCharacter) => {
     const u = [...universalCharacters, c]; setUniversalCharacters(u); saveChars(u);
@@ -303,6 +306,35 @@ export default function HomePage() {
     const u = universalCharacters.filter(c => c.id !== id);
     setUniversalCharacters(u); saveChars(u);
   };
+
+  const handleDownloadProjectBackup = useCallback((suffix = ''): boolean => {
+    const stamp = new Date().toISOString().slice(0, 10);
+    const projectLabel = project.template === 'ios'
+      ? (project.settings.iosGroupMode ? project.settings.iosGroupName : project.settings.iosContactName)
+      : project.template === 'android'
+      ? (project.settings.androidGroupMode ? project.settings.androidGroupName : project.settings.androidContactName)
+      : project.template === 'twitter'
+      ? project.settings.twitterDisplayName
+      : project.settings.googleQuery;
+    const label = safeFilenamePart(projectLabel || project.template);
+    const filename = `ao3skingen-${label}-${stamp}${suffix ? `-${safeFilenamePart(suffix)}` : ''}.json`;
+    const ok = downloadTextFile(serializeProjectFile(project, universalCharacters), filename);
+    if (ok) {
+      markProjectBackedUp(project);
+      trackAnalytics({ name: 'project_backup_exported', schemaVersion: PROJECT_FILE_SCHEMA_VERSION });
+    }
+    return ok;
+  }, [project, universalCharacters]);
+
+  const handleReplaceFromBackup = useCallback((nextProject: SkinProject, characters: UniversalCharacter[]) => {
+    setProject(nextProject);
+    setHistory([nextProject]);
+    setHistoryIndex(0);
+    setUniversalCharacters(characters);
+    persistCharacterLibrary(characters);
+    setShowPicker(false);
+    setCameFromWorkspace(false);
+  }, []);
 
   /**
    * Renaming the other person rewrites the messages they have already sent.
@@ -490,6 +522,7 @@ export default function HomePage() {
         onSettingsOpen={() => setShowSettings(true)}
         onCharactersOpen={() => setShowCharacters(true)}
         onCastOpen={() => setShowCast(true)}
+        onBackupOpen={() => setShowBackup(true)}
         template={project.template}
         saveStatus={saveStatus}
         messageCount={project.messages.length}
@@ -666,6 +699,14 @@ export default function HomePage() {
         project={project}
         showCodeModal={showCodeModal}
         setShowCodeModal={setShowCodeModal}
+        onBackupProject={handleDownloadProjectBackup}
+      />
+
+      <ProjectBackupDialog
+        isOpen={showBackup}
+        onClose={() => setShowBackup(false)}
+        onDownloadCurrent={handleDownloadProjectBackup}
+        onReplace={handleReplaceFromBackup}
       />
 
     </div>

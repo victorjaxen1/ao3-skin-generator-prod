@@ -9,6 +9,17 @@ function fallbackEscape(str: string): string {
     .replace(/>/g, '&gt;');
 }
 
+/** Escape plain text for a quoted HTML attribute. */
+export function sanitizeAttribute(input: string | undefined): string {
+  return (input || '')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/[\r\n]+/g, ' ');
+}
+
 /**
  * Sanitize URLs to prevent XSS via javascript: and other dangerous protocols.
  * Only allows http:, https:, and data: (for inline images) protocols.

@@ -6,6 +6,8 @@
  * Users can also enter custom URLs for their own avatars.
  */
 
+export type { UniversalCharacter } from './schema';
+
 const PUBLIT_CDN = 'https://media.publit.io/file/AO3-Skins-App';
 
 function avatarUrl(filename: string): string {
@@ -18,29 +20,6 @@ export interface CharacterAvatar {
   url: string;
   category: 'modern' | 'diversity' | 'fantasy' | 'neutral' | 'age-varied';
   description?: string;
-}
-
-/**
- * Universal Character - Works across all templates
- */
-export interface UniversalCharacter {
-  id: string;
-  name: string;                 // Display name (used in all templates)
-  avatarUrl?: string;           // Profile picture URL
-  
-  // Platform-specific handles
-  twitterHandle?: string;       // @username for Twitter
-  phoneNumber?: string;         // For SMS/WhatsApp (optional)
-  email?: string;              // For email templates (future)
-  
-  // Metadata
-  verified?: boolean;           // Verified badge (Twitter, Instagram)
-  bio?: string;                // Short description
-  category: CharacterAvatar['category'];
-  
-  // Usage tracking
-  lastUsed?: string;           // ISO timestamp
-  usageCount: number;          // Analytics
 }
 
 /**
