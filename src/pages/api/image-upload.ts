@@ -53,7 +53,7 @@ export function isAllowedUploadOrigin(req: NextApiRequest): boolean {
   const known = new Set([
     host ? `${protocol}://${host}` : '',
     'https://ao3skingen.netlify.app',
-    'https://ao3skingen.wordfokus.com',
+    'https://app.ao3skingen.wordfokus.com',
     ...(process.env.NODE_ENV !== 'production' ? ['http://localhost:3000', 'http://127.0.0.1:3000'] : []),
     ...configured,
   ].filter(Boolean));

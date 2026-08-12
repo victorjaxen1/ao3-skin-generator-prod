@@ -10,7 +10,7 @@ export default defineConfig({
   fullyParallel: true,
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
-    baseURL: process.env.UX_BASE_URL || 'https://ao3skingen.netlify.app',
+    baseURL: process.env.UX_BASE_URL || 'https://app.ao3skingen.wordfokus.com',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },

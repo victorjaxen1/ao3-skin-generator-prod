@@ -36,7 +36,9 @@ test.describe('image upload route boundary', () => {
       },
       data: Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
     });
-    expect([400, 413, 415, 422, 503]).toContain(response.status());
+    // With a local provider key configured, the deliberately truncated PNG can
+    // reach ImgBB and return our sanitized upstream-failure status (502).
+    expect([400, 413, 415, 422, 502, 503]).toContain(response.status());
     const text = await response.text();
     expect(text).not.toMatch(/NEXT_PUBLIC|api\.imgbb\.com|key=/i);
   });

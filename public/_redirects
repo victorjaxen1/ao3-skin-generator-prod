@@ -1,0 +1,2 @@
+# Keep the default vendor hostname as a compatibility entry point only.
+https://ao3skingen.netlify.app/* https://app.ao3skingen.wordfokus.com/:splat 301!

@@ -1,10 +1,12 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/router';
+import { ProductHead } from '../components/ProductHead';
 import { defaultProject, SkinProject, UniversalCharacter, Message } from '../lib/schema';
 import { loadStoredProject, persistProject, hasStoredProject } from '../lib/storage';
 import { PLATFORM_LOOK } from '../lib/generator';
 import { TEMPLATE_EXAMPLES } from '../lib/examples';
+import { parseBlankPlatform } from '../lib/deepLinks';
 import { CharacterLibrary } from '../components/CharacterLibrary';
 import { PlatformPicker } from '../components/PlatformPicker';
 import { WorkspaceHeader } from '../components/WorkspaceHeader';
@@ -109,7 +111,7 @@ export default function HomePage() {
     if (!router.isReady) return;
 
     let initial: SkinProject = defaultProject();
-    let fromTemplate = false;
+    let fromDeepLink = false;
     let returning = false;
 
     // Check URL for template param
@@ -121,10 +123,17 @@ export default function HomePage() {
     if (templateId) {
       const all = Object.values(TEMPLATE_EXAMPLES).flat();
       const found = all.find(ex => ex.id === templateId);
-      if (found) { initial = found; fromTemplate = true; }
+      if (found) { initial = found; fromDeepLink = true; }
     } else {
-      returning = hasStoredProject();
-      initial = loadStoredProject(defaultProject);
+      const platform = parseBlankPlatform(router.query.platform);
+      if (platform) {
+        initial.template = platform;
+        Object.assign(initial.settings, PLATFORM_LOOK[platform]);
+        fromDeepLink = true;
+      } else {
+        returning = hasStoredProject();
+        initial = loadStoredProject(defaultProject);
+      }
     }
 
     setProject(initial);
@@ -135,7 +144,7 @@ export default function HomePage() {
     // Skip the picker only for a template link or genuinely saved work.
     // defaultProject() ships with seed messages, so a length check alone would
     // hide the picker from every first-time visitor.
-    if (fromTemplate || (returning && initial.messages.length > 0)) {
+    if (fromDeepLink || (returning && initial.messages.length > 0)) {
       setShowPicker(false);
     }
 
@@ -438,24 +447,31 @@ export default function HomePage() {
     ? (project.template === 'ios' ? 'Family Chat' : 'Work Team')
     : undefined;
 
+  const head = (
+    <ProductHead
+      title="AO3 Work Skin & Fake Screenshot Generator — AO3 SkinGen"
+      description="Create fictional social-media scenes, download images, or copy AO3-compatible work-skin HTML and CSS. Free, unofficial, and no signup required."
+    />
+  );
+
   // Hold the first paint until storage has been read, so returning visitors
   // don't see the picker flash past before it's dismissed.
   if (!isLoaded) {
-    return <div className="min-h-screen bg-stone-50" aria-busy="true" />;
+    return <>{head}<div className="min-h-screen bg-stone-50" aria-busy="true"><h1 className="sr-only">AO3 SkinGen</h1></div></>;
   }
 
   if (showPicker) {
-    return (
-      <PlatformPicker
-        onSelectPlatform={handleSelectPlatform}
-        onLoadExample={handleLoadExample}
-        hasWorkInProgress={cameFromWorkspace && project.messages.length > 0}
-        onCancel={() => { setCameFromWorkspace(false); setShowPicker(false); }}
-      />
-    );
+    return <>{head}<PlatformPicker
+      onSelectPlatform={handleSelectPlatform}
+      onLoadExample={handleLoadExample}
+      hasWorkInProgress={cameFromWorkspace && project.messages.length > 0}
+      onCancel={() => { setCameFromWorkspace(false); setShowPicker(false); }}
+    /></>;
   }
 
   return (
+    <>
+    {head}
     <div className="flex flex-col h-screen bg-stone-50 font-sans">
       {/* ─── Header ─────────────────────────────────────────────────── */}
       <WorkspaceHeader
@@ -650,5 +666,6 @@ export default function HomePage() {
       />
 
     </div>
+    </>
   );
 }

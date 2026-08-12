@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import Head from 'next/head';
 import { AO3_RULESET } from '../lib/ao3Compatibility';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
@@ -19,6 +18,7 @@ import { TemplateGallery } from '../components/siteSkin/TemplateGallery';
 import { ThemeEditor } from '../components/siteSkin/ThemeEditor';
 import { SkinPreview } from '../components/siteSkin/SkinPreview';
 import { ExportSkinDialog } from '../components/siteSkin/ExportSkinDialog';
+import { ProductHead } from '../components/ProductHead';
 
 const MAX_HISTORY = 50;
 
@@ -174,21 +174,19 @@ export default function SiteSkinPage() {
     return () => window.removeEventListener('keydown', handle);
   }, [showExport, undo, redo]);
 
+  const head = (
+    <ProductHead
+      title="AO3 Site Skin Maker — AO3 SkinGen"
+      description="Pick a look, personalise it, and copy a site skin checked against bundled AO3 compatibility rules. No CSS knowledge or account required."
+      path="/site-skin"
+    />
+  );
+
   // Hold the first paint until storage has been read, so a returning visitor
   // doesn't see the gallery flash past before it's dismissed.
   if (!isLoaded) {
-    return <div className="min-h-screen bg-stone-50" aria-busy="true" />;
+    return <>{head}<div className="min-h-screen bg-stone-50" aria-busy="true"><h1 className="sr-only">AO3 Site Skin Maker</h1></div></>;
   }
-
-  const head = (
-    <Head>
-      <title>AO3 Site Skin Maker — AO3 SkinGen</title>
-      <meta
-        name="description"
-        content="Pick a look, personalise it, and copy a site skin checked against bundled AO3 compatibility rules. No CSS knowledge or account required."
-      />
-    </Head>
-  );
 
   if (showGallery) {
     return (

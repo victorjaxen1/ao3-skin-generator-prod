@@ -1,4 +1,5 @@
 import { Html, Head, Main, NextScript } from 'next/document';
+import { PRODUCT } from '../lib/brand';
 
 /**
  * Validate and sanitize Google Analytics Measurement ID.
@@ -20,11 +21,11 @@ export default function Document() {
       <Head>
         {/* PWA Manifest */}
         <link rel="manifest" href="/manifest.json" />
-        <meta name="theme-color" content="#7c3aed" />
+        <meta name="theme-color" content={PRODUCT.themeColor} />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="apple-mobile-web-app-title" content="AO3 Skins" />
+        <meta name="apple-mobile-web-app-title" content={PRODUCT.name} />
         <link rel="apple-touch-icon" href="/icon-192.svg" />
         
         {/* Google Fonts - Clean Design System */}

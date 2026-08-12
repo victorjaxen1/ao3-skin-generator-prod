@@ -251,7 +251,7 @@ nav { display: none; }
   </head>
   <body>
     <div class="trust-bar">
-      ✨ Free Forever • No Signup Required • Used by 1,200+ AO3 Writers
+      Free to use • No signup required • Your editable project stays in this browser
     </div>
 
     <header>
@@ -272,7 +272,7 @@ nav { display: none; }
             <li><a href="#how-it-works">How It Works</a></li>
             <li><a href="https://ao3skingen.wordfokus.com/privacy-policy">Privacy</a></li>
             <li><a href="https://ko-fi.com/ao3skingen" target="_blank" rel="noopener noreferrer" class="nav-kofi">☕ Support</a></li>
-            <li><a href="https://ao3skingen.netlify.app" class="btn btn-primary" style="padding: 10px 20px; font-size: 15px;">Launch Generator</a></li>
+            <li><a href="https://app.ao3skingen.wordfokus.com" class="btn btn-primary" style="padding: 10px 20px; font-size: 15px;">Launch Generator</a></li>
           </ul>
         </nav>
         <button class="menu-toggle" aria-label="Toggle Menu">☰</button>
@@ -288,7 +288,7 @@ nav { display: none; }
           <li><a href="#how-it-works">How It Works</a></li>
           <li><a href="https://ao3skingen.wordfokus.com/privacy-policy">Privacy</a></li>
           <li><a href="https://ko-fi.com/ao3skingen" target="_blank" rel="noopener noreferrer" style="color: #FF5E5B; font-weight: 600;">☕ Support on Ko-fi</a></li>
-          <li><a href="https://ao3skingen.netlify.app" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">Launch Generator</a></li>
+          <li><a href="https://app.ao3skingen.wordfokus.com" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">Launch Generator</a></li>
         </ul>
       </div>
     </div>
@@ -312,8 +312,8 @@ nav { display: none; }
             </p>
 
             <div class="hero-buttons">
-              <a href="https://ao3skingen.netlify.app" class="btn btn-primary btn-large">Make a Screenshot</a>
-              <a href="https://ao3skingen.netlify.app/site-skin" class="btn btn-secondary btn-large">Build a Site Skin</a>
+              <a href="https://app.ao3skingen.wordfokus.com" class="btn btn-primary btn-large">Make a Screenshot</a>
+              <a href="https://app.ao3skingen.wordfokus.com/site-skin" class="btn btn-secondary btn-large">Build a Site Skin</a>
             </div>
 
             <div class="trust-signals">
@@ -369,7 +369,7 @@ nav { display: none; }
                 <li><strong>No work skin needed</strong> — it's an image</li>
                 <li>Everyone reading your fic sees it</li>
               </ul>
-              <a href="https://ao3skingen.netlify.app" class="btn btn-primary" style="width: 100%; text-align: center;">Make a screenshot</a>
+              <a href="https://app.ao3skingen.wordfokus.com" class="btn btn-primary" style="width: 100%; text-align: center;">Make a screenshot</a>
             </div>
 
             <div class="feature-card">
@@ -386,7 +386,7 @@ nav { display: none; }
                 <li>Add your own header banner image</li>
                 <li>Only <strong>you</strong> see it, on every AO3 page</li>
               </ul>
-              <a href="https://ao3skingen.netlify.app/site-skin" class="btn btn-primary" style="width: 100%; text-align: center;">Build a site skin</a>
+              <a href="https://app.ao3skingen.wordfokus.com/site-skin" class="btn btn-primary" style="width: 100%; text-align: center;">Build a site skin</a>
             </div>
           </div>
 
@@ -526,7 +526,7 @@ nav { display: none; }
         <div class="container" style="text-align: center;">
           <h2 style="color: var(--text-dark); margin-bottom: 1rem;">☕ Love This Tool?</h2>
           <p style="font-size: 1.15rem; color: var(--text-gray); max-width: 600px; margin: 0 auto 2rem;">
-            AO3 Skin Generator is free forever, but if it saved you time and headaches, consider buying me a coffee!
+            AO3 Skin Generator is free to use, with no signup required. If it saved you time and headaches, consider buying me a coffee!
           </p>
           <a href="https://ko-fi.com/ao3skingen" target="_blank" rel="noopener noreferrer" class="btn" style="background: #FF5E5B; color: white; border: none; font-size: 18px; padding: 16px 36px; display: inline-flex; align-items: center; gap: 10px;">
             <span style="font-size: 24px;">☕</span>
@@ -542,10 +542,10 @@ nav { display: none; }
       <section class="cta-section">
         <div class="container">
           <h2>Ready when you are</h2>
-          <p>Both tools are free forever, need no signup, and remember your work between visits.</p>
+          <p>Both tools are free to use, need no signup, and remember your work between visits.</p>
           <div class="hero-buttons" style="justify-content: center;">
-            <a href="https://ao3skingen.netlify.app" class="btn btn-primary btn-large">Make a screenshot</a>
-            <a href="https://ao3skingen.netlify.app/site-skin" class="btn btn-secondary btn-large">Build a site skin</a>
+            <a href="https://app.ao3skingen.wordfokus.com" class="btn btn-primary btn-large">Make a screenshot</a>
+            <a href="https://app.ao3skingen.wordfokus.com/site-skin" class="btn btn-secondary btn-large">Build a site skin</a>
           </div>
         </div>
       </section>
@@ -567,8 +567,8 @@ nav { display: none; }
               <li><a href="#tools">The two tools</a></li>
             <li><a href="#features">Features</a></li>
               <li><a href="#how-it-works">How It Works</a></li>
-              <li><a href="https://ao3skingen.netlify.app">Screenshot generator</a></li>
-              <li><a href="https://ao3skingen.netlify.app/site-skin">Site skin builder</a></li>
+              <li><a href="https://app.ao3skingen.wordfokus.com">Screenshot generator</a></li>
+              <li><a href="https://app.ao3skingen.wordfokus.com/site-skin">Site skin builder</a></li>
             </ul>
           </div>
           
