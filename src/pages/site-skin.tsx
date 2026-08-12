@@ -19,6 +19,7 @@ import { ThemeEditor } from '../components/siteSkin/ThemeEditor';
 import { SkinPreview } from '../components/siteSkin/SkinPreview';
 import { ExportSkinDialog } from '../components/siteSkin/ExportSkinDialog';
 import { ProductHead } from '../components/ProductHead';
+import { trackAnalytics } from '../lib/analytics';
 
 const MAX_HISTORY = 50;
 
@@ -122,7 +123,18 @@ export default function SiteSkinPage() {
     setHistory([fresh]);
     setHistoryIndex(0);
     setShowGallery(false);
+    trackAnalytics({ name: 'template_selected', templateId: template.meta.id });
   }, []);
+
+  const handleOpenExport = () => {
+    if (violations.length > 0) {
+      trackAnalytics({ name: 'export_failed', outputType: 'site_skin', errorCode: 'CSS_VALIDATION_BLOCKED' });
+    } else {
+      trackAnalytics({ name: 'export_started', outputType: 'site_skin', templateId: theme.meta.id });
+      trackAnalytics({ name: 'export_ready', outputType: 'site_skin', templateId: theme.meta.id });
+    }
+    setShowExport(true);
+  };
 
   const handleFix = useCallback((issue: ReadabilityIssue) => {
     setTheme(prev => {
@@ -249,7 +261,7 @@ export default function SiteSkinPage() {
             )}
             <button
               type="button"
-              onClick={() => setShowExport(true)}
+              onClick={handleOpenExport}
               className="px-4 py-2 rounded-xl bg-violet-600 text-white text-sm font-semibold hover:bg-violet-700 transition-colors"
             >
               Copy to AO3
@@ -265,7 +277,10 @@ export default function SiteSkinPage() {
 
         {/* ─── Editor + preview ────────────────────────────────────────── */}
         <div className="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0">
-          <div className="w-full lg:w-[340px] flex-shrink-0 overflow-y-auto bg-white lg:border-r border-stone-200 px-4 pb-6 order-2 lg:order-1">
+          <div
+            className="w-full lg:w-[340px] flex-shrink-0 overflow-y-auto bg-white lg:border-r border-stone-200 px-4 order-2 lg:order-1"
+            style={{ paddingBottom: 'calc(1.5rem + var(--analytics-consent-h, 0px))' }}
+          >
             <ThemeEditor theme={theme} onChange={updateTheme} issues={issues} onFix={handleFix} />
           </div>
 
@@ -280,6 +295,7 @@ export default function SiteSkinPage() {
         onClose={() => setShowExport(false)}
         css={css}
         themeName={theme.meta.name}
+        templateId={theme.meta.id}
         violations={violations}
       />
     </>

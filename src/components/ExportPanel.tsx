@@ -7,6 +7,7 @@ import { uploadToImgBB, ImageUploadError } from '../lib/imgbb';
 import { inlineCrossOriginImages, FailedImage } from '../lib/imageProxy';
 import { PLATFORM_ASSETS } from '../lib/platformAssets';
 import { AO3_RULESET_STATUS } from '../lib/ao3Compatibility';
+import { mapUploadErrorCode, trackAnalytics } from '../lib/analytics';
 
 interface Props {
   project: SkinProject;
@@ -566,6 +567,8 @@ export const ExportPanel: React.FC<Props> = ({
   const [showWorkSkin, setShowWorkSkin] = useState(false);
   const [includeWorkSkinCredit, setIncludeWorkSkinCredit] = useState(false);
   const [copiedPart, setCopiedPart] = useState<'css' | 'html' | null>(null);
+  const workSkinPartsCopiedRef = useRef(new Set<'css' | 'html'>());
+  const workSkinHandoffTrackedRef = useRef(false);
   /**
    * The quality switch is a popover rather than a row.
    *
@@ -687,19 +690,15 @@ export const ExportPanel: React.FC<Props> = ({
   // --- Download Image ---
   const handleDownloadImage = async () => {
     if (isExporting) return;
+    trackAnalytics({ name: 'export_started', outputType: 'png', templateId: project.template });
     setIsExporting(true);
     setProgressLabel('Rendering...');
     try {
       await exportAsImage(project, exportScale, warnAboutImages);
       success('PNG download started.');
-      if (typeof window !== 'undefined' && (window as any).gtag) {
-        (window as any).gtag('event', 'export_image', {
-          event_category: 'Export',
-          event_label: project.template,
-          scale: exportScale,
-        });
-      }
+      trackAnalytics({ name: 'export_ready', outputType: 'png', templateId: project.template });
     } catch (err) {
+      trackAnalytics({ name: 'export_failed', outputType: 'png', errorCode: 'EXPORT_RENDER_FAILED' });
       showError(
         err instanceof Error ? err.message : 'Failed to export image. Please try again.'
       );
@@ -712,6 +711,7 @@ export const ExportPanel: React.FC<Props> = ({
   // --- Get AO3 Code ---
   const handleGetAO3Code = async () => {
     if (isExporting) return;
+    trackAnalytics({ name: 'export_started', outputType: 'hosted_image', templateId: project.template });
     setIsExporting(true);
     setProgressLabel('Starting...');
     try {
@@ -725,17 +725,13 @@ export const ExportPanel: React.FC<Props> = ({
       );
       setAo3Code(code);
       setShowCodeModal(true);
-      if (typeof window !== 'undefined' && (window as any).gtag) {
-        (window as any).gtag('event', 'export_ao3_code', {
-          event_category: 'Export',
-          event_label: project.template,
-          scale: exportScale,
-        });
-      }
+      trackAnalytics({ name: 'export_ready', outputType: 'hosted_image', templateId: project.template });
     } catch (err) {
       if (err instanceof ImageUploadError) {
+        trackAnalytics({ name: 'export_failed', outputType: 'hosted_image', errorCode: mapUploadErrorCode(err.code) });
         showError(`Upload failed: ${err.userMessage}`);
       } else {
+        trackAnalytics({ name: 'export_failed', outputType: 'hosted_image', errorCode: 'EXPORT_RENDER_FAILED' });
         showError(
           err instanceof Error ? err.message : 'Export failed. Please try again.'
         );
@@ -759,11 +755,44 @@ export const ExportPanel: React.FC<Props> = ({
     void handleGetAO3Code();
   };
 
-  const handleCopyCode = () => {
-    navigator.clipboard.writeText(ao3Code);
-    setCopiedCode(true);
-    setTimeout(() => setCopiedCode(false), 2000);
-    success('Copied! Paste into your AO3 chapter HTML editor.');
+  const handleCopyCode = async () => {
+    try {
+      await navigator.clipboard.writeText(ao3Code);
+      setCopiedCode(true);
+      setTimeout(() => setCopiedCode(false), 2000);
+      success('Copied! Paste into your AO3 chapter HTML editor.');
+      trackAnalytics({ name: 'output_copied', outputType: 'hosted_image', part: 'embed' });
+      trackAnalytics({ name: 'handoff_completed', outputType: 'hosted_image', templateId: project.template });
+    } catch {
+      trackAnalytics({ name: 'export_failed', outputType: 'hosted_image', errorCode: 'CLIPBOARD_DENIED' });
+      showError('Your browser blocked the clipboard. Select the code and copy it manually.');
+    }
+  };
+
+  const openWorkSkin = () => {
+    workSkinPartsCopiedRef.current.clear();
+    workSkinHandoffTrackedRef.current = false;
+    trackAnalytics({ name: 'export_started', outputType: 'work_skin', templateId: project.template });
+    trackAnalytics({ name: 'export_ready', outputType: 'work_skin', templateId: project.template });
+    setShowWorkSkin(true);
+  };
+
+  const copyWorkSkinPart = async (part: 'css' | 'html') => {
+    if (!skin) return;
+    try {
+      await navigator.clipboard.writeText(skin[part]);
+      setCopiedPart(part);
+      setTimeout(() => setCopiedPart(null), 2000);
+      trackAnalytics({ name: 'output_copied', outputType: 'work_skin', part });
+      workSkinPartsCopiedRef.current.add(part);
+      if (workSkinPartsCopiedRef.current.size === 2 && !workSkinHandoffTrackedRef.current) {
+        workSkinHandoffTrackedRef.current = true;
+        trackAnalytics({ name: 'handoff_completed', outputType: 'work_skin', templateId: project.template });
+      }
+    } catch {
+      trackAnalytics({ name: 'export_failed', outputType: 'work_skin', errorCode: 'CLIPBOARD_DENIED' });
+      showError('Your browser blocked the clipboard. Select this part and copy it manually.');
+    }
   };
 
   return (
@@ -782,7 +811,8 @@ export const ExportPanel: React.FC<Props> = ({
         // a regex over raw file text, not a parser — it reads comments, and an
         // elided `pb-[env(…)]` written with dots generates a literal
         // `padding-bottom: env(...)` rule that fails the CSS build.
-        className="fixed bottom-0 left-0 right-0 bg-white border-t border-stone-200 shadow-[0_-4px_24px_rgba(0,0,0,0.08)] z-50 pb-[env(safe-area-inset-bottom)]"
+        className="fixed left-0 right-0 bg-white border-t border-stone-200 shadow-[0_-4px_24px_rgba(0,0,0,0.08)] z-50 pb-[env(safe-area-inset-bottom)]"
+        style={{ bottom: 'var(--analytics-consent-h, 0px)' }}
       >
         <div className="max-w-4xl mx-auto px-3 py-2">
           {/* One row. Everything that isn't a primary action is behind a
@@ -883,7 +913,7 @@ export const ExportPanel: React.FC<Props> = ({
                 hidden by template and the row never reflows between them. */}
             {workSkin && (
               <button
-                onClick={() => setShowWorkSkin(true)}
+                onClick={openWorkSkin}
                 // Set unconditionally, so the accessible name does not vary
                 // with viewport the way the visible text does.
                 aria-label="Accessible work skin"
@@ -1205,11 +1235,7 @@ export const ExportPanel: React.FC<Props> = ({
                   onClick={e => (e.target as HTMLTextAreaElement).select()}
                 />
                 <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(skin.css);
-                    setCopiedPart('css');
-                    setTimeout(() => setCopiedPart(null), 2000);
-                  }}
+                  onClick={() => void copyWorkSkinPart('css')}
                   disabled={skin.violations.length > 0}
                   className={`w-full mt-2 py-2.5 rounded-xl font-semibold text-sm transition-all ${
                     skin.violations.length > 0
@@ -1254,11 +1280,7 @@ export const ExportPanel: React.FC<Props> = ({
                   onClick={e => (e.target as HTMLTextAreaElement).select()}
                 />
                 <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(skin.html);
-                    setCopiedPart('html');
-                    setTimeout(() => setCopiedPart(null), 2000);
-                  }}
+                  onClick={() => void copyWorkSkinPart('html')}
                   disabled={skin.violations.length > 0}
                   className={`w-full mt-2 py-2.5 rounded-xl font-semibold text-sm transition-all ${
                     skin.violations.length > 0

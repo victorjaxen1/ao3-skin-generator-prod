@@ -7,6 +7,7 @@ import { loadStoredProject, persistProject, hasStoredProject } from '../lib/stor
 import { PLATFORM_LOOK } from '../lib/generator';
 import { TEMPLATE_EXAMPLES } from '../lib/examples';
 import { parseBlankPlatform } from '../lib/deepLinks';
+import { trackAnalytics } from '../lib/analytics';
 import { CharacterLibrary } from '../components/CharacterLibrary';
 import { PlatformPicker } from '../components/PlatformPicker';
 import { WorkspaceHeader } from '../components/WorkspaceHeader';
@@ -211,6 +212,7 @@ export default function HomePage() {
     setHistoryIndex(0);
     setShowPicker(false);
     setCameFromWorkspace(false);
+    trackAnalytics({ name: 'template_selected', templateId: template });
   }, []);
 
   const handleLoadExample = useCallback((example: SkinProject) => {
@@ -219,6 +221,7 @@ export default function HomePage() {
     setHistoryIndex(0);
     setShowPicker(false);
     setCameFromWorkspace(false);
+    trackAnalytics({ name: 'template_selected', templateId: example.id });
   }, []);
 
   const handleMessageClick = useCallback((messageId: string) => {
@@ -508,7 +511,7 @@ export default function HomePage() {
           measured height as --export-bar-h. */}
       <div
         className="flex-1 flex overflow-hidden"
-        style={{ paddingBottom: 'var(--export-bar-h, 0px)' }}
+        style={{ paddingBottom: 'calc(var(--export-bar-h, 0px) + var(--analytics-consent-h, 0px))' }}
       >
         {/* Left / mobile-full: compose area */}
         <div className="flex-1 flex flex-col min-w-0">

@@ -30,7 +30,7 @@ Network access happens in these cases:
 - Remote image addresses are requested from their hosts for preview and may pass through `/api/image-proxy` when an export needs a CORS-safe copy.
 - Uploaded files are sent to ImgBB.
 - “Get AO3 image code” uploads the finished rendered scene, including visible story text, to ImgBB.
-- Google Analytics loads when `NEXT_PUBLIC_GA_MEASUREMENT_ID` is configured. Event parameters must never include story text, names, handles, image addresses, or generated output.
+- Google Analytics can load when `NEXT_PUBLIC_GA_MEASUREMENT_ID` is configured, but only after the visitor explicitly allows it. Event parameters never include story text, names, handles, image addresses, uploaded files, or generated output.
 
 Uploads go through the same-origin `/api/image-upload` boundary. The ImgBB credential is server-only, uploaded bytes are size/type checked, and provider responses are reduced to a fixed public-URL result. The in-memory abuse and daily-budget counters reset on serverless cold starts; use a shared durable rate-limit store if traffic or abuse makes that necessary.
 

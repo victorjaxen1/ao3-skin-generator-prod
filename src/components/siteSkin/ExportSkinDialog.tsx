@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { Violation } from '../../lib/siteSkin/ao3Css';
 import { AO3_RULESET_STATUS } from '../../lib/ao3Compatibility';
+import { trackAnalytics } from '../../lib/analytics';
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
   css: string;
   themeName: string;
+  templateId: string;
   /** Non-empty means the skin will not save on AO3. Blocks copy. */
   violations: Violation[];
 }
@@ -57,6 +59,7 @@ export const ExportSkinDialog: React.FC<Props> = ({
   onClose,
   css,
   themeName,
+  templateId,
   violations,
 }) => {
   const [copied, setCopied] = useState(false);
@@ -72,10 +75,13 @@ export const ExportSkinDialog: React.FC<Props> = ({
       setCopied(true);
       setError('');
       setTimeout(() => setCopied(false), 2500);
+      trackAnalytics({ name: 'output_copied', outputType: 'site_skin', part: 'css' });
+      trackAnalytics({ name: 'handoff_completed', outputType: 'site_skin', templateId });
     } catch {
       // Clipboard is blocked in plenty of ordinary situations. The textarea
       // above is already selectable, so say that rather than just failing.
       setError('Your browser blocked the clipboard. Select the CSS above and copy it manually.');
+      trackAnalytics({ name: 'export_failed', outputType: 'site_skin', errorCode: 'CLIPBOARD_DENIED' });
     }
   };
 
