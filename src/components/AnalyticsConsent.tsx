@@ -61,7 +61,7 @@ export function AnalyticsConsent() {
 
   const choicePanel = (
     <div className="w-full max-w-lg rounded-2xl border border-stone-200 bg-white p-5 shadow-2xl">
-      <h2 id="analytics-consent-title" className="text-base font-semibold text-stone-900">Help improve AO3 SkinGen?</h2>
+      <h2 id="analytics-consent-title" className="text-base font-semibold text-stone-900">Optional analytics</h2>
       <p className="mt-2 text-sm leading-relaxed text-stone-600">
         If you accept, Google Analytics counts content-free actions such as choosing a tool or completing an export. We never send story text, names, image addresses, uploaded files, or generated code.
       </p>
@@ -99,7 +99,7 @@ export function AnalyticsConsent() {
         <aside ref={firstChoiceRef} className="fixed inset-x-3 bottom-3 z-[40] flex justify-center" aria-labelledby="analytics-consent-title">
           <div className="w-full max-w-4xl rounded-2xl border border-stone-200 bg-white p-4 shadow-2xl sm:flex sm:items-center sm:gap-5">
             <div className="min-w-0 flex-1">
-              <h2 id="analytics-consent-title" className="text-sm font-semibold text-stone-900">Help improve AO3 SkinGen?</h2>
+              <h2 id="analytics-consent-title" className="text-sm font-semibold text-stone-900">Optional analytics</h2>
               <p className="mt-1 text-xs leading-relaxed text-stone-600">
                 Optional Google Analytics counts content-free actions. It never receives story text, names, image addresses, uploaded files, or generated code. Analytics stays off unless you allow it.
               </p>

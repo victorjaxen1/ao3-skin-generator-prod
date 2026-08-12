@@ -8,7 +8,7 @@ test('Google Analytics is not requested before consent and can be changed later'
   });
 
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Help improve AO3 SkinGen?' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Optional analytics' })).toBeVisible();
   expect(analyticsRequests).toBe(0);
 
   await page.getByRole('button', { name: 'Don’t allow' }).click();
@@ -17,7 +17,7 @@ test('Google Analytics is not requested before consent and can be changed later'
   expect(await page.evaluate(() => localStorage.getItem('ao3skingen_analytics_consent'))).toBe('denied');
 
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'Help improve AO3 SkinGen?' })).toBeHidden();
+  await expect(page.getByRole('heading', { name: 'Optional analytics' })).toBeHidden();
   expect(analyticsRequests).toBe(0);
 
   await page.getByRole('button', { name: 'Privacy' }).click();
