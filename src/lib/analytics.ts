@@ -42,6 +42,12 @@ export type AnalyticsEvent =
 export type AnalyticsConsent = 'granted' | 'denied';
 
 export const ANALYTICS_CONSENT_KEY = 'ao3skingen_analytics_consent';
+export const OPEN_PRIVACY_CHOICES_EVENT = 'ao3skingen:open-privacy-choices';
+
+export function openPrivacyChoices(): void {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new Event(OPEN_PRIVACY_CHOICES_EVENT));
+}
 
 const TEMPLATE_IDS = new Set([
   'ios', 'android', 'twitter', 'google',

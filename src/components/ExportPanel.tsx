@@ -7,7 +7,7 @@ import { uploadToImgBB, ImageUploadError } from '../lib/imgbb';
 import { inlineCrossOriginImages, FailedImage } from '../lib/imageProxy';
 import { PLATFORM_ASSETS } from '../lib/platformAssets';
 import { AO3_RULESET_STATUS } from '../lib/ao3Compatibility';
-import { mapUploadErrorCode, trackAnalytics } from '../lib/analytics';
+import { mapUploadErrorCode, openPrivacyChoices, trackAnalytics } from '../lib/analytics';
 import { buildSceneTranscript, defaultSceneAlt } from '../lib/transcript';
 import { buildWorkSkinPreflight } from '../lib/preflight';
 import { hasProjectBackup } from '../lib/backupStatus';
@@ -985,6 +985,19 @@ export const ExportPanel: React.FC<Props> = ({
                 <span className="hidden sm:inline">Accessible work skin</span>
               </button>
             )}
+
+            <button
+              type="button"
+              onClick={openPrivacyChoices}
+              aria-label="Privacy choices"
+              title="Privacy choices"
+              data-testid="privacy-control"
+              className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg bg-stone-100 text-stone-500 hover:bg-stone-200 hover:text-stone-700 transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />
+              </svg>
+            </button>
 
             <button
               onClick={toggleHelp}

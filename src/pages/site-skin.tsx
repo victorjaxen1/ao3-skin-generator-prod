@@ -19,7 +19,7 @@ import { ThemeEditor } from '../components/siteSkin/ThemeEditor';
 import { SkinPreview } from '../components/siteSkin/SkinPreview';
 import { ExportSkinDialog } from '../components/siteSkin/ExportSkinDialog';
 import { ProductHead } from '../components/ProductHead';
-import { trackAnalytics } from '../lib/analytics';
+import { openPrivacyChoices, trackAnalytics } from '../lib/analytics';
 
 const MAX_HISTORY = 50;
 
@@ -259,6 +259,13 @@ export default function SiteSkinPage() {
             {saveStatus === 'saving' && (
               <span className="text-[11px] text-stone-400 hidden sm:inline">Saving…</span>
             )}
+            <button
+              type="button"
+              onClick={openPrivacyChoices}
+              className="rounded-xl border border-stone-200 px-3 py-2 text-sm font-medium text-stone-600 hover:bg-stone-100"
+            >
+              Privacy
+            </button>
             <button
               type="button"
               onClick={handleOpenExport}

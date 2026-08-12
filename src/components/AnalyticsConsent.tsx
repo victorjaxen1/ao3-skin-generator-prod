@@ -4,6 +4,7 @@ import {
   AnalyticsConsent as ConsentValue,
   getAnalyticsConsent,
   loadAnalytics,
+  OPEN_PRIVACY_CHOICES_EVENT,
   setAnalyticsConsent,
   trackAnalytics,
   trackPageView,
@@ -19,6 +20,12 @@ export function AnalyticsConsent() {
     const stored = getAnalyticsConsent();
     setConsent(stored);
     setOpen(stored === null);
+  }, []);
+
+  useEffect(() => {
+    const handleOpenPrivacyChoices = () => setOpen(true);
+    window.addEventListener(OPEN_PRIVACY_CHOICES_EVENT, handleOpenPrivacyChoices);
+    return () => window.removeEventListener(OPEN_PRIVACY_CHOICES_EVENT, handleOpenPrivacyChoices);
   }, []);
 
   useEffect(() => {
@@ -85,16 +92,6 @@ export function AnalyticsConsent() {
 
   return (
     <>
-      {!open && (
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="fixed left-3 bottom-[calc(var(--export-bar-h,0px)+0.75rem)] z-[70] rounded-full border border-stone-300 bg-white/95 px-3 py-1.5 text-[11px] font-medium text-stone-600 shadow-sm hover:text-stone-900"
-        >
-          Privacy
-        </button>
-      )}
-
       {open && consent === null && (
         <aside ref={firstChoiceRef} className="fixed inset-x-3 bottom-3 z-[40] flex justify-center" aria-labelledby="analytics-consent-title">
           <div className="w-full max-w-4xl rounded-2xl border border-stone-200 bg-white p-4 shadow-2xl sm:flex sm:items-center sm:gap-5">

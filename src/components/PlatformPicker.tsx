@@ -2,6 +2,7 @@ import React from 'react';
 import Link from 'next/link';
 import { SkinProject } from '../lib/schema';
 import { TEMPLATE_EXAMPLES } from '../lib/examples';
+import { openPrivacyChoices } from '../lib/analytics';
 
 interface Props {
   onSelectPlatform: (template: 'ios' | 'android' | 'twitter' | 'google') => void;
@@ -213,7 +214,9 @@ export const PlatformPicker: React.FC<Props> = ({
         <p className="text-xs text-stone-400">No account required. Editable text and settings stay in this browser.</p>
         <p className="text-xs text-stone-400">Hosted image features upload only when you choose them.</p>
         <p className="text-xs text-stone-300">
-          <a href="/privacy-policy.html" className="hover:text-stone-500 transition-colors">Privacy</a>
+          <button type="button" onClick={openPrivacyChoices} className="hover:text-stone-500 transition-colors">Privacy choices</button>
+          {' · '}
+          <a href="/privacy-policy.html" className="hover:text-stone-500 transition-colors">Privacy policy</a>
           {' · '}
           <a href="/terms-of-service.html" className="hover:text-stone-500 transition-colors">Terms</a>
         </p>
