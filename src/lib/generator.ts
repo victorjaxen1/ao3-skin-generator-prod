@@ -187,6 +187,14 @@ const WHATSAPP_TICKS = {
   read: { src: PLATFORM_ASSETS.whatsapp.checkmarkRead, width: 16 },
 } as const;
 
+function iosDeliveryLabel(status: Message['status']): string | undefined {
+  if (status === 'read') return 'Read';
+  if (status === 'delivered') return 'Delivered';
+  if (status === 'sent') return 'Sent';
+  if (status === 'sending') return 'Sending…';
+  return undefined;
+}
+
 function applyBoldMarkup(raw: string): string {
   return raw.replace(/\*([^*]+)\*/g, '<b>$1</b>');
 }
@@ -479,8 +487,9 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
   
   // Add status indicators
   let statusIndicator = '';
-  if (template === 'ios' && msg.outgoing && project.settings.iosShowReadReceipt && msg.status === 'read') {
-    statusIndicator = `<dd class="status-indicator">Read</dd>`;
+  const deliveryLabel = iosDeliveryLabel(msg.status);
+  if (template === 'ios' && msg.outgoing && project.settings.iosShowReadReceipt && deliveryLabel && isLastInGroup) {
+    statusIndicator = `<dd class="status-indicator">${deliveryLabel}</dd>`;
   }
   
   const atts = (msg.attachments||[]).map(a => `<dd class="attach"><span class="visually-hidden">Image:</span><img src="${sanitizeUrl(a.url)}" alt="${attachmentAlt(a)}" class="attach-img"/></dd>`).join('');
@@ -700,8 +709,9 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
 
     // Add status indicators
     let statusIndicator = '';
-    if (msg.outgoing && project.settings.iosShowReadReceipt && msg.status === 'read' && isLastInGroup) {
-      statusIndicator = `<dd class="status-indicator">Read</dd>`;
+    const deliveryLabel = iosDeliveryLabel(msg.status);
+    if (msg.outgoing && project.settings.iosShowReadReceipt && deliveryLabel && isLastInGroup) {
+      statusIndicator = `<dd class="status-indicator">${deliveryLabel}</dd>`;
     }
 
     // Who is speaking, for when no CSS applies.

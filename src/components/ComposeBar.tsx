@@ -4,10 +4,12 @@ import { normalizeImageUrl } from '../lib/urlNormalize';
 import { ImageUrlInput } from './ImageUrlInput';
 import { MessageEmojiPicker, MessageEmojiTrigger } from './MessageEmojiPicker';
 import { ReactionPicker } from './ReactionPicker';
+import { nextChatTimestamp, nextChatTimestampFromHistory } from '../lib/messageMetadata';
 
 interface Props {
   template: 'ios' | 'android' | 'twitter' | 'google';
   settings: SkinSettings;
+  messages: Message[];
   onAddMessage: (message: Message) => void;
   twitterCharacters?: TwitterCharacter[];
   cast?: SceneCast;
@@ -18,6 +20,7 @@ interface Props {
 export const ComposeBar: React.FC<Props> = ({
   template,
   settings,
+  messages,
   onAddMessage,
   twitterCharacters,
   cast,
@@ -33,7 +36,7 @@ export const ComposeBar: React.FC<Props> = ({
   const [imageUrl, setImageUrl] = useState('');
   const [imageAlt, setImageAlt] = useState('');
   const [imageDecorative, setImageDecorative] = useState(false);
-  const [status, setStatus] = useState<'sent' | 'delivered' | 'read'>('sent');
+  const [status, setStatus] = useState<'auto' | 'sent' | 'delivered' | 'read'>('auto');
   const [participantId, setParticipantId] = useState('');
   // '' means "post as the account itself", i.e. follow the Twitter settings.
   const [twitterCharId, setTwitterCharId] = useState('');
@@ -81,6 +84,7 @@ export const ComposeBar: React.FC<Props> = ({
     (template === 'ios'
       ? settings.iosContactName || settings.chatContactName
       : settings.androidContactName || settings.chatContactName) || 'Them';
+  const automaticTimestamp = nextChatTimestampFromHistory(messages);
 
   const handleSend = () => {
     const trimmedContent = content.trim();
@@ -145,9 +149,10 @@ export const ComposeBar: React.FC<Props> = ({
         sender: senderName,
         content: trimmedContent,
         outgoing: isOutgoing,
-        timestamp: timestamp || undefined,
+        timestamp: timestamp.trim() || nextChatTimestamp(messages),
         reaction: reaction || undefined,
-        status: status,
+        status: isOutgoing ? (status === 'auto' ? 'delivered' : status) : undefined,
+        statusMode: isOutgoing ? (status === 'auto' ? 'auto' : 'manual') : undefined,
         participantId: isGroupMode && !isOutgoing ? participantId || undefined : undefined,
         characterId: isOutgoing
           ? cast?.selfId
@@ -170,6 +175,7 @@ export const ComposeBar: React.FC<Props> = ({
 
     setContent('');
     setTimestamp('');
+    setStatus('auto');
     setReaction('');
     setImageUrl('');
     setImageAlt('');
@@ -250,20 +256,23 @@ export const ComposeBar: React.FC<Props> = ({
                 <input
                   value={timestamp}
                   onChange={(e) => setTimestamp(e.target.value)}
-                  placeholder="Time, e.g. 10:15"
+                  placeholder={automaticTimestamp ? `Automatic: ${automaticTimestamp}` : 'Automatic: current time'}
                   aria-label="Timestamp"
                   className="flex-1 min-w-0 text-xs bg-white border border-stone-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-violet-500 focus:border-transparent"
                 />
-                <select
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value as 'sent' | 'delivered' | 'read')}
-                  aria-label="Delivery status"
-                  className="flex-shrink-0 text-xs bg-white border border-stone-200 rounded-lg px-2 py-2 focus:ring-2 focus:ring-violet-500"
-                >
-                  <option value="sent">Sent</option>
-                  <option value="delivered">Delivered</option>
-                  <option value="read">Read</option>
-                </select>
+                {isOutgoing && (
+                  <select
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value as 'auto' | 'sent' | 'delivered' | 'read')}
+                    aria-label="Delivery status"
+                    className="flex-shrink-0 text-xs bg-white border border-stone-200 rounded-lg px-2 py-2 focus:ring-2 focus:ring-violet-500"
+                  >
+                    <option value="auto">Automatic</option>
+                    <option value="sent">Sent</option>
+                    <option value="delivered">Delivered</option>
+                    <option value="read">Read</option>
+                  </select>
+                )}
               </div>
               {/* iOS SMS mode still gets the picker. Classic SMS had no
                   tapbacks, but RCS does, the CSS renders identically, and a fic

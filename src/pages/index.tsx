@@ -18,6 +18,7 @@ import { loadCharacterLibrary, persistCharacterLibrary } from '../lib/characterS
 import { serializeProjectFile, PROJECT_FILE_SCHEMA_VERSION } from '../lib/projectFile';
 import { downloadTextFile, safeFilenamePart } from '../lib/download';
 import { markProjectBackedUp } from '../lib/backupStatus';
+import { appendChatMessage } from '../lib/messageMetadata';
 import { PlatformPicker } from '../components/PlatformPicker';
 import { WorkspaceHeader } from '../components/WorkspaceHeader';
 import { SettingsSheet } from '../components/SettingsSheet';
@@ -249,7 +250,10 @@ export default function HomePage() {
   const handleAddMessage = useCallback((msg: Message) => {
     setProject(prev => {
       if (prev.messages.length >= MAX_MESSAGES) return prev;
-      return { ...prev, messages: [...prev.messages, msg] };
+      const messages = prev.template === 'ios' || prev.template === 'android'
+        ? appendChatMessage(prev.messages, msg)
+        : [...prev.messages, msg];
+      return { ...prev, messages };
     });
   }, []);
 
@@ -617,6 +621,7 @@ export default function HomePage() {
           <ComposeBar
             template={project.template}
             settings={project.settings}
+            messages={project.messages}
             cast={project.cast}
             onAddMessage={handleAddMessage}
             twitterCharacters={twitterCharacters}

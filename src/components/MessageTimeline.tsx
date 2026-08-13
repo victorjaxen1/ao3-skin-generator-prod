@@ -4,6 +4,7 @@ import { IdentityTarget, resolveMessageIdentity } from '../lib/identity';
 import { ImageUrlInput } from './ImageUrlInput';
 import { MessageEmojiPicker, MessageEmojiTrigger } from './MessageEmojiPicker';
 import { ReactionPicker } from './ReactionPicker';
+import { automaticDeliveryStatus } from '../lib/messageMetadata';
 
 interface Props {
   messages: Message[];
@@ -316,21 +317,32 @@ export const MessageTimeline: React.FC<Props> = ({
                           outgoing: e.target.value === 'outgoing',
                           sender: e.target.value === 'outgoing' ? youLabel : msg.sender,
                           characterId: e.target.value === 'outgoing' ? project.cast?.selfId : project.cast?.contactId,
+                          status: e.target.value === 'outgoing' ? 'delivered' : undefined,
+                          statusMode: e.target.value === 'outgoing' ? 'auto' : undefined,
                         })}
                         className="text-xs bg-white border border-stone-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-violet-500"
                       >
                         <option value="outgoing">{youLabel} (outgoing)</option>
                         <option value="incoming">Them (incoming)</option>
                       </select>
-                      <select
-                        value={msg.status || 'sent'}
-                        onChange={(e) => onUpdateMessage(msg.id, { status: e.target.value as Message['status'] })}
-                        className="text-xs bg-white border border-stone-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-violet-500"
-                      >
-                        <option value="sent">Sent</option>
-                        <option value="delivered">Delivered</option>
-                        <option value="read">Read</option>
-                      </select>
+                      {msg.outgoing && (
+                        <select
+                          value={msg.statusMode === 'auto' ? 'auto' : msg.status || 'sent'}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            onUpdateMessage(msg.id, value === 'auto'
+                              ? { status: automaticDeliveryStatus(messages, index), statusMode: 'auto' }
+                              : { status: value as Message['status'], statusMode: 'manual' });
+                          }}
+                          aria-label="Delivery status"
+                          className="text-xs bg-white border border-stone-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-violet-500"
+                        >
+                          <option value="auto">Automatic</option>
+                          <option value="sent">Sent</option>
+                          <option value="delivered">Delivered</option>
+                          <option value="read">Read</option>
+                        </select>
+                      )}
                     </>
                   )}
 

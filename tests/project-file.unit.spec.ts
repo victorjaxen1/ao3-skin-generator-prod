@@ -15,6 +15,7 @@ test.describe('versioned project files', () => {
   test('round-trips a scene cast and character library through schema v2', () => {
     const project = defaultProject();
     project.id = 'scene-1';
+    project.messages[0].statusMode = 'auto';
     project.messages[0].attachments = [{
       type: 'image',
       url: 'https://i.ibb.co/example/image.png',
@@ -38,6 +39,7 @@ test.describe('versioned project files', () => {
       alt: 'Cafe sign',
       decorative: false,
     });
+    expect(parsed.project.messages[0].statusMode).toBe('auto');
     expect(parsed.characterLibrary).toHaveLength(1);
     expect(summarizeProjectFile(parsed)).toEqual({
       template: 'ios',

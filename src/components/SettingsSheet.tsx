@@ -108,8 +108,8 @@ export const SettingsSheet: React.FC<Props> = ({
             />
 
             <ToggleRow
-              label="Read receipt"
-              sublabel={'Shows "Read" under your last message'}
+              label="Delivery status"
+              sublabel={'Shows "Delivered" or "Read" under your last message'}
               checked={settings.iosShowReadReceipt !== false}
               onChange={(v) => onUpdateSettings('iosShowReadReceipt', v)}
             />

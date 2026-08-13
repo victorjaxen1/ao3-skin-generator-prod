@@ -69,6 +69,7 @@ export interface Message {
   participantId?: string; // ID of GroupParticipant (for group messages)
   // Chat-specific enhancements
   status?: 'sending' | 'sent' | 'delivered' | 'read'; // message delivery status
+  statusMode?: 'auto' | 'manual'; // auto may advance to read when a reply is added
   reaction?: string; // emoji reaction to this message
   useCustomIdentity?: boolean; // For Twitter: override main account identity
   // Twitter-specific per-tweet metrics

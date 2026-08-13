@@ -9,6 +9,7 @@ const MAX_STORAGE_SIZE = 500000; // 500KB max for stored project
 const MAX_MESSAGES = 100; // Max messages per project
 const MAX_CONTENT_LENGTH = 10000; // Max characters per message
 const MAX_URL_LENGTH = 2048; // Standard URL length limit
+const MESSAGE_STATUSES = new Set(['sending', 'sent', 'delivered', 'read']);
 
 /**
  * Sanitize a string field with length limit
@@ -47,6 +48,8 @@ function sanitizeMessage(msg: unknown): { id: string; sender: string; content: s
     content: sanitizeString(m.content, MAX_CONTENT_LENGTH),
     outgoing: m.outgoing,
     timestamp: typeof m.timestamp === 'string' ? sanitizeString(m.timestamp, 50) : undefined,
+    status: typeof m.status === 'string' && MESSAGE_STATUSES.has(m.status) ? m.status : undefined,
+    statusMode: m.statusMode === 'auto' || m.statusMode === 'manual' ? m.statusMode : undefined,
     avatarUrl: sanitizeStoredUrl(m.avatarUrl),
     reaction: typeof m.reaction === 'string' ? sanitizeString(m.reaction, 10) : undefined,
     characterId: typeof m.characterId === 'string' ? sanitizeString(m.characterId, 100) : undefined,

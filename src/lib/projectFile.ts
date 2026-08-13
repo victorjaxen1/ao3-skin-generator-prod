@@ -198,6 +198,7 @@ function validateMessage(value: unknown, index: number): Message {
   }
   if (typeof raw.avatarUrl === 'string') result.avatarUrl = safeUrl(raw.avatarUrl, `Message ${index + 1} avatar`);
   if (typeof raw.status === 'string' && STATUS.has(raw.status)) result.status = raw.status as Message['status'];
+  if (raw.statusMode === 'auto' || raw.statusMode === 'manual') result.statusMode = raw.statusMode;
   if (attachments) result.attachments = attachments;
   if (replyToHandles) result.replyToHandles = replyToHandles;
   return result;
