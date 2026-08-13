@@ -4,6 +4,11 @@ import { join } from 'path';
 import { buildWorkSkin } from '../src/lib/workSkin';
 import { defaultProject } from '../src/lib/schema';
 
+const PIXEL = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+  'base64'
+);
+
 /**
  * Does our layout survive AO3 wrapping our elements in paragraphs?
  *
@@ -174,15 +179,13 @@ async function geometryUnderInjection(
 
   const { html, css } = buildWorkSkin(p);
 
-  // Block remote images. Two reasons, and the second is the important one:
-  // the CDN makes this slow and flaky offline, but an image that finished
-  // loading BETWEEN the two measurements would shift the geometry on its own
-  // and be reported as injection damage. Every img we emit carries width and
-  // height attributes — there is a unit test for it — so layout is fully
-  // determined without the bytes.
-  await page.route('**/*', (route) =>
-    route.request().resourceType() === 'document' ? route.continue() : route.abort()
-  );
+  // Fulfil images rather than aborting them: Chromium's broken-image
+  // placeholder can change geometry after layout and create a false diff.
+  await page.route('**/*', (route) => {
+    if (route.request().resourceType() === 'document') return route.continue();
+    if (route.request().resourceType() === 'image') return route.fulfill({ contentType: 'image/png', body: PIXEL });
+    return route.abort();
+  });
 
   await page.setContent(ao3Page(html, css), { waitUntil: 'domcontentloaded' });
   const before = await measure(page, selectors);
@@ -354,6 +357,31 @@ test('the expanded view and threaded replies survive injection', async ({ page }
     );
 
   expect(moved, `${moved.length} element(s) moved:\n${moved.join('\n')}`).toEqual([]);
+});
+
+test('Twitter media grids, per-post quotes, polls, and video fallbacks survive injection', async ({ page }) => {
+  const { before, after } = await geometryUnderInjection(
+    page,
+    'twitter',
+    ['.twitter-media-grid', '.quote', '.twitter-poll', '.twitter-video-card'],
+    p => {
+      p.settings.twitterQuoteEnabled = false;
+      p.settings.twitterTheme = 'dim';
+      p.messages = [
+        {
+          id: 'rich', sender: 'User', content: 'Rich post', outgoing: true,
+          attachments: [1, 2, 3, 4].map(number => ({ type: 'image' as const, url: `https://example.com/${number}.png`, alt: `Image ${number}` })),
+          twitterQuote: { name: 'Witness', handle: 'witness', text: 'Quoted evidence.' },
+          twitterPoll: { state: 'closed', options: [{ id: 'yes', text: 'Yes', percent: 60 }, { id: 'no', text: 'No', percent: 40 }] },
+        },
+        {
+          id: 'video', sender: 'User', content: 'Video post', outgoing: true,
+          twitterVideo: { source: 'youtube', url: 'https://youtu.be/bN8449nalT8', posterUrl: 'https://example.com/poster.png', title: 'Clip', description: 'Fallback transcript.' },
+        },
+      ];
+    }
+  );
+  expect(after).toEqual(before);
 });
 
 /**

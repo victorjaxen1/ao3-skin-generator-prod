@@ -196,13 +196,13 @@ where the failure mode is easy to misread.
 
 From `Sanitize::Config::ARCHIVE` (`config/initializers/gem-plugin_config/sanitizer_config.rb`):
 
-- **Allowed elements** are a fixed list: `a abbr acronym address b big
+- **Ordinary text elements** are a fixed list: `a abbr acronym address b big
   blockquote br caption center cite code col colgroup details figcaption figure
   dd del dfn div dl dt em h1–h6 hr i img ins kbd li ol p pre q rp rt ruby s
   samp small span strike strong sub summary sup table tbody td tfoot th thead
   tr tt u ul var`.
   **Not** `button`, `section`, `article`, `header`, `footer`, `nav`, `time`,
-  `input`, `video`.
+  `input`, `video`. **Media is a separate sanitizer path:** AO3 officially accepts allowlisted provider `iframe` embeds and native `video` / `source` / `track` markup in Work Text. Do not infer media support from this ordinary-element list.
 - **`<svg>` is removed together with its contents** (it is in `remove_contents`
   alongside `script` and `style`).
 - **Attributes**: `align title dir` on anything, plus `class` for fields that
@@ -1077,7 +1077,7 @@ so **no markup change is needed at all**; `absolutizeCssAssets` and
 3. **Emit the version as a rule, not a comment.** AO3 deletes every comment on
    save (§13), so `/* Generated with … */` has never once reached the archive.
    Rosé Pine's trick survives because it is a real rule —
-   `#workskin .ao3skingen-v3::after{content:'3';}` — and it lets the app detect
+   `#workskin .ao3skingen-v4::after{content:'4';}` — and it lets the app detect
    a stale saved skin if the author pastes their CSS back in. Bump it whenever
    the class contract changes. Single quotes: that is the form we have watched
    survive the sanitizer (see the note in `buildIOSCSS`).

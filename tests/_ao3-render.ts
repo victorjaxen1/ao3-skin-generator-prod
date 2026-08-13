@@ -274,6 +274,35 @@ export function richProject(template: string) {
   p.settings.twitterVerified = true;
   p.settings.twitterShowMetrics = true;
 
+  if (template === 'twitter') {
+    p.settings.twitterQuoteEnabled = false;
+    p.settings.twitterSceneMode = 'thread';
+    p.settings.twitterTheme = 'dim';
+    p.cast = {
+      twitterPrimaryId: 'alex',
+      characters: [
+        { id: 'alex', name: 'Alex Rivers', twitterHandle: 'alex', verified: true },
+        { id: 'casey', name: 'Casey Lin', twitterHandle: 'casey' },
+      ],
+    };
+    p.messages = [
+      {
+        id: 'twitter-root', sender: '', content: 'A translated post with four clues.', outgoing: true, characterId: 'alex', timestamp: '7:00 PM',
+        attachments: [1, 2, 3, 4].map(number => ({ type: 'image' as const, url: `https://example.com/clue-${number}.png`, alt: `Clue ${number}` })),
+        twitterQuote: { characterId: 'casey', text: 'The quoted clue.' },
+        twitterPoll: { state: 'closed', options: [{ id: 'yes', text: 'Yes', percent: 55 }, { id: 'no', text: 'No', percent: 45 }] },
+        twitterTranslation: { languageLabel: 'French', originalText: 'Bonjour', translatedText: 'Hello', visibleText: 'translated' },
+        twitterActivity: { type: 'liked', actorCharacterIds: ['casey'], additionalCount: 2 },
+        twitterAccountLabel: 'Parody account',
+        twitterLikes: 12,
+      },
+      {
+        id: 'twitter-reply', sender: '', content: 'A reply with a video fallback.', outgoing: true, characterId: 'casey', parentId: 'twitter-root', timestamp: '7:01 PM',
+        twitterVideo: { source: 'youtube', url: 'https://youtu.be/bN8449nalT8', posterUrl: 'https://example.com/poster.png', title: 'Story clip', description: 'A transcript fallback.' },
+      },
+    ] as typeof p.messages;
+  }
+
   if (template === 'ios' || template === 'android') {
     p.messages = [
       { id: '1', sender: 'Sam', content: 'hey', outgoing: false, timestamp: '10:23' },

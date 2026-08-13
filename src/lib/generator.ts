@@ -1,8 +1,16 @@
-import { SkinProject, Message } from './schema';
+import { Attachment, Message, SkinProject, TwitterQuotePost } from './schema';
 import { sanitizeAttribute, sanitizeText, sanitizeUrl, formatMessageText } from './sanitize';
 import { PLATFORM_ASSETS, FALLBACK_TEXT } from './platformAssets';
 import { resolveMessageIdentity } from './identity';
 import { emojiMessageSize } from './emoji';
+import {
+  calculateTwitterPollPercentages,
+  normalizeTwitterScene,
+  normalizeYouTubeUrl,
+  resolveTwitterTheme,
+} from './twitter';
+
+export type HtmlRenderMode = 'static' | 'ao3-work';
 
 function hexToRgba(hex: string, alpha: number): string {
   const h = hex.replace('#','');
@@ -195,6 +203,116 @@ function iosDeliveryLabel(status: Message['status']): string | undefined {
   return undefined;
 }
 
+function twitterMediaHTML(
+  attachments: Attachment[] | undefined,
+  crop: Message['twitterMediaCrop'] = 'auto',
+  quote = false,
+): string {
+  const images = (attachments || []).filter(attachment => attachment.type === 'image' && attachment.url).slice(0, 4);
+  if (images.length === 0) return '';
+  const image = (attachment: Attachment, index: number, extraClass = '') =>
+    `<img src="${sanitizeUrl(attachment.url)}" alt="${attachmentAlt(attachment)}" class="twitter-media-image ${extraClass}" width="600" height="338" />`;
+  const prefix = quote ? 'quote-media' : 'tweet-media';
+  const cropClass = `media-crop-${crop || 'auto'}`;
+  if (images.length === 1) {
+    return `<div class="${prefix} twitter-media-grid media-count-1 ${cropClass}">${image(images[0], 0)}</div>`;
+  }
+  if (images.length === 3) {
+    return `<div class="${prefix} twitter-media-grid media-count-3 ${cropClass}"><span class="media-primary">${image(images[0], 0)}</span><span class="media-stack"><span class="media-cell">${image(images[1], 1)}</span><span class="media-cell">${image(images[2], 2)}</span></span></div>`;
+  }
+  return `<div class="${prefix} twitter-media-grid media-count-${images.length} ${cropClass}">${images.map((attachment, index) => `<span class="media-cell">${image(attachment, index)}</span>`).join('')}</div>`;
+}
+
+function resolveQuoteIdentity(project: SkinProject, quote: TwitterQuotePost) {
+  const character = quote.characterId
+    ? project.cast?.characters.find(candidate => candidate.id === quote.characterId)
+    : undefined;
+  return {
+    name: character?.name || quote.name || 'User',
+    handle: (character?.twitterHandle || quote.handle || '').replace(/^@+/, ''),
+    avatarUrl: character?.avatarUrl || quote.avatarUrl,
+    verified: character ? !!character.verified : !!quote.verified,
+  };
+}
+
+function twitterQuoteHTML(project: SkinProject, quote: TwitterQuotePost | undefined): string {
+  if (!quote) return '';
+  const identity = resolveQuoteIdentity(project, quote);
+  const avatar = identity.avatarUrl
+    ? `<img src="${sanitizeUrl(identity.avatarUrl)}" alt="${sanitizeAttribute(identity.name)} avatar" class="quote-avatar" width="32" height="32" />`
+    : '';
+  const verified = identity.verified
+    ? `<span class="verified-container quote-verified-container"><span class="quote-verified-badge" title="Verified">✔</span></span>`
+    : '';
+  const handle = identity.handle ? `@${sanitizeText(identity.handle)}` : '';
+  const media = twitterMediaHTML(quote.attachments, 'auto', true);
+  const timestamp = quote.timestamp ? `<span class="quote-time"> · ${sanitizeText(quote.timestamp)}</span>` : '';
+  return `<div class="quote">${srOnly('Quoted post by ')}<div class="quote-head">${avatar}<span class="quote-name">${sanitizeText(identity.name)}</span>${verified}<span class="quote-handle">${handle}</span>${timestamp}</div><div class="quote-body">${highlightTwitterText(sanitizeText(quote.text))}${media}</div></div>`;
+}
+
+function twitterVideoHTML(msg: Message, mode: HtmlRenderMode): string {
+  const video = msg.twitterVideo;
+  if (!video) return '';
+  const normalized = video.source === 'youtube' ? normalizeYouTubeUrl(video.url) : undefined;
+  const sourceUrl = normalized?.canonicalUrl || video.url;
+  const safeSource = sanitizeUrl(sourceUrl);
+  const title = sanitizeText(video.title || 'Video');
+  const poster = video.posterUrl
+    ? `<img src="${sanitizeUrl(video.posterUrl)}" alt="Poster for ${sanitizeAttribute(video.title || 'video')}" class="video-poster" width="600" height="338" />`
+    : `<span class="video-poster-placeholder" aria-hidden="true">Video</span>`;
+  const duration = video.duration ? `<span class="video-duration">${sanitizeText(video.duration)}</span>` : '';
+  const description = video.description ? `<div class="video-description">${sanitizeText(video.description)}</div>` : '';
+  const captions = video.captionTrackUrl
+    ? `<div class="video-captions">Captions: <a href="${sanitizeUrl(video.captionTrackUrl)}">${sanitizeText(video.captionLabel || video.captionLanguage || 'caption track')}</a></div>`
+    : '';
+  if (mode === 'ao3-work') {
+    if (video.source === 'youtube' && normalized) {
+      return `<div class="twitter-video-card twitter-video-player">${srOnly('Video: ')}<iframe src="${sanitizeUrl(normalized.embedUrl)}" title="${sanitizeAttribute(video.title || 'YouTube video')}" width="560" height="315" frameborder="0" allowfullscreen=""></iframe><b class="video-title">${title}</b>${description}${captions}<div class="video-fallback">Source: <a href="${safeSource}">${sanitizeText(sourceUrl)}</a></div></div>`;
+    }
+    if (video.source === 'direct' && sanitizeUrl(video.url) && /^video\/(mp4|webm|ogg)$/i.test(video.mimeType || '')) {
+      const posterAttribute = video.posterUrl ? ` poster="${sanitizeUrl(video.posterUrl)}"` : '';
+      const track = video.captionTrackUrl
+        ? `<track src="${sanitizeUrl(video.captionTrackUrl)}" kind="captions" srclang="${sanitizeAttribute(video.captionLanguage)}" label="${sanitizeAttribute(video.captionLabel)}" default="default">`
+        : '';
+      return `<div class="twitter-video-card twitter-video-player">${srOnly('Video: ')}<video class="twitter-native-video" title="${sanitizeAttribute(video.title || 'Video')}" width="560"${posterAttribute}><source src="${safeSource}" type="${sanitizeAttribute(video.mimeType)}">${track}Your browser cannot play this video. <a href="${safeSource}">Open the video source.</a></video><b class="video-title">${title}</b>${description}${captions}<div class="video-fallback">Source: <a href="${safeSource}">${sanitizeText(sourceUrl)}</a></div></div>`;
+    }
+  }
+  return `<div class="twitter-video-card">${srOnly('Video: ')}<a href="${safeSource}" class="video-source"><span class="video-poster-wrap">${poster}<span class="video-play" aria-hidden="true">▶</span>${duration}</span><b class="video-title">${title}</b></a>${description}${captions}<div class="video-fallback">Source: <a href="${safeSource}">${sanitizeText(sourceUrl)}</a></div></div>`;
+}
+
+function twitterPollHTML(msg: Message): string {
+  const poll = msg.twitterPoll;
+  if (!poll) return '';
+  const percentages = calculateTwitterPollPercentages(poll);
+  const max = Math.max(...percentages);
+  const options = poll.options.slice(0, 4).map((option, index) => {
+    const percent = percentages[index] || 0;
+    const widthClass = `poll-pct-${Math.max(0, Math.min(100, Math.round(percent / 5) * 5))}`;
+    const selected = option.id === poll.selectedOptionId;
+    const winner = poll.state === 'closed' && percent === max && max > 0;
+    const state = [selected ? 'Selected' : '', winner ? 'Winner' : ''].filter(Boolean).join(', ');
+    return `<div class="poll-option ${selected ? 'selected' : ''} ${winner ? 'winner' : ''}"><span class="poll-bar ${widthClass}"></span><span class="poll-option-text">${sanitizeText(option.text)}</span><b class="poll-percent">${percent}%</b>${state ? `<span class="poll-state"> ${state}</span>` : ''}</div>`;
+  }).join('');
+  const totalVotes = poll.totalVotes ?? poll.options.reduce((sum, option) => sum + (option.votes || 0), 0);
+  const footerParts = [
+    totalVotes ? `${formatNumber(totalVotes)} votes` : '',
+    poll.state === 'open' ? poll.timeRemaining || 'Poll open' : poll.finalLabel || 'Final results',
+  ].filter(Boolean);
+  return `<div class="twitter-poll" aria-label="${poll.state === 'open' ? 'Open' : 'Closed'} poll">${options}<div class="poll-footer">${sanitizeText(footerParts.join(' · '))}</div></div>`;
+}
+
+function twitterActivityHTML(project: SkinProject, msg: Message): string {
+  const activity = msg.twitterActivity;
+  if (!activity) return '';
+  const names = activity.actorCharacterIds
+    .map(id => project.cast?.characters.find(character => character.id === id)?.name)
+    .filter((name): name is string => !!name);
+  const first = names[0] || 'Someone';
+  const others = Math.max(0, names.length - 1 + (activity.additionalCount || 0));
+  const actorText = others ? `${first} and ${others} ${others === 1 ? 'other' : 'others'}` : first;
+  return `<div class="tweet-activity"><span aria-hidden="true">${activity.type === 'liked' ? '♡' : '⇄'}</span> ${sanitizeText(actorText)} ${activity.type === 'liked' ? 'liked' : 'reposted'}</div>`;
+}
+
 function applyBoldMarkup(raw: string): string {
   return raw.replace(/\*([^*]+)\*/g, '<b>$1</b>');
 }
@@ -273,7 +391,7 @@ function safeCssColor(value: string | undefined, fallback: string): string {
   return value && /^#[0-9a-f]{6}$/i.test(value.trim()) ? value.trim() : fallback;
 }
 
-function msgHTML(msg: Message, template: string, project: SkinProject, options?: { index?: number; allMessages?: Message[]; isReply?: boolean }): string {
+function msgHTML(msg: Message, template: string, project: SkinProject, options?: { index?: number; allMessages?: Message[]; isReply?: boolean; renderMode?: HtmlRenderMode }): string {
   // Time break (iOS/Android)
   const timeBreak = msg.showTimeBreak && msg.timeBreakText
     ? `<div class="time-break">${sanitizeText(msg.timeBreakText)}</div>`
@@ -511,9 +629,10 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
     
     // Determine if this is a reply
     const isReply = !!msg.parentId;
+    const hasThreadConnector = options?.isReply === true;
     
     // Override avatar if using main identity
-    const effectiveAvatar = displayAvatar ? `<img src="${sanitizeUrl(displayAvatar)}" alt="Avatar" class="avatar" width="40" height="40" />` : '';
+    const effectiveAvatar = displayAvatar ? `<img src="${sanitizeUrl(displayAvatar)}" alt="${sanitizeAttribute(displayName)} avatar" class="avatar" width="40" height="40" />` : '';
     const safeDisplayName = sanitizeText(displayName);
     
     // Handle logic: if using custom identity and has custom handle, use it; otherwise generate from name or use main handle
@@ -528,13 +647,13 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
     // every chrome image is a request to our CDN from inside somebody's
     // published fic, forever, and this one buys nothing an `✔` cannot.
     const verified = isVerified ? `<span class="verified-container"><span class="verified-badge" title="Verified">✔</span></span>` : '';
-    const timestampLine = project.settings.twitterTimestamp || (msg.timestamp ? msg.timestamp : '');
+    // Per-post time is canonical. The project-wide value remains a legacy
+    // fallback for old files, but can no longer overwrite every authored post.
+    const timestampLine = msg.timestamp || project.settings.twitterTimestamp || '';
     
-    // Build tweet image from attachments array
-    let tweetImage = '';
-    if (msg.attachments && msg.attachments.length > 0 && msg.attachments[0].type === 'image') {
-      tweetImage = `<img src="${sanitizeUrl(msg.attachments[0].url)}" alt="${attachmentAlt(msg.attachments[0])}" class="tweet-image" />`;
-    }
+    const tweetMedia = msg.twitterVideo
+      ? twitterVideoHTML(msg, options?.renderMode || 'static')
+      : twitterMediaHTML(msg.attachments, msg.twitterMediaCrop || 'auto');
     
     // Enhanced metrics with icons - use per-tweet metrics if available, otherwise fall back to global
     // Only use global defaults if the property doesn't exist on the message object
@@ -545,7 +664,7 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
     const bookmarks = msg.twitterBookmarks;
     
     // Use gray icons in dark mode
-    const isDarkMode = project.settings.twitterDarkMode;
+    const isDarkMode = resolveTwitterTheme(project.settings) !== 'light';
     // No reply, retweet or like icons: all three are characters now, and a
     // character needs no dark-mode variant because it takes the metric colour
     // like any other text. The X logo is the last chrome image on a tweet, and
@@ -570,16 +689,38 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
     const hasMetrics = metricChips.length > 0;
     const metrics = hasMetrics ? `<div class="metrics">${metricChips}</div>` : '';
     
-    let quote = '';
-    if (project.settings.twitterQuoteEnabled) {
-      const qAvatar = project.settings.twitterQuoteAvatar ? `<img src="${sanitizeUrl(project.settings.twitterQuoteAvatar)}" alt="Quote avatar" class="quote-avatar" />` : '';
-      const qHandle = project.settings.twitterQuoteHandle ? `@${sanitizeText(project.settings.twitterQuoteHandle.replace(/^@/, ''))}` : '';
-      const qVerified = project.settings.twitterQuoteVerified ? `<span class="verified-container quote-verified-container"><span class="quote-verified-badge" title="Verified">✔</span></span>` : '';
-      const qText = sanitizeText(project.settings.twitterQuoteText || '');
-      const qImage = project.settings.twitterQuoteImage ? `<img src="${sanitizeUrl(project.settings.twitterQuoteImage)}" alt="Quote image" class="quote-image" />` : '';
-      quote = `<div class="quote"><div class="quote-head">${qAvatar}<span class="quote-name">${sanitizeText(project.settings.twitterQuoteName||'')}</span>${qVerified}<span class="quote-handle">${sanitizeText(qHandle)}</span></div><div class="quote-body">${highlightTwitterText(qText)}${qImage}</div></div>`;
-    }
-    const bodyWithFormatting = highlightTwitterText(sanitized);
+    const legacyQuote: TwitterQuotePost | undefined = !msg.twitterQuote
+      && project.messages[0]?.id === msg.id
+      && project.settings.twitterQuoteEnabled
+      ? {
+          name: project.settings.twitterQuoteName || '',
+          handle: project.settings.twitterQuoteHandle || '',
+          avatarUrl: project.settings.twitterQuoteAvatar || undefined,
+          verified: project.settings.twitterQuoteVerified,
+          text: project.settings.twitterQuoteText || '',
+          attachments: project.settings.twitterQuoteImage
+            ? [{ type: 'image', url: project.settings.twitterQuoteImage, alt: 'Image in quoted post' }]
+            : undefined,
+        }
+      : undefined;
+    const quote = twitterQuoteHTML(project, msg.twitterQuote || legacyQuote);
+    const translation = msg.twitterTranslation;
+    const visibleBody = translation
+      ? (translation.visibleText === 'translated' ? translation.translatedText : translation.originalText)
+      : sanitized;
+    const bodyWithFormatting = highlightTwitterText(sanitizeText(visibleBody));
+    const translationContext = translation
+      ? `<div class="translation-context">${translation.visibleText === 'translated'
+          ? `Translated${translation.languageLabel ? ` from ${sanitizeText(translation.languageLabel)}` : ''}`
+          : `Showing original${translation.languageLabel ? ` (${sanitizeText(translation.languageLabel)})` : ''}`}</div>${srOnly(translation.visibleText === 'translated'
+            ? ` Original text: ${translation.originalText}`
+            : ` Translation: ${translation.translatedText}`)}`
+      : '';
+    const poll = twitterPollHTML(msg);
+    const accountLabel = msg.twitterAccountLabel
+      ? `<span class="account-label">${sanitizeText(msg.twitterAccountLabel)}</span>`
+      : '';
+    const activity = twitterActivityHTML(project, msg);
 
     // Turns "Alex Rivers @alexrivers okay so I need to tell you all something"
     // into "Alex Rivers (@alexrivers) tweeted: okay so I need to tell you..."
@@ -623,18 +764,18 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
     
     // Check if this should be displayed as expanded view (clicked-into reply)
     if (msg.expandedView) {
-      // Expanded view: avatar on left, larger text, no header/metrics, content indented
-      return `<div class="tweet expanded" data-message-id="${sanitizeAttribute(msg.id)}">${effectiveAvatar}<div class="expanded-content"><div class="expanded-name"><b class="name">${safeDisplayName}</b>${verified}</div><div class="expanded-handle">${openParen}${sanitizeText(handle)}${closeParen}</div>${replyingTo}${attribution}<div class="expanded-body">${bodyWithFormatting}${tweetImage}${quote}</div>${timestampLine ? `<div class="time-line">${sanitizeText(timestampLine)}</div>`:''}</div></div>`;
+      // Expanded view: avatar on left, larger text and the focal post's metrics.
+      return `${activity}<div class="tweet expanded" data-message-id="${sanitizeAttribute(msg.id)}">${effectiveAvatar}<div class="expanded-content"><div class="expanded-name"><b class="name">${safeDisplayName}</b>${verified}</div><div class="expanded-handle">${openParen}<span class="handle">${sanitizeText(handle)}</span>${closeParen}${accountLabel}</div>${replyingTo}${attribution}<div class="expanded-body">${bodyWithFormatting}${translationContext}${tweetMedia}${quote}${poll}</div>${timestampLine ? `<div class="time-line">${sanitizeText(timestampLine)}</div>`:''}${metrics}</div></div>`;
     }
     
     // Add reply class if this is a threaded reply. `no-metrics` suppresses the
     // divider under the timestamp, which otherwise draws a rule pointing at an
     // empty space when the tweet has no counts.
-    const tweetClass = [isReply ? 'tweet reply' : 'tweet', hasMetrics ? '' : 'no-metrics']
+    const tweetClass = [hasThreadConnector ? 'tweet reply' : 'tweet', hasMetrics ? '' : 'no-metrics']
       .filter(Boolean)
       .join(' ');
     
-    return `<div class="${tweetClass}" data-message-id="${sanitizeAttribute(msg.id)}"><div class="tweet-header">${effectiveAvatar}<div class="head"><div class="head-content"><div class="name-line"><b class="name">${safeDisplayName}</b> ${verified} ${openParen}<span class="handle">${sanitizeText(handle)}</span>${closeParen}<span class="follow-dot">·</span>${chromeGap}${followBtn}<img src="${xLogo}" alt="" class="twitter-logo" width="20" height="20" /></div></div></div></div>${replyingTo}${attribution}<div class="body">${bodyWithFormatting}${tweetImage}${quote}</div>${timestampLine ? `<div class="time-line">${sanitizeText(timestampLine)}</div>`:''}${metrics}</div>`;
+    return `${activity}<div class="${tweetClass}" data-message-id="${sanitizeAttribute(msg.id)}"><div class="tweet-header">${effectiveAvatar}<div class="head"><div class="head-content"><div class="name-line"><b class="name">${safeDisplayName}</b> ${verified} ${openParen}<span class="handle">${sanitizeText(handle)}</span>${closeParen}<span class="follow-dot">·</span>${chromeGap}${followBtn}<img src="${xLogo}" alt="" class="twitter-logo" width="20" height="20" /></div>${accountLabel}</div></div></div>${replyingTo}${attribution}<div class="body">${bodyWithFormatting}${translationContext}${tweetMedia}${quote}${poll}</div>${timestampLine ? `<div class="time-line">${sanitizeText(timestampLine)}</div>`:''}${metrics}</div>`;
   }
   
   if (template === 'google') {
@@ -784,7 +925,7 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
   return `${timeBreak}<div class="${rowClass}" data-message-id="${sanitizeAttribute(msg.id)}">${avatar}<dl class="msg">${who}${bubble}${statusIndicator}</dl></div>`;
 }
 
-export type SkinTheme = 'light' | 'dark';
+export type SkinTheme = 'light' | 'dim' | 'dark';
 
 /**
  * Which settings field carries each platform's theme.
@@ -805,6 +946,7 @@ const THEME_SETTING = {
 
 /** The theme this project's platform is set to, or null if it has none. */
 export function platformTheme(project: SkinProject): SkinTheme | null {
+  if (project.template === 'twitter') return resolveTwitterTheme(project.settings);
   const field = THEME_SETTING[project.template as keyof typeof THEME_SETTING];
   if (!field) return null;
   return project.settings[field] ? 'dark' : 'light';
@@ -818,9 +960,19 @@ export function platformTheme(project: SkinProject): SkinTheme | null {
  * pick. Returns the project untouched for a platform with no theme.
  */
 export function withPlatformTheme(project: SkinProject, theme: SkinTheme): SkinProject {
+  if (project.template === 'twitter') {
+    return {
+      ...project,
+      settings: {
+        ...project.settings,
+        twitterTheme: theme,
+        twitterDarkMode: theme !== 'light',
+      },
+    };
+  }
   const field = THEME_SETTING[project.template as keyof typeof THEME_SETTING];
   if (!field) return project;
-  return { ...project, settings: { ...project.settings, [field]: theme === 'dark' } };
+  return { ...project, settings: { ...project.settings, [field]: theme !== 'light' } };
 }
 
 /**
@@ -926,7 +1078,7 @@ function chatClass(project: SkinProject, extra?: string): string {
   return `chat ${project.template}${theme ? ` theme-${theme}` : ''}${extra ? ` ${extra}` : ''}`;
 }
 
-export function buildHTML(project: SkinProject): string {
+export function buildHTML(project: SkinProject, renderMode: HtmlRenderMode = 'static'): string {
   // iOS and Android templates with enhanced features
   if (project.template === 'ios' || project.template === 'android') {
     const s = project.settings;
@@ -1145,38 +1297,23 @@ export function buildHTML(project: SkinProject): string {
   }
   
   if (project.template === 'twitter') {
-    // Thread mode: organize tweets hierarchically
-    if (project.settings.twitterThreadMode) {
-      // Build a tree structure: find top-level tweets and their replies
-      const topLevelTweets = project.messages.filter(m => !m.parentId);
-      const tweetsByParent: { [key: string]: Message[] } = {};
-      
-      // Group replies by parent
-      project.messages.forEach(m => {
-        if (m.parentId) {
-          if (!tweetsByParent[m.parentId]) {
-            tweetsByParent[m.parentId] = [];
-          }
-          tweetsByParent[m.parentId].push(m);
-        }
-      });
-      
-      // Recursive function to render a tweet and its replies
-      const renderTweetThread = (tweet: Message, isReply: boolean = false): string => {
-        const tweetHTML = msgHTML(tweet, 'twitter', project, isReply ? { isReply: true } : undefined);
-        const replies = tweetsByParent[tweet.id] || [];
-        const repliesHTML = replies.map(reply => renderTweetThread(reply, true)).join('');
-        return tweetHTML + repliesHTML;
-      };
-      
-      // Render all top-level tweets and their threads
-      const tweets = topLevelTweets.map(tweet => renderTweetThread(tweet)).join('');
-      return `<div class="${chatClass(project, 'tweets')}">${tweets}</div>`;
-    } else {
-      // Simple mode: each message becomes its own tweet
-      const tweets = project.messages.map(m => msgHTML(m, 'twitter', project)).join('');
+    const scene = normalizeTwitterScene(project);
+    if (scene.mode === 'thread') {
+      const renderNode = (node: (typeof scene.roots)[number], connected = false): string =>
+        msgHTML(node.message, 'twitter', project, {
+          index: project.messages.findIndex(message => message.id === node.message.id),
+          renderMode,
+          ...(connected ? { isReply: true } : {}),
+        })
+        + node.children.map(child => renderNode(child, true)).join('');
+      const tweets = scene.roots.map(root => renderNode(root)).join('');
       return `<div class="${chatClass(project, 'tweets')}">${tweets}</div>`;
     }
+    // Timeline replies retain semantic "Replying to" context, but connector
+    // styling is reserved for Thread mode. Single mode resolves its first post
+    // to the expanded layout in the normalized model.
+    const tweets = scene.posts.map((message, index) => msgHTML(message, 'twitter', project, { index, renderMode })).join('');
+    return `<div class="${chatClass(project, 'tweets')}">${tweets}</div>`;
   }
 
   const body = project.messages.map(m => msgHTML(m, project.template, project)).join('');
@@ -1640,21 +1777,35 @@ const TWITTER_COLOURS = {
     quoteHover: '#f7f9f9',
     replyLineColor: '#cfd9de',
   },
-  dark: {
+  dim: {
     bgColor: '#15202b',
-    bgHover: '#1c2e3f',
-    textPrimary: '#e7e9ea',
+    bgHover: '#1c2732',
+    textPrimary: '#f7f9f9',
     textSecondary: '#8b98a5',
     borderColor: '#38444d',
     handleColor: '#8b98a5',
-    quoteHover: '#1c2e3f',
-    replyLineColor: '#38444d',
+    quoteHover: '#1c2732',
+    replyLineColor: '#536471',
+  },
+  dark: {
+    bgColor: '#000',
+    bgHover: '#080808',
+    textPrimary: '#e7e9ea',
+    textSecondary: '#71767b',
+    borderColor: '#2f3336',
+    handleColor: '#71767b',
+    quoteHover: '#080808',
+    replyLineColor: '#333639',
   },
 } as const;
 
 function buildTwitterCSS(s: SkinProject['settings'], senderBg: string, maxWidth: number): string {
-  const isDark = s.twitterDarkMode;
-  const colour = TWITTER_COLOURS[isDark ? 'dark' : 'light'];
+  const theme = resolveTwitterTheme(s);
+  const isDark = theme !== 'light';
+  const colour = TWITTER_COLOURS[theme];
+  const pollWidths = Array.from({ length: 21 }, (_, index) =>
+    `#workskin .tweet .poll-pct-${index * 5}{width:${index * 5}%;}`
+  ).join('');
 
   return `/* Generated with AO3 SkinGen */
 /* NOTE ON UNITS. Sizes here are em, not px, and that is the whole reason this
@@ -1752,6 +1903,44 @@ ${PARAGRAPH_RESET_CSS}
 #workskin .tweet .body .hashtag{color:#1d9bf0;font-weight:400;}
 #workskin .tweet .body .mention{color:#1d9bf0;font-weight:400;}
 #workskin .tweet .tweet-image{width:100%;max-width:100%;height:auto;max-height:17.813em;border-radius:1em;margin-top:0.75em;border:1px solid ${colour.borderColor};display:block;}
+#workskin .tweet .twitter-media-grid{display:block;width:100%;margin-top:0.75em;border:1px solid ${colour.borderColor};border-radius:0.75em;overflow:hidden;box-sizing:border-box;font-size:0;}
+#workskin .tweet .twitter-media-image{display:block;width:100%;max-width:100%;height:auto;margin:0;box-sizing:border-box;}
+#workskin .tweet .media-cell{display:inline-block;width:50%;vertical-align:top;overflow:hidden;box-sizing:border-box;border:1px solid ${colour.borderColor};}
+#workskin .tweet .media-count-2 .media-cell{width:50%;}
+#workskin .tweet .media-count-4 .media-cell{width:50%;}
+#workskin .tweet .media-count-3{display:table;table-layout:fixed;}
+#workskin .tweet .media-count-3 .media-primary{display:table-cell;width:66.667%;vertical-align:middle;overflow:hidden;}
+#workskin .tweet .media-count-3 .media-stack{display:table-cell;width:33.333%;vertical-align:top;overflow:hidden;}
+#workskin .tweet .media-count-3 .media-cell{display:block;width:100%;}
+#workskin .tweet .media-crop-fill-width .twitter-media-image{width:100%;height:auto;}
+#workskin .tweet .media-crop-fill-height{height:14em;}
+#workskin .tweet .media-crop-fill-height .twitter-media-image{height:14em;width:auto;max-width:none;}
+#workskin .tweet .quote-media{margin-top:0.5em;}
+#workskin .tweet .twitter-video-card{margin-top:0.75em;border:1px solid ${colour.borderColor};border-radius:0.75em;overflow:hidden;background:${colour.bgColor};white-space:normal;}
+#workskin .tweet .video-source{display:block;color:${colour.textPrimary};text-decoration:none;}
+#workskin .tweet .video-poster-wrap{display:block;position:relative;min-height:8em;background:${colour.bgHover};overflow:hidden;}
+#workskin .tweet .video-poster{display:block;width:100%;height:auto;}
+#workskin .tweet .video-poster-placeholder{display:block;text-align:center;padding:4em 1em;color:${colour.textSecondary};}
+#workskin .tweet .video-play{position:absolute;left:50%;top:50%;margin-left:-1.25em;margin-top:-1.25em;width:2.5em;line-height:2.5;text-align:center;border-radius:50%;background:rgba(0,0,0,0.72);color:#fff;}
+#workskin .tweet .video-duration{position:absolute;right:0.5em;bottom:0.5em;padding:0.125em 0.375em;border-radius:0.25em;background:rgba(0,0,0,0.78);color:#fff;font-size:0.75em;}
+#workskin .tweet .video-title{display:block;padding:0.625em 0.75em 0;color:${colour.textPrimary};}
+#workskin .tweet .video-description,#workskin .tweet .video-captions,#workskin .tweet .video-fallback{padding:0.375em 0.75em 0;color:${colour.textSecondary};font-size:0.813em;line-height:1.385;}
+#workskin .tweet .video-fallback{padding-bottom:0.75em;word-break:break-word;}
+#workskin .tweet .video-captions a,#workskin .tweet .video-fallback a{color:#1d9bf0;}
+#workskin .tweet .twitter-video-player iframe,#workskin .tweet .twitter-native-video{display:block;width:100%;max-width:100%;height:19.688em;border:0;background:#000;}
+#workskin .tweet .translation-context{margin-top:0.5em;color:#1d9bf0;font-size:0.813em;}
+#workskin .tweet .account-label{display:inline-block;margin-top:0.286em;padding:0.143em 0.429em;border:1px solid ${colour.borderColor};border-radius:0.286em;color:${colour.textSecondary};font-size:0.75em;line-height:1.333;}
+#workskin .tweets .tweet-activity{margin:0.25em 0 0.375em 1em;color:${colour.textSecondary};font-size:0.813em;font-weight:700;}
+#workskin .tweet .twitter-poll{margin-top:0.75em;white-space:normal;}
+#workskin .tweet .poll-option{position:relative;overflow:hidden;margin-top:0.375em;padding:0.5em 0.625em;border-radius:0.375em;background:${colour.bgHover};color:${colour.textPrimary};}
+#workskin .tweet .poll-bar{position:absolute;left:0;top:0;bottom:0;background:#cfe8fa;}
+#workskin .tweet .poll-option.selected{border:2px solid #1d9bf0;}
+#workskin .tweet .poll-option.winner{font-weight:700;}
+#workskin .tweet .poll-option-text,#workskin .tweet .poll-percent,#workskin .tweet .poll-state{position:relative;z-index:1;}
+#workskin .tweet .poll-percent{float:right;margin-left:0.5em;}
+#workskin .tweet .poll-state{font-size:0.75em;color:${colour.textSecondary};}
+#workskin .tweet .poll-footer{margin-top:0.5em;color:${colour.textSecondary};font-size:0.813em;}
+${pollWidths}
 #workskin .tweet .time-line{margin-top:1.067em;font-size:0.938em;color:${colour.textSecondary};padding-bottom:1.067em;border-bottom:1px solid ${colour.borderColor};}
 #workskin .tweet.no-metrics .time-line{padding-bottom:0;border-bottom:none;}
 /* Flex is kept HERE only because its failure mode is graceful: if the
@@ -1819,6 +2008,7 @@ ${PARAGRAPH_RESET_CSS}
 #workskin .tweet.expanded .expanded-name .verified-badge{font-size:0.764em;}
 
 #workskin .tweet.expanded .expanded-handle{color:${colour.textSecondary};font-size:0.938em;line-height:1.333;margin-bottom:0.267em;}
+#workskin .tweet.expanded .expanded-handle .handle{color:inherit;font-size:1em;line-height:inherit;}
 #workskin .tweet.expanded .replying-to{margin:0 0 0.923em 0;}
 #workskin .tweet.expanded .expanded-body{font-size:1.438em;line-height:1.217;color:${colour.textPrimary};word-wrap:break-word;white-space:pre-wrap;}
 #workskin .tweet.expanded .tweet-image{margin-top:1em;}

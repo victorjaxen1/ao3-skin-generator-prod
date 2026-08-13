@@ -19,6 +19,7 @@ import { serializeProjectFile, PROJECT_FILE_SCHEMA_VERSION } from '../lib/projec
 import { downloadTextFile, safeFilenamePart } from '../lib/download';
 import { markProjectBackedUp } from '../lib/backupStatus';
 import { appendChatMessage } from '../lib/messageMetadata';
+import { migrateTwitterProject, resolveTwitterTheme } from '../lib/twitter';
 import { PlatformPicker } from '../components/PlatformPicker';
 import { WorkspaceHeader } from '../components/WorkspaceHeader';
 import { SettingsSheet } from '../components/SettingsSheet';
@@ -42,7 +43,7 @@ function getDarkMode(project: SkinProject): boolean {
   switch (project.template) {
     case 'ios': return !!project.settings.iosDarkMode;
     case 'android': return !!project.settings.androidDarkMode;
-    case 'twitter': return !!project.settings.twitterDarkMode;
+    case 'twitter': return resolveTwitterTheme(project.settings) !== 'light';
     default: return false;
   }
 }
@@ -62,6 +63,7 @@ export default function HomePage() {
   const [identityPanelMode, setIdentityPanelMode] = useState<IdentityPanelMode>({ kind: 'overview' });
   const [showMobilePreview, setShowMobilePreview] = useState(true);
   const [showBackup, setShowBackup] = useState(false);
+  const [pendingTwitterDelete, setPendingTwitterDelete] = useState<string | null>(null);
   // True when the picker was reached from the workspace, i.e. there is work
   // a selection would discard. On a first visit there is nothing to lose.
   const [cameFromWorkspace, setCameFromWorkspace] = useState(false);
@@ -80,6 +82,12 @@ export default function HomePage() {
 
   // Derived
   const dark = getDarkMode(project);
+  const pendingDeletedPost = pendingTwitterDelete
+    ? project.messages.find(message => message.id === pendingTwitterDelete)
+    : undefined;
+  const pendingReplyCount = pendingTwitterDelete
+    ? project.messages.filter(message => message.parentId === pendingTwitterDelete).length
+    : 0;
 
   // ── Mount: load characters ──────────────────────────────────────────────
   useEffect(() => {
@@ -138,6 +146,7 @@ export default function HomePage() {
       const platform = parseBlankPlatform(router.query.platform);
       if (platform) {
         initial.template = platform;
+        if (platform === 'twitter') initial.messages = [];
         Object.assign(initial.settings, PLATFORM_LOOK[platform]);
         fromDeepLink = true;
       } else {
@@ -146,7 +155,7 @@ export default function HomePage() {
       }
     }
 
-    initial = migrateProjectIdentities(initial);
+    initial = migrateTwitterProject(migrateProjectIdentities(initial));
     setProject(initial);
     setHistory([initial]);
     setHistoryIndex(0);
@@ -216,8 +225,9 @@ export default function HomePage() {
     // the WhatsApp examples used `#dcf8c6` green. One table, one answer.
     let p = defaultProject();
     p.template = template;
+    if (template === 'twitter') p.messages = [];
     Object.assign(p.settings, PLATFORM_LOOK[template]);
-    p = migrateProjectIdentities(p);
+    p = migrateTwitterProject(migrateProjectIdentities(p));
     setProject(p);
     setHistory([p]);
     setHistoryIndex(0);
@@ -227,7 +237,7 @@ export default function HomePage() {
   }, []);
 
   const handleLoadExample = useCallback((example: SkinProject) => {
-    const instantiated = instantiateTemplate(example);
+    const instantiated = migrateTwitterProject(migrateProjectIdentities(instantiateTemplate(example)));
     setProject(instantiated);
     setHistory([instantiated]);
     setHistoryIndex(0);
@@ -264,12 +274,35 @@ export default function HomePage() {
     }));
   }, []);
 
-  const handleDeleteMessage = useCallback((id: string) => {
-    setProject(prev => ({
-      ...prev,
-      messages: prev.messages.filter(m => m.id !== id),
-    }));
+  const deleteMessageWithReplyChoice = useCallback((id: string, choice: 'promote' | 'reparent') => {
+    setProject(prev => {
+      const deleted = prev.messages.find(message => message.id === id);
+      const replacementParentId = choice === 'reparent' ? deleted?.parentId : undefined;
+      return {
+        ...prev,
+        messages: prev.messages
+          .filter(message => message.id !== id)
+          .map(message => message.parentId === id
+            ? {
+                ...message,
+                parentId: replacementParentId,
+                replyToHandles: undefined,
+                twitterReplyHandlesMode: replacementParentId ? 'auto' : undefined,
+              }
+            : message),
+      };
+    });
+    setPendingTwitterDelete(null);
   }, []);
+
+  const handleDeleteMessage = useCallback((id: string) => {
+    const replyCount = project.messages.filter(message => message.parentId === id).length;
+    if (project.template === 'twitter' && replyCount > 0) {
+      setPendingTwitterDelete(id);
+      return;
+    }
+    deleteMessageWithReplyChoice(id, 'promote');
+  }, [deleteMessageWithReplyChoice, project.messages, project.template]);
 
   const handleDuplicateMessage = useCallback((msg: Message) => {
     setProject(prev => {
@@ -622,6 +655,7 @@ export default function HomePage() {
             template={project.template}
             settings={project.settings}
             messages={project.messages}
+            project={project}
             cast={project.cast}
             onAddMessage={handleAddMessage}
             twitterCharacters={twitterCharacters}
@@ -695,8 +729,29 @@ export default function HomePage() {
         onClose={() => setShowSettings(false)}
         template={project.template}
         settings={project.settings}
+        messageCount={project.messages.length}
         onUpdateSettings={handleUpdateSettings}
       />
+
+      {pendingTwitterDelete && pendingDeletedPost && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="delete-twitter-title">
+          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
+            <h2 id="delete-twitter-title" className="text-base font-semibold text-stone-900">Delete a post with replies?</h2>
+            <p className="mt-2 text-sm text-stone-600">This post has {pendingReplyCount} direct {pendingReplyCount === 1 ? 'reply' : 'replies'}. Choose what happens to them; deeper reply relationships are preserved.</p>
+            <div className="mt-4 space-y-2">
+              {pendingDeletedPost.parentId && (
+                <button type="button" onClick={() => deleteMessageWithReplyChoice(pendingTwitterDelete, 'reparent')} className="w-full rounded-lg border border-violet-300 bg-violet-50 px-4 py-3 text-left text-sm font-medium text-violet-800">
+                  Reparent replies to the deleted post’s parent
+                </button>
+              )}
+              <button type="button" onClick={() => deleteMessageWithReplyChoice(pendingTwitterDelete, 'promote')} className="w-full rounded-lg border border-stone-200 px-4 py-3 text-left text-sm font-medium text-stone-800">
+                Promote replies to top-level posts
+              </button>
+            </div>
+            <button type="button" autoFocus onClick={() => setPendingTwitterDelete(null)} className="mt-4 rounded-lg px-3 py-2 text-sm text-stone-600 hover:bg-stone-100">Cancel</button>
+          </div>
+        </div>
+      )}
 
       {/* ─── Export bar (sticky bottom) ─────────────────────────────── */}
       <ExportPanel

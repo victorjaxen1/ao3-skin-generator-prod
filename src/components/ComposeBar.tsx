@@ -1,15 +1,19 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Message, SceneCast, SkinSettings, GroupParticipant, TwitterCharacter } from '../lib/schema';
+import { Message, SceneCast, SkinProject, SkinSettings, GroupParticipant, TwitterCharacter } from '../lib/schema';
 import { normalizeImageUrl } from '../lib/urlNormalize';
 import { ImageUrlInput } from './ImageUrlInput';
 import { MessageEmojiPicker, MessageEmojiTrigger } from './MessageEmojiPicker';
 import { ReactionPicker } from './ReactionPicker';
 import { nextChatTimestamp, nextChatTimestampFromHistory } from '../lib/messageMetadata';
+import { getTwitterSceneMode } from '../lib/twitter';
+import { resolveMessageIdentity } from '../lib/identity';
+import TwitterPostExtrasEditor from './TwitterPostExtrasEditor';
 
 interface Props {
   template: 'ios' | 'android' | 'twitter' | 'google';
   settings: SkinSettings;
   messages: Message[];
+  project: SkinProject;
   onAddMessage: (message: Message) => void;
   twitterCharacters?: TwitterCharacter[];
   cast?: SceneCast;
@@ -17,10 +21,26 @@ interface Props {
   onEditActiveIdentity?: (target: { kind: 'self' | 'contact' | 'twitter-primary' | 'character'; id?: string }) => void;
 }
 
+function hasMeaningfulTwitterExtras(message: Partial<Message>): boolean {
+  if (message.attachments?.some(attachment => attachment.url.trim())) return true;
+  if (message.twitterVideo && (message.twitterVideo.url.trim() || message.twitterVideo.title.trim())) return true;
+  if (message.twitterQuote && (
+    message.twitterQuote.text.trim()
+    || message.twitterQuote.attachments?.some(attachment => attachment.url.trim())
+  )) return true;
+  if (message.twitterPoll?.options.some(option => option.text.trim())) return true;
+  if (message.twitterTranslation && (
+    message.twitterTranslation.originalText.trim()
+    || message.twitterTranslation.translatedText.trim()
+  )) return true;
+  return false;
+}
+
 export const ComposeBar: React.FC<Props> = ({
   template,
   settings,
   messages,
+  project,
   onAddMessage,
   twitterCharacters,
   cast,
@@ -40,6 +60,10 @@ export const ComposeBar: React.FC<Props> = ({
   const [participantId, setParticipantId] = useState('');
   // '' means "post as the account itself", i.e. follow the Twitter settings.
   const [twitterCharId, setTwitterCharId] = useState('');
+  const [twitterRelationship, setTwitterRelationship] = useState<'post' | 'reply'>('post');
+  const [twitterParentId, setTwitterParentId] = useState('');
+  const [twitterDraftExtras, setTwitterDraftExtras] = useState<Partial<Message>>({});
+  const twitterDraftExtrasRef = useRef<Partial<Message>>({});
 
   // Google-specific
   const [googleUrl, setGoogleUrl] = useState('');
@@ -85,6 +109,22 @@ export const ComposeBar: React.FC<Props> = ({
       ? settings.iosContactName || settings.chatContactName
       : settings.androidContactName || settings.chatContactName) || 'Them';
   const automaticTimestamp = nextChatTimestampFromHistory(messages);
+  const twitterSceneMode = template === 'twitter' ? getTwitterSceneMode(project) : 'timeline';
+
+  useEffect(() => {
+    if (template !== 'twitter') return;
+    if (twitterSceneMode === 'single' || messages.length === 0) {
+      setTwitterRelationship('post');
+      setTwitterParentId('');
+      return;
+    }
+    if (twitterSceneMode === 'thread' && !twitterParentId) {
+      setTwitterRelationship('reply');
+      setTwitterParentId(messages[messages.length - 1].id);
+    } else if (twitterParentId && !messages.some(message => message.id === twitterParentId)) {
+      setTwitterParentId(messages[messages.length - 1]?.id || '');
+    }
+  }, [messages, template, twitterParentId, twitterSceneMode]);
 
   const handleSend = () => {
     const trimmedContent = content.trim();
@@ -105,31 +145,29 @@ export const ComposeBar: React.FC<Props> = ({
       setGoogleUrl('');
       setGoogleDesc('');
     } else if (template === 'twitter') {
-      if (!trimmedContent) return;
-      const chars = twitterCharacters || [];
-      const activeChar = twitterCharId ? chars.find(c => c.id === twitterCharId) : undefined;
-      // Only a character preset pins an identity to the tweet. Without one the
-      // tweet is left unstamped so it follows the account settings, and
-      // renaming yourself later updates tweets you have already written.
+      const currentExtras = twitterDraftExtrasRef.current;
+      if (!trimmedContent && !hasMeaningfulTwitterExtras(currentExtras)) return;
+      const parentId = twitterSceneMode !== 'single' && twitterRelationship === 'reply'
+        && messages.some(message => message.id === twitterParentId)
+        ? twitterParentId
+        : undefined;
       const msg: Message = {
+        ...currentExtras,
         id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         sender: '',
         content: trimmedContent,
         outgoing: true,
-        timestamp: timestamp || undefined,
-        ...(activeChar && {
-          characterId: activeChar.id,
-          sender: activeChar.name,
-          useCustomIdentity: true,
-          twitterHandle: activeChar.handle,
-          verified: activeChar.verified,
-          avatarUrl: activeChar.avatarUrl,
-        }),
+        timestamp: timestamp.trim() || nextChatTimestamp(messages),
+        characterId: twitterCharId || cast?.twitterPrimaryId,
+        parentId,
+        twitterReplyHandlesMode: parentId ? 'auto' : undefined,
+        twitterLayout: 'auto',
       };
-      if (normalizedImage) {
-        msg.attachments = [{ type: 'image', url: normalizedImage, alt: imageDecorative ? '' : imageAlt.trim(), decorative: imageDecorative }];
-      }
       onAddMessage(msg);
+      if (twitterSceneMode === 'thread') {
+        setTwitterRelationship('reply');
+        setTwitterParentId(msg.id);
+      }
     } else {
       // iOS / Android
       if (!trimmedContent && !normalizedImage) return;
@@ -180,6 +218,8 @@ export const ComposeBar: React.FC<Props> = ({
     setImageUrl('');
     setImageAlt('');
     setImageDecorative(false);
+    twitterDraftExtrasRef.current = {};
+    setTwitterDraftExtras({});
     setShowDetails(false);
     setShowEmojiPicker(false);
     inputRef.current?.focus();
@@ -221,6 +261,8 @@ export const ComposeBar: React.FC<Props> = ({
   const canSend =
     template === 'ios' || template === 'android'
       ? Boolean(content.trim() || imageUrl.trim())
+      : template === 'twitter'
+      ? Boolean(content.trim() || hasMeaningfulTwitterExtras(twitterDraftExtras))
       : Boolean(content.trim());
 
   const placeholders: Record<string, string> = {
@@ -310,33 +352,19 @@ export const ComposeBar: React.FC<Props> = ({
               <input
                 value={timestamp}
                 onChange={(e) => setTimestamp(e.target.value)}
-                placeholder="Timestamp, e.g. 2:14 PM"
+                placeholder={automaticTimestamp ? `Automatic: ${automaticTimestamp}` : 'Automatic: current time'}
                 aria-label="Timestamp"
                 className="w-full text-xs bg-white border border-stone-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-violet-500"
               />
-              <ImageUrlInput
-                value={imageUrl}
-                onChange={setImageUrl}
-                ariaLabel="Image address for this post"
-                placeholder="Paste an image address (optional)"
+              <TwitterPostExtrasEditor
+                message={{ id: 'twitter-compose-draft', sender: '', content, outgoing: true, ...twitterDraftExtras }}
+                project={project}
+                onChange={updates => setTwitterDraftExtras(previous => {
+                  const next = { ...previous, ...updates };
+                  twitterDraftExtrasRef.current = next;
+                  return next;
+                })}
               />
-              {imageUrl.trim() && (
-                <div className="space-y-1.5">
-                  <input
-                    value={imageAlt}
-                    onChange={event => setImageAlt(event.target.value)}
-                    disabled={imageDecorative}
-                    maxLength={500}
-                    aria-label="Image description"
-                    placeholder="Describe the image for readers"
-                    className="w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-xs disabled:bg-stone-100 disabled:text-stone-400"
-                  />
-                  <label className="flex items-center gap-2 text-xs text-stone-600">
-                    <input type="checkbox" checked={imageDecorative} onChange={event => setImageDecorative(event.target.checked)} className="accent-violet-600" />
-                    Decorative image — use empty alt text
-                  </label>
-                </div>
-              )}
             </div>
           )}
 
@@ -363,6 +391,48 @@ export const ComposeBar: React.FC<Props> = ({
       {template !== 'google' && showEmojiPicker && (
         <div className="border-b border-stone-100 bg-stone-50/70 px-3 py-2">
           <MessageEmojiPicker id="compose-message-emoji-options" onInsert={insertEmoji} />
+        </div>
+      )}
+
+      {template === 'twitter' && twitterSceneMode !== 'single' && (
+        <div className="flex items-center gap-2 border-b border-stone-100 bg-white px-3 py-2">
+          <span className="text-[11px] font-medium text-stone-500">Relationship</span>
+          <div className="flex rounded-lg bg-stone-100 p-0.5">
+            <button
+              type="button"
+              onClick={() => setTwitterRelationship('post')}
+              aria-pressed={twitterRelationship === 'post'}
+              className={`rounded-md px-2 py-1 text-xs ${twitterRelationship === 'post' ? 'bg-white text-violet-700 shadow-sm' : 'text-stone-600'}`}
+            >
+              New post
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setTwitterRelationship('reply');
+                if (!twitterParentId) setTwitterParentId(messages[messages.length - 1]?.id || '');
+              }}
+              aria-pressed={twitterRelationship === 'reply'}
+              disabled={messages.length === 0}
+              className={`rounded-md px-2 py-1 text-xs disabled:text-stone-300 ${twitterRelationship === 'reply' ? 'bg-white text-violet-700 shadow-sm' : 'text-stone-600'}`}
+            >
+              Reply
+            </button>
+          </div>
+          {twitterRelationship === 'reply' && (
+            <select
+              value={twitterParentId}
+              onChange={event => setTwitterParentId(event.target.value)}
+              aria-label="Reply to post"
+              className="min-w-0 flex-1 rounded-lg border border-stone-200 bg-white px-2 py-1 text-xs focus:ring-2 focus:ring-violet-500"
+            >
+              {messages.map(message => {
+                const identity = resolveMessageIdentity(project, message);
+                const excerpt = message.content.replace(/\s+/g, ' ').slice(0, 38);
+                return <option key={message.id} value={message.id}>@{identity.twitterHandle || identity.name} — {excerpt || 'Post'}</option>;
+              })}
+            </select>
+          )}
         </div>
       )}
 

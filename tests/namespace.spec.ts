@@ -57,7 +57,7 @@ for (const template of ['ios', 'android', 'twitter', 'google'] as const) {
     });
 
     test('the theme class on its own changes nothing either', async ({ page }) => {
-      // `buildHTML` emits `theme-light` / `theme-dark` beside the platform
+      // `buildHTML` emits a theme class beside the platform
       // class, on every path including the PNG. It is the hook the master
       // skin's variant block aims at (BACKLOG 8) and is inert without one —
       // but "inert" is a claim about every stylesheet on the page, ours and
@@ -65,7 +65,7 @@ for (const template of ['ios', 'android', 'twitter', 'google'] as const) {
       await stubRemoteImages(page);
       const { html, css } = buildWorkSkin(richProject(template));
 
-      const without = html.replace(/(<div class="chat [a-z]+) theme-(?:light|dark)/, '$1');
+      const without = html.replace(/(<div class="chat [a-z]+) theme-(?:light|dim|dark)/, '$1');
       if (template === 'google') {
         expect(without, 'google should carry no theme class').toBe(html);
         return;

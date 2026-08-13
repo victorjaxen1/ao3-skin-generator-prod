@@ -127,21 +127,58 @@ Constraints the author documents, all **REPORTED**:
 - A background image *"NEEDS to be 520px long, and with a width of at least
   340px"* so the footer's background lines up with the body's.
 
-## 5. `<video>` and `<audio>` are stripped — **VERIFIED**
+## 5. AO3 supports native audio and video in Work Text — **VERIFIED; CORRECTED 13 AUG 2026**
 
-The template contains `<video class="media" src="…">` and
-`<audio><source src="…"></audio>`. Neither element is on AO3's allowed list
-(which has no `video`, `audio`, or `source`), so both are removed.
+The earlier version of this entry was wrong. It inspected only AO3's base
+`ARCHIVE` element allowlist, saw no `audio`, `video`, `source` or `track`, and
+concluded those elements were always stripped. Current otwarchive applies a
+second, purpose-built `MediaSanitizer` to fields listed in
+`FIELDS_ALLOWING_MEDIA_EMBEDS`. The production configuration lists `content`—
+the work/chapter body—and the sanitizer explicitly preserves all four elements.
 
-The work's own rendered output shows it: where the video should be, the page
-has only the screen-reader label and the timestamp.
+The sanitizer also adds safe defaults:
 
-**This is a published, widely-copied template shipping markup AO3 deletes** —
-a good reminder that community templates are not automatically correct.
+```html
+<video controls="controls" crossorigin="anonymous"
+       preload="metadata" playsinline="playsinline">
+  <source src="https://example.com/video.mp4" type="video/mp4">
+  <track src="https://example.com/captions.vtt" kind="subtitles"
+         srclang="en" label="English">
+</video>
+```
 
-Their voice-message technique is the honest workaround and is worth stealing:
-a **static PNG of a waveform** plus a duration `<span>`, styled to look like the
-player. No media element involved.
+Allowed native-video attributes are `class`, `controls`, `crossorigin`, `dir`,
+`height`, `loop`, `muted`, `playsinline`, `poster`, `preload`, `src`, `title`
+and `width`. `source` keeps `src` and `type`; `track` keeps `default`, `kind`,
+`label`, `src` and `srclang`. Media URLs must use HTTP(S), and the
+`crossorigin="anonymous"` default means a direct-file host must permit CORS.
+
+**Why the published WhatsApp example still lost its media is not settled.** A
+bad/expired source, blocked host, missing CORS, malformed markup or older AO3
+behavior could all produce the observed empty result. The observation was real;
+the universal explanation was not. Never infer the full sanitizer from its base
+allowlist when field-specific transformers can add elements.
+
+The static waveform remains useful as an image-export fallback and as fictional
+chat chrome. It is no longer the only honest way to include playable media in
+an AO3 work.
+
+The supplied published
+[Twitter Work Skin Template](https://archiveofourown.org/collections/ao3_socmed_work_skin/works/47803507)
+provides direct read-back confirmation. Its current sanitized Work Text contains
+three native `video` elements and two native `audio` elements. The videos use a
+direct MP4 URL; the audio players contain direct MP3 `source` children. The
+read-back markup contains AO3's expected `controls`, `crossorigin="anonymous"`
+and `preload="metadata"` defaults, plus `playsinline` on video. This proves the
+field-specific native-media path is active on a real published social-media
+work, not merely present in source code.
+
+Sources:
+
+- [AO3 Posting and Editing FAQ](https://archiveofourown.org/faq/posting-and-editing?language_id=en)
+- [otwarchive media sanitizer](https://github.com/otwcode/otwarchive/blob/master/lib/otw_sanitize/media_sanitizer.rb)
+- [otwarchive HTML cleaner](https://github.com/otwcode/otwarchive/blob/master/lib/html_cleaner.rb)
+- [otwarchive media configuration](https://github.com/otwcode/otwarchive/blob/master/config/config.yml)
 
 ## 6. Patterns we do not implement
 
@@ -828,6 +865,158 @@ risk without improving the story. Metrics such as views and bookmarks can be
 optional; ads, live navigation and network behavior are outside the useful
 fidelity boundary.
 
+---
+
+## Part 5 — Playable media and approved embeds
+
+**Sources, 13 Aug 2026:** the supplied playable
+[YouTube clip](https://www.youtube.com/watch?v=bN8449nalT8), AO3's current
+[Posting and Editing FAQ](https://archiveofourown.org/faq/posting-and-editing?language_id=en),
+YouTube's official [embed and privacy-enhanced mode guidance](https://support.google.com/youtube/answer/171780?hl=en),
+the supplied reader-facing
+[AO3 Social Media AU Work Skins example](https://archiveofourown.org/collections/ao3_socmed_work_skin/works/47803507),
+and current otwarchive source for the
+[embed sanitizer](https://github.com/otwcode/otwarchive/blob/master/lib/otw_sanitize/embed_sanitizer.rb),
+[media sanitizer](https://github.com/otwcode/otwarchive/blob/master/lib/otw_sanitize/media_sanitizer.rb)
+and [HTML-cleaner routing](https://github.com/otwcode/otwarchive/blob/master/lib/html_cleaner.rb).
+
+The supplied URL is a five-minute YouTube clip whose current player metadata
+allows embedding. Both its ordinary and privacy-enhanced embed endpoints
+respond successfully. The supplied AO3 Twitter template independently contains
+three direct-file video players and two audio players after AO3 read-back.
+Together they cover both supported paths: approved hosted-player embeds and
+native media. AO3's FAQ and source code establish why those results are
+supported.
+
+## 36. AO3 can play media, but it does not host media — **VERIFIED**
+
+AO3 supports text works containing externally hosted video and audio. There are
+two separate playback paths:
+
+1. an approved hosting site's player, sanitized into an `iframe`, `embed` or
+   legacy `object` block;
+2. a direct HTTP(S) media file played by the browser through native `video` or
+   `audio` markup.
+
+In both cases the bytes stay on the external host. If YouTube removes a clip,
+an archive.org item changes, a direct-file host blocks CORS, or the reader
+blocks third-party content, AO3 cannot repair it. “Playable on AO3” must never
+be described as “uploaded to AO3” or “preserved by AO3.”
+
+## 37. Approved player embeds are a field-specific exception — **VERIFIED**
+
+AO3's base sanitizer removes `iframe` and its contents. In the work/chapter
+`content` field, `HtmlCleaner` first applies a special `EmbedSanitizer`. That
+transformer allowlists only recognized player hosts, cleans the node, and then
+marks it safe for the base pass.
+
+The current official video-player list includes 4shared, archive.org, Bilibili,
+Critical Commons, Google, vidders.net, viddertube, Vimeo and YouTube. The source
+also explicitly recognizes both `youtube.com` and `youtube-nocookie.com`.
+Arbitrary iframes are still removed.
+
+For YouTube:
+
+- paste provider embed code in AO3's **HTML editor**, not Rich Text;
+- use an `/embed/VIDEO_ID` URL, not a watch-page URL;
+- prefer `https://www.youtube-nocookie.com/embed/VIDEO_ID` when generating code;
+- do not store or re-emit raw user-supplied iframe HTML;
+- expect AO3 to strip attributes outside its iframe list.
+
+AO3 keeps `allowfullscreen`, `frameborder`, `height`, `src`, `title`, `class`,
+`type` and `width` on an approved iframe. Modern provider extras such as
+`allow`, `referrerpolicy` and clipboard permissions are not in that list. A
+minimal AO3-targeted embed is therefore better than blindly preserving the
+entire current YouTube snippet.
+
+## 38. Native media supports posters and caption tracks — **VERIFIED**
+
+The native path is not merely a bare player. AO3 preserves:
+
+- a poster image and intrinsic width/height on `video`;
+- one or more `source` elements with URL and MIME type;
+- `track` elements with subtitle/caption URL, language and label;
+- fallback HTML inside the media element;
+- a CSS class that a work skin can style.
+
+AO3 forces controls, anonymous CORS, metadata-only preload and inline playback
+defaults onto native video. This is a good safety baseline and a warning about
+hosting: a file that plays when opened directly may still fail inside AO3 if
+its server does not return a compatible cross-origin header.
+
+**Reusable lesson:** a direct-media feature needs a host/CORS preflight, MIME
+type, poster, title, caption track where available and an ordinary fallback
+link. A URL field alone is not a complete video model.
+
+## 39. Work Text, Preview and downloads are different environments — **VERIFIED + REPORTED**
+
+The media transformers are configured for `content`, not every HTML-bearing
+field. Do not promise that the same iframe will survive in a summary, note,
+endnote, profile or skin description.
+
+AO3's own FAQ warns that a video may fail to display in Preview even when it
+works after posting. It recommends checking while logged out of the hosting
+provider. A real posted/read-back fixture is therefore required; preview-only
+testing is insufficient.
+
+Likewise, an AO3 download must not be assumed to preserve or play an external
+iframe/native stream. Provide nearby text—a title, source link, description or
+transcript—whose meaning survives when the player, network or Creator's Style
+is absent.
+
+## 40. Playable HTML and raster exports need intentionally different fallbacks — **VERIFIED by format**
+
+| Output | Correct video behavior |
+| --- | --- |
+| AO3 Work Text + work skin | Emit a sanitized approved iframe or native video; the skin styles its shell. |
+| App preview | Show a poster first and load the external player only on explicit user action. |
+| Save PNG | Render poster, play symbol, duration/title and optional URL text; it cannot be playable. |
+| Hosted AO3 image code | Same static poster treatment because the final artifact is an image. |
+| Skin-off / blocked media | Keep adjacent title, description/transcript and an ordinary HTTPS link. |
+| AO3 download | Treat playback as unavailable unless separately verified for that format. |
+
+This is a legitimate divergence from “one rendering everywhere”: one shared
+media view model should feed two render variants, **interactive HTML** and
+**static raster fallback**. Pretending a PNG is playable would be less faithful
+than acknowledging the boundary.
+
+## 41. Embeds expand the privacy, accessibility and durability surface — **VERIFIED + PRODUCT CONSTRAINT**
+
+- Never autoplay. It is hostile to readers and can expose them to unexpected
+  sound and third-party requests.
+- Prefer privacy-enhanced YouTube URLs, while being honest that the player is
+  still externally hosted.
+- Give every iframe a useful title.
+- Support caption tracks or an adjacent transcript/description; do not treat a
+  poster's alt text as a substitute for video accessibility.
+- Keep an ordinary source link available when embedding is disabled.
+- Validate hosts and construct markup ourselves. Raw embed HTML is an XSS and
+  sanitizer-consistency risk.
+- Do not use the supplied television clip as a built-in example or asset. It is
+  a research trigger, not product content.
+
+## 42. A published work is a regression fixture, not the platform specification — **PROVEN + PRODUCT CONSTRAINT**
+
+The supplied AO3 collection work, **Twitter Work Skin Template** by
+worlds_end_valentine, shows the reader-facing combination we care about:
+social-media-shaped Work Text containing externally hosted native video and
+audio. Its saved page still contains the player elements after AO3 sanitization.
+Use it to compare pacing, media placement, fallback copy and the experience with
+Creator's Style on and off.
+
+It is not the authority for what AO3 will continue accepting. A work can contain
+old markup, depend on a host that later changes, or render differently after an
+AO3 sanitizer update. The implementation hierarchy is:
+
+1. AO3's current FAQ for author-facing promises;
+2. current otwarchive sanitizer/configuration for exact accepted markup;
+3. a newly posted and read-back draft for real behavior;
+4. existing public works as design examples and regression comparisons.
+
+**Reusable lesson:** save the structured source URL and accessible fallback,
+not just whichever embed snippet works today. Generate the current approved
+markup at export time.
+
 ## Actions from Parts 1–3
 
 All of these are now in **`BACKLOG.md`**, which is the single ranked list —
@@ -863,3 +1052,24 @@ the general backlog:
    retaining legacy fields as migration inputs.
 5. **Keep fidelity selective** (§35). Validate each addition against narrative
    value, AO3 safety, accessibility and long-term image-hosting cost.
+
+## Actions from Part 5
+
+These are incorporated into
+`TWITTER-PLATFORM-IMPROVEMENT-IMPLEMENTATION-PLAN.md`:
+
+1. **Add one structured video object per Twitter post** (§§36–38), initially
+   mutually exclusive with the image grid. Store a canonical source URL,
+   title, poster, duration/description, MIME type and caption metadata—not raw
+   iframe HTML.
+2. **Generate two intentional output variants** (§40): an approved player for
+   editable AO3 Work Text and a static poster card for PNG/hosted-image output.
+3. **Gate in-app playback behind explicit user action** (§41), prefer
+   privacy-enhanced YouTube embeds, never autoplay, and retain a source link and
+   transcript/description when the player is unavailable.
+4. **Test a posted AO3 draft, not Preview alone** (§§39, 42). Read the saved
+   markup back, test logged out of the media host, disable Creator's Style, and
+   exercise a downloaded-work fallback.
+5. **Correct documentation and tests that assume native media is always
+   stripped** (§5). Native `audio`/`video` and approved player embeds are
+   field-specific Work Text exceptions; arbitrary iframes remain disallowed.

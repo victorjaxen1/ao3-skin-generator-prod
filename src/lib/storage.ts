@@ -1,6 +1,7 @@
 import { SkinProject } from './schema';
 import { PLATFORM_ASSETS } from './platformAssets';
 import { migrateProjectIdentities } from './identity';
+import { migrateTwitterProject } from './twitter';
 
 const KEY = 'ao3SkinProject';
 
@@ -53,6 +54,119 @@ function sanitizeMessage(msg: unknown): { id: string; sender: string; content: s
     avatarUrl: sanitizeStoredUrl(m.avatarUrl),
     reaction: typeof m.reaction === 'string' ? sanitizeString(m.reaction, 10) : undefined,
     characterId: typeof m.characterId === 'string' ? sanitizeString(m.characterId, 100) : undefined,
+    parentId: typeof m.parentId === 'string' ? sanitizeString(m.parentId, 100) : undefined,
+    replyToHandles: Array.isArray(m.replyToHandles)
+      ? m.replyToHandles.slice(0, 20).flatMap(value => typeof value === 'string' ? [sanitizeString(value, 100).replace(/^@+/, '')] : [])
+      : undefined,
+    twitterLayout: m.twitterLayout === 'expanded' || m.twitterLayout === 'compact' || m.twitterLayout === 'auto' ? m.twitterLayout : undefined,
+    twitterReplyHandlesMode: m.twitterReplyHandlesMode === 'manual' || m.twitterReplyHandlesMode === 'auto' ? m.twitterReplyHandlesMode : undefined,
+    twitterMediaCrop: m.twitterMediaCrop === 'auto' || m.twitterMediaCrop === 'fill-width' || m.twitterMediaCrop === 'fill-height' ? m.twitterMediaCrop : undefined,
+    attachments: sanitizeStoredAttachments(m.attachments),
+    twitterQuote: sanitizeStoredQuote(m.twitterQuote),
+    twitterVideo: sanitizeStoredVideo(m.twitterVideo),
+    twitterPoll: sanitizeStoredPoll(m.twitterPoll),
+    twitterTranslation: sanitizeStoredTranslation(m.twitterTranslation),
+    twitterActivity: sanitizeStoredActivity(m.twitterActivity),
+    twitterAccountLabel: typeof m.twitterAccountLabel === 'string' ? sanitizeString(m.twitterAccountLabel, 50) : undefined,
+  };
+}
+
+function sanitizeStoredAttachments(value: unknown) {
+  if (!Array.isArray(value)) return undefined;
+  return value.slice(0, 4).flatMap(candidate => {
+    if (!candidate || typeof candidate !== 'object') return [];
+    const raw = candidate as Record<string, unknown>;
+    const url = sanitizeStoredUrl(raw.url);
+    if (!url) return [];
+    return [{
+      type: 'image' as const,
+      url,
+      ...(typeof raw.alt === 'string' ? { alt: sanitizeString(raw.alt, 500) } : {}),
+      ...(typeof raw.decorative === 'boolean' ? { decorative: raw.decorative } : {}),
+    }];
+  });
+}
+
+function sanitizeStoredQuote(value: unknown) {
+  if (!value || typeof value !== 'object') return undefined;
+  const raw = value as Record<string, unknown>;
+  return {
+    ...(typeof raw.characterId === 'string' ? { characterId: sanitizeString(raw.characterId, 100) } : {}),
+    ...(typeof raw.name === 'string' ? { name: sanitizeString(raw.name, 200) } : {}),
+    ...(typeof raw.handle === 'string' ? { handle: sanitizeString(raw.handle, 100).replace(/^@+/, '') } : {}),
+    ...(sanitizeStoredUrl(raw.avatarUrl) ? { avatarUrl: sanitizeStoredUrl(raw.avatarUrl) } : {}),
+    ...(typeof raw.verified === 'boolean' ? { verified: raw.verified } : {}),
+    text: sanitizeString(raw.text, 2_000),
+    ...(typeof raw.timestamp === 'string' ? { timestamp: sanitizeString(raw.timestamp, 200) } : {}),
+    ...(sanitizeStoredAttachments(raw.attachments) ? { attachments: sanitizeStoredAttachments(raw.attachments) } : {}),
+  };
+}
+
+function sanitizeStoredVideo(value: unknown) {
+  if (!value || typeof value !== 'object') return undefined;
+  const raw = value as Record<string, unknown>;
+  if (raw.source !== 'youtube' && raw.source !== 'direct') return undefined;
+  return {
+    source: raw.source,
+    url: sanitizeStoredUrl(raw.url),
+    title: sanitizeString(raw.title, 200),
+    ...(sanitizeStoredUrl(raw.posterUrl) ? { posterUrl: sanitizeStoredUrl(raw.posterUrl) } : {}),
+    ...(typeof raw.duration === 'string' ? { duration: sanitizeString(raw.duration, 30) } : {}),
+    ...(typeof raw.description === 'string' ? { description: sanitizeString(raw.description, 2_000) } : {}),
+    ...(typeof raw.mimeType === 'string' ? { mimeType: sanitizeString(raw.mimeType, 100) } : {}),
+    ...(sanitizeStoredUrl(raw.captionTrackUrl) ? { captionTrackUrl: sanitizeStoredUrl(raw.captionTrackUrl) } : {}),
+    ...(typeof raw.captionLanguage === 'string' ? { captionLanguage: sanitizeString(raw.captionLanguage, 40) } : {}),
+    ...(typeof raw.captionLabel === 'string' ? { captionLabel: sanitizeString(raw.captionLabel, 100) } : {}),
+  };
+}
+
+function sanitizeStoredPoll(value: unknown) {
+  if (!value || typeof value !== 'object') return undefined;
+  const raw = value as Record<string, unknown>;
+  if ((raw.state !== 'open' && raw.state !== 'closed') || !Array.isArray(raw.options)) return undefined;
+  const options = raw.options.slice(0, 4).flatMap(candidate => {
+    if (!candidate || typeof candidate !== 'object') return [];
+    const option = candidate as Record<string, unknown>;
+    const optionId = sanitizeString(option.id, 100);
+    if (!optionId) return [];
+    return [{
+      id: optionId,
+      text: sanitizeString(option.text, 200),
+      ...(typeof option.percent === 'number' && Number.isFinite(option.percent) ? { percent: Math.max(0, Math.min(100, option.percent)) } : {}),
+      ...(typeof option.votes === 'number' && Number.isFinite(option.votes) ? { votes: Math.max(0, Math.floor(option.votes)) } : {}),
+    }];
+  });
+  if (options.length < 2) return undefined;
+  return {
+    state: raw.state,
+    options,
+    ...(typeof raw.totalVotes === 'number' ? { totalVotes: Math.max(0, Math.floor(raw.totalVotes)) } : {}),
+    ...(typeof raw.timeRemaining === 'string' ? { timeRemaining: sanitizeString(raw.timeRemaining, 100) } : {}),
+    ...(typeof raw.finalLabel === 'string' ? { finalLabel: sanitizeString(raw.finalLabel, 100) } : {}),
+    ...(typeof raw.selectedOptionId === 'string' ? { selectedOptionId: sanitizeString(raw.selectedOptionId, 100) } : {}),
+  };
+}
+
+function sanitizeStoredTranslation(value: unknown) {
+  if (!value || typeof value !== 'object') return undefined;
+  const raw = value as Record<string, unknown>;
+  if (raw.visibleText !== 'original' && raw.visibleText !== 'translated') return undefined;
+  return {
+    ...(typeof raw.languageLabel === 'string' ? { languageLabel: sanitizeString(raw.languageLabel, 100) } : {}),
+    originalText: sanitizeString(raw.originalText, MAX_CONTENT_LENGTH),
+    translatedText: sanitizeString(raw.translatedText, MAX_CONTENT_LENGTH),
+    visibleText: raw.visibleText,
+  };
+}
+
+function sanitizeStoredActivity(value: unknown) {
+  if (!value || typeof value !== 'object') return undefined;
+  const raw = value as Record<string, unknown>;
+  if ((raw.type !== 'liked' && raw.type !== 'reposted') || !Array.isArray(raw.actorCharacterIds)) return undefined;
+  return {
+    type: raw.type,
+    actorCharacterIds: raw.actorCharacterIds.slice(0, 20).flatMap(entry => typeof entry === 'string' ? [sanitizeString(entry, 100)] : []),
+    ...(typeof raw.additionalCount === 'number' ? { additionalCount: Math.max(0, Math.min(9999, Math.floor(raw.additionalCount))) } : {}),
   };
 }
 
@@ -162,6 +276,16 @@ export function loadStoredProject<T extends SkinProject>(fallback: () => T): T {
       twitterAvatarUrl: sanitizeStoredUrl(parsed.settings.twitterAvatarUrl),
       twitterQuoteAvatar: sanitizeStoredUrl(parsed.settings.twitterQuoteAvatar),
       twitterQuoteImage: sanitizeStoredUrl(parsed.settings.twitterQuoteImage),
+      twitterSceneMode: parsed.settings.twitterSceneMode === 'single'
+        || parsed.settings.twitterSceneMode === 'timeline'
+        || parsed.settings.twitterSceneMode === 'thread'
+        ? parsed.settings.twitterSceneMode
+        : undefined,
+      twitterTheme: parsed.settings.twitterTheme === 'light'
+        || parsed.settings.twitterTheme === 'dim'
+        || parsed.settings.twitterTheme === 'dark'
+        ? parsed.settings.twitterTheme
+        : undefined,
     };
     
     const sanitizedProject = {
@@ -174,7 +298,7 @@ export function loadStoredProject<T extends SkinProject>(fallback: () => T): T {
       messages: sanitizedMessages,
       cast: sanitizeStoredCast(parsed.cast),
     } as T;
-    return migrateProjectIdentities(sanitizedProject) as T;
+    return migrateTwitterProject(migrateProjectIdentities(sanitizedProject)) as T;
   } catch (e) { 
     console.warn('Failed to load stored project:', e);
     return fallback(); 

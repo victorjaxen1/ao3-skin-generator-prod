@@ -2,6 +2,7 @@ import { SkinProject } from './schema';
 import { Violation } from './siteSkin/ao3Css';
 import { getExpiringUrlWarning } from './urlNormalize';
 import { contrastRatio } from './siteSkin/colors';
+import { resolveTwitterTheme } from './twitter';
 
 export interface PreflightItem {
   id: string;
@@ -36,6 +37,12 @@ function sceneContrast(project: SkinProject): number | null {
       contrastRatio(compositeHex(project.settings.receiverColor, opacity, page), '#000000')
     );
   }
+  if (project.template === 'twitter') {
+    const theme = resolveTwitterTheme(project.settings);
+    if (theme === 'light') return contrastRatio('#ffffff', '#0f1419');
+    if (theme === 'dim') return contrastRatio('#15202b', '#f7f9f9');
+    return contrastRatio('#000000', '#e7e9ea');
+  }
   return null;
 }
 
@@ -45,15 +52,23 @@ export function buildWorkSkinPreflight(
   violations: Violation[],
   hasBackup: boolean
 ): PreflightItem[] {
-  const attachments = project.messages.flatMap(message => message.attachments || []);
+  const attachments = project.messages.flatMap(message => [
+    ...(message.attachments || []),
+    ...(message.twitterQuote?.attachments || []),
+  ]);
   const missingAlt = attachments.filter(attachment => !attachment.decorative && !attachment.alt?.trim()).length;
   const expiring = attachments.filter(attachment => !!getExpiringUrlWarning(attachment.url)).length;
   const missingSpeaker = (project.template === 'ios' || project.template === 'android')
     && project.messages.some(message => !message.outgoing && !message.sender.trim() && !message.participantId);
   const longUnbroken = project.messages.some(message => /\S{90,}/.test(message.content));
   const bubbleContrast = sceneContrast(project);
+  const videosMissingFallback = project.messages.filter(message => message.twitterVideo
+    && !message.twitterVideo.description?.trim()
+    && !message.twitterVideo.captionTrackUrl).length;
+  const unsafeIframe = /<iframe\b[^>]*src="(?!https:\/\/(?:www\.)?youtube(?:-nocookie)?\.com\/embed\/[A-Za-z0-9_-]{11})/i.test(html);
   const htmlContractOk = /^<div class="(?:chat|tweets)\b/.test(html)
-    && !/<(?:script|iframe|object|embed)\b/i.test(html);
+    && !/<(?:script|object|embed)\b/i.test(html)
+    && !unsafeIframe;
 
   return [
     {
@@ -95,6 +110,14 @@ export function buildWorkSkinPreflight(
         : bubbleContrast >= 4.5
         ? `Bubble text contrast is at least ${bubbleContrast.toFixed(1)}:1.`
         : `Bubble text contrast falls to ${bubbleContrast.toFixed(1)}:1; review the colours in the preview.`,
+    },
+    {
+      id: 'video-fallback',
+      severity: 'warn',
+      status: videosMissingFallback ? 'fail' : 'pass',
+      message: videosMissingFallback
+        ? `${videosMissingFallback} video ${videosMissingFallback === 1 ? 'post needs' : 'posts need'} a description/transcript or caption track.`
+        : 'Video posts retain a description/transcript or caption fallback.',
     },
     {
       id: 'mobile-overflow',

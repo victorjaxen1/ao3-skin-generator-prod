@@ -10,12 +10,14 @@ import {
   TextRow,
   AdvancedSection,
 } from './SettingsRows';
+import { resolveTwitterSceneMode } from '../lib/twitter';
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
   template: 'ios' | 'android' | 'twitter' | 'google';
   settings: SkinSettings;
+  messageCount?: number;
   onUpdateSettings: <K extends keyof SkinSettings>(key: K, value: SkinSettings[K]) => void;
 }
 
@@ -63,6 +65,7 @@ export const SettingsSheet: React.FC<Props> = ({
   onClose,
   template,
   settings,
+  messageCount = 0,
   onUpdateSettings,
 }) => {
   // The participant add/remove/update handlers moved to CastPanel with the
@@ -170,10 +173,25 @@ export const SettingsSheet: React.FC<Props> = ({
             panel — they are who is posting, not how it looks. */}
         {template === 'twitter' && (
           <>
-            <ToggleRow
-              label="Dark mode"
-              checked={settings.twitterDarkMode || false}
-              onChange={(v) => onUpdateSettings('twitterDarkMode', v)}
+            <SelectRow
+              label="Scene mode"
+              value={resolveTwitterSceneMode(settings, messageCount)}
+              options={[
+                { value: 'single', label: 'Single post' },
+                { value: 'timeline', label: 'Timeline' },
+                { value: 'thread', label: 'Thread' },
+              ]}
+              onChange={(v) => onUpdateSettings('twitterSceneMode', v as SkinSettings['twitterSceneMode'])}
+            />
+            <SelectRow
+              label="Theme"
+              value={settings.twitterTheme || (settings.twitterDarkMode ? 'dark' : 'light')}
+              options={[
+                { value: 'light', label: 'Light' },
+                { value: 'dim', label: 'Dim' },
+                { value: 'dark', label: 'Dark' },
+              ]}
+              onChange={(v) => onUpdateSettings('twitterTheme', v as SkinSettings['twitterTheme'])}
             />
             <ToggleRow
               label="Show metrics"
@@ -181,72 +199,6 @@ export const SettingsSheet: React.FC<Props> = ({
               checked={settings.twitterShowMetrics !== false}
               onChange={(v) => onUpdateSettings('twitterShowMetrics', v)}
             />
-            <TextRow
-              label="Timestamp"
-              value={settings.twitterTimestamp || ''}
-              placeholder="2:15 PM · Nov 26, 2025"
-              onChange={(v) => onUpdateSettings('twitterTimestamp', v)}
-            />
-
-            {/* Its own collapsible rather than four top-level rows. It IS an
-                identity — a name, a handle, a badge, a picture — but it is
-                welded to a feature toggle and applies to *every* tweet in the
-                project, since the generator builds the block from
-                project.settings inside msgHTML. Splitting the identity fields
-                into the People panel and leaving the toggle here would scatter
-                one feature across two surfaces; keeping it whole and folded
-                away costs one click and no coherence.
-
-                A second collapsible is fine. A second one named "Advanced" is
-                not — settings-render.spec.ts asserts exactly one of those. */}
-            <AdvancedSection label="Quote tweet">
-              <ToggleRow
-                label="Enable quote tweet"
-                sublabel="Embed another post inside yours"
-                checked={settings.twitterQuoteEnabled || false}
-                onChange={(v) => onUpdateSettings('twitterQuoteEnabled', v)}
-              />
-              {settings.twitterQuoteEnabled && (
-                <>
-                  <TextRow
-                    label="Quoted name"
-                    value={settings.twitterQuoteName || ''}
-                    placeholder="Quoted User"
-                    onChange={(v) => onUpdateSettings('twitterQuoteName', v)}
-                  />
-                  <TextRow
-                    label="Quoted handle"
-                    value={settings.twitterQuoteHandle || ''}
-                    placeholder="quoteduser"
-                    onChange={(v) => onUpdateSettings('twitterQuoteHandle', v)}
-                  />
-                  <ToggleRow
-                    label="Quoted account verified"
-                    checked={settings.twitterQuoteVerified || false}
-                    onChange={(v) => onUpdateSettings('twitterQuoteVerified', v)}
-                  />
-                  <TextRow
-                    label="Quoted text"
-                    value={settings.twitterQuoteText || ''}
-                    placeholder="Original tweet text"
-                    onChange={(v) => onUpdateSettings('twitterQuoteText', v)}
-                  />
-                  <div className="py-3">
-                    <span className="text-sm font-medium text-stone-900 block mb-2">Quoted profile picture</span>
-                    <AvatarSelector
-                      value={settings.twitterQuoteAvatar || ''}
-                      onChange={(v) => onUpdateSettings('twitterQuoteAvatar', v)}
-                      placeholder="Paste an image address, or pick a preset"
-                    />
-                  </div>
-                  <ImageUrlRow
-                    label="Image in the quoted post"
-                    value={settings.twitterQuoteImage || ''}
-                    onChange={(v) => onUpdateSettings('twitterQuoteImage', v)}
-                  />
-                </>
-              )}
-            </AdvancedSection>
           </>
         )}
 
@@ -304,22 +256,6 @@ export const SettingsSheet: React.FC<Props> = ({
         {/* One Advanced section, not two — the platform-specific rows and the
             shared ones live together so there is a single place to look. */}
         <AdvancedSection>
-          {template === 'twitter' && (
-            // Demoted, and the sublabel says why. The generator reads parentId,
-            // replyToHandles and expandedView to draw the connecting lines, but
-            // **no component writes any of them** — so the toggle threads
-            // conversations that arrived from a loaded example and does nothing
-            // at all for anything you author here. Presenting it as a top-level
-            // feature promises something the app cannot currently do. Giving
-            // replies a real editor is a feature, not a refinement.
-            <ToggleRow
-              label="Thread mode"
-              sublabel="Connects tweets with lines. Replies currently come from example templates only."
-              checked={settings.twitterThreadMode || false}
-              onChange={(v) => onUpdateSettings('twitterThreadMode', v)}
-            />
-          )}
-
           {template === 'ios' && (
             <>
               <ToggleRow

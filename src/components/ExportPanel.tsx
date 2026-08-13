@@ -12,6 +12,7 @@ import { buildSceneTranscript, defaultSceneAlt } from '../lib/transcript';
 import { buildWorkSkinPreflight } from '../lib/preflight';
 import { hasProjectBackup } from '../lib/backupStatus';
 import { downloadTextFile, safeFilenamePart } from '../lib/download';
+import { getTwitterSceneMode, partitionTwitterSceneForExport } from '../lib/twitter';
 
 interface Props {
   project: SkinProject;
@@ -185,7 +186,7 @@ async function renderChunk(
   let outerPadding = '24px';
   let extraWidth = 48;
   if (project.template === 'twitter') {
-    if (project.settings.twitterThreadMode) {
+    if (getTwitterSceneMode(project) === 'thread') {
       outerPadding = '20px';
       extraWidth = 64;
     } else {
@@ -224,7 +225,7 @@ async function renderChunk(
   }
 
   if (project.template === 'twitter') {
-    if (project.settings.twitterThreadMode) {
+    if (getTwitterSceneMode(project) === 'thread') {
       clone.style.padding = '0 40px 0 20px';
       clone.style.width = `${previewWidth + 60}px`;
       clone.style.maxWidth = `${previewWidth + 60}px`;
@@ -319,6 +320,26 @@ async function renderChunk(
     clone.querySelectorAll('.tweet .head').forEach(el => {
       (el as HTMLElement).style.cssText += ';overflow:visible';
     });
+    // A header without an avatar collapses to the same 20px line box as
+    // `.head`. The outer header still clips overflow to contain the optional
+    // avatar float, so html2canvas's lower text paint was merely moved from one
+    // clipping edge to another by the fix above. Reserve five raster-only
+    // pixels inside that outer edge. Reduce its margin by the same amount so
+    // the tweet body keeps its browser/AO3 position.
+    clone.querySelectorAll('.tweet .tweet-header').forEach(el => {
+      (el as HTMLElement).style.cssText += ';padding-bottom:5px;margin-bottom:7px';
+    });
+    // html2canvas also paints a wrapped body line about 6px below Chromium's
+    // measured line box. A following rich block therefore began across the
+    // lower half of that last line even though Preview had the correct 0.75em
+    // margin. Move only raster rich blocks down by eight CSS pixels and reserve
+    // the same amount in flow so consecutive cards cannot overlap. Verified at
+    // both 1× and 2× by the real-download raster test.
+    clone
+      .querySelectorAll('.tweet .twitter-media-grid,.tweet .twitter-video-card,.tweet .quote,.tweet .twitter-poll')
+      .forEach(el => {
+        (el as HTMLElement).style.cssText += ';position:relative;top:8px;margin-bottom:8px';
+      });
     clone
       .querySelectorAll('.tweet .name,.tweet .handle,.tweet .follow-dot,.tweet .follow-btn')
       .forEach(el => {
@@ -489,6 +510,40 @@ async function renderChunk(
 
 const CHUNK_SIZE = 15;
 
+function exportMessageChunks(project: SkinProject): SkinProject['messages'][] {
+  if (project.template !== 'twitter') {
+    const chunks: SkinProject['messages'][] = [];
+    for (let i = 0; i < project.messages.length; i += CHUNK_SIZE) chunks.push(project.messages.slice(i, i + CHUNK_SIZE));
+    return chunks.length ? chunks : [[]];
+  }
+  return partitionTwitterSceneForExport(project, CHUNK_SIZE).map((partition, index) => {
+    if (!partition.continuation) return partition.messages;
+    const root = project.messages.find(message => message.id === partition.continuation!.rootMessageId);
+    const context = {
+      ...(root || partition.messages[0]),
+      id: `twitter-continuation-${index}`,
+      content: `Thread continued from @${partition.continuation.handle}: ${partition.continuation.excerpt}`,
+      parentId: undefined,
+      replyToHandles: undefined,
+      twitterReplyHandlesMode: undefined,
+      twitterLayout: 'compact' as const,
+      twitterAccountLabel: 'Thread continuation',
+      attachments: undefined,
+      twitterVideo: undefined,
+      twitterQuote: undefined,
+      twitterPoll: undefined,
+      twitterTranslation: undefined,
+      twitterActivity: undefined,
+      twitterLikes: undefined,
+      twitterRetweets: undefined,
+      twitterReplies: undefined,
+      twitterViews: undefined,
+      twitterBookmarks: undefined,
+    };
+    return [context, ...partition.messages];
+  });
+}
+
 async function renderAllChunks(
   project: SkinProject,
   scale: number,
@@ -501,10 +556,7 @@ async function renderAllChunks(
     return [await renderChunk(project, scale, onImageWarning)];
   }
 
-  const chunks: (typeof messages)[] = [];
-  for (let i = 0; i < messages.length; i += CHUNK_SIZE) {
-    chunks.push(messages.slice(i, i + CHUNK_SIZE));
-  }
+  const chunks = exportMessageChunks(project);
 
   const canvases: HTMLCanvasElement[] = [];
   for (let i = 0; i < chunks.length; i++) {
@@ -553,7 +605,7 @@ async function exportAsAO3(
   onProgress: (stage: string, current: number, total: number) => void,
   onImageWarning?: (failed: FailedImage[]) => void
 ): Promise<string> {
-  const totalChunks = Math.max(1, Math.ceil((project.messages.length || 1) / CHUNK_SIZE));
+  const totalChunks = exportMessageChunks(project).length;
 
   onProgress('Rendering', 0, totalChunks);
 
@@ -1118,6 +1170,7 @@ export const ExportPanel: React.FC<Props> = ({
             <div className="p-5 space-y-4 overflow-y-auto">
               <textarea
                 readOnly
+                aria-label="AO3 hosted image code"
                 value={ao3Code}
                 rows={Math.max(3, Math.min(10, ao3Code.split('\n').length + 1))}
                 className="w-full font-mono text-xs bg-gray-950 text-green-400 border border-gray-700 rounded-lg p-3 resize-none focus:outline-none"

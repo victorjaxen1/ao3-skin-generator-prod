@@ -277,6 +277,7 @@ export const CONTAINER_CLASSES: readonly string[] = [
   'tweets',
   'css-tails',
   'theme-light',
+  'theme-dim',
   'theme-dark',
 ];
 
@@ -328,7 +329,7 @@ function platformCss(project: SkinProject): string {
 
 /** One platform's markup, with the four export-only rewrites applied. */
 function platformHtml(project: SkinProject, options: WorkSkinOptions = {}): string {
-  const html = useCssBubbleTails(absolutizeAssets(stripEditorAttributes(buildHTML(project))));
+  const html = useCssBubbleTails(absolutizeAssets(stripEditorAttributes(buildHTML(project, 'ao3-work'))));
   return options.includeCredit ? appendCredit(html) : html;
 }
 
@@ -380,7 +381,7 @@ export const MASTER_TEMPLATES: readonly WorkSkinTemplate[] = [
  * mechanical, and reasoning about what is "really released" is how a version
  * stamp stops being trustworthy.
  */
-export const MASTER_SKIN_VERSION = 2;
+export const MASTER_SKIN_VERSION = 4;
 
 function versionRule(): string {
   return `#workskin .ao3skingen-v${MASTER_SKIN_VERSION}::after{content:'${MASTER_SKIN_VERSION}';}`;
@@ -463,16 +464,17 @@ function blockProject(project: SkinProject, template: WorkSkinTemplate): SkinPro
     : withPlatformLook(project, template);
 }
 
-function themeVariantCss(project: SkinProject, template: WorkSkinTemplate): string {
+function themeVariantCss(project: SkinProject, template: WorkSkinTemplate): string[] {
   const scoped = blockProject(project, template);
   const theme = platformTheme(scoped);
-  if (!theme) return ''; // Google has no theme, so there is nothing to vary.
+  if (!theme) return []; // Google has no theme, so there is nothing to vary.
 
-  // The base block already serves the author's own setting; only the theme they
-  // did *not* pick needs carrying. Symmetric: an author working in dark mode
-  // gets the light variant, not "a dark mode added".
-  const other: SkinTheme = theme === 'dark' ? 'light' : 'dark';
-  return namespaceCss(platformCss(withPlatformTheme(scoped, other)), template, other);
+  const supported: SkinTheme[] = template === 'twitter'
+    ? ['light', 'dim', 'dark']
+    : ['light', 'dark'];
+  return supported
+    .filter(candidate => candidate !== theme)
+    .map(candidate => namespaceCss(platformCss(withPlatformTheme(scoped, candidate)), template, candidate));
 }
 
 /**
@@ -529,8 +531,7 @@ export function buildMasterWorkSkin(
   // decides this — a variant rule carries one class more than its base twin —
   // so the order is for whoever reads the skin, not for the cascade.
   const variants = MASTER_TEMPLATES
-    .map((template) => themeVariantCss(project, template))
-    .filter(Boolean);
+    .flatMap((template) => themeVariantCss(project, template));
 
   const css = [versionRule(), ...blocks, ...variants].join('\n');
 

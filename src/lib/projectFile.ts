@@ -1,4 +1,4 @@
-import { defaultProject, GroupParticipant, Message, SceneCast, SceneCharacter, SkinProject, SkinSettings, TwitterCharacter, UniversalCharacter } from './schema';
+import { defaultProject, GroupParticipant, Message, SceneCast, SceneCharacter, SkinProject, SkinSettings, TwitterActivity, TwitterCharacter, TwitterPoll, TwitterQuotePost, TwitterTranslation, TwitterVideo, UniversalCharacter } from './schema';
 import { validateCharacterLibrary } from './characterStorage';
 import { migrateProjectIdentities, normalizeTwitterHandle } from './identity';
 import {
@@ -14,8 +14,9 @@ import {
 } from './siteSkin/theme';
 import { checkAo3ImageUrl } from './siteSkin/ao3Css';
 import { DEFAULT_TEMPLATE, cloneTheme } from './siteSkin/templates';
+import { getTwitterPollError, migrateTwitterProject, validateTwitterRelationships, validateTwitterVideo } from './twitter';
 
-export const PROJECT_FILE_SCHEMA_VERSION = 2;
+export const PROJECT_FILE_SCHEMA_VERSION = 4;
 export const PROJECT_FILE_MAX_BYTES = 2 * 1024 * 1024;
 export const APPLICATION_VERSION = '0.1.0';
 
@@ -46,7 +47,25 @@ export interface SceneProjectFileV2 {
   characterLibrary: UniversalCharacter[];
 }
 
-export type SceneProjectFile = SceneProjectFileV2;
+export interface SceneProjectFileV3 {
+  format: 'ao3skingen-project';
+  schemaVersion: 3;
+  exportedAt: string;
+  application: { name: 'AO3 SkinGen'; version: string };
+  project: SkinProject;
+  characterLibrary: UniversalCharacter[];
+}
+
+export interface SceneProjectFileV4 {
+  format: 'ao3skingen-project';
+  schemaVersion: 4;
+  exportedAt: string;
+  application: { name: 'AO3 SkinGen'; version: string };
+  project: SkinProject;
+  characterLibrary: UniversalCharacter[];
+}
+
+export type SceneProjectFile = SceneProjectFileV4;
 
 export interface SiteThemeFileV1 {
   format: 'ao3skingen-site-theme';
@@ -160,6 +179,106 @@ function validateAttachment(value: unknown, index: number) {
   };
 }
 
+function httpsUrl(value: unknown, label: string, required = false): string {
+  const raw = string(value, label, 2048, required);
+  if (!raw) return '';
+  if (/[<>]/.test(raw)) invalid(`${label} cannot contain embed markup.`);
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol === 'https:') return raw;
+  } catch { /* handled below */ }
+  invalid(`${label} must be an absolute HTTPS address.`);
+}
+
+function validateTwitterQuote(value: unknown, label: string): TwitterQuotePost {
+  const raw = object(value, label);
+  const attachments = raw.attachments === undefined
+    ? undefined
+    : Array.isArray(raw.attachments)
+      ? raw.attachments.slice(0, 4).map(validateAttachment)
+      : invalid(`${label} attachments must be a list.`);
+  return {
+    ...(typeof raw.characterId === 'string' ? { characterId: id(raw.characterId, `${label} character ID`) } : {}),
+    ...(typeof raw.name === 'string' ? { name: string(raw.name, `${label} name`, 200) } : {}),
+    ...(typeof raw.handle === 'string' ? { handle: normalizeTwitterHandle(string(raw.handle, `${label} handle`, 100)) } : {}),
+    ...(typeof raw.avatarUrl === 'string' && raw.avatarUrl ? { avatarUrl: safeUrl(raw.avatarUrl, `${label} avatar`) } : {}),
+    ...(typeof raw.verified === 'boolean' ? { verified: raw.verified } : {}),
+    text: string(raw.text, `${label} text`, 2_000),
+    ...(typeof raw.timestamp === 'string' ? { timestamp: string(raw.timestamp, `${label} timestamp`, 200) } : {}),
+    ...(attachments ? { attachments } : {}),
+  };
+}
+
+function validateTwitterVideoModel(value: unknown, label: string): TwitterVideo {
+  const raw = object(value, label);
+  if (raw.source !== 'youtube' && raw.source !== 'direct') invalid(`${label} source must be youtube or direct.`);
+  const result: TwitterVideo = {
+    source: raw.source,
+    url: httpsUrl(raw.url, `${label} URL`, true),
+    title: string(raw.title, `${label} title`, 200),
+    ...(typeof raw.posterUrl === 'string' && raw.posterUrl ? { posterUrl: httpsUrl(raw.posterUrl, `${label} poster`) } : {}),
+    ...(typeof raw.duration === 'string' ? { duration: string(raw.duration, `${label} duration`, 30) } : {}),
+    ...(typeof raw.description === 'string' ? { description: string(raw.description, `${label} description`, 2_000) } : {}),
+    ...(typeof raw.mimeType === 'string' ? { mimeType: string(raw.mimeType, `${label} MIME type`, 100) } : {}),
+    ...(typeof raw.captionTrackUrl === 'string' && raw.captionTrackUrl ? { captionTrackUrl: httpsUrl(raw.captionTrackUrl, `${label} caption track`) } : {}),
+    ...(typeof raw.captionLanguage === 'string' ? { captionLanguage: string(raw.captionLanguage, `${label} caption language`, 40) } : {}),
+    ...(typeof raw.captionLabel === 'string' ? { captionLabel: string(raw.captionLabel, `${label} caption label`, 100) } : {}),
+  };
+  const issue = validateTwitterVideo(result)[0];
+  if (issue) invalid(`${label}: ${issue}`);
+  return result;
+}
+
+function validateTwitterPollModel(value: unknown, label: string): TwitterPoll {
+  const raw = object(value, label);
+  if (raw.state !== 'open' && raw.state !== 'closed') invalid(`${label} state is invalid.`);
+  if (!Array.isArray(raw.options) || raw.options.length < 2 || raw.options.length > 4) invalid(`${label} needs two to four options.`);
+  const options = raw.options.map((entry, index) => {
+    const option = object(entry, `${label} option ${index + 1}`);
+    return {
+      id: id(option.id, `${label} option ${index + 1} ID`),
+      text: string(option.text, `${label} option ${index + 1} text`, 200, true),
+      ...(typeof option.percent === 'number' && Number.isFinite(option.percent) ? { percent: finite(option.percent, 0, 0, 100) } : {}),
+      ...(typeof option.votes === 'number' && Number.isFinite(option.votes) ? { votes: Math.floor(finite(option.votes, 0, 0, 1_000_000_000)) } : {}),
+    };
+  });
+  if (new Set(options.map(option => option.id)).size !== options.length) invalid(`${label} option IDs must be unique.`);
+  const result: TwitterPoll = {
+    state: raw.state,
+    options,
+    ...(typeof raw.totalVotes === 'number' ? { totalVotes: Math.floor(finite(raw.totalVotes, 0, 0, 1_000_000_000)) } : {}),
+    ...(typeof raw.timeRemaining === 'string' ? { timeRemaining: string(raw.timeRemaining, `${label} time remaining`, 100) } : {}),
+    ...(typeof raw.finalLabel === 'string' ? { finalLabel: string(raw.finalLabel, `${label} final label`, 100) } : {}),
+    ...(typeof raw.selectedOptionId === 'string' ? { selectedOptionId: id(raw.selectedOptionId, `${label} selected option`) } : {}),
+  };
+  if (result.selectedOptionId && !options.some(option => option.id === result.selectedOptionId)) invalid(`${label} selected option does not exist.`);
+  const issue = getTwitterPollError(result);
+  if (issue) invalid(`${label}: ${issue}`);
+  return result;
+}
+
+function validateTwitterTranslationModel(value: unknown, label: string): TwitterTranslation {
+  const raw = object(value, label);
+  if (raw.visibleText !== 'original' && raw.visibleText !== 'translated') invalid(`${label} visible state is invalid.`);
+  return {
+    ...(typeof raw.languageLabel === 'string' ? { languageLabel: string(raw.languageLabel, `${label} language`, 100) } : {}),
+    originalText: string(raw.originalText, `${label} original text`, 10_000, true),
+    translatedText: string(raw.translatedText, `${label} translated text`, 10_000, true),
+    visibleText: raw.visibleText,
+  };
+}
+
+function validateTwitterActivityModel(value: unknown, label: string): TwitterActivity {
+  const raw = object(value, label);
+  if (raw.type !== 'liked' && raw.type !== 'reposted') invalid(`${label} type is invalid.`);
+  if (!Array.isArray(raw.actorCharacterIds)) invalid(`${label} actors must be a list.`);
+  return {
+    type: raw.type,
+    actorCharacterIds: raw.actorCharacterIds.slice(0, 20).map((entry, index) => id(entry, `${label} actor ${index + 1}`)),
+    ...(typeof raw.additionalCount === 'number' ? { additionalCount: Math.floor(finite(raw.additionalCount, 0, 0, 9999)) } : {}),
+  };
+}
+
 function validateMessage(value: unknown, index: number): Message {
   const raw = object(value, `Message ${index + 1}`);
   const messageId = id(raw.id, `Message ${index + 1} ID`);
@@ -183,11 +302,14 @@ function validateMessage(value: unknown, index: number): Message {
   };
   const optionalStrings: Array<keyof Message> = [
     'timestamp', 'roleColor', 'participantId', 'characterId', 'reaction', 'twitterHandle', 'parentId',
-    'timeBreakText', 'googleResultUrl', 'googleResultDescription',
+    'timeBreakText', 'googleResultUrl', 'googleResultDescription', 'twitterAccountLabel',
   ];
   for (const key of optionalStrings) {
     const value = raw[key];
-    if (typeof value === 'string') (result as unknown as Record<string, unknown>)[key] = value.slice(0, key === 'googleResultDescription' ? 2_000 : 500);
+    if (typeof value === 'string') {
+      const max = key === 'googleResultDescription' ? 2_000 : key === 'twitterAccountLabel' ? 50 : 500;
+      (result as unknown as Record<string, unknown>)[key] = value.slice(0, max);
+    }
   }
   const optionalBooleans: Array<keyof Message> = ['useCustomIdentity', 'verified', 'expandedView', 'showTimeBreak', 'isTyping'];
   for (const key of optionalBooleans) if (typeof raw[key] === 'boolean') (result as unknown as Record<string, unknown>)[key] = raw[key];
@@ -201,6 +323,15 @@ function validateMessage(value: unknown, index: number): Message {
   if (raw.statusMode === 'auto' || raw.statusMode === 'manual') result.statusMode = raw.statusMode;
   if (attachments) result.attachments = attachments;
   if (replyToHandles) result.replyToHandles = replyToHandles;
+  if (raw.twitterLayout === 'auto' || raw.twitterLayout === 'expanded' || raw.twitterLayout === 'compact') result.twitterLayout = raw.twitterLayout;
+  if (raw.twitterReplyHandlesMode === 'auto' || raw.twitterReplyHandlesMode === 'manual') result.twitterReplyHandlesMode = raw.twitterReplyHandlesMode;
+  if (raw.twitterMediaCrop === 'auto' || raw.twitterMediaCrop === 'fill-width' || raw.twitterMediaCrop === 'fill-height') result.twitterMediaCrop = raw.twitterMediaCrop;
+  if (raw.twitterQuote !== undefined) result.twitterQuote = validateTwitterQuote(raw.twitterQuote, `Message ${index + 1} quote`);
+  if (raw.twitterVideo !== undefined) result.twitterVideo = validateTwitterVideoModel(raw.twitterVideo, `Message ${index + 1} video`);
+  if (raw.twitterPoll !== undefined) result.twitterPoll = validateTwitterPollModel(raw.twitterPoll, `Message ${index + 1} poll`);
+  if (raw.twitterTranslation !== undefined) result.twitterTranslation = validateTwitterTranslationModel(raw.twitterTranslation, `Message ${index + 1} translation`);
+  if (raw.twitterActivity !== undefined) result.twitterActivity = validateTwitterActivityModel(raw.twitterActivity, `Message ${index + 1} activity`);
+  if (result.twitterVideo && result.attachments?.length) invalid(`Message ${index + 1} cannot contain both a video and an image grid.`);
   return result;
 }
 
@@ -298,6 +429,14 @@ function validateSettings(value: unknown): SkinSettings {
   }
   if (raw.iosMode === 'imessage' || raw.iosMode === 'sms') result.iosMode = raw.iosMode;
   if (raw.googleEngineVariant === 'google' || raw.googleEngineVariant === 'google-old' || raw.googleEngineVariant === 'naver') result.googleEngineVariant = raw.googleEngineVariant;
+  if (raw.twitterSceneMode === 'single' || raw.twitterSceneMode === 'timeline' || raw.twitterSceneMode === 'thread') result.twitterSceneMode = raw.twitterSceneMode;
+  if (raw.twitterTheme === 'light' || raw.twitterTheme === 'dim' || raw.twitterTheme === 'dark') {
+    result.twitterTheme = raw.twitterTheme;
+  } else {
+    // Keep the field absent until migration. Otherwise the default light value
+    // masks the legacy twitterDarkMode flag in v1-v3 backups.
+    delete result.twitterTheme;
+  }
   if (Array.isArray(raw.googleSuggestions)) result.googleSuggestions = raw.googleSuggestions.slice(0, 20).map((item, i) => string(item, `Suggestion ${i + 1}`, 200, true));
   if (Array.isArray(raw.iosGroupParticipants)) result.iosGroupParticipants = raw.iosGroupParticipants.slice(0, 50).map(validateParticipant);
   if (Array.isArray(raw.androidGroupParticipants)) result.androidGroupParticipants = raw.androidGroupParticipants.slice(0, 50).map(validateParticipant);
@@ -311,11 +450,31 @@ function validateProject(value: unknown): SkinProject {
   if (!Array.isArray(raw.messages)) invalid('Project messages must be a list.');
   if (raw.messages.length > 100) invalid('This backup contains more than 100 messages.');
   const cast = validateCast(raw.cast);
+  const messages = raw.messages.map(validateMessage);
+  if (raw.template === 'twitter') {
+    const castIds = new Set(cast?.characters.map(character => character.id) || []);
+    const invalidIdentity = messages.find(message => message.characterId && !castIds.has(message.characterId));
+    if (invalidIdentity) {
+      invalid(`Twitter message ${invalidIdentity.id} references an account that is not in the scene cast.`);
+    }
+    for (const message of messages) {
+      if (message.twitterQuote?.characterId && !castIds.has(message.twitterQuote.characterId)) {
+        invalid(`Twitter quote in message ${message.id} references an account that is not in the scene cast.`);
+      }
+      const missingActor = message.twitterActivity?.actorCharacterIds.find(actorId => !castIds.has(actorId));
+      if (missingActor) invalid(`Twitter activity in message ${message.id} references an account that is not in the scene cast.`);
+    }
+    const issue = validateTwitterRelationships(messages)[0];
+    if (issue) {
+      const detail = issue.parentId ? ` and parent ${issue.parentId}` : '';
+      invalid(`Twitter relationship ${issue.code} for message ${issue.messageId}${detail}.`);
+    }
+  }
   return {
     id: id(raw.id, 'Project ID'),
     template: raw.template as SkinProject['template'],
     settings: validateSettings(raw.settings),
-    messages: raw.messages.map(validateMessage),
+    messages,
     ...(cast ? { cast } : {}),
   };
 }
@@ -357,16 +516,18 @@ function parseJson(text: string): Record<string, unknown> {
 }
 
 export const PROJECT_FILE_MIGRATIONS: Readonly<Record<number, (value: SkinProject) => SkinProject>> = Object.freeze({
-  1: migrateProjectIdentities,
+  1: (project) => migrateTwitterProject(migrateProjectIdentities(project)),
+  2: (project) => migrateTwitterProject(migrateProjectIdentities(project)),
+  3: (project) => migrateTwitterProject(migrateProjectIdentities(project)),
 });
 
-export function createProjectFile(project: SkinProject, characterLibrary: UniversalCharacter[], now = new Date()): SceneProjectFileV2 {
+export function createProjectFile(project: SkinProject, characterLibrary: UniversalCharacter[], now = new Date()): SceneProjectFileV4 {
   return {
     format: 'ao3skingen-project',
-    schemaVersion: 2,
+    schemaVersion: 4,
     exportedAt: now.toISOString(),
     application: { name: 'AO3 SkinGen', version: APPLICATION_VERSION },
-    project: validateProject(migrateProjectIdentities(project)),
+    project: validateProject(migrateTwitterProject(migrateProjectIdentities(project))),
     characterLibrary: validateCharacterLibrary(characterLibrary),
   };
 }
@@ -375,17 +536,17 @@ export function serializeProjectFile(project: SkinProject, characterLibrary: Uni
   return JSON.stringify(createProjectFile(project, characterLibrary, now), null, 2);
 }
 
-export function parseProjectFile(text: string): SceneProjectFileV2 {
+export function parseProjectFile(text: string): SceneProjectFileV4 {
   const raw = parseJson(text);
   assertExactTopLevel(raw, TOP_SCENE_KEYS);
   const envelope = validateEnvelope(raw, 'ao3skingen-project', PROJECT_FILE_SCHEMA_VERSION);
   const validatedProject = validateProject(raw.project);
-  const project = envelope.schemaVersion === 1
-    ? PROJECT_FILE_MIGRATIONS[1](validatedProject)
-    : migrateProjectIdentities(validatedProject);
+  const project = envelope.schemaVersion < PROJECT_FILE_SCHEMA_VERSION
+    ? PROJECT_FILE_MIGRATIONS[envelope.schemaVersion](validatedProject)
+    : migrateTwitterProject(migrateProjectIdentities(validatedProject));
   return {
     format: 'ao3skingen-project',
-    schemaVersion: 2,
+    schemaVersion: 4,
     exportedAt: envelope.exportedAt,
     application: { name: 'AO3 SkinGen', version: string(object(raw.application, 'Application').version, 'Application version', 40, true) },
     project,
@@ -401,6 +562,11 @@ function projectUrls(project: SkinProject): string[] {
   for (const message of project.messages) {
     if (message.avatarUrl) urls.push(message.avatarUrl);
     for (const attachment of message.attachments || []) if (attachment.url) urls.push(attachment.url);
+    for (const attachment of message.twitterQuote?.attachments || []) if (attachment.url) urls.push(attachment.url);
+    if (message.twitterQuote?.avatarUrl) urls.push(message.twitterQuote.avatarUrl);
+    if (message.twitterVideo?.url) urls.push(message.twitterVideo.url);
+    if (message.twitterVideo?.posterUrl) urls.push(message.twitterVideo.posterUrl);
+    if (message.twitterVideo?.captionTrackUrl) urls.push(message.twitterVideo.captionTrackUrl);
   }
   for (const participant of [...(project.settings.iosGroupParticipants || []), ...(project.settings.androidGroupParticipants || [])]) {
     if (participant.avatarUrl) urls.push(participant.avatarUrl);

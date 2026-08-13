@@ -780,6 +780,94 @@ export const TEMPLATE_EXAMPLES: Record<string, SkinProject[]> = {
   ],
 };
 
+const richTwitterSettings: SkinProject['settings'] = {
+  bubbleOpacity: 1,
+  senderColor: '#1DA1F2',
+  receiverColor: '#f5f8fa',
+  fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
+  maxWidthPx: 600,
+  useDarkNeutral: false,
+  fictionLabel: true,
+  fictionLabelText: 'Fictional scene',
+  twitterShowMetrics: true,
+  twitterSceneMode: 'timeline',
+  twitterTheme: 'light',
+};
+
+TEMPLATE_EXAMPLES.twitter.push(
+  {
+    id: 'twitter-quote-post',
+    template: 'twitter',
+    settings: { ...richTwitterSettings },
+    cast: {
+      twitterPrimaryId: 'casey',
+      characters: [
+        { id: 'casey', name: 'Casey Lin', twitterHandle: 'caseylin', verified: true },
+        { id: 'morgan', name: 'Morgan Reed', twitterHandle: 'morganreed' },
+      ],
+    },
+    messages: [{
+      id: 'quote-1', characterId: 'casey', sender: 'Casey Lin', outgoing: true,
+      content: 'This changes everything.', timestamp: '7:12 PM', twitterLayout: 'expanded',
+      twitterQuote: { characterId: 'morgan', text: 'Meet me at the old station at midnight.', timestamp: '6:58 PM' },
+      twitterLikes: 418, twitterRetweets: 62, twitterReplies: 19,
+    }],
+  },
+  {
+    id: 'twitter-four-image-post',
+    template: 'twitter',
+    settings: { ...richTwitterSettings },
+    cast: { twitterPrimaryId: 'jamie', characters: [{ id: 'jamie', name: 'Jamie Chen', twitterHandle: 'jamiechen' }] },
+    messages: [{
+      id: 'grid-1', characterId: 'jamie', sender: 'Jamie Chen', outgoing: true,
+      content: 'Four clues. One very strange afternoon.', timestamp: '4:04 PM',
+      attachments: [1, 2, 3, 4].map(number => ({ type: 'image' as const, url: `https://placehold.co/600x338/e8eef5/536471?text=Clue+${number}`, alt: `Fictional clue photograph ${number}` })),
+      twitterMediaCrop: 'fill-width',
+    }],
+  },
+  {
+    id: 'twitter-video-post',
+    template: 'twitter',
+    settings: { ...richTwitterSettings, twitterTheme: 'dim' },
+    cast: { twitterPrimaryId: 'rowan', characters: [{ id: 'rowan', name: 'Rowan Vale', twitterHandle: 'rowanvale' }] },
+    messages: [{
+      id: 'video-1', characterId: 'rowan', sender: 'Rowan Vale', outgoing: true,
+      content: 'I caught the greenhouse opening at dawn.', timestamp: '6:10 AM',
+      twitterVideo: {
+        source: 'direct',
+        url: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
+        mimeType: 'video/mp4',
+        posterUrl: 'https://placehold.co/600x338/183447/f7f9f9?text=Flower+at+dawn',
+        title: 'Flower opening at dawn',
+        duration: '0:30',
+        description: 'A time-lapse of a white flower opening against a dark background.',
+      },
+    }],
+  },
+  {
+    id: 'twitter-long-thread',
+    template: 'twitter',
+    settings: { ...richTwitterSettings, twitterSceneMode: 'thread', twitterTheme: 'dark' },
+    cast: {
+      twitterPrimaryId: 'alex',
+      characters: [
+        { id: 'alex', name: 'Alex Rivers', twitterHandle: 'alexrivers' },
+        { id: 'sam', name: 'Sam Ortiz', twitterHandle: 'samortiz' },
+      ],
+    },
+    messages: Array.from({ length: 18 }, (_, index) => ({
+      id: `long-${index + 1}`,
+      characterId: index % 4 === 3 ? 'sam' : 'alex',
+      sender: index % 4 === 3 ? 'Sam Ortiz' : 'Alex Rivers',
+      outgoing: index % 4 !== 3,
+      content: index === 0 ? 'A long thread built to demonstrate safe hosted-image continuation.' : `Thread entry ${index + 1}: the story continues without losing its parent context.`,
+      timestamp: `8:${String(index).padStart(2, '0')} PM`,
+      ...(index > 0 ? { parentId: `long-${index}` } : {}),
+      twitterReplyHandlesMode: index > 0 ? 'auto' as const : undefined,
+    })),
+  },
+);
+
 // Get example names for UI display
 export function getExampleNames(template: string): Array<{id: string; name: string; description: string}> {
   switch(template) {
@@ -788,6 +876,10 @@ export function getExampleNames(template: string): Array<{id: string; name: stri
         { id: 'twitter-character-thread', name: '🧵 Character Thread', description: 'Multi-part tweet thread with custom profile' },
         { id: 'twitter-verified-account', name: '✓ Verified Account', description: 'Celebrity tweet with engagement stats' },
         { id: 'twitter-media-image', name: '📷 Tweet with Media', description: 'Tweet with attached photo' },
+        { id: 'twitter-quote-post', name: '↗ Quote Post', description: 'Per-post quote using a live scene account' },
+        { id: 'twitter-four-image-post', name: '▦ Four-Image Grid', description: 'Accessible two-by-two media post' },
+        { id: 'twitter-video-post', name: '▶ Video Poster', description: 'Rights-safe video with static export fallback' },
+        { id: 'twitter-long-thread', name: '🧵 Long Thread', description: 'Thread that crosses a hosted-export boundary' },
       ];
     case 'ios':
       return [

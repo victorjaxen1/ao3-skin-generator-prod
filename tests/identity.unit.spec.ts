@@ -196,14 +196,16 @@ test.describe('scene identities', () => {
     expect(html).toContain('>Casey Jones</div>');
   });
 
-  test('instantiates isolated Twitter templates whose main posts follow the primary account', () => {
+  test('instantiates isolated Twitter templates whose posts reference live scene accounts', () => {
     for (const template of TEMPLATE_EXAMPLES.twitter) {
       const first = instantiateTemplate(template);
       const second = instantiateTemplate(template);
       expect(first).not.toBe(template);
       expect(first.id).not.toBe(second.id);
       expect(first.cast?.twitterPrimaryId).toBeTruthy();
-      expect(first.messages.every(message => message.characterId === first.cast?.twitterPrimaryId)).toBe(true);
+      const castIds = new Set(first.cast?.characters.map(character => character.id));
+      expect(first.messages.every(message => !!message.characterId && castIds.has(message.characterId))).toBe(true);
+      expect(first.messages.some(message => message.characterId === first.cast?.twitterPrimaryId)).toBe(true);
       expect(first.messages.every(message => !message.useCustomIdentity)).toBe(true);
     }
   });

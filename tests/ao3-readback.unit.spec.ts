@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { readdirSync, readFileSync, statSync } from 'fs';
 import { join } from 'path';
-import { buildMasterWorkSkin } from '../src/lib/workSkin';
+import { buildMasterWorkSkin, MASTER_SKIN_VERSION } from '../src/lib/workSkin';
 import { defaultProject } from '../src/lib/schema';
 
 /**
@@ -86,6 +86,11 @@ test('AO3 readback — the archive stored every rule we sent', () => {
 
   console.log(`  [MEASURE] readback: ${path!.replace(ROOT, '.')}`);
   const stored = parse(readFileSync(path!, 'utf-8'));
+  const storedText = readFileSync(path!, 'utf-8');
+  test.skip(
+    !storedText.includes(`.ao3skingen-v${MASTER_SKIN_VERSION}`),
+    `The newest AO3 readback predates master-skin v${MASTER_SKIN_VERSION}; create a fresh readback before release.`,
+  );
   const ours = parse(buildMasterWorkSkin({ ...defaultProject(), template: 'ios' }).css);
 
   const props = (rs: Rule[]) => rs.reduce((n, r) => n + r.props.length, 0);

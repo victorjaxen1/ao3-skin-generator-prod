@@ -156,3 +156,51 @@ test('the image export still works alongside it', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Save PNG' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Get AO3 image code' })).toBeVisible();
 });
+
+test('Twitter video players exist only in copied work HTML, never the raster preview or ImgBB payload', async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.addInitScript(project => localStorage.setItem('ao3SkinProject', JSON.stringify(project)), {
+    id: 'media-boundary', template: 'twitter',
+    settings: {
+      bubbleOpacity: 1, senderColor: '#1DA1F2', receiverColor: '#f5f8fa',
+      fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif', maxWidthPx: 600,
+      useDarkNeutral: false, twitterSceneMode: 'timeline', twitterTheme: 'light',
+      twitterShowMetrics: false, fictionLabel: true, fictionLabelText: 'Fictional scene',
+    },
+    messages: [{
+      id: 'video', sender: 'User', content: 'Watch this', outgoing: true,
+      twitterVideo: { source: 'youtube', url: 'https://youtu.be/bN8449nalT8?feature=share', title: 'Story clip', description: 'Transcript.' },
+    }],
+  });
+  await page.goto('/');
+
+  const preview = page.locator('#workskin').first();
+  await expect(preview.locator('.twitter-video-card')).toHaveCount(1);
+  await expect(preview.locator('iframe,video,source,track')).toHaveCount(0);
+
+  await page.getByRole('button', { name: /work skin/i }).click();
+  const workHtml = await page.getByLabel('Work skin HTML').inputValue();
+  expect(workHtml).toContain('<iframe');
+  expect(workHtml).toContain('https://www.youtube-nocookie.com/embed/bN8449nalT8');
+  expect(workHtml).not.toContain('feature=share');
+
+  await page.getByRole('button', { name: 'Close' }).click();
+  const onePixelPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
+  await page.route('**/api/image-proxy**', route => route.fulfill({ status: 200, contentType: 'image/png', body: onePixelPng }));
+  let uploadContentType = '';
+  let uploadKind = '';
+  let uploadBody = Buffer.alloc(0);
+  await page.route('**/api/image-upload', async route => {
+    uploadContentType = route.request().headers()['content-type'] || '';
+    uploadKind = route.request().headers()['x-upload-kind'] || '';
+    uploadBody = route.request().postDataBuffer() || Buffer.alloc(0);
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, url: 'https://i.ibb.co/static-scene.png' }) });
+  });
+  await page.getByRole('button', { name: 'Get AO3 image code' }).click();
+  await page.getByRole('dialog', { name: 'Confirm hosted image upload' }).getByRole('button', { name: 'Upload and get AO3 code' }).click();
+  await expect(page.getByRole('heading', { name: 'Your AO3 code' })).toBeVisible({ timeout: 90_000 });
+  expect(uploadContentType).toBe('image/png');
+  expect(uploadKind).toBe('rendered-scene');
+  expect(uploadBody.subarray(1, 4).toString()).toBe('PNG');
+  expect(uploadBody.toString('utf8')).not.toContain('youtube');
+});

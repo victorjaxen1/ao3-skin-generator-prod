@@ -4,7 +4,9 @@ import { IdentityTarget, resolveMessageIdentity } from '../lib/identity';
 import { ImageUrlInput } from './ImageUrlInput';
 import { MessageEmojiPicker, MessageEmojiTrigger } from './MessageEmojiPicker';
 import { ReactionPicker } from './ReactionPicker';
-import { automaticDeliveryStatus } from '../lib/messageMetadata';
+import { automaticDeliveryStatus, nextChatTimestamp } from '../lib/messageMetadata';
+import { deriveTwitterReplyHandles, getTwitterDescendantIds, getTwitterSceneMode } from '../lib/twitter';
+import TwitterPostExtrasEditor from './TwitterPostExtrasEditor';
 
 interface Props {
   messages: Message[];
@@ -159,6 +161,9 @@ export const MessageTimeline: React.FC<Props> = ({
     return msg.outgoing ? 'text-violet-600' : 'text-stone-500';
   };
 
+  const twitterSceneMode = template === 'twitter' ? getTwitterSceneMode(project) : 'timeline';
+  const twitterAccounts = project.cast?.characters || [];
+
   const insertMessageEmoji = (msg: Message, emoji: string) => {
     const input = messageInputRefs.current.get(msg.id);
     const start = input?.selectionStart ?? msg.content.length;
@@ -181,6 +186,8 @@ export const MessageTimeline: React.FC<Props> = ({
       {messages.map((msg, index) => {
         const isExpanded = expandedId === msg.id;
         const isMenuOpen = menuOpenId === msg.id;
+        const twitterDescendants = template === 'twitter' ? getTwitterDescendantIds(messages, msg.id) : new Set<string>();
+        const hasMissingParent = !!msg.parentId && !messages.some(candidate => candidate.id === msg.parentId);
 
         return (
           <div
@@ -241,6 +248,8 @@ export const MessageTimeline: React.FC<Props> = ({
                   e.stopPropagation();
                   setMenuOpenId(isMenuOpen ? null : msg.id);
                 }}
+                aria-label={`Post options for ${msg.content.replace(/\s+/g, ' ').slice(0, 40) || 'untitled post'}`}
+                aria-expanded={isMenuOpen}
                 className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full text-stone-400 hover:text-stone-600 hover:bg-stone-200 transition-colors"
               >
                 ⋯
@@ -348,22 +357,53 @@ export const MessageTimeline: React.FC<Props> = ({
 
                   {template === 'twitter' && (
                     <>
-                      <input
-                        value={msg.timestamp || ''}
-                        onChange={(e) => onUpdateMessage(msg.id, { timestamp: e.target.value })}
-                        placeholder="Timestamp"
-                        className="text-xs bg-white border border-stone-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-violet-500"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const target = identityTarget(msg);
-                          if (target) onIdentityClick?.(target);
-                        }}
-                        className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-left text-xs text-violet-700 hover:bg-violet-50"
+                      <div className="flex min-w-0 rounded-lg border border-stone-200 bg-white">
+                        <input
+                          value={msg.timestamp || ''}
+                          onChange={(e) => onUpdateMessage(msg.id, { timestamp: e.target.value })}
+                          placeholder="Timestamp"
+                          aria-label="Post timestamp"
+                          className="min-w-0 flex-1 border-0 bg-transparent px-3 py-1.5 text-xs focus:ring-2 focus:ring-violet-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => onUpdateMessage(msg.id, { timestamp: nextChatTimestamp(messages.slice(0, index)) })}
+                          aria-label="Use automatic timestamp"
+                          title="Use the next story time"
+                          className="border-l border-stone-200 px-2 text-[10px] font-medium text-violet-700 hover:bg-violet-50"
+                        >
+                          Auto
+                        </button>
+                      </div>
+                      <select
+                        value={msg.characterId || project.cast?.twitterPrimaryId || ''}
+                        onChange={event => onUpdateMessage(msg.id, {
+                          characterId: event.target.value || undefined,
+                          useCustomIdentity: false,
+                          twitterHandle: undefined,
+                          avatarUrl: undefined,
+                          verified: undefined,
+                        })}
+                        aria-label="Posting account"
+                        className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-xs focus:ring-2 focus:ring-violet-500"
                       >
-                        Edit posting account
-                      </button>
+                        {twitterAccounts.map(account => (
+                          <option key={account.id} value={account.id}>{account.name}{account.archived ? ' (archived)' : ''}</option>
+                        ))}
+                      </select>
+                      <select
+                        value={msg.twitterLayout || (msg.expandedView ? 'expanded' : 'auto')}
+                        onChange={event => onUpdateMessage(msg.id, {
+                          twitterLayout: event.target.value as Message['twitterLayout'],
+                          expandedView: undefined,
+                        })}
+                        aria-label="Post layout"
+                        className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-xs focus:ring-2 focus:ring-violet-500"
+                      >
+                        <option value="auto">Automatic layout</option>
+                        <option value="expanded">Expanded</option>
+                        <option value="compact">Compact</option>
+                      </select>
                       {/* Only when the metrics actually render. With "Show
                           metrics" off the generator emits none of these, so
                           four number inputs per tweet were editing values that
@@ -430,6 +470,95 @@ export const MessageTimeline: React.FC<Props> = ({
                   )}
                 </div>
 
+                {template === 'twitter' && twitterSceneMode !== 'single' && (
+                  <div className="rounded-lg border border-stone-200 bg-white p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-xs font-medium text-stone-700">Relationship</span>
+                      <select
+                        value={msg.parentId ? 'reply' : 'post'}
+                        onChange={event => {
+                          if (event.target.value !== 'reply') {
+                            onUpdateMessage(msg.id, { parentId: undefined, replyToHandles: undefined, twitterReplyHandlesMode: undefined });
+                            return;
+                          }
+                          const candidates = [...messages.slice(0, index).reverse(), ...messages.slice(index + 1)];
+                          const parentId = candidates.find(candidate => candidate.id !== msg.id && !twitterDescendants.has(candidate.id))?.id;
+                          onUpdateMessage(msg.id, { parentId, twitterReplyHandlesMode: parentId ? 'auto' : undefined });
+                        }}
+                        aria-label="Post relationship"
+                        className="rounded-lg border border-stone-200 bg-stone-50 px-2 py-1 text-xs"
+                      >
+                        <option value="post">New post</option>
+                        <option value="reply" disabled={messages.length < 2}>Reply</option>
+                      </select>
+                    </div>
+                    {msg.parentId && (
+                      <>
+                        <select
+                          value={hasMissingParent ? '' : msg.parentId}
+                          onChange={event => onUpdateMessage(msg.id, {
+                            parentId: event.target.value || undefined,
+                            twitterReplyHandlesMode: 'auto',
+                          })}
+                          aria-label="Reply parent"
+                          className="w-full rounded-lg border border-stone-200 bg-stone-50 px-2 py-1.5 text-xs"
+                        >
+                          {hasMissingParent && <option value="">Missing parent: {msg.parentId}</option>}
+                          {messages.map(candidate => {
+                            const identity = resolveMessageIdentity(project, candidate);
+                            const invalid = candidate.id === msg.id || twitterDescendants.has(candidate.id);
+                            return (
+                              <option key={candidate.id} value={candidate.id} disabled={invalid}>
+                                @{identity.twitterHandle || identity.name} — {candidate.content.replace(/\s+/g, ' ').slice(0, 45) || 'Post'}
+                              </option>
+                            );
+                          })}
+                        </select>
+                        {hasMissingParent && (
+                          <p role="alert" className="text-xs text-amber-700">The original parent no longer exists. Choose a new parent or make this a new post.</p>
+                        )}
+                        <div className="flex items-center gap-2">
+                          <select
+                            value={msg.twitterReplyHandlesMode || (msg.replyToHandles ? 'manual' : 'auto')}
+                            onChange={event => onUpdateMessage(msg.id, {
+                              twitterReplyHandlesMode: event.target.value as Message['twitterReplyHandlesMode'],
+                              ...(event.target.value === 'auto' ? { replyToHandles: undefined } : {}),
+                            })}
+                            aria-label="Replying-to handles"
+                            className="rounded-lg border border-stone-200 bg-stone-50 px-2 py-1.5 text-xs"
+                          >
+                            <option value="auto">Handles: Automatic</option>
+                            <option value="manual">Handles: Manual</option>
+                          </select>
+                          {(msg.twitterReplyHandlesMode === 'manual' || (!msg.twitterReplyHandlesMode && msg.replyToHandles)) ? (
+                            <input
+                              value={(msg.replyToHandles || []).map(handle => `@${handle.replace(/^@+/, '')}`).join(', ')}
+                              onChange={event => onUpdateMessage(msg.id, {
+                                replyToHandles: event.target.value.split(',').map(handle => handle.trim().replace(/^@+/, '')).filter(Boolean),
+                              })}
+                              aria-label="Manual reply handles"
+                              placeholder="@casey, @morgan"
+                              className="min-w-0 flex-1 rounded-lg border border-stone-200 px-2 py-1.5 text-xs"
+                            />
+                          ) : (
+                            <span className="min-w-0 flex-1 truncate text-xs text-stone-500">
+                              {deriveTwitterReplyHandles(project, msg).map(handle => `@${handle}`).join(', ') || 'Select a valid parent'}
+                            </span>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {template === 'twitter' && (
+                  <TwitterPostExtrasEditor
+                    message={msg}
+                    project={project}
+                    onChange={updates => onUpdateMessage(msg.id, updates)}
+                  />
+                )}
+
                 {/* Outside the grid: six chips plus a custom field need the
                     full width. Narrowed to the two platforms with a reaction
                     rendering path — TypeScript enforces it rather than a
@@ -444,7 +573,7 @@ export const MessageTimeline: React.FC<Props> = ({
                 )}
 
                 {/* Image attachment — iOS / Android / Twitter */}
-                {template !== 'google' && (
+                {template !== 'google' && template !== 'twitter' && (
                   <ImageUrlInput
                     value={msg.attachments?.[0]?.url || ''}
                     onChange={(url) =>
@@ -463,7 +592,7 @@ export const MessageTimeline: React.FC<Props> = ({
                     placeholder="Paste an image address (optional)"
                   />
                 )}
-                {template !== 'google' && msg.attachments?.[0]?.url && (
+                {template !== 'google' && template !== 'twitter' && msg.attachments?.[0]?.url && (
                   <div className="space-y-1.5">
                     <input
                       value={msg.attachments[0].alt || ''}

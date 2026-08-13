@@ -397,7 +397,7 @@ archive.
 Rosé Pine's workaround does survive, because it is a real rule:
 
 ```css
-#workskin .ao3skingen-v3::after { content: "3"; }
+#workskin .ao3skingen-v4::after { content: "4"; }
 ```
 
 Emit one, bump it whenever the class contract changes, and let the app detect a

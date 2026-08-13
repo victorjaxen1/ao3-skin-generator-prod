@@ -8,6 +8,65 @@ export type Attachment = {
   decorative?: boolean;
 };
 
+export type TwitterSceneMode = 'single' | 'timeline' | 'thread';
+export type TwitterTheme = 'light' | 'dim' | 'dark';
+export type TwitterPostLayout = 'auto' | 'expanded' | 'compact';
+export type TwitterReplyHandlesMode = 'auto' | 'manual';
+export type TwitterMediaCrop = 'auto' | 'fill-width' | 'fill-height';
+
+export interface TwitterQuotePost {
+  characterId?: string;
+  name?: string;
+  handle?: string;
+  avatarUrl?: string;
+  verified?: boolean;
+  text: string;
+  timestamp?: string;
+  attachments?: Attachment[];
+}
+
+export interface TwitterVideo {
+  source: 'youtube' | 'direct';
+  url: string;
+  posterUrl?: string;
+  title: string;
+  duration?: string;
+  description?: string;
+  mimeType?: string;
+  captionTrackUrl?: string;
+  captionLanguage?: string;
+  captionLabel?: string;
+}
+
+export interface TwitterPollOption {
+  id: string;
+  text: string;
+  percent?: number;
+  votes?: number;
+}
+
+export interface TwitterPoll {
+  options: TwitterPollOption[];
+  state: 'open' | 'closed';
+  totalVotes?: number;
+  timeRemaining?: string;
+  finalLabel?: string;
+  selectedOptionId?: string;
+}
+
+export interface TwitterTranslation {
+  languageLabel?: string;
+  originalText: string;
+  translatedText: string;
+  visibleText: 'original' | 'translated';
+}
+
+export interface TwitterActivity {
+  type: 'liked' | 'reposted';
+  actorCharacterIds: string[];
+  additionalCount?: number;
+}
+
 export interface TwitterCharacter {
   id: string;
   name: string;
@@ -84,6 +143,15 @@ export interface Message {
   parentId?: string; // ID of parent tweet for replies (undefined = main thread tweet)
   replyToHandles?: string[]; // Handles to show in "Replying to @user1 and @user2"
   expandedView?: boolean; // Show as expanded reply (larger text, no avatar/header, just name + replying-to + body)
+  twitterLayout?: TwitterPostLayout;
+  twitterReplyHandlesMode?: TwitterReplyHandlesMode;
+  twitterMediaCrop?: TwitterMediaCrop;
+  twitterVideo?: TwitterVideo;
+  twitterQuote?: TwitterQuotePost;
+  twitterPoll?: TwitterPoll;
+  twitterTranslation?: TwitterTranslation;
+  twitterActivity?: TwitterActivity;
+  twitterAccountLabel?: string;
   // iOS-specific: Time break before this message
   showTimeBreak?: boolean; // Show "5 minutes later" or timestamp before this message
   timeBreakText?: string; // Custom text like "5 minutes later", "Later that evening"
@@ -139,6 +207,8 @@ export interface SkinSettings {
   twitterTimestamp?: string; // full date/time line (e.g., "3:09 PM · 5 May 2014")
   twitterDarkMode?: boolean; // Dark mode theme
   twitterThreadMode?: boolean; // Enable thread view with connecting lines
+  twitterSceneMode?: TwitterSceneMode; // Canonical scene structure; thread boolean is legacy fallback
+  twitterTheme?: TwitterTheme; // Canonical light/dim/dark theme; dark boolean is legacy fallback
   twitterCharacterPresets?: TwitterCharacter[]; // Saved character profiles for quick access
   // Quote Tweet (embedded) optional block
   twitterQuoteEnabled?: boolean;
@@ -247,6 +317,7 @@ export const defaultProject = (): SkinProject => ({
     twitterShowMetrics: true,
     twitterTimestamp: '',
     twitterDarkMode: false,
+    twitterTheme: 'light',
     twitterQuoteEnabled: false,
     twitterQuoteAvatar: '',
     twitterQuoteName: '',

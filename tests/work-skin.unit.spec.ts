@@ -21,6 +21,7 @@ import { lintAo3Css, isAo3Safe, stripCssComments } from '../src/lib/siteSkin/ao3
 function twitter() {
   const p = defaultProject();
   p.template = 'twitter';
+  p.settings.twitterSceneMode = 'timeline';
   return p;
 }
 
@@ -234,6 +235,45 @@ test.describe('the Twitter work skin', () => {
     expect(html).toContain('<span class="glyph-icon">↩︎</span>');
     expect(html).toContain('<span class="glyph-icon">⇄</span>');
     expect(html).toContain('<span class="glyph-icon">♡</span>');
+  });
+
+  test('rich Twitter cards remain AO3-safe and use only structured media players', () => {
+    const p = twitter();
+    p.settings.twitterTheme = 'dim';
+    p.messages[0].attachments = [1, 2, 3, 4].map(number => ({
+      type: 'image',
+      url: `https://example.com/${number}.png`,
+      alt: `Clue ${number}`,
+    }));
+    p.messages[0].twitterQuote = { name: 'Witness', handle: 'witness', text: 'I saw everything.' };
+    p.messages[0].twitterPoll = { state: 'closed', options: [{ id: 'yes', text: 'Believe them', percent: 55 }, { id: 'no', text: 'Doubt them', percent: 45 }] };
+    p.messages[0].twitterTranslation = { languageLabel: 'French', originalText: 'Bonjour', translatedText: 'Hello', visibleText: 'translated' };
+    const rich = buildWorkSkin(p);
+    expect(rich.violations).toEqual([]);
+    expect(rich.html).toContain('media-count-4');
+    expect(rich.html).toContain('Original text: Bonjour');
+    expect(rich.html).not.toMatch(/<(button|iframe|video|source|track|svg)\b/i);
+
+    p.messages[0].attachments = [];
+    p.messages[0].twitterVideo = { source: 'youtube', url: 'https://youtu.be/bN8449nalT8', title: 'Clip', description: 'A complete fallback.' };
+    const video = buildWorkSkin(p);
+    expect(video.violations).toEqual([]);
+    expect(video.html).toContain('A complete fallback.');
+    expect(video.html).toContain('<iframe');
+    expect(video.html).toContain('src="https://www.youtube-nocookie.com/embed/bN8449nalT8"');
+    expect(video.html).not.toMatch(/<(video|source|track)\b/i);
+
+    p.messages[0].twitterVideo = {
+      source: 'direct', url: 'https://example.com/clip.mp4', mimeType: 'video/mp4', title: 'Direct clip',
+      posterUrl: 'https://example.com/poster.png', description: 'A direct fallback.',
+      captionTrackUrl: 'https://example.com/en.vtt', captionLanguage: 'en', captionLabel: 'English',
+    };
+    const direct = buildWorkSkin(p);
+    expect(direct.html).toContain('<video');
+    expect(direct.html).toContain('<source src="https://example.com/clip.mp4" type="video/mp4">');
+    expect(direct.html).toContain('<track src="https://example.com/en.vtt"');
+    expect(direct.html).not.toContain('<iframe');
+    expect(buildHTML(p)).not.toMatch(/<(iframe|video|source|track)\b/i);
   });
 });
 
@@ -1015,12 +1055,13 @@ test.describe('the master work skin', () => {
   test('carries the opposite theme as a variant block, for each themed platform', () => {
     const p = defaultProject();
     p.template = 'twitter';
-    p.settings.twitterDarkMode = false;
+    p.settings.twitterTheme = 'light';
     p.settings.iosDarkMode = false;
     p.settings.androidDarkMode = true; // the other direction, in the same skin
     const { css } = buildMasterWorkSkin(p);
 
     expect(css, 'twitter: no dark override').toMatch(/#workskin [^{]*\.twitter\.theme-dark/);
+    expect(css, 'twitter: no dim override').toMatch(/#workskin [^{]*\.twitter\.theme-dim/);
     expect(css, 'ios: no dark override').toMatch(/#workskin [^{]*\.ios\.theme-dark/);
     // Android is already dark, so it is the LIGHT variant that has to be
     // carried — the derivation is symmetric, not "add a dark mode".
@@ -1049,6 +1090,7 @@ test.describe('the master work skin', () => {
     for (const template of ['twitter', 'ios', 'android'] as const) {
       const other = defaultProject();
       other.template = template;
+      other.settings.twitterTheme = 'dark';
       other.settings.twitterDarkMode = true;
       other.settings.iosDarkMode = true;
       other.settings.androidDarkMode = true;
@@ -1056,6 +1098,14 @@ test.describe('the master work skin', () => {
       const block = namespaceCss(buildWorkSkin(other).css, template, 'dark');
       expect(css, `${template}: the dark variant is not this platform's own export`)
         .toContain(block);
+
+      if (template === 'twitter') {
+        const dim = defaultProject();
+        dim.template = 'twitter';
+        dim.settings.twitterTheme = 'dim';
+        expect(css, 'twitter: the dim variant is not its own export')
+          .toContain(namespaceCss(buildWorkSkin(dim).css, 'twitter', 'dim'));
+      }
     }
   });
 
@@ -1098,6 +1148,7 @@ test.describe('the master work skin', () => {
     for (const template of ['twitter', 'ios', 'android'] as const) {
       const p = defaultProject();
       p.template = template;
+      p.settings.twitterTheme = 'dark';
       p.settings.twitterDarkMode = true;
       p.settings.iosDarkMode = true;
       p.settings.androidDarkMode = true;

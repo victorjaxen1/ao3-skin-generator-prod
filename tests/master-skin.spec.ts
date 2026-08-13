@@ -34,9 +34,10 @@ import { richProject, stableDiff, stubRemoteImages } from './_ao3-render';
  */
 
 /** The same rich project with every platform's theme flag forced. */
-function themed(template: string, theme: 'light' | 'dark') {
+function themed(template: string, theme: 'light' | 'dim' | 'dark') {
   const p = richProject(template);
   const dark = theme === 'dark';
+  p.settings.twitterTheme = theme;
   p.settings.twitterDarkMode = dark;
   p.settings.iosDarkMode = dark;
   p.settings.androidDarkMode = dark;
@@ -127,6 +128,22 @@ for (const template of ['ios', 'android', 'twitter', 'google'] as const) {
           { injected: true }
         );
         expect(problems, `injected: the ${base}-built master skin renders a ${block} ${template} differently:\n${problems.join('\n')}`)
+          .toEqual([]);
+      });
+    }
+
+    if (template === 'twitter') {
+      test('a dim block renders from the variant when the skin was built light', async ({ page }) => {
+        await stubRemoteImages(page);
+        const { css: masterCss } = buildMasterWorkSkin(themed(template, 'light'));
+        const single = buildWorkSkin(themed(template, 'dim'));
+        const problems = await stableDiff(
+          page,
+          { html: single.html, css: single.css },
+          { html: single.html, css: masterCss },
+          { injected: true }
+        );
+        expect(problems, `the master skin renders dim Twitter differently:\n${problems.join('\n')}`)
           .toEqual([]);
       });
     }
