@@ -6,12 +6,34 @@
 codebase. This plan keeps their product thinking and replaces their
 architecture with ours.
 
+> ## Start here
+>
+> **Revision 4 — 13 Aug 2026.** The product is built and deployed; one gate is
+> still open and one class of bug has already escaped through it.
+>
+> **§15 is the handoff.** Current state, the file map, the invariants you must
+> not break, how to run everything, and the next work in order. Read it first,
+> then come back for whichever section it sends you to.
+>
+> If you are about to touch the compiler, read **§4b** (who owns which selector)
+> and **§14** (why not every declaration may shout) before you write a rule.
+> If you are about to touch `ao3Css.ts`, read **§3** and the corrections in §7 —
+> and note that the work-skin product depends on that file too.
+>
+> Reading order for a cold start: §0 → §15 → §3 → §4b → §14 → §5.
+
 **Revision 3 — 6 Aug 2026.** Every rule below was re-verified against
 otwarchive `master`, including AO3's *own default stylesheets*, not just its
 sanitizer. That reading changed the compiler spec substantially; §4 and §4b are
 the parts that moved. Revision 3 added header banners and the image-address
 validator (§3a), and reversed the earlier "v1 emits no `url()`". Citations at
 the end.
+
+**What revision 4 added.** §13 (Phase 9: tag colours by type, themed
+scrollbars, banner-hosting copy), §14 (the defect that shipped — a site skin
+overriding an author's work skin, and the cascade rule that came out of it), and
+§15 (this handoff). The sections §14 corrects are flagged in place, at §4.1 and
+§3b.
 
 **A second product now shares this knowledge.** `WORK-SKIN-IMPLEMENTATION.md`
 covers the conversation generator's third export. It relies on §3 below and
@@ -623,6 +645,7 @@ Always emit a fallback stack, and keep every family name inside
 | 7 | A11y, tests, **manual AO3 save of every template** | ⬜ **the remaining gate** — see §8 |
 | 8 | Header banners, hide-logo, URL validator, 4 banner-ready presets | ✅ 16 templates; see §3a and §11 |
 | 9 | Tag colours by type, themed scrollbars, banner-hosting copy, the Phase 7 checklist file | ✅ 13 Aug 2026; see §13 |
+| 10 | **Fix:** details rules scoped to direct children, `!important` withdrawn from six selectors, work skin added to the preview | ✅ 13 Aug 2026 — a defect found on a live page; see §14 |
 
 ### Corrections made to `ao3Css.ts` after Phase 8
 
@@ -948,7 +971,11 @@ Read out of CSS AO3 is currently serving, so these are known-legal:
 - **`clip: rect(0,0,0,0)`** — `clip` is on the property list and `rect()` reaches
   `VALUE_REGEX` through `SHAPE_FUNCTION_REGEX`.
 
-### The state of this product
+### The state of this product, as of 7 Aug 2026
+
+> **Superseded by §15.** Kept because the *reconciliation* above — what work-skin
+> research does and does not carry over — is still current and is the reason this
+> section exists. For state and next steps, read §15.
 
 | | Status |
 | --- | --- |
@@ -957,37 +984,6 @@ Read out of CSS AO3 is currently serving, so these are known-legal:
 | Saved on real AO3 | ❌ **never** — the open gate |
 | Mobile preview | ⚠️ scrolls sideways rather than scaling |
 | Marketing copy mentions the work-skin export | ❌ still not |
-
-### What to do next, in order
-
-Items 2–4 of the previous revision's list are **done** — see §13. What is left
-is the one thing a test cannot do.
-
-1. **Phase 7 — the release gate.** Save all sixteen templates on AO3 by hand and
-   confirm each applies. Then the probes §8 names: the
-   `#chapters .userstuff` drop cap and divider on a single-chapter *and* a
-   multi-chapter work, and the header dropdown from §4.4 with a logged-in
-   account. Until this is done "AO3-safe" is a well-tested prediction rather
-   than an observation. **The checklist now exists:
-   `docs/SITE-SKIN-AO3-CHECKLIST.md`** — sixteen rows and nine named probes,
-   including two new ones for the Phase 9 features.
-   - While you are there: **reopen each saved skin in AO3's editor.** AO3 stores
-     the *cleaned* CSS, so that box is a direct readout of what the sanitizer
-     kept. Diff it against what we emitted. Anything missing is a rule our lint
-     does not know about, and belongs in §7 as a correction.
-2. **Marketing copy** still describes two products and does not mention that the
-   conversation generator now emits a real work skin for two platforms.
-3. **The mobile preview** still scrolls sideways rather than scaling.
-
-`BACKLOG.md` carries the cross-product list; item 20 is this product's release
-gate. The other 28 items are work-skin work and do not touch this codebase.
-
-### Two things that are still true and still unfixed
-
-- **The 8-digit hex gap** (§11). Our lint rejects `#89797925` where AO3 accepts
-  it by accident. We are stricter than the archive, which §3 says never to be.
-  It does not bite while we emit no alpha colours.
-- **The mobile preview** does not scale. Left out rather than added untested.
 
 ---
 
@@ -1180,6 +1176,153 @@ matched the export exactly, and visible within minutes of a real reader opening
 a real work. **The mock is a model of AO3, and a model of AO3 with no work skin
 in it was a model of the wrong page.** `docs/SITE-SKIN-AO3-CHECKLIST.md` gained a
 probe: P10, the drop cap and divider over a work that has its own work skin.
+
+---
+
+## 15. Handoff — 13 Aug 2026
+
+Everything a person picking this up needs, in the order they need it. Where a
+claim has a longer story, the section number is the story.
+
+### 15a. Where the product stands
+
+| | |
+| --- | --- |
+| Deployed | ✅ `main` → Netlify, at `/site-skin`. Commits `f2bc76c` (Phase 9) and `5c47eda` (the §14 fix) |
+| Phases 0–6, 8, 9, 10 | ✅ complete |
+| Phase 7 — **saved on real AO3** | ❌ **never done.** The one open gate |
+| Templates | 16, all lint clean, all round-tripping through storage |
+| Tests | 273 unit (`--project=unit`), 20 browser (`tests/site-skin.spec.ts`) |
+| Mobile preview | ⚠️ scrolls sideways instead of scaling. Known, deliberate |
+| Marketing copy | ⚠️ correct about site skins; still silent on the work-skin export |
+
+**What "not saved on real AO3" means, precisely.** Our lint is a faithful port of
+`clean_css_code`, re-verified against upstream twice, and it is still a *model*.
+No template in this catalog has been pasted into AO3 and submitted. Until
+`docs/SITE-SKIN-AO3-CHECKLIST.md` is filled in, every "AO3-safe" claim in the UI
+is a well-tested prediction. **This is the single highest-value thing left, and
+it needs a human with an account, not a test.**
+
+### 15b. The file map
+
+| File | What it is | Touch it when |
+| --- | --- | --- |
+| `src/pages/site-skin.tsx` | route; gallery ⇄ editor, undo/redo, debounced save, one `compile()` call feeding both preview and export | adding page-level state |
+| `src/lib/siteSkin/theme.ts` | `SiteSkinTheme`, the option lists, `validateTheme` (the storage boundary) | adding a control — **and then all 16 templates** |
+| `src/lib/siteSkin/compile.ts` | theme → CSS. `derive()` for everything computed, `buildRules()` for the spec in §4b, `serialize()` for `!important` | any change to emitted CSS |
+| `src/lib/siteSkin/colors.ts` | mix, luminance, contrast, `readableOn`, `fixAccent`, `tagTypeColors` — all colour maths, resolved to literal hex because AO3 has no `color-mix()` | deriving a colour |
+| `src/lib/siteSkin/ao3Css.ts` | **the safety layer.** Property allowlist, value grammar, URL validator, lint. **The work-skin product imports this too** | never casually; see §15e |
+| `src/lib/siteSkin/ao3Properties.ts` | AO3's 181 properties, 20 shorthands, 270 TLDs, copied verbatim and dated | re-verifying against upstream |
+| `src/lib/siteSkin/mockPage.ts` | the preview's DOM in AO3's markup, AO3's base CSS, and an author's work skin — three stylesheets in AO3's real order (§14c) | adding a control that must be previewable |
+| `src/lib/siteSkin/templates.ts` | the 16-template catalog, descriptions, `cloneTheme` | adding a theme or a field |
+| `src/lib/siteSkin/storage.ts` | key `ao3SiteSkinTheme`, `PersistResult` discipline | never, ideally |
+| `src/components/siteSkin/*` | `TemplateGallery`, `ThemeEditor`, `SkinPreview`, `ExportSkinDialog` | UI |
+| `tests/site-skin.unit.spec.ts` | the compiler's contract: ownership, cascade, contrast floors, validation | always, alongside the change |
+| `tests/site-skin.spec.ts` | the journey, and every assertion checks the **compiled CSS**, not that a control moved | always |
+| `tests/ao3-css.unit.spec.ts` | the sanitizer model's pinned rules | with `ao3Css.ts` |
+| `docs/SITE-SKIN-AO3-CHECKLIST.md` | the Phase 7 gate, unfilled | when you have an AO3 account open |
+
+### 15c. The five invariants
+
+Each is enforced by a test, and each exists because breaking it produced a bug
+that a diff review did not catch.
+
+1. **One owner per (selector, property).** A selector may appear in two rules,
+   never for the same property. §4.2 is what happens otherwise — the Page colour
+   control silently stopped working.
+2. **`!important` on chrome; never on anything that can land inside a work.**
+   Six selectors are enumerated in the test. §14b is the whole argument; the
+   short version is that AO3 renders a work skin *after* our stylesheet and
+   prefixes it with `#workskin`, so shouting is the only way we could override an
+   author, and we must not.
+3. **The preview renders the exported string.** One `compile()`, no second
+   rendering path. The prototype had two and shipped an invisible header (§4.4).
+4. **If it cannot be previewed honestly, it does not ship.** This is what put the
+   open dropdown, `#dashboard span`, the work-meta table and the author's work
+   skin into the mock. §14c is the cost of forgetting it.
+5. **Never be stricter than AO3.** Four separate bugs in `ao3Css.ts` were this
+   (§7). Being stricter blocks CSS the archive accepts, and the user has no way
+   to tell we are the ones who are wrong.
+
+### 15d. How to run it
+
+```bash
+npm run dev                      # localhost:3000/site-skin
+
+npx playwright test --project=unit          # 273 tests, no browser, no server
+npx playwright test --project=unit tests/site-skin.unit.spec.ts
+
+# Browser projects point at the DEPLOYED site by default. For local work:
+UX_BASE_URL=http://localhost:3000 npx playwright test --project=desktop tests/site-skin.spec.ts
+
+npx tsc --noEmit -p tsconfig.json
+```
+
+Adding a control is a five-file change, in this order: `theme.ts` (field +
+`validateTheme`), `templates.ts` (**all 16**), `compile.ts` (rules, and decide
+`authorWins`), `mockPage.ts` (something for it to style), `ThemeEditor.tsx`, then
+both specs. If you cannot see it in the preview, stop — invariant 4.
+
+### 15e. Traps, each of which has already been paid for
+
+- **Strip comments before you pattern-match CSS.** Four wrong answers in this
+  codebase came from not doing it, twice inside the tests written to fix it (§7,
+  Correction 4).
+- **The export carries no comments at all.** AO3 deletes them, and a work skin
+  saved with comments came back missing eleven consecutive rules (WORK-SKIN §13).
+  Do not reintroduce them without saving on real AO3 and diffing.
+- **`@media` is flattened, not rejected.** The rules survive and the condition is
+  dropped, so it *looks* like it works. A widely-read tutorial says it does. It
+  does not (§3).
+- **AO3 validates declarations, never selectors** — only `@font-face` in a
+  selector is refused. That is why `::-webkit-scrollbar` is legal (§13), and it
+  also means a mistaken selector will be stored happily and go wrong quietly.
+- **`:first-of-type` matches once per parent.** §14a. The chapter body is full of
+  parents whenever an author has pasted a work skin into it.
+- **`!important` beats the author, not just AO3.** §14b.
+- **The value grammar's number rule is not a three-digit cap.** `1000` matches as
+  `100` + `0`. Do not "fix" it (§3).
+- **`gap` is refused while `grid-template-columns` is allowed.** An unanchored
+  substring test. Faithful, and pinned (§3).
+
+### 15f. What to do next, in order
+
+1. **Phase 7 — the release gate.** `docs/SITE-SKIN-AO3-CHECKLIST.md`: sixteen
+   templates × saved/applied/readback, then ten named probes. **Do P10 first** —
+   read a work that has its own work skin with a site skin on. That is the class
+   of bug that already escaped, and it is the one our tests model least well.
+   While you are in AO3's editor, reopen each saved skin: AO3 stores the
+   *cleaned* CSS, so that box is a direct readout of what the sanitizer kept.
+   Anything missing is a rule our lint does not know about, and belongs in §7 as
+   a numbered correction.
+2. **Whatever the gate finds.** Assume it finds something.
+3. **Tag colours *within* a listing's required tags** — `ul.required-tags` uses
+   sprite-backed spans rather than `a.tag`, so the Phase 9 work does not reach
+   the rating/warning icons. Previewable, and the same semantic argument.
+4. **Marketing copy** — it describes two products and still does not mention that
+   the conversation generator now emits a real work skin for two platforms.
+5. **The mobile preview** — scale AO3's desktop layout rather than scrolling it
+   sideways. Left out rather than added untested.
+6. **The 8-digit hex gap** (§11) — our lint refuses `#89797925` where AO3 accepts
+   it by accident. We are stricter than the archive, which invariant 5 forbids.
+   It does not bite while we emit no alpha colours, so it is last.
+
+Deliberately **not** next, and the reasons are in §10 and §11: raw CSS editing,
+webfonts, `@media` variants, parent-skin chains, sharing, accounts, and anything
+that turns this into a page builder.
+
+`BACKLOG.md` carries the cross-product list; item 20 is this product's gate. The
+other 28 items are work-skin work and do not touch these files.
+
+### 15g. The two lessons worth carrying, in one line each
+
+**A model of AO3 with no work skin in it was a model of the wrong page.** 273
+green tests and a preview that matched the export byte for byte did not see §14;
+a reader opening a real work saw it in minutes.
+
+**Our CSS is a guest twice over** — on AO3's page, and inside an author's work.
+The `!important` that makes us a good guest on the first is what made us a bad
+one on the second.
 
 ---
 
