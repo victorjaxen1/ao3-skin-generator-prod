@@ -2,6 +2,7 @@ import { SkinProject, Message } from './schema';
 import { sanitizeAttribute, sanitizeText, sanitizeUrl, formatMessageText } from './sanitize';
 import { PLATFORM_ASSETS, FALLBACK_TEXT } from './platformAssets';
 import { resolveMessageIdentity } from './identity';
+import { emojiMessageSize } from './emoji';
 
 function hexToRgba(hex: string, alpha: number): string {
   const h = hex.replace('#','');
@@ -292,6 +293,12 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
   
   // Use formatMessageText for rich formatting (bold, italic, strikethrough, code, lists, quotes)
   const sanitized = formatMessageText(msg.content);
+  const chatEmojiSize = template === 'ios' || template === 'android'
+    ? emojiMessageSize(msg.content, !!msg.attachments?.length)
+    : undefined;
+  const chatMessageContent = chatEmojiSize
+    ? `<span class="emoji-content ${chatEmojiSize}">${sanitized}</span>`
+    : sanitized;
   const resolvedIdentity = resolveMessageIdentity(project, msg);
   const avatar = resolvedIdentity.avatarUrl ? `<img src="${sanitizeUrl(resolvedIdentity.avatarUrl)}" alt="${sanitizeAttribute(resolvedIdentity.name)} avatar" class="avatar" />` : '';
   
@@ -431,7 +438,7 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
   // Build the message bubble with text content
   const hasAttachment = (template === 'ios' || template === 'android') && msg.attachments && msg.attachments.length > 0;
   const hasReaction = (template === 'ios' || template === 'android') && !!msg.reaction;
-  const bubbleClasses = `bubble ${msg.outgoing?'out':'in'}${hasAttachment ? ' image-bubble' : ''}${hasReaction ? ' has-reaction' : ''}`;
+  const bubbleClasses = `bubble ${msg.outgoing?'out':'in'}${hasAttachment ? ' image-bubble' : ''}${hasReaction ? ' has-reaction' : ''}${chatEmojiSize ? ` emoji-only ${chatEmojiSize}` : ''}`;
   let bubble = `<dd class="${bubbleClasses}">`;
   
   // Add group sender name INSIDE bubble (at top)
@@ -441,7 +448,7 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
   
   // Add message text if present
   if (sanitized && sanitized.trim()) {
-    bubble += sanitized;
+    bubble += chatMessageContent;
   }
   
   // Add image attachment inline (iOS/Android)
@@ -630,13 +637,13 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
   if (template === 'ios') {
     const rowClass = msg.outgoing ? 'row out' : 'row in';
     const groupClass = isFirstInGroup && isLastInGroup ? 'single' : isFirstInGroup ? 'first' : isLastInGroup ? 'last' : 'middle';
-    const tailClass = isLastInGroup ? 'has-tail' : 'no-tail';
+    const tailClass = isLastInGroup && !chatEmojiSize ? 'has-tail' : 'no-tail';
     
     // Check if this message has an image
     const hasImage = msg.attachments && msg.attachments.length > 0 && msg.attachments[0].type === 'image';
     
     // Build bubble with text content (add group sender name if applicable)
-    let bubbleContent = senderNameHTML ? senderNameHTML + sanitized : sanitized;
+    let bubbleContent = senderNameHTML ? senderNameHTML + chatMessageContent : chatMessageContent;
     
     // Add image inline if present
     if (hasImage) {
@@ -654,7 +661,7 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
     
     // Add inline SVG tail for html2canvas compatibility (::after doesn't render in canvas)
     let tailSvg = '';
-    if (isLastInGroup) {
+    if (isLastInGroup && !chatEmojiSize) {
       if (msg.outgoing) {
         // Right-pointing tail for outgoing messages
         tailSvg = `<svg class="bubble-tail bubble-tail-out" width="12" height="16" viewBox="0 0 12 16" xmlns="http://www.w3.org/2000/svg"><path d="M0,0 Q0,16 12,16 L0,16 Z" fill="currentColor"/></svg>`;
@@ -687,7 +694,7 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
     const reactionClass = msg.reaction ? ' has-reaction' : '';
     const bubbleClass = hasImage
       ? `bubble ${msg.outgoing?'out':'in'} ${tailClass} image-bubble${reactionClass}`
-      : `bubble ${msg.outgoing?'out':'in'} ${tailClass}${reactionClass}`;
+      : `bubble ${msg.outgoing?'out':'in'} ${tailClass}${reactionClass}${chatEmojiSize ? ` emoji-only ${chatEmojiSize}` : ''}`;
     const bubble = `<dd class="${bubbleClass}">${bubbleContent}${tailSvg}${reaction}</dd>`;
 
 
@@ -1313,6 +1320,13 @@ ${PARAGRAPH_RESET_CSS}
 /* pointer-events dropped from both tail rules — not on AO3's property list, and
    purely defensive: the tails are decorative and sit outside the bubble's text. */
 #workskin dd.bubble.in.has-tail .bubble-tail-in{display:block;position:absolute;left:-0.533em;bottom:-0.067em;color:${colour.receiverBubbleBg};}
+/* Native emoji-only messages float without the coloured bubble or tail. Keep
+   the message metadata at its ordinary size: only the content span grows. */
+#workskin dd.bubble.emoji-only{background:transparent;box-shadow:none;padding:0.133em 0.2em;border-radius:0;overflow:visible;}
+#workskin dd.bubble.emoji-only .emoji-content{display:block;line-height:1.05;white-space:nowrap;}
+#workskin dd.bubble.emoji1 .emoji-content{font-size:4em;}
+#workskin dd.bubble.emoji2 .emoji-content{font-size:2.4em;}
+#workskin dd.bubble.emoji-only.out .time{color:${colour.statusIndicatorColor};}
 /* TWO WAYS TO DRAW THE SAME TAIL, and both are needed.
    The SVG above is for the PNG: html2canvas cannot rasterise ::before/::after,
    which is the only reason an inline <svg> is in the markup at all.
@@ -1530,6 +1544,12 @@ ${PARAGRAPH_RESET_CSS}
 #workskin dd.bubble.image-bubble.in img.message-image{border-bottom-left-radius:0.143em;}
 #workskin dd.bubble.out{background:${colour.senderBubbleBg};color:${colour.bubbleTextColor};border-top-right-radius:0.571em;border-bottom-right-radius:0.143em;border-bottom-left-radius:0.571em;border-top-left-radius:0.571em;}
 #workskin dd.bubble.in{background:${colour.receiverBubbleBg};color:${colour.bubbleTextColor};border-top-left-radius:0.571em;border-bottom-left-radius:0.143em;border-bottom-right-radius:0.571em;border-top-right-radius:0.571em;}
+/* WhatsApp, like iMessage, removes the bubble around one-to-four emoji. The
+   child span grows while the time and ticks keep their normal proportions. */
+#workskin dd.bubble.emoji-only{background:transparent;box-shadow:none;padding:0.143em 0.214em;border-radius:0;overflow:visible;}
+#workskin dd.bubble.emoji-only .emoji-content{display:block;line-height:1.05;white-space:nowrap;}
+#workskin dd.bubble.emoji1 .emoji-content{font-size:4.286em;}
+#workskin dd.bubble.emoji2 .emoji-content{font-size:2.571em;}
 /* The gap property is spelled out as child margins: AO3 keeps a property only
    if it is on its list or CONTAINS a shorthand name, so column-gap passes and
    bare gap does not. Same substitution as the Twitter stylesheet. */
