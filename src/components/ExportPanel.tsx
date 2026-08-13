@@ -357,6 +357,20 @@ async function renderChunk(
     });
   }
 
+  // html2canvas paints native colour emoji lower than Chromium's measured line
+  // box. Give emoji-only chat content a real layout reserve so its timestamp
+  // and the following message cannot overlap the painted glyph in PNG output.
+  // This is export-only: browsers lay out the live iMessage/WhatsApp preview
+  // correctly without the compensation.
+  if (project.template === 'ios' || project.template === 'android') {
+    clone.querySelectorAll('dd.bubble.emoji1 .emoji-content').forEach(el => {
+      (el as HTMLElement).style.cssText += ';margin-bottom:32px';
+    });
+    clone.querySelectorAll('dd.bubble.emoji2 .emoji-content').forEach(el => {
+      (el as HTMLElement).style.cssText += ';margin-bottom:14px';
+    });
+  }
+
   // Google html2canvas layout fixes
   if (project.template === 'google') {
     // The same bug as the tweet name line, in the one place Google clips: the
@@ -407,6 +421,17 @@ async function renderChunk(
     // sits entirely below the bubble and needs nothing from the bubble's own
     // box, so there is nothing to re-assert — but if you ever add padding to a
     // bubble in the stylesheet, it will not survive this line.
+    //
+    // Emoji-only bubbles are the exception. html2canvas paints a large colour
+    // emoji below the line box Chromium measured for it. Without an explicit
+    // lower reserve, the timestamp is drawn through the glyph and the next row
+    // begins against (or over) the emoji. The shared chat correction above
+    // supplies that reserve. Here we only re-apply the native transparent box
+    // after Android's generic inline bubble override.
+    clone.querySelectorAll('dd.bubble.emoji-only').forEach(el => {
+      (el as HTMLElement).style.cssText +=
+        ';background:transparent;box-shadow:none;border-radius:0;padding:2px 3px;overflow:visible';
+    });
     clone.querySelectorAll('.row.out').forEach(el => {
       (el as HTMLElement).style.cssText += ';display:flex;justify-content:flex-end';
     });
