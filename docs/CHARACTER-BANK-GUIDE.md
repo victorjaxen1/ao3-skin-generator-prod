@@ -17,45 +17,47 @@ This file contains:
 
 ## Character Categories
 
-### Female (6)
-- Alex Rivers - Young woman with auburn hair
-- Taylor Swift - Blonde celebrity style
-- Jamie Chen - Asian woman, casual style
-- Riley - Redhead with freckles
-- Mom - Middle-aged woman
-- Casey - Short dark hair
+These are generated from `CHARACTER_BANK` in `src/lib/characterBank.ts`. Preset **names describe the image, not a character** — the People/Accounts sheet asks for a real name before saving one.
 
-### Male (6)
-- Jordan - Athletic young man
-- Sam - Casual guy next door
-- Marcus - Professional businessman
-- Tyler - Hipster with beard
-- Dad - Middle-aged man
-- Jake - Teen boy
+### Modern / Contemporary (10)
+- `m1` **Casual Young Man** — Age 18-25, everyday protagonist
+- `m2` **Casual Young Woman** — Age 18-25, everyday protagonist
+- `m3` **Business Man** — Professional in suit, corporate AUs
+- `m4` **Business Woman** — Professional attire, boss dynamics
+- `m5` **Teen Boy** — Age 15-17, high school AUs
+- `m6` **Teen Girl** — Age 15-17, YA fiction
+- `m7` **Soft Boy** — E-boy aesthetic, modern internet culture
+- `m8` **Alternative Girl** — Goth/punk style, subculture rep
+- `m9` **Athletic Jock** — Sports AUs, college settings
+- `m10` **Hipster Guy** — Beard, glasses, coffee shop AUs
 
-### Neutral/Androgynous (6)
-- Quinn - Androgynous style
-- Avery - Short pixie cut
-- Morgan - Long wavy hair
-- Skyler - Colorful hair
-- River - Alternative style
-- Phoenix - Artistic vibe
+### Diversity (6)
+- `d1` **Asian Man** — East Asian rep, K-pop AUs
+- `d2` **Asian Woman** — East Asian rep, diverse casting
+- `d3` **Black Man** — Black representation, diverse casting
+- `d4` **Black Woman** — Black representation, diverse casting
+- `d5` **Hijabi Woman** — Religious/cultural representation
+- `d6` **Plus-Size Character** — Body diversity, size representation
 
-### Fantasy/Fictional (6)
-- Elara - Elf princess
-- Kira - Warrior woman
-- Zephyr - Mysterious mage
-- Luna - Moon witch
-- Rex - Armored knight
-- Nova - Sci-fi character
+### Neutral / Androgynous (4)
+- `n1` **Androgynous Masc** — Masculine-presenting NB
+- `n2` **Androgynous Femme** — Feminine-presenting NB
+- `n3` **Quinn** — Gender-neutral style
+- `n4` **River** — Alternative NB aesthetic
 
-### Professional/Work (6)
-- Dr. Chen - Doctor in lab coat
-- Detective Ray - Noir detective
-- Agent K - Secret agent
-- Chef Mia - Chef in whites
-- Prof. Harris - Academic professor
-- Officer Park - Police officer
+### Fantasy & Genre (6)
+- `f1` **Elf Warrior** — Fantasy/D&D settings
+- `f2` **Knight** — Medieval/historical combat
+- `f3` **Mage** — Wizard/magic user
+- `f4` **Vampire** — Supernatural romance, gothic
+- `f5` **Royalty** — Regency, historical romance
+- `f6` **Cyberpunk** — Sci-fi, futuristic settings
+
+### Age-Varied (4)
+- `a1` **Dad Figure** — Age 40s-50s, found family trope
+- `a2` **Mom Figure** — Age 40s-50s, parental support
+- `a3` **Silver Fox** — Distinguished older man, age gap romance
+- `a4` **Mature Woman** — Elegant older woman, mentor figure
 
 ## TypeScript Interface
 
@@ -64,7 +66,7 @@ export interface CharacterAvatar {
   id: string;                    // e.g., 'f1', 'm2', 'n3'
   name: string;                  // Display name
   url: string;                   // Full CDN URL
-  category: 'female' | 'male' | 'neutral' | 'fantasy' | 'professional';
+  category: 'modern' | 'diversity' | 'fantasy' | 'neutral' | 'age-varied';
   description?: string;          // Short description
 }
 ```
@@ -75,15 +77,15 @@ export interface CharacterAvatar {
 Retrieve a specific character by ID.
 
 ```typescript
-const char = getAvatarById('f1'); // Returns Alex Rivers
+const char = getAvatarById('f1'); // Returns the Elf Warrior preset
 ```
 
 ### `getAvatarsByCategory(category)`
 Get all characters in a category.
 
 ```typescript
-const females = getAvatarsByCategory('female'); // 6 characters
-const fantasy = getAvatarsByCategory('fantasy'); // 6 characters
+const modern = getAvatarsByCategory('modern');   // 10 presets
+const fantasy = getAvatarsByCategory('fantasy'); // 6 presets
 ```
 
 ### `resolveAvatarUrl(avatarIdOrUrl: string)`
@@ -172,14 +174,16 @@ function CharacterSelector({ onSelect }) {
 
 All avatars are hosted on Publit.io:
 
-```
-https://media.publit.io/file/avatars/{filename}.png
+```text
+https://media.publit.io/file/AO3-Skins-App/avatars/{filename}.png
 ```
 
 Example URLs:
-- `https://media.publit.io/file/avatars/alex-rivers.png`
-- `https://media.publit.io/file/avatars/taylor-swift.png`
-- `https://media.publit.io/file/avatars/elara.png`
+- `https://media.publit.io/file/AO3-Skins-App/avatars/casual-young-man.png`
+- `https://media.publit.io/file/AO3-Skins-App/avatars/elf-warrior.png`
+
+Quick-template avatars are separate: those are local files under `/assets`, and
+`tests/identity.unit.spec.ts` asserts every one of them exists on disk.
 
 ## Adding New Characters
 
@@ -196,11 +200,11 @@ To add new characters to the bank:
 export const CHARACTER_BANK: CharacterAvatar[] = [
   // ... existing characters
   { 
-    id: 'f7',                              // Next available ID
-    name: 'Sarah Lee', 
-    url: avatarUrl('sarah-lee.png'),       // Filename only
-    category: 'female',
-    description: 'Business professional'
+    id: 'm11',                             // Next available ID in the category
+    name: 'Business Woman In Scrubs',      // Describes the IMAGE, not a character
+    url: avatarUrl('business-woman-scrubs.png'), // Filename only
+    category: 'modern',
+    description: 'Medical AUs'
   },
 ];
 ```
@@ -257,99 +261,107 @@ function avatarUrl(filename: string): string {
 - **Thumbnails**: Consider serving smaller 100x100px thumbnails for grid view
 - **Pagination**: If bank grows beyond 50 characters, implement pagination
 - **Search**: Add name/description search for large banks
-
 ## Related Files
 
-- `src/lib/characterBank.ts` — Main preset bank definition
-- `src/lib/platformAssets.ts` — Platform icons/headers/footers  
-- `src/lib/examples.ts` — Example templates using CHARACTER_BANK
-- `src/components/CharacterLibrary.tsx` — Full character management UI (see below)
+- `src/lib/characterBank.ts` — Preset avatar bank (the static image data on this page)
+- `src/lib/identity.ts` — Scene identity model: resolution, migration, add/edit/archive
+- `src/components/CastPanel.tsx` — The People/Accounts sheet (the whole identity UI)
+- `src/lib/platformAssets.ts` — Platform icons/headers/footers
+- `src/lib/examples.ts` — Quick templates, instantiated as isolated clones
 
 ---
 
-## CharacterLibrary Component (as of March 11, 2026)
+## Where the preset bank fits in the identity workflow
 
-`src/components/CharacterLibrary.tsx` is the **controlled slide-in panel** for character management. It replaces the old self-managing floating-button implementation.
+The preset bank is **one image source inside the People/Accounts sheet**. It is not a
+character list and it does not create characters on its own.
 
-### Props
+### Scene identities are the real model
+
+Everyone who appears in a scene is a `SceneCharacter` stored on the project
+(`project.cast`), addressed by a stable `id`:
 
 ```typescript
-interface Props {
-  isOpen: boolean;                  // Controlled by parent
-  onClose: () => void;              // Parent closes the panel
-  characters: UniversalCharacter[]; // User's saved library
-  currentTemplate: 'ios' | 'android' | 'twitter' | 'google';
-  onAddCharacter: (c: UniversalCharacter) => void;
-  onUpdateCharacter: (id: string, updates: Partial<UniversalCharacter>) => void;
-  onDeleteCharacter: (id: string) => void;
-  onSetAsContact: (name: string, avatarUrl: string) => void; // ← key action
+interface SceneCharacter {
+  id: string;
+  name: string;
+  avatarUrl?: string;
+  twitterHandle?: string;
+  verified?: boolean;
+  sourceLibraryId?: string;  // provenance only — NOT a live reference
+  archived?: boolean;
 }
 ```
 
-### Opening the panel
+Messages point at these by `Message.characterId`, so a rename or an avatar change
+reaches every message that identity already speaks in. Names are never identity keys:
+two characters may share a display name and stay separate.
 
-The panel is opened by the Characters icon in `WorkspaceHeader`. In `index.tsx`:
+### The one sheet, and its states
 
-```typescript
-const [showCharacters, setShowCharacters] = useState(false);
+`CastPanel` is a single controlled sheet — titled **People** on iOS/Android and
+**Accounts** on Twitter — with these modes:
 
-// In WorkspaceHeader:
-onCharactersOpen={() => setShowCharacters(true)}
+| Mode | What it is |
+| --- | --- |
+| `overview` | Who is in this scene, plus **Add person**/**Add account** and **Library** |
+| `create` | Complete-profile form (name, avatar, handle, verified, group colour) |
+| `edit` | The same form for an existing identity, plus archive/reassign |
+| `library` | Saved `UniversalCharacter[]`, each with an explicit **Add** (copy) action |
+| `avatar-presets` | The `CHARACTER_BANK` grid on this page |
 
-// In JSX:
-<CharacterLibrary
-  isOpen={showCharacters}
-  onClose={() => setShowCharacters(false)}
-  characters={universalCharacters}
-  currentTemplate={project.template}
-  onAddCharacter={handleAddCharacter}
-  onUpdateCharacter={handleUpdateCharacter}
-  onDeleteCharacter={handleDeleteCharacter}
-  onSetAsContact={handleSetAsContact}
-/>
-```
+Google renders none of it. A search page has no cast, so it exposes only
+**Add result details**.
 
-### What `onSetAsContact` does
+### Choosing a preset avatar
 
-`handleSetAsContact` maps to the correct per-template settings fields:
+Selecting a preset fills the **Avatar** field and returns to the form. It deliberately
+does **not** create a character, because bank names such as “Casual Young Man” or
+“Mage” describe the image, not a person. The author still names the character before
+saving.
 
-```typescript
-const handleSetAsContact = useCallback((name: string, avatarUrl: string) => {
-  switch (project.template) {
-    case 'ios':
-      handleUpdateSettings('iosContactName', name);
-      handleUpdateSettings('iosAvatarUrl', avatarUrl);
-      break;
-    case 'android':
-      handleUpdateSettings('androidContactName', name);
-      handleUpdateSettings('androidAvatarUrl', avatarUrl);
-      break;
-    case 'twitter':
-      handleUpdateSettings('twitterDisplayName', name);
-      handleUpdateSettings('twitterAvatarUrl', avatarUrl);
-      break;
-    case 'google':
-      handleUpdateSettings('googleQuery', name);
-      break;
-  }
-}, [project.template, handleUpdateSettings]);
-```
+### Library ↔ scene is copy, never link
 
-After calling `onSetAsContact`, the component calls `onClose()` automatically.
-
-### Tabs
-
-**My Library** (default) — user's saved `UniversalCharacter[]`, sorted by `lastUsed` descending. Tap name to rename inline. "Set as contact" / "Set as tweeter" button applies and closes.
-
-**Browse** — presets from `CHARACTER_BANK`. Search + category filter pills. "Save to library" saves to the user's library. Already-saved presets show "✓ Saved" state (disabled button).
-
-### `setLabel` per platform
+Adding a library entry to a scene creates a **new** `SceneCharacter` and records
+`sourceLibraryId` for provenance only:
 
 ```typescript
-const setLabel = currentTemplate === 'twitter' ? 'Set as tweeter' : 'Set as contact';
+copyLibraryCharacterToScene(project, source, role)
 ```
 
----
+- editing the scene copy never writes back to the library;
+- editing the library never reaches into a scene that copied from it;
+- two projects seeded from the same library entry stay independent;
+- the library is never silently merged into a scene's roster.
 
-**Note:** `CharacterLibrary.tsx` manages the UI for both user-saved characters **and** the preset bank browse experience. `characterBank.ts` is the static data source with the 30 preset `CharacterAvatar` objects. They are separate — the component imports and uses the data file.
+Creating a person offers **Also save to my library** as an explicit opt-in.
 
+### Complete profiles, one transaction
+
+The removed `onSetAsContact(name, avatarUrl)` API is gone. It carried only two of the
+four Twitter fields, which is exactly why handles used to disappear. Every save now
+passes a whole profile through one helper, so undo/redo sees one coherent change:
+
+```typescript
+addSceneCharacter(project, draft, role)
+updateSceneCharacter(project, id, updates)
+archiveOrReassignCharacter(project, id, replacementId?)
+```
+
+Legacy settings fields (`iosContactName`, `twitterHandle`, …) are kept in sync as a
+fallback for older saved projects; they are no longer the source of truth.
+
+### Removing someone who has already spoken
+
+Deleting an identity must never corrupt existing messages:
+
+- unreferenced → removed immediately;
+- referenced → **Archive** (it leaves new-message selectors but still resolves and
+  edits from old messages), or **Reassign** those messages to another identity first.
+
+### Reaching the editor
+
+Identity is editable from wherever a person is visible: the header title, the composer
+identity chip and its ✎ button, the timeline sender label, and the name/handle/avatar
+in the preview. Clicking a preview **message body** still opens the message editor —
+identity wins only on a name, handle, or avatar.

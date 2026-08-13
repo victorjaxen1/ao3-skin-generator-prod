@@ -26,7 +26,7 @@ test('compose bar reports a failed upload instead of failing silently', async ({
 
   await page.goto('/');
   await page.getByRole('button', { name: 'Start a blank iMessage conversation' }).click();
-  await page.getByRole('button', { name: /Add details/ }).click();
+  await page.getByRole('button', { name: 'Message options' }).click();
 
   await page
     .getByLabel('Upload an image file')
@@ -60,7 +60,7 @@ test('hosted scene stays local until the disclosure is accepted', async ({ page 
 test('a bad image address is called out rather than silently ignored', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Start a blank iMessage conversation' }).click();
-  await page.getByRole('button', { name: /Add details/ }).click();
+  await page.getByRole('button', { name: 'Message options' }).click();
 
   const field = page.getByLabel('Image address for this message');
   await field.fill('https://example.com/not-an-image-page');
@@ -72,7 +72,7 @@ test('a bad image address is called out rather than silently ignored', async ({ 
 test('a share-page URL is rewritten and the rewrite is disclosed', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Start a blank iMessage conversation' }).click();
-  await page.getByRole('button', { name: /Add details/ }).click();
+  await page.getByRole('button', { name: 'Message options' }).click();
 
   const field = page.getByLabel('Image address for this message');
   // An Imgur gallery page is not a direct image; normalisation fixes it.

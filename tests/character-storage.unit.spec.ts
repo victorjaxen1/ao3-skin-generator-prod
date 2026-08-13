@@ -18,3 +18,24 @@ test('character-library validation caps count, lengths, URLs, and duplicate IDs'
   expect(characters[0].usageCount).toBe(0);
   expect(characters[0].lastUsed).toBe('2026-08-12T00:00:00.000Z');
 });
+
+test('a saved character round-trips its whole profile, not just name and avatar', () => {
+  // The old library apply path passed (name, avatarUrl) and dropped the rest,
+  // which is what made Twitter handles disappear. Storage must keep all four.
+  const [character] = validateCharacterLibrary([{
+    id: 'lib-1',
+    name: 'Nat Romanoff',
+    avatarUrl: 'https://example.com/nat.png',
+    twitterHandle: 'natromanoff',
+    verified: true,
+    usageCount: 3,
+  }]);
+
+  expect(character).toMatchObject({
+    id: 'lib-1',
+    name: 'Nat Romanoff',
+    avatarUrl: 'https://example.com/nat.png',
+    twitterHandle: 'natromanoff',
+    verified: true,
+  });
+});

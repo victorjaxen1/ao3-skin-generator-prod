@@ -43,7 +43,7 @@ test('privacy choices stay in the export bar and clear of composer controls', as
 
   const controls = [
     page.getByRole('button', { name: /Sending as/ }),
-    page.getByRole('button', { name: 'Add details (timestamp, image, etc.)' }),
+    page.getByRole('button', { name: 'Message options' }),
     page.getByRole('button', { name: 'Send message' }),
   ];
   const privacyBox = await privacy.boundingBox();

@@ -1,6 +1,7 @@
 import { SkinProject } from './schema';
 import { PLATFORM_ASSETS } from './platformAssets';
 import { CHARACTER_BANK } from './characterBank';
+import { migrateProjectIdentities } from './identity';
 
 // Pre-defined example conversations matching the Examples Gallery
 // Writers can load these as starting points for quick wins
@@ -816,7 +817,62 @@ export function getExampleNames(template: string): Array<{id: string; name: stri
 export function loadExample(exampleId: string): SkinProject | null {
   for (const template in TEMPLATE_EXAMPLES) {
     const example = TEMPLATE_EXAMPLES[template].find(ex => ex.id === exampleId);
-    if (example) return example;
+    if (example) return instantiateTemplate(example);
   }
   return null;
+}
+
+function freshTemplateProjectId(): string {
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  } catch { /* use a local fallback */ }
+  return `project-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function cloneProject(project: SkinProject): SkinProject {
+  if (typeof structuredClone === 'function') return structuredClone(project);
+  return JSON.parse(JSON.stringify(project)) as SkinProject;
+}
+
+/**
+ * Create an isolated, normalized project from a module-level quick template.
+ * Template constants are never returned by reference.
+ */
+export function instantiateTemplate(example: SkinProject): SkinProject {
+  const cloned = cloneProject(example);
+  cloned.id = freshTemplateProjectId();
+  let project = migrateProjectIdentities(cloned);
+
+  // Current Twitter templates contain only main-account posts. Remove the
+  // duplicated legacy preset/message profile so those posts follow one stable
+  // scene identity when the main account is edited.
+  if (project.template === 'twitter' && project.cast?.twitterPrimaryId) {
+    const primaryId = project.cast.twitterPrimaryId;
+    project = {
+      ...project,
+      settings: { ...project.settings, twitterCharacterPresets: [] },
+      messages: project.messages.map(message => {
+        if (message.characterId !== primaryId) return message;
+        const normalized = { ...message, characterId: primaryId, useCustomIdentity: false };
+        delete normalized.twitterHandle;
+        delete normalized.avatarUrl;
+        delete normalized.verified;
+        return normalized;
+      }),
+    };
+  }
+
+  const localAvatarUrls = [
+    project.settings.iosAvatarUrl,
+    project.settings.androidAvatarUrl,
+    project.settings.twitterAvatarUrl,
+    ...project.messages.map(message => message.avatarUrl),
+    ...(project.settings.iosGroupParticipants || []).map(participant => participant.avatarUrl),
+    ...(project.settings.androidGroupParticipants || []).map(participant => participant.avatarUrl),
+    ...(project.cast?.characters || []).map(character => character.avatarUrl),
+  ].filter((value): value is string => !!value && value.startsWith('/'));
+  if (localAvatarUrls.some(value => !value.startsWith('/assets/'))) {
+    throw new Error('Quick template contains a local avatar outside /assets/.');
+  }
+  return project;
 }

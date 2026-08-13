@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Message, SkinSettings } from '../lib/schema';
+import { Message, SkinProject, SkinSettings } from '../lib/schema';
+import { IdentityTarget, resolveMessageIdentity } from '../lib/identity';
 import { ImageUrlInput } from './ImageUrlInput';
 import { ReactionPicker } from './ReactionPicker';
 
@@ -7,6 +8,8 @@ interface Props {
   messages: Message[];
   template: 'ios' | 'android' | 'twitter' | 'google';
   settings: SkinSettings;
+  project: SkinProject;
+  onIdentityClick?: (target: IdentityTarget) => void;
   focusedMessageId?: string | null;
   focusTrigger?: number;
   onUpdateMessage: (id: string, updates: Partial<Message>) => void;
@@ -73,6 +76,8 @@ export const MessageTimeline: React.FC<Props> = ({
   messages,
   template,
   settings,
+  project,
+  onIdentityClick,
   focusedMessageId,
   focusTrigger,
   onUpdateMessage,
@@ -127,16 +132,21 @@ export const MessageTimeline: React.FC<Props> = ({
   const youLabel = settings.chatYourName?.trim() || 'You';
 
   const getSenderLabel = (msg: Message) => {
+    const identity = resolveMessageIdentity(project, msg);
     if (template === 'twitter') {
-      // Mirror how the generator resolves identity, or a tweet that follows the
-      // account settings would be listed here under a name nothing renders.
-      const handle = msg.useCustomIdentity ? msg.twitterHandle : settings.twitterHandle;
-      if (handle) return `@${handle.replace(/^@/, '')}`;
-      const name = msg.useCustomIdentity ? msg.sender : settings.twitterDisplayName;
-      return name || 'You';
+      return identity.twitterHandle ? `@${identity.twitterHandle}` : identity.name;
     }
     if (template === 'google') return msg.googleResultUrl || msg.content;
-    return msg.outgoing ? youLabel : msg.sender;
+    return identity.name;
+  };
+
+  const identityTarget = (msg: Message): IdentityTarget | undefined => {
+    if (template === 'google') return undefined;
+    if (msg.characterId) return { kind: 'character', id: msg.characterId };
+    if (template === 'twitter') return { kind: 'twitter-primary' };
+    if (msg.outgoing) return { kind: 'self' };
+    if (msg.participantId) return { kind: 'participant', id: msg.participantId };
+    return { kind: 'contact' };
   };
 
   const getSenderColor = (msg: Message) => {
@@ -176,9 +186,19 @@ export const MessageTimeline: React.FC<Props> = ({
               )}
 
               {/* Sender */}
-              <span className={`text-[11px] font-medium flex-shrink-0 ${getSenderColor(msg)}`}>
+              <button
+                type="button"
+                disabled={template === 'google'}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  const target = identityTarget(msg);
+                  if (target) onIdentityClick?.(target);
+                }}
+                className={`text-[11px] font-medium flex-shrink-0 ${getSenderColor(msg)} ${template === 'google' ? '' : 'hover:underline focus:underline'}`}
+                aria-label={template === 'google' ? undefined : `Edit ${getSenderLabel(msg)}`}
+              >
                 {getSenderLabel(msg)}
-              </span>
+              </button>
 
               {/* Content preview */}
               <span className="text-sm text-stone-700 truncate flex-1">
@@ -245,6 +265,7 @@ export const MessageTimeline: React.FC<Props> = ({
                         onChange={(e) => onUpdateMessage(msg.id, {
                           outgoing: e.target.value === 'outgoing',
                           sender: e.target.value === 'outgoing' ? youLabel : msg.sender,
+                          characterId: e.target.value === 'outgoing' ? project.cast?.selfId : project.cast?.contactId,
                         })}
                         className="text-xs bg-white border border-stone-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-violet-500"
                       >
@@ -271,24 +292,16 @@ export const MessageTimeline: React.FC<Props> = ({
                         placeholder="Timestamp"
                         className="text-xs bg-white border border-stone-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-violet-500"
                       />
-                      <input
-                        value={
-                          (msg.useCustomIdentity ? msg.twitterHandle : settings.twitterHandle) || ''
-                        }
-                        // Editing the handle on one post is what "this post is
-                        // by someone else" means, so it opts the post out of
-                        // the account identity rather than being ignored.
-                        onChange={(e) =>
-                          onUpdateMessage(msg.id, {
-                            twitterHandle: e.target.value,
-                            useCustomIdentity: true,
-                            sender: msg.sender || settings.twitterDisplayName || '',
-                          })
-                        }
-                        placeholder="@handle"
-                        aria-label="Handle for this post"
-                        className="text-xs bg-white border border-stone-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-violet-500"
-                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const target = identityTarget(msg);
+                          if (target) onIdentityClick?.(target);
+                        }}
+                        className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-left text-xs text-violet-700 hover:bg-violet-50"
+                      >
+                        Edit posting account
+                      </button>
                       {/* Only when the metrics actually render. With "Show
                           metrics" off the generator emits none of these, so
                           four number inputs per tweet were editing values that

@@ -5,7 +5,7 @@ import {
   ProjectFileError,
   ProjectFileSummary,
   PROJECT_FILE_MAX_BYTES,
-  SceneProjectFileV1,
+  SceneProjectFile,
   summarizeProjectFile,
 } from '../lib/projectFile';
 import { trackAnalytics } from '../lib/analytics';
@@ -24,7 +24,7 @@ export const ProjectBackupDialog: React.FC<Props> = ({
   onReplace,
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [candidate, setCandidate] = useState<SceneProjectFileV1 | null>(null);
+  const [candidate, setCandidate] = useState<SceneProjectFile | null>(null);
   const [summary, setSummary] = useState<ProjectFileSummary | null>(null);
   const [error, setError] = useState('');
   const [downloaded, setDownloaded] = useState(false);

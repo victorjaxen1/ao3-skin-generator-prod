@@ -11,7 +11,7 @@ interface Props {
   onAddCharacter: (character: UniversalCharacter) => void;
   onUpdateCharacter: (id: string, updates: Partial<UniversalCharacter>) => void;
   onDeleteCharacter: (id: string) => void;
-  onSetAsContact: (name: string, avatarUrl: string) => void;
+  onSetAsContact: (character: UniversalCharacter) => void;
 }
 
 type CategoryFilter = 'all' | 'modern' | 'diversity' | 'fantasy' | 'neutral' | 'age-varied';
@@ -46,7 +46,7 @@ export const CharacterLibrary: React.FC<Props> = ({
   };
 
   const handleSetAsContact = (char: UniversalCharacter) => {
-    onSetAsContact(char.name, char.avatarUrl || '');
+    onSetAsContact(char);
     onUpdateCharacter(char.id, {
       usageCount: (char.usageCount || 0) + 1,
       lastUsed: new Date().toISOString(),

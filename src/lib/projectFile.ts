@@ -1,5 +1,6 @@
-import { defaultProject, GroupParticipant, Message, SkinProject, SkinSettings, TwitterCharacter, UniversalCharacter } from './schema';
+import { defaultProject, GroupParticipant, Message, SceneCast, SceneCharacter, SkinProject, SkinSettings, TwitterCharacter, UniversalCharacter } from './schema';
 import { validateCharacterLibrary } from './characterStorage';
+import { migrateProjectIdentities, normalizeTwitterHandle } from './identity';
 import {
   BANNER_HEIGHTS,
   CARD_RADII,
@@ -14,7 +15,7 @@ import {
 import { checkAo3ImageUrl } from './siteSkin/ao3Css';
 import { DEFAULT_TEMPLATE, cloneTheme } from './siteSkin/templates';
 
-export const PROJECT_FILE_SCHEMA_VERSION = 1;
+export const PROJECT_FILE_SCHEMA_VERSION = 2;
 export const PROJECT_FILE_MAX_BYTES = 2 * 1024 * 1024;
 export const APPLICATION_VERSION = '0.1.0';
 
@@ -35,6 +36,17 @@ export interface SceneProjectFileV1 {
   project: SkinProject;
   characterLibrary: UniversalCharacter[];
 }
+
+export interface SceneProjectFileV2 {
+  format: 'ao3skingen-project';
+  schemaVersion: 2;
+  exportedAt: string;
+  application: { name: 'AO3 SkinGen'; version: string };
+  project: SkinProject;
+  characterLibrary: UniversalCharacter[];
+}
+
+export type SceneProjectFile = SceneProjectFileV2;
 
 export interface SiteThemeFileV1 {
   format: 'ao3skingen-site-theme';
@@ -65,7 +77,7 @@ const TOP_THEME_KEYS = new Set(['format', 'schemaVersion', 'exportedAt', 'applic
 
 const STRING_SETTING_KEYS = new Set<keyof SkinSettings>([
   'senderColor', 'receiverColor', 'fontFamily', 'fictionLabelText', 'twitterDisplayName',
-  'twitterHandle', 'twitterTimestamp', 'twitterQuoteAvatar', 'twitterQuoteName',
+  'twitterHandle', 'twitterAvatarUrl', 'twitterTimestamp', 'twitterQuoteAvatar', 'twitterQuoteName',
   'twitterQuoteHandle', 'twitterQuoteText', 'twitterQuoteImage', 'googleQuery',
   'googleResultsCount', 'googleResultsTime', 'googleDidYouMean', 'chatYourName',
   'chatContactName', 'chatTypingName', 'iosContactName', 'iosGroupName',
@@ -170,7 +182,7 @@ function validateMessage(value: unknown, index: number): Message {
     outgoing: raw.outgoing,
   };
   const optionalStrings: Array<keyof Message> = [
-    'timestamp', 'roleColor', 'participantId', 'reaction', 'twitterHandle', 'parentId',
+    'timestamp', 'roleColor', 'participantId', 'characterId', 'reaction', 'twitterHandle', 'parentId',
     'timeBreakText', 'googleResultUrl', 'googleResultDescription',
   ];
   for (const key of optionalStrings) {
@@ -196,10 +208,52 @@ function validateParticipant(value: unknown, index: number): GroupParticipant {
   const color = string(raw.color, `Participant ${index + 1} colour`, 7);
   return {
     id: id(raw.id, `Participant ${index + 1} ID`),
+    ...(typeof raw.characterId === 'string' ? { characterId: id(raw.characterId, `Participant ${index + 1} character ID`) } : {}),
     name: string(raw.name, `Participant ${index + 1} name`, 200, true),
     color: HEX.test(color) ? color : '#777777',
     ...(safeUrl(raw.avatarUrl, `Participant ${index + 1} avatar`) ? { avatarUrl: safeUrl(raw.avatarUrl, `Participant ${index + 1} avatar`) } : {}),
     ...(string(raw.phoneNumber, `Participant ${index + 1} phone`, 100) ? { phoneNumber: string(raw.phoneNumber, `Participant ${index + 1} phone`, 100) } : {}),
+  };
+}
+
+function validateSceneCharacter(value: unknown, index: number): SceneCharacter {
+  const raw = object(value, `Scene character ${index + 1}`);
+  const avatarUrl = safeUrl(raw.avatarUrl, `Scene character ${index + 1} avatar`);
+  const twitterHandle = normalizeTwitterHandle(string(raw.twitterHandle, `Scene character ${index + 1} handle`, 100));
+  return {
+    id: id(raw.id, `Scene character ${index + 1} ID`),
+    name: string(raw.name, `Scene character ${index + 1} name`, 200, true),
+    ...(avatarUrl ? { avatarUrl } : {}),
+    ...(twitterHandle ? { twitterHandle } : {}),
+    ...(typeof raw.verified === 'boolean' ? { verified: raw.verified } : {}),
+    ...(typeof raw.sourceLibraryId === 'string'
+      ? { sourceLibraryId: string(raw.sourceLibraryId, `Scene character ${index + 1} library ID`, 100, true) }
+      : {}),
+    ...(typeof raw.archived === 'boolean' ? { archived: raw.archived } : {}),
+  };
+}
+
+function validateCast(value: unknown): SceneCast | undefined {
+  if (value === undefined) return undefined;
+  const raw = object(value, 'Project cast');
+  if (!Array.isArray(raw.characters)) invalid('Project cast characters must be a list.');
+  const characters = raw.characters.slice(0, 100).map(validateSceneCharacter);
+  const ids = new Set(characters.map(character => character.id));
+  if (ids.size !== characters.length) invalid('Project cast character IDs must be unique.');
+  const binding = (key: 'selfId' | 'contactId' | 'twitterPrimaryId') => {
+    if (raw[key] === undefined) return undefined;
+    const value = id(raw[key], `Project cast ${key}`);
+    if (!ids.has(value)) invalid(`Project cast ${key} does not reference a character.`);
+    return value;
+  };
+  const selfId = binding('selfId');
+  const contactId = binding('contactId');
+  const twitterPrimaryId = binding('twitterPrimaryId');
+  return {
+    characters,
+    ...(selfId ? { selfId } : {}),
+    ...(contactId ? { contactId } : {}),
+    ...(twitterPrimaryId ? { twitterPrimaryId } : {}),
   };
 }
 
@@ -255,11 +309,13 @@ function validateProject(value: unknown): SkinProject {
   if (!TEMPLATE_IDS.has(raw.template as SkinProject['template'])) invalid('This backup has an unknown platform.');
   if (!Array.isArray(raw.messages)) invalid('Project messages must be a list.');
   if (raw.messages.length > 100) invalid('This backup contains more than 100 messages.');
+  const cast = validateCast(raw.cast);
   return {
     id: id(raw.id, 'Project ID'),
     template: raw.template as SkinProject['template'],
     settings: validateSettings(raw.settings),
     messages: raw.messages.map(validateMessage),
+    ...(cast ? { cast } : {}),
   };
 }
 
@@ -268,19 +324,19 @@ function assertExactTopLevel(raw: Record<string, unknown>, allowed: Set<string>)
   if (extra) invalid(`Unknown top-level field: ${extra}.`);
 }
 
-function validateEnvelope(raw: Record<string, unknown>, expectedFormat: string): string {
+function validateEnvelope(raw: Record<string, unknown>, expectedFormat: string, supportedVersion: number): { exportedAt: string; schemaVersion: number } {
   if (raw.format !== expectedFormat) invalid(`Expected a ${expectedFormat} file.`);
   if (!Number.isInteger(raw.schemaVersion)) invalid('schemaVersion must be an integer.');
-  if ((raw.schemaVersion as number) > PROJECT_FILE_SCHEMA_VERSION) {
-    throw new ProjectFileError('PROJECT_SCHEMA_UNSUPPORTED', `This file uses schema version ${raw.schemaVersion}; this app supports version ${PROJECT_FILE_SCHEMA_VERSION}.`);
+  if ((raw.schemaVersion as number) > supportedVersion) {
+    throw new ProjectFileError('PROJECT_SCHEMA_UNSUPPORTED', `This file uses schema version ${raw.schemaVersion}; this app supports version ${supportedVersion}.`);
   }
-  if (raw.schemaVersion !== PROJECT_FILE_SCHEMA_VERSION) invalid(`Unsupported schema version ${String(raw.schemaVersion)}.`);
+  if ((raw.schemaVersion as number) < 1) invalid(`Unsupported schema version ${String(raw.schemaVersion)}.`);
   const exportedAt = string(raw.exportedAt, 'Export date', 40, true);
   if (Number.isNaN(Date.parse(exportedAt))) invalid('The export date is invalid.');
   const application = object(raw.application, 'Application');
   if (application.name !== 'AO3 SkinGen') invalid('This file was not created by AO3 SkinGen.');
   string(application.version, 'Application version', 40, true);
-  return new Date(exportedAt).toISOString();
+  return { exportedAt: new Date(exportedAt).toISOString(), schemaVersion: raw.schemaVersion as number };
 }
 
 function byteLength(text: string): number {
@@ -299,15 +355,17 @@ function parseJson(text: string): Record<string, unknown> {
   }
 }
 
-export const PROJECT_FILE_MIGRATIONS: Readonly<Record<number, (value: unknown) => unknown>> = Object.freeze({});
+export const PROJECT_FILE_MIGRATIONS: Readonly<Record<number, (value: SkinProject) => SkinProject>> = Object.freeze({
+  1: migrateProjectIdentities,
+});
 
-export function createProjectFile(project: SkinProject, characterLibrary: UniversalCharacter[], now = new Date()): SceneProjectFileV1 {
+export function createProjectFile(project: SkinProject, characterLibrary: UniversalCharacter[], now = new Date()): SceneProjectFileV2 {
   return {
     format: 'ao3skingen-project',
-    schemaVersion: 1,
+    schemaVersion: 2,
     exportedAt: now.toISOString(),
     application: { name: 'AO3 SkinGen', version: APPLICATION_VERSION },
-    project: validateProject(project),
+    project: validateProject(migrateProjectIdentities(project)),
     characterLibrary: validateCharacterLibrary(characterLibrary),
   };
 }
@@ -316,16 +374,20 @@ export function serializeProjectFile(project: SkinProject, characterLibrary: Uni
   return JSON.stringify(createProjectFile(project, characterLibrary, now), null, 2);
 }
 
-export function parseProjectFile(text: string): SceneProjectFileV1 {
+export function parseProjectFile(text: string): SceneProjectFileV2 {
   const raw = parseJson(text);
   assertExactTopLevel(raw, TOP_SCENE_KEYS);
-  const exportedAt = validateEnvelope(raw, 'ao3skingen-project');
+  const envelope = validateEnvelope(raw, 'ao3skingen-project', PROJECT_FILE_SCHEMA_VERSION);
+  const validatedProject = validateProject(raw.project);
+  const project = envelope.schemaVersion === 1
+    ? PROJECT_FILE_MIGRATIONS[1](validatedProject)
+    : migrateProjectIdentities(validatedProject);
   return {
     format: 'ao3skingen-project',
-    schemaVersion: 1,
-    exportedAt,
+    schemaVersion: 2,
+    exportedAt: envelope.exportedAt,
     application: { name: 'AO3 SkinGen', version: string(object(raw.application, 'Application').version, 'Application version', 40, true) },
-    project: validateProject(raw.project),
+    project,
     characterLibrary: validateCharacterLibrary(raw.characterLibrary),
   };
 }
@@ -342,10 +404,13 @@ function projectUrls(project: SkinProject): string[] {
   for (const participant of [...(project.settings.iosGroupParticipants || []), ...(project.settings.androidGroupParticipants || [])]) {
     if (participant.avatarUrl) urls.push(participant.avatarUrl);
   }
+  for (const character of project.cast?.characters || []) {
+    if (character.avatarUrl) urls.push(character.avatarUrl);
+  }
   return urls;
 }
 
-export function summarizeProjectFile(file: SceneProjectFileV1): ProjectFileSummary {
+export function summarizeProjectFile(file: SceneProjectFile): ProjectFileSummary {
   return {
     template: file.project.template,
     itemCount: file.project.messages.length,
@@ -399,7 +464,7 @@ export function serializeSiteThemeFile(theme: SiteSkinTheme, now = new Date()): 
 export function parseSiteThemeFile(text: string): SiteThemeFileV1 {
   const raw = parseJson(text);
   assertExactTopLevel(raw, TOP_THEME_KEYS);
-  const exportedAt = validateEnvelope(raw, 'ao3skingen-site-theme');
+  const { exportedAt } = validateEnvelope(raw, 'ao3skingen-site-theme', 1);
   return {
     format: 'ao3skingen-site-theme',
     schemaVersion: 1,

@@ -5,9 +5,8 @@ interface Props {
   onContactNameChange: (name: string) => void;
   onBack: () => void;
   onSettingsOpen: () => void;
-  /** Google only — see the button below. Do not delete it with the Cast panel. */
-  onCharactersOpen: () => void;
   onCastOpen: () => void;
+  onIdentityOpen: () => void;
   onBackupOpen: () => void;
   template: 'ios' | 'android' | 'twitter' | 'google';
   saveStatus: 'saved' | 'unsaved' | 'saving' | 'failed';
@@ -26,8 +25,8 @@ export const WorkspaceHeader: React.FC<Props> = ({
   onContactNameChange,
   onBack,
   onSettingsOpen,
-  onCharactersOpen,
   onCastOpen,
+  onIdentityOpen,
   onBackupOpen,
   template,
   saveStatus,
@@ -115,7 +114,7 @@ export const WorkspaceHeader: React.FC<Props> = ({
 
         {/* Center: Editable title */}
         <div className="flex-1 flex items-center justify-center min-w-0 px-2">
-          {isEditing ? (
+          {isEditing && template === 'google' ? (
             <input
               ref={inputRef}
               value={editValue}
@@ -128,10 +127,10 @@ export const WorkspaceHeader: React.FC<Props> = ({
             />
           ) : (
             <button
-              onClick={() => setIsEditing(true)}
+              onClick={() => template === 'google' ? setIsEditing(true) : onIdentityOpen()}
               className="flex items-center gap-1.5 text-sm font-semibold text-stone-900 hover:text-violet-700 transition-colors truncate max-w-[200px]"
-              title={`Tap to edit ${fieldLabel.toLowerCase()}`}
-              aria-label={`Edit ${fieldLabel.toLowerCase()}, currently ${displayName}`}
+              title={template === 'google' ? `Tap to edit ${fieldLabel.toLowerCase()}` : `Edit identity for ${displayName}`}
+              aria-label={template === 'google' ? `Edit ${fieldLabel.toLowerCase()}, currently ${displayName}` : `Edit identity for ${displayName}`}
             >
               <span className="truncate">{displayName}</span>
               {saveStatus === 'unsaved' && (
@@ -172,11 +171,11 @@ export const WorkspaceHeader: React.FC<Props> = ({
               legitimately useful there ("Set as contact" fills the search query
               with a character's name), so hiding the button would strand the
               feature rather than tidy it away. */}
-          <button
-            onClick={template === 'google' ? onCharactersOpen : onCastOpen}
+          {template !== 'google' && <button
+            onClick={onCastOpen}
             className="flex items-center justify-center w-8 h-8 rounded-full text-stone-500 hover:text-violet-700 hover:bg-violet-50 transition-colors"
-            title={template === 'google' ? 'Characters' : 'People in this conversation'}
-            aria-label={template === 'google' ? 'Open character library' : 'Open people'}
+            title={template === 'twitter' ? 'Accounts in this scene' : 'People in this conversation'}
+            aria-label={template === 'twitter' ? 'Open accounts' : 'Open people'}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
@@ -184,7 +183,7 @@ export const WorkspaceHeader: React.FC<Props> = ({
               <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
               <path d="M16 3.13a4 4 0 0 1 0 7.75" />
             </svg>
-          </button>
+          </button>}
           <button
             onClick={onSettingsOpen}
             className="flex items-center justify-center w-8 h-8 rounded-full text-stone-500 hover:text-stone-900 hover:bg-stone-100 transition-colors"

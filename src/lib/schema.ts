@@ -46,6 +46,8 @@ export interface UniversalCharacter {
  */
 export interface GroupParticipant {
   id: string;
+  /** Stable reference into the project-scoped cast. */
+  characterId?: string;
   name: string;                 // Participant display name
   avatarUrl?: string;           // Optional profile picture
   color: string;                // Hex color for name display (#FF5733)
@@ -54,6 +56,8 @@ export interface GroupParticipant {
 
 export interface Message {
   id: string;
+  /** Stable reference into the project-scoped cast. Legacy identity fields remain as fallback. */
+  characterId?: string;
   sender: string;
   avatarUrl?: string;
   content: string; // raw user text (sanitized before emit)
@@ -88,6 +92,25 @@ export interface Message {
   googleResultUrl?: string; // The URL displayed in green
   googleResultDescription?: string; // The snippet/description below the title
 }
+
+/** A project-local identity. Library characters are copied here, never linked live. */
+export interface SceneCharacter {
+  id: string;
+  name: string;
+  avatarUrl?: string;
+  twitterHandle?: string;
+  verified?: boolean;
+  sourceLibraryId?: string;
+  archived?: boolean;
+}
+
+export interface SceneCast {
+  characters: SceneCharacter[];
+  selfId?: string;
+  contactId?: string;
+  twitterPrimaryId?: string;
+}
+
 export interface SkinSettings {
   bubbleOpacity: number; // 0..1
   senderColor: string; // hex
@@ -191,6 +214,8 @@ export interface SkinProject {
   template: 'ios' | 'android' | 'twitter' | 'google';
   settings: SkinSettings;
   messages: Message[];
+  /** Canonical project-local identities. Optional while legacy projects migrate. */
+  cast?: SceneCast;
 }
 
 function localProjectId(): string {

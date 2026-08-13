@@ -1,5 +1,6 @@
 import { SkinProject } from './schema';
 import { PLATFORM_ASSETS } from './platformAssets';
+import { migrateProjectIdentities } from './identity';
 
 const KEY = 'ao3SkinProject';
 
@@ -48,6 +49,42 @@ function sanitizeMessage(msg: unknown): { id: string; sender: string; content: s
     timestamp: typeof m.timestamp === 'string' ? sanitizeString(m.timestamp, 50) : undefined,
     avatarUrl: sanitizeStoredUrl(m.avatarUrl),
     reaction: typeof m.reaction === 'string' ? sanitizeString(m.reaction, 10) : undefined,
+    characterId: typeof m.characterId === 'string' ? sanitizeString(m.characterId, 100) : undefined,
+  };
+}
+
+function sanitizeStoredCast(value: unknown): SkinProject['cast'] {
+  if (!value || typeof value !== 'object') return undefined;
+  const raw = value as Record<string, unknown>;
+  if (!Array.isArray(raw.characters)) return undefined;
+  const characters = raw.characters.slice(0, 100).flatMap(candidate => {
+    if (!candidate || typeof candidate !== 'object') return [];
+    const character = candidate as Record<string, unknown>;
+    const id = sanitizeString(character.id, 100).trim();
+    const name = sanitizeString(character.name, 200).trim();
+    if (!id || !name) return [];
+    const avatarUrl = sanitizeStoredUrl(character.avatarUrl);
+    const twitterHandle = sanitizeString(character.twitterHandle, 100).trim().replace(/^@+/, '');
+    return [{
+      id,
+      name,
+      ...(avatarUrl ? { avatarUrl } : {}),
+      ...(twitterHandle ? { twitterHandle } : {}),
+      ...(typeof character.verified === 'boolean' ? { verified: character.verified } : {}),
+      ...(typeof character.sourceLibraryId === 'string' ? { sourceLibraryId: sanitizeString(character.sourceLibraryId, 100) } : {}),
+      ...(typeof character.archived === 'boolean' ? { archived: character.archived } : {}),
+    }];
+  });
+  const ids = new Set(characters.map(character => character.id));
+  const binding = (key: 'selfId' | 'contactId' | 'twitterPrimaryId') => {
+    const value = sanitizeString(raw[key], 100);
+    return value && ids.has(value) ? value : undefined;
+  };
+  return {
+    characters,
+    ...(binding('selfId') ? { selfId: binding('selfId') } : {}),
+    ...(binding('contactId') ? { contactId: binding('contactId') } : {}),
+    ...(binding('twitterPrimaryId') ? { twitterPrimaryId: binding('twitterPrimaryId') } : {}),
   };
 }
 
@@ -124,7 +161,7 @@ export function loadStoredProject<T extends SkinProject>(fallback: () => T): T {
       twitterQuoteImage: sanitizeStoredUrl(parsed.settings.twitterQuoteImage),
     };
     
-    return {
+    const sanitizedProject = {
       ...parsed,
       id:
         typeof parsed.id === 'string' && parsed.id && parsed.id !== 'default-project'
@@ -132,7 +169,9 @@ export function loadStoredProject<T extends SkinProject>(fallback: () => T): T {
           : defaults.id,
       settings: sanitizedSettings,
       messages: sanitizedMessages,
+      cast: sanitizeStoredCast(parsed.cast),
     } as T;
+    return migrateProjectIdentities(sanitizedProject) as T;
   } catch (e) { 
     console.warn('Failed to load stored project:', e);
     return fallback(); 

@@ -32,9 +32,10 @@ test('iMessage group name renders in the header (was dead)', async ({ page }) =>
   // Group chat is who is in the conversation, so it lives with the people now
   // rather than in Settings. Everything asserted below is generator output and
   // is unchanged.
+  const sheet = page.getByRole('dialog', { name: 'People' });
   await page.getByRole('button', { name: 'Open people' }).click();
-  await page.getByRole('switch', { name: 'Group chat mode' }).click();
-  await page.locator('[placeholder="Family Chat"]').fill('Avengers Assemble');
+  await sheet.getByRole('switch', { name: 'Group chat mode' }).click();
+  await sheet.locator('[placeholder="Family Chat"]').fill('Avengers Assemble');
   await page.waitForTimeout(500);
 
   const html = await skin(page).innerHTML();
@@ -45,11 +46,17 @@ test('iMessage group name renders in the header (was dead)', async ({ page }) =>
 test('WhatsApp group mode shows group name and participant count', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: /blank WhatsApp/i }).click();
+  const sheet = page.getByRole('dialog', { name: 'People' });
   await page.getByRole('button', { name: 'Open people' }).click();
-  await page.getByRole('switch', { name: 'Group chat mode' }).click();
-  await page.locator('[placeholder="Work Team"]').fill('Team Cap');
-  await page.getByRole('button', { name: '+ Add' }).click();
-  await page.getByRole('button', { name: '+ Add' }).click();
+  await sheet.getByRole('switch', { name: 'Group chat mode' }).click();
+  await sheet.locator('[placeholder="Work Team"]').fill('Team Cap');
+  // Members are now created through the same complete-profile form as every
+  // other identity, rather than by appending a blank participant row.
+  for (const name of ['Bucky', 'Sam']) {
+    await sheet.getByRole('button', { name: 'Add person' }).click();
+    await sheet.getByPlaceholder('Person name').fill(name);
+    await sheet.getByRole('button', { name: 'Add to this conversation' }).click();
+  }
   await page.waitForTimeout(500);
 
   const html = await skin(page).innerHTML();
@@ -68,10 +75,13 @@ test('Twitter: renaming updates tweets that are already written', async ({ page 
   await page.waitForTimeout(300);
 
   // Identity used to be stamped onto the tweet at send time, so this rename
-  // left the existing tweet showing the old name.
-  await page.getByRole('button', { name: /Edit display name/i }).click();
-  await page.keyboard.type('Nat Romanoff');
-  await page.keyboard.press('Enter');
+  // left the existing tweet showing the old name. The header title now opens
+  // the account editor instead of editing the name in place.
+  await page.getByRole('button', { name: /Edit identity for/i }).click();
+  const accounts = page.getByRole('dialog', { name: 'Accounts' });
+  await accounts.getByPlaceholder('Display name').fill('Nat Romanoff');
+  await accounts.getByRole('button', { name: 'Save changes' }).click();
+  await accounts.getByRole('button', { name: 'Close' }).click();
   await page.waitForTimeout(500);
 
   await expect(skin(page)).toContainText('Nat Romanoff');
@@ -119,8 +129,14 @@ test('your own name reaches the hidden speaker label, retroactively', async ({ p
   await page.getByRole('button', { name: 'Send message' }).click();
   await page.waitForTimeout(300);
 
+  // "You" is a scene identity now, edited through the same form as everyone
+  // else rather than through a bare "Your name" field.
+  const sheet = page.getByRole('dialog', { name: 'People' });
   await page.getByRole('button', { name: 'Open people' }).click();
-  await page.getByRole('textbox', { name: 'Your name' }).fill('Rhys');
+  await sheet.getByRole('button', { name: /^You/ }).click();
+  await sheet.getByPlaceholder('Person name').fill('Rhys');
+  await sheet.getByRole('button', { name: 'Save changes' }).click();
+  await sheet.getByRole('button', { name: 'Close' }).click();
   await page.waitForTimeout(500);
 
   // The label is what a reader gets with Hide Creator's Style on, and it is
@@ -166,7 +182,7 @@ test('a reaction lands inside the bubble, where the only rule for it can match',
   await expect(page.getByPlaceholder('Add a message…')).toBeVisible();
 
   await page.getByPlaceholder('Add a message…').fill('you free tonight?');
-  await page.getByRole('button', { name: /Add details/i }).click();
+  await page.getByRole('button', { name: 'Message options' }).click();
   await page.getByRole('button', { name: 'React with ❤️' }).click();
   await page.getByRole('button', { name: 'Send message' }).click();
   await page.waitForTimeout(400);

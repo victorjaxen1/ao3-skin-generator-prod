@@ -5,18 +5,23 @@ import { ProductHead } from '../components/ProductHead';
 import { defaultProject, SkinProject, UniversalCharacter, Message } from '../lib/schema';
 import { loadStoredProject, persistProject, hasStoredProject } from '../lib/storage';
 import { PLATFORM_LOOK } from '../lib/generator';
-import { TEMPLATE_EXAMPLES } from '../lib/examples';
+import { instantiateTemplate, TEMPLATE_EXAMPLES } from '../lib/examples';
+import {
+  IdentityTarget,
+  migrateProjectIdentities,
+  normalizeTwitterHandle,
+  updateSceneCharacter,
+} from '../lib/identity';
 import { parseBlankPlatform } from '../lib/deepLinks';
 import { trackAnalytics } from '../lib/analytics';
 import { loadCharacterLibrary, persistCharacterLibrary } from '../lib/characterStorage';
 import { serializeProjectFile, PROJECT_FILE_SCHEMA_VERSION } from '../lib/projectFile';
 import { downloadTextFile, safeFilenamePart } from '../lib/download';
 import { markProjectBackedUp } from '../lib/backupStatus';
-import { CharacterLibrary } from '../components/CharacterLibrary';
 import { PlatformPicker } from '../components/PlatformPicker';
 import { WorkspaceHeader } from '../components/WorkspaceHeader';
 import { SettingsSheet } from '../components/SettingsSheet';
-import { CastPanel } from '../components/CastPanel';
+import { CastPanel, IdentityPanelMode } from '../components/CastPanel';
 import { ComposeBar } from '../components/ComposeBar';
 import { MessageTimeline } from '../components/MessageTimeline';
 import { ProjectBackupDialog } from '../components/ProjectBackupDialog';
@@ -52,8 +57,8 @@ export default function HomePage() {
   const [showCodeModal, setShowCodeModal] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'unsaved' | 'saving' | 'failed'>('saved');
   const [saveError, setSaveError] = useState('');
-  const [showCharacters, setShowCharacters] = useState(false);
   const [showCast, setShowCast] = useState(false);
+  const [identityPanelMode, setIdentityPanelMode] = useState<IdentityPanelMode>({ kind: 'overview' });
   const [showMobilePreview, setShowMobilePreview] = useState(true);
   const [showBackup, setShowBackup] = useState(false);
   // True when the picker was reached from the workspace, i.e. there is work
@@ -127,7 +132,7 @@ export default function HomePage() {
     if (templateId) {
       const all = Object.values(TEMPLATE_EXAMPLES).flat();
       const found = all.find(ex => ex.id === templateId);
-      if (found) { initial = found; fromDeepLink = true; }
+      if (found) { initial = instantiateTemplate(found); fromDeepLink = true; }
     } else {
       const platform = parseBlankPlatform(router.query.platform);
       if (platform) {
@@ -140,6 +145,7 @@ export default function HomePage() {
       }
     }
 
+    initial = migrateProjectIdentities(initial);
     setProject(initial);
     setHistory([initial]);
     setHistoryIndex(0);
@@ -207,9 +213,10 @@ export default function HomePage() {
     // WhatsApp was `#00A884` on `#1F2C34`, its **dark-theme** colours, applied
     // to a light card — so picking WhatsApp gave a teal bubble on white while
     // the WhatsApp examples used `#dcf8c6` green. One table, one answer.
-    const p = defaultProject();
+    let p = defaultProject();
     p.template = template;
     Object.assign(p.settings, PLATFORM_LOOK[template]);
+    p = migrateProjectIdentities(p);
     setProject(p);
     setHistory([p]);
     setHistoryIndex(0);
@@ -219,8 +226,9 @@ export default function HomePage() {
   }, []);
 
   const handleLoadExample = useCallback((example: SkinProject) => {
-    setProject(example);
-    setHistory([example]);
+    const instantiated = instantiateTemplate(example);
+    setProject(instantiated);
+    setHistory([instantiated]);
     setHistoryIndex(0);
     setShowPicker(false);
     setCameFromWorkspace(false);
@@ -288,8 +296,54 @@ export default function HomePage() {
   }, []);
 
   const handleUpdateSettings = useCallback(<K extends keyof typeof project.settings>(key: K, value: typeof project.settings[K]) => {
-    setProject(prev => ({ ...prev, settings: { ...prev.settings, [key]: value } }));
+    setProject(prev => {
+      const withSetting = { ...prev, settings: { ...prev.settings, [key]: value } };
+      const identityUpdate =
+        key === 'chatYourName' ? { id: prev.cast?.selfId, updates: { name: String(value || '') } }
+        : key === 'iosContactName' || key === 'androidContactName'
+          ? { id: prev.cast?.contactId, updates: { name: String(value || '') } }
+        : key === 'iosAvatarUrl' || key === 'androidAvatarUrl'
+          ? { id: prev.cast?.contactId, updates: { avatarUrl: String(value || '') } }
+        : key === 'twitterDisplayName'
+          ? { id: prev.cast?.twitterPrimaryId, updates: { name: String(value || '') } }
+        : key === 'twitterHandle'
+          ? { id: prev.cast?.twitterPrimaryId, updates: { twitterHandle: normalizeTwitterHandle(String(value || '')) } }
+        : key === 'twitterAvatarUrl'
+          ? { id: prev.cast?.twitterPrimaryId, updates: { avatarUrl: String(value || '') } }
+        : key === 'twitterVerified'
+          ? { id: prev.cast?.twitterPrimaryId, updates: { verified: Boolean(value) } }
+        : undefined;
+      return identityUpdate?.id
+        ? updateSceneCharacter(withSetting, identityUpdate.id, identityUpdate.updates)
+        : withSetting;
+    });
   }, []);
+
+  const openIdentityOverview = useCallback(() => {
+    if (project.template === 'google') return;
+    setIdentityPanelMode({ kind: 'overview' });
+    setShowCast(true);
+  }, [project.template]);
+
+  const openIdentityEditor = useCallback((target: IdentityTarget) => {
+    if (project.template === 'google') return;
+    setIdentityPanelMode({ kind: 'edit', target });
+    setShowCast(true);
+  }, [project.template]);
+
+  const openIdentityCreate = useCallback(() => {
+    if (project.template === 'google') return;
+    const isGroup = project.template === 'ios'
+      ? !!project.settings.iosGroupMode
+      : project.template === 'android'
+        ? !!project.settings.androidGroupMode
+        : false;
+    setIdentityPanelMode({
+      kind: 'create',
+      suggestedRole: project.template === 'twitter' ? 'account' : isGroup ? 'participant' : 'contact',
+    });
+    setShowCast(true);
+  }, [project.template, project.settings.iosGroupMode, project.settings.androidGroupMode]);
 
   // ── Character handlers ──────────────────────────────────────────────────
   const saveChars = (chars: UniversalCharacter[]) => {
@@ -354,7 +408,7 @@ export default function HomePage() {
       const key = prev.template === 'ios' ? 'iosContactName' : 'androidContactName';
       const previous =
         (prev.settings as any)[key] || prev.settings.chatContactName || 'Them';
-      return {
+      const legacyUpdated = {
         ...prev,
         settings: { ...prev.settings, [key]: name },
         messages: prev.messages.map(m =>
@@ -363,90 +417,26 @@ export default function HomePage() {
             : m
         ),
       };
+      return prev.cast?.contactId
+        ? updateSceneCharacter(legacyUpdated, prev.cast.contactId, { name })
+        : legacyUpdated;
     });
   }, []);
 
-  const handleAddParticipant = useCallback((name: string, avatarUrl: string) => {
-    setProject(prev => {
-      const field =
-        prev.template === 'ios' ? 'iosGroupParticipants' : 'androidGroupParticipants';
-      const existing = prev.settings[field] || [];
-      const colors = ['#FF5733', '#33A1FF', '#33FF57', '#FF33A1', '#FFC733', '#8B33FF'];
-      return {
-        ...prev,
-        settings: {
-          ...prev.settings,
-          [field]: [
-            ...existing,
-            {
-              id: `p-${Date.now()}`,
-              name,
-              color: colors[existing.length % colors.length],
-              ...(avatarUrl ? { avatarUrl } : {}),
-            },
-          ],
-        },
-      };
-    });
-  }, []);
-
-  const handleSetAsContact = useCallback((name: string, avatarUrl: string) => {
-    // In group mode the contact name is rendered nowhere and the avatar field is
-    // THE GROUP'S photo, not a person's (generator.ts, the iOS/Android header
-    // blocks). Writing them here would set a name nothing shows and replace the
-    // group picture with one member's face — so a group chat adds a participant
-    // instead, which is what "use this character" means there.
-    const isGroup =
-      (project.template === 'ios' && project.settings.iosGroupMode) ||
-      (project.template === 'android' && project.settings.androidGroupMode);
-    if (isGroup && (project.template === 'ios' || project.template === 'android')) {
-      handleAddParticipant(name, avatarUrl);
-      return;
-    }
-
-    switch (project.template) {
-      case 'ios':
-        handleRenameContact(name);
-        handleUpdateSettings('iosAvatarUrl', avatarUrl);
-        break;
-      case 'android':
-        handleRenameContact(name);
-        handleUpdateSettings('androidAvatarUrl', avatarUrl);
-        break;
-      case 'twitter':
-        handleUpdateSettings('twitterDisplayName', name);
-        handleUpdateSettings('twitterAvatarUrl', avatarUrl);
-        break;
-      case 'google':
-        handleUpdateSettings('googleQuery', name);
-        break;
-    }
-  }, [
-    project.template,
-    project.settings.iosGroupMode,
-    project.settings.androidGroupMode,
-    handleUpdateSettings,
-    handleRenameContact,
-    handleAddParticipant,
-  ]);
-
-  // The compose bar's "posting as" list. Template presets were previously the
-  // only source, so the feature existed only if you happened to load one of
-  // three starter templates — the Character Library writes somewhere else
-  // entirely. Both feed it now.
+  // The compose roster is project-scoped. Library characters appear only after
+  // an explicit copy into this scene, and IDs keep duplicate names distinct.
   const twitterCharacters = React.useMemo(() => {
-    const presets = project.settings.twitterCharacterPresets || [];
-    const fromLibrary = universalCharacters
-      .filter(c => !presets.some(p => p.name === c.name))
-      .map(c => ({
-        id: c.id,
-        name: c.name,
-        handle: (c.twitterHandle || c.name.toLowerCase().replace(/\s+/g, '')).replace(/^@/, ''),
-        avatarUrl: c.avatarUrl,
-        verified: c.verified,
+    if (project.template !== 'twitter') return [];
+    return (project.cast?.characters || [])
+      .filter(character => character.id !== project.cast?.twitterPrimaryId && !character.archived)
+      .map(character => ({
+        id: character.id,
+        name: character.name,
+        handle: normalizeTwitterHandle(character.twitterHandle) || character.name.toLowerCase().replace(/\s+/g, ''),
+        avatarUrl: character.avatarUrl,
+        verified: character.verified,
       }));
-    return [...presets, ...fromLibrary];
-  }, [project.settings.twitterCharacterPresets, universalCharacters]);
+  }, [project.template, project.cast]);
 
   // ── Render ───────────────────────────────────────────────────────────────
   // Derive the contact name from the correct per-template settings field
@@ -520,8 +510,14 @@ export default function HomePage() {
         }
         onBack={() => { setCameFromWorkspace(true); setShowPicker(true); }}
         onSettingsOpen={() => setShowSettings(true)}
-        onCharactersOpen={() => setShowCharacters(true)}
-        onCastOpen={() => setShowCast(true)}
+        onCastOpen={openIdentityOverview}
+        onIdentityOpen={() => {
+          if (project.template === 'twitter') openIdentityEditor({ kind: 'twitter-primary' });
+          else if (project.template === 'ios' || project.template === 'android') {
+            if (isGroupChat) openIdentityOverview();
+            else openIdentityEditor({ kind: 'contact' });
+          }
+        }}
         onBackupOpen={() => setShowBackup(true)}
         template={project.template}
         saveStatus={saveStatus}
@@ -543,16 +539,18 @@ export default function HomePage() {
           otherwise cover the compose input. ExportPanel publishes its own
           measured height as --export-bar-h. */}
       <div
-        className="flex-1 flex overflow-hidden"
+        className="flex-1 min-h-0 flex overflow-hidden"
         style={{ paddingBottom: 'calc(var(--export-bar-h, 0px) + var(--analytics-consent-h, 0px))' }}
       >
         {/* Left / mobile-full: compose area */}
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className="flex-1 min-h-0 flex flex-col min-w-0">
           <div className="flex-1 overflow-y-auto px-3 py-2 sm:px-4 sm:py-3 pb-4">
             <MessageTimeline
               messages={project.messages}
               template={project.template}
               settings={project.settings}
+              project={project}
+              onIdentityClick={openIdentityEditor}
               focusedMessageId={focusedMessageId}
               focusTrigger={focusTrigger}
               onUpdateMessage={handleUpdateMessage}
@@ -564,7 +562,7 @@ export default function HomePage() {
           </div>
 
           {/* ─── Mobile live preview (desktop uses the column on the right) ── */}
-          <div className="md:hidden flex flex-col flex-shrink-0 border-t border-stone-200 bg-white">
+          <div className="md:hidden flex min-h-0 flex-col flex-shrink border-t border-stone-200 bg-white">
             <button
               type="button"
               onClick={toggleMobilePreview}
@@ -608,6 +606,7 @@ export default function HomePage() {
                   mobile={true}
                   dark={dark}
                   onMessageClick={handleMessageClick}
+                  onIdentityClick={(target) => target ? openIdentityEditor(target) : openIdentityOverview()}
                   editModeEnabled={true}
                 />
               </div>
@@ -618,8 +617,16 @@ export default function HomePage() {
           <ComposeBar
             template={project.template}
             settings={project.settings}
+            cast={project.cast}
             onAddMessage={handleAddMessage}
             twitterCharacters={twitterCharacters}
+            onAddIdentity={openIdentityCreate}
+            onEditActiveIdentity={(target) => {
+              if (target.kind === 'character' && target.id) openIdentityEditor({ kind: 'character', id: target.id });
+              else if (target.kind === 'twitter-primary') openIdentityEditor({ kind: 'twitter-primary' });
+              else if (target.kind === 'self') openIdentityEditor({ kind: 'self' });
+              else if (target.kind === 'contact') openIdentityEditor({ kind: 'contact' });
+            }}
           />
         </div>
 
@@ -639,6 +646,7 @@ export default function HomePage() {
               mobile={true}
               dark={dark}
               onMessageClick={handleMessageClick}
+              onIdentityClick={(target) => target ? openIdentityEditor(target) : openIdentityOverview()}
               editModeEnabled={true}
             />
           </div>
@@ -659,17 +667,6 @@ export default function HomePage() {
       )}
 
       {/* ─── Character Library ────────────────────────────────────── */}
-      <CharacterLibrary
-        isOpen={showCharacters}
-        onClose={() => setShowCharacters(false)}
-        characters={universalCharacters}
-        currentTemplate={project.template}
-        onAddCharacter={handleAddCharacter}
-        onUpdateCharacter={handleUpdateCharacter}
-        onDeleteCharacter={handleDeleteCharacter}
-        onSetAsContact={handleSetAsContact}
-      />
-
       {/* ─── People / Cast panel ────────────────────────────────────── */}
       {/* Google never opens this — its header button still goes to the
           Character Library, which is the only place that feature is reachable
@@ -677,12 +674,14 @@ export default function HomePage() {
       <CastPanel
         isOpen={showCast}
         onClose={() => setShowCast(false)}
-        template={project.template}
-        settings={project.settings}
-        onUpdateSettings={handleUpdateSettings}
-        onRenameContact={handleRenameContact}
-        universalCharacters={universalCharacters}
-        onOpenCharacterLibrary={() => { setShowCast(false); setShowCharacters(true); }}
+        project={project}
+        mode={identityPanelMode}
+        onModeChange={setIdentityPanelMode}
+        onChangeProject={(updater) => setProject(previous => updater(previous))}
+        characters={universalCharacters}
+        onAddLibraryCharacter={handleAddCharacter}
+        onUpdateLibraryCharacter={handleUpdateCharacter}
+        onDeleteLibraryCharacter={handleDeleteCharacter}
       />
 
       {/* ─── Settings sheet ─────────────────────────────────────────── */}

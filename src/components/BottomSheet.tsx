@@ -16,16 +16,45 @@ export const BottomSheet: React.FC<Props> = ({
   height = 'max-h-[70vh]',
 }) => {
   const sheetRef = useRef<HTMLDivElement>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
 
   // Close on Escape
   useEffect(() => {
     if (!isOpen) return;
+    returnFocusRef.current = document.activeElement as HTMLElement | null;
+    const frame = requestAnimationFrame(() => {
+      const sheet = sheetRef.current;
+      const first = sheet?.querySelector<HTMLElement>(
+        'input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+      (first || sheet)?.focus();
+    });
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') onCloseRef.current();
+      if (e.key !== 'Tab' || !sheetRef.current) return;
+      const focusable = Array.from(sheetRef.current.querySelectorAll<HTMLElement>(
+        'input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      ));
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener('keydown', handleKeyDown);
+      returnFocusRef.current?.focus();
+    };
+  }, [isOpen]);
 
   // Prevent body scroll when open
   useEffect(() => {
@@ -50,6 +79,10 @@ export const BottomSheet: React.FC<Props> = ({
       {/* Sheet */}
       <div
         ref={sheetRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title || 'Panel'}
+        tabIndex={-1}
         className={`absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl animate-slide-up ${height} flex flex-col`}
       >
         {/* Drag handle */}
@@ -63,6 +96,7 @@ export const BottomSheet: React.FC<Props> = ({
             <h2 className="text-base font-semibold text-stone-900">{title}</h2>
             <button
               onClick={onClose}
+              aria-label="Close"
               className="w-7 h-7 flex items-center justify-center rounded-full bg-stone-100 text-stone-500 hover:bg-stone-200 hover:text-stone-700 transition-colors text-sm"
             >
               ✕

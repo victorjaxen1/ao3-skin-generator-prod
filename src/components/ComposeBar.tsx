@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Message, SkinSettings, GroupParticipant, TwitterCharacter } from '../lib/schema';
+import { Message, SceneCast, SkinSettings, GroupParticipant, TwitterCharacter } from '../lib/schema';
 import { normalizeImageUrl } from '../lib/urlNormalize';
 import { ImageUrlInput } from './ImageUrlInput';
 import { ReactionPicker } from './ReactionPicker';
@@ -9,6 +9,9 @@ interface Props {
   settings: SkinSettings;
   onAddMessage: (message: Message) => void;
   twitterCharacters?: TwitterCharacter[];
+  cast?: SceneCast;
+  onAddIdentity?: () => void;
+  onEditActiveIdentity?: (target: { kind: 'self' | 'contact' | 'twitter-primary' | 'character'; id?: string }) => void;
 }
 
 export const ComposeBar: React.FC<Props> = ({
@@ -16,6 +19,9 @@ export const ComposeBar: React.FC<Props> = ({
   settings,
   onAddMessage,
   twitterCharacters,
+  cast,
+  onAddIdentity,
+  onEditActiveIdentity,
 }) => {
   const [content, setContent] = useState('');
   const [isOutgoing, setIsOutgoing] = useState(true);
@@ -50,12 +56,19 @@ export const ComposeBar: React.FC<Props> = ({
     ? settings.androidGroupMode
     : false;
 
-  const groupParticipants: GroupParticipant[] =
+  const archivedIds = new Set((cast?.characters || []).filter(character => character.archived).map(character => character.id));
+  const groupParticipants: GroupParticipant[] = (
     template === 'ios'
       ? settings.iosGroupParticipants || []
       : template === 'android'
       ? settings.androidGroupParticipants || []
-      : [];
+      : []).filter(participant => !participant.characterId || !archivedIds.has(participant.characterId));
+
+  useEffect(() => {
+    if (twitterCharId && !(twitterCharacters || []).some(character => character.id === twitterCharId)) {
+      setTwitterCharId('');
+    }
+  }, [twitterCharId, twitterCharacters]);
 
   // The two names the direction chip shows. iOS/Android only — the chip does
   // not render for Twitter or Google. This is the one place in the workspace
@@ -99,6 +112,7 @@ export const ComposeBar: React.FC<Props> = ({
         outgoing: true,
         timestamp: timestamp || undefined,
         ...(activeChar && {
+          characterId: activeChar.id,
           sender: activeChar.name,
           useCustomIdentity: true,
           twitterHandle: activeChar.handle,
@@ -133,6 +147,11 @@ export const ComposeBar: React.FC<Props> = ({
         reaction: reaction || undefined,
         status: status,
         participantId: isGroupMode && !isOutgoing ? participantId || undefined : undefined,
+        characterId: isOutgoing
+          ? cast?.selfId
+          : isGroupMode
+            ? groupParticipants.find(participant => participant.id === participantId)?.characterId
+            : cast?.contactId,
       };
 
       if (normalizedImage) {
@@ -185,8 +204,8 @@ export const ComposeBar: React.FC<Props> = ({
   const isResultList = template === 'google';
   const sendLabel = isResultList ? 'Add result' : 'Send message';
   const detailsLabel = isResultList
-    ? 'Add link and description'
-    : 'Add details (timestamp, image, etc.)';
+    ? 'Add result details'
+    : 'Message options';
 
   return (
     <div className="border-t border-stone-200 bg-white">
@@ -308,6 +327,20 @@ export const ComposeBar: React.FC<Props> = ({
 
       {/* Main compose row */}
       <div className="px-3 py-2 flex items-end gap-2">
+        {template !== 'google' && (
+          <button
+            type="button"
+            onClick={onAddIdentity}
+            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-stone-100 text-stone-500 transition-colors hover:bg-violet-100 hover:text-violet-700"
+            title={template === 'twitter' ? 'Add account' : 'Add person'}
+            aria-label={template === 'twitter' ? 'Add account' : 'Add person'}
+          >
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M15 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="8.5" cy="7" r="4" /><path d="M19 8v6M16 11h6" />
+            </svg>
+          </button>
+        )}
+
         {/* Sender toggle (iOS/Android only) */}
         {(template === 'ios' || template === 'android') && (
           <button
@@ -330,21 +363,36 @@ export const ComposeBar: React.FC<Props> = ({
           </button>
         )}
 
+        {(template === 'ios' || template === 'android') && (
+          <button
+            type="button"
+            onClick={() => onEditActiveIdentity?.({ kind: isOutgoing ? 'self' : 'contact' })}
+            aria-label={`Edit ${isOutgoing ? youLabel : themLabel}`}
+            title={`Edit ${isOutgoing ? youLabel : themLabel}`}
+            className="-ml-1 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-xs text-stone-400 hover:bg-violet-50 hover:text-violet-700"
+          >
+            ✎
+          </button>
+        )}
+
         {/* Who is posting (Twitter). The account itself is the default; the
             other entries come from saved characters and template presets. */}
-        {template === 'twitter' && twitterCharacters && twitterCharacters.length > 0 && (
-          <select
-            value={twitterCharId}
-            onChange={(e) => setTwitterCharId(e.target.value)}
-            aria-label="Posting as"
-            title="Posting as"
-            className="flex-shrink-0 text-xs bg-stone-100 border-0 rounded-full px-2.5 py-1.5 focus:ring-2 focus:ring-violet-500 max-w-[120px]"
-          >
-            <option value="">{settings.twitterDisplayName || 'Me'}</option>
-            {twitterCharacters.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
+        {template === 'twitter' && (
+          <div className="flex min-w-0 max-w-[135px] flex-shrink-0 items-center rounded-full bg-stone-100">
+            <select
+              value={twitterCharId}
+              onChange={(e) => setTwitterCharId(e.target.value)}
+              aria-label="Posting as"
+              title="Posting as"
+              className="min-w-0 flex-1 bg-transparent py-1.5 pl-2.5 text-xs focus:ring-2 focus:ring-violet-500"
+            >
+              <option value="">{settings.twitterDisplayName || 'Me'}</option>
+              {(twitterCharacters || []).map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            <button type="button" onClick={() => onEditActiveIdentity?.(twitterCharId ? { kind: 'character', id: twitterCharId } : { kind: 'twitter-primary' })} aria-label={`Edit ${(twitterCharacters || []).find(character => character.id === twitterCharId)?.name || settings.twitterDisplayName || 'primary account'}`} className="px-1.5 text-stone-400 hover:text-violet-700">✎</button>
+          </div>
         )}
 
         {/* Group participant selector */}
@@ -352,6 +400,8 @@ export const ComposeBar: React.FC<Props> = ({
           <select
             value={participantId}
             onChange={(e) => setParticipantId(e.target.value)}
+            aria-label="Speaking as"
+            title="Speaking as"
             className="flex-shrink-0 text-xs bg-stone-100 border-0 rounded-full px-2.5 py-1.5 focus:ring-2 focus:ring-violet-500 max-w-[100px]"
           >
             <option value="">Select person</option>
@@ -373,8 +423,7 @@ export const ComposeBar: React.FC<Props> = ({
           aria-expanded={showDetails}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="12" y1="5" x2="12" y2="19" />
-            <line x1="5" y1="12" x2="19" y2="12" />
+            {template === 'google' ? <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" /> : <><circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /></>}
           </svg>
         </button>
 

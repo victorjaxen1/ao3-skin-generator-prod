@@ -1,4 +1,5 @@
 import { Message, SkinProject } from './schema';
+import { resolveMessageIdentity } from './identity';
 
 const PLATFORM_LABEL: Record<SkinProject['template'], string> = {
   ios: 'iMessage conversation',
@@ -26,24 +27,12 @@ function attachmentLines(message: Message): string[] {
 }
 
 function chatSpeaker(project: SkinProject, message: Message): string {
-  if (message.outgoing) return project.settings.chatYourName?.trim() || 'You';
-  const participants = project.template === 'android'
-    ? project.settings.androidGroupParticipants
-    : project.settings.iosGroupParticipants;
-  return participants?.find(participant => participant.id === message.participantId)?.name
-    || message.sender.trim()
-    || 'Them';
+  return resolveMessageIdentity(project, message).name;
 }
 
 function twitterSpeaker(project: SkinProject, message: Message): string {
-  if (message.useCustomIdentity) {
-    const name = message.sender.trim() || 'User';
-    const handle = message.twitterHandle?.replace(/^@/, '').trim();
-    return handle ? `${name} (@${handle})` : name;
-  }
-  const name = project.settings.twitterDisplayName?.trim() || message.sender.trim() || 'User';
-  const handle = project.settings.twitterHandle?.replace(/^@/, '').trim();
-  return handle ? `${name} (@${handle})` : name;
+  const identity = resolveMessageIdentity(project, message);
+  return identity.twitterHandle ? `${identity.name} (@${identity.twitterHandle})` : identity.name;
 }
 
 export function buildSceneTranscript(project: SkinProject): string {

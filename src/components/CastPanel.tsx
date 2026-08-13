@@ -1,444 +1,587 @@
-import React from 'react';
-import { SkinSettings, GroupParticipant, UniversalCharacter, TwitterCharacter } from '../lib/schema';
-import { AvatarSelector } from './AvatarSelector';
-import { ImageUrlInput } from './ImageUrlInput';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { CHARACTER_BANK } from '../lib/characterBank';
+import {
+  IdentityTarget,
+  SceneCharacterDraft,
+  addSceneCharacter,
+  archiveOrReassignCharacter,
+  copyLibraryCharacterToScene,
+  normalizeTwitterHandle,
+  resolveIdentityTarget,
+  updateSceneCharacter,
+} from '../lib/identity';
+import { SceneCharacter, SkinProject, UniversalCharacter } from '../lib/schema';
 import BottomSheet from './BottomSheet';
-import { ToggleRow, TextRow } from './SettingsRows';
+import { ImageUrlInput } from './ImageUrlInput';
+import { ToggleRow } from './SettingsRows';
 
-/**
- * "Who is in this conversation, and what do they look like."
- *
- * Before this panel, that question was answered in four places: the other
- * person's name was the header title, their photo was in Settings under
- * "Contact", your Twitter handle was in Settings under "Profile", saved
- * characters were in a fourth drawer — and **your own name did not exist at
- * all**. Settings apologised for the split three times, in the form of "Their
- * name is the title at the top of the screen — tap it to change". That sentence
- * was a bug report.
- *
- * ## This is four panels, not one layout with conditionals
- *
- * Switch on `template` at the top level and share the leaf components
- * underneath. The alternative — one tree sprinkled with
- * `template === 'ios' && !settings.iosGroupMode &&` — is how this file would
- * become unreadable, because group mode does not *add* fields, it **changes
- * what the existing ones mean**:
- *
- * - The header renders `iosGroupName` / `androidGroupName`; the contact name is
- *   still used to label unassigned incoming messages, but is invisible.
- * - `iosAvatarUrl` / `androidAvatarUrl` becomes **the group's** photo rather
- *   than a person's. Same field, different meaning, no label change anywhere in
- *   the generator.
- *
- * So the "Them" card is *replaced* by a "The group" card, not supplemented.
- */
+export type IdentityPanelMode =
+  | { kind: 'overview' }
+  | { kind: 'create'; suggestedRole?: 'self' | 'contact' | 'participant' | 'account' }
+  | { kind: 'edit'; target: IdentityTarget }
+  | { kind: 'library' }
+  | { kind: 'avatar-presets'; returnTo: 'create' | 'edit' };
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
-  template: 'ios' | 'android' | 'twitter' | 'google';
-  settings: SkinSettings;
-  onUpdateSettings: <K extends keyof SkinSettings>(key: K, value: SkinSettings[K]) => void;
-  /** Renames the contact *and* rewrites the messages they have already sent. */
-  onRenameContact: (name: string) => void;
-  universalCharacters: UniversalCharacter[];
-  onOpenCharacterLibrary: () => void;
+  project: SkinProject;
+  mode: IdentityPanelMode;
+  onModeChange: (mode: IdentityPanelMode) => void;
+  onChangeProject: (updater: (project: SkinProject) => SkinProject) => void;
+  characters: UniversalCharacter[];
+  onAddLibraryCharacter: (character: UniversalCharacter) => void;
+  onUpdateLibraryCharacter: (id: string, updates: Partial<UniversalCharacter>) => void;
+  onDeleteLibraryCharacter: (id: string) => void;
 }
 
-/** A titled block for one identity: a name, an optional photo, and a note. */
-const PersonCard: React.FC<{
-  title: string;
-  note?: string;
-  children?: React.ReactNode;
-}> = ({ title, note, children }) => (
-  <div className="py-3">
-    <span className="text-[11px] font-semibold text-stone-400 uppercase tracking-wider block mb-1">
-      {title}
-    </span>
-    <div className="space-y-2">{children}</div>
-    {note && <p className="text-xs text-stone-500 mt-2 leading-relaxed">{note}</p>}
-  </div>
-);
+interface FormState {
+  name: string;
+  avatarUrl: string;
+  twitterHandle: string;
+  verified: boolean;
+  color: string;
+  alsoSave: boolean;
+}
 
-/** A 40px round avatar, or a coloured monogram — the same fallback the generator uses. */
-const Monogram: React.FC<{ name: string; url?: string; color?: string }> = ({
-  name,
-  url,
-  color = '#a8a29e',
-}) =>
-  url ? (
+const EMPTY_FORM: FormState = {
+  name: '',
+  avatarUrl: '',
+  twitterHandle: '',
+  verified: false,
+  color: '#33A1FF',
+  alsoSave: false,
+};
+
+const COLORS = ['#FF5733', '#33A1FF', '#33FF57', '#FF33A1', '#FFC733', '#8B33FF'];
+
+function targetId(project: SkinProject, target: IdentityTarget): string | undefined {
+  if (target.kind === 'character') return target.id;
+  if (target.kind === 'self') return project.cast?.selfId;
+  if (target.kind === 'contact') return project.cast?.contactId;
+  if (target.kind === 'twitter-primary') return project.cast?.twitterPrimaryId;
+  const participants = project.template === 'ios'
+    ? project.settings.iosGroupParticipants
+    : project.settings.androidGroupParticipants;
+  return participants?.find(participant => participant.id === target.id || participant.characterId === target.id)?.characterId;
+}
+
+function participantField(project: SkinProject): 'iosGroupParticipants' | 'androidGroupParticipants' {
+  return project.template === 'ios' ? 'iosGroupParticipants' : 'androidGroupParticipants';
+}
+
+function participantForCharacter(project: SkinProject, id: string) {
+  return (project.settings[participantField(project)] || []).find(participant => participant.characterId === id);
+}
+
+function initials(name: string): string {
+  return name.trim().split(/\s+/).slice(0, 2).map(part => part[0] || '').join('').toUpperCase() || '?';
+}
+
+const Avatar: React.FC<{ character: Pick<SceneCharacter, 'name' | 'avatarUrl'>; color?: string }> = ({ character, color = '#7c3aed' }) =>
+  character.avatarUrl ? (
     // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={url}
-      alt=""
-      className="w-10 h-10 rounded-full object-cover flex-shrink-0 border border-stone-200"
-    />
+    <img src={character.avatarUrl} alt="" className="h-11 w-11 flex-shrink-0 rounded-full border border-stone-200 object-cover" />
   ) : (
-    <span
-      className="w-10 h-10 rounded-full flex items-center justify-center text-[11px] font-bold flex-shrink-0"
-      style={{ backgroundColor: `${color}20`, color }}
-    >
-      {name.substring(0, 2).toUpperCase()}
+    // Decorative: the row already carries the name, so the initials would only
+    // stutter it into the accessible name.
+    <span aria-hidden="true" className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold" style={{ color, backgroundColor: `${color}18` }}>
+      {initials(character.name)}
     </span>
   );
 
 export const CastPanel: React.FC<Props> = ({
   isOpen,
   onClose,
-  template,
-  settings,
-  onUpdateSettings,
-  onRenameContact,
-  universalCharacters,
-  onOpenCharacterLibrary,
+  project,
+  mode,
+  onModeChange,
+  onChangeProject,
+  characters,
+  onAddLibraryCharacter,
+  onUpdateLibraryCharacter,
+  onDeleteLibraryCharacter,
 }) => {
-  // ── Participant handlers ────────────────────────────────────────────────
-  // Moved verbatim from SettingsSheet, with one addition: `add` takes a seed so
-  // the "+ Add" button and the library strip share a single code path.
-  type ParticipantField = 'iosGroupParticipants' | 'androidGroupParticipants';
+  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [dirty, setDirty] = useState(false);
+  const [replacementId, setReplacementId] = useState('');
+  const [libraryEditId, setLibraryEditId] = useState<string | null>(null);
+  const [libraryForm, setLibraryForm] = useState<FormState>(EMPTY_FORM);
+  const loadedFormKey = useRef('');
+  const editTargetRef = useRef<IdentityTarget | null>(null);
 
-  const addParticipant = (field: ParticipantField, seed?: Partial<GroupParticipant>) => {
-    const existing = settings[field] || [];
-    const colors = ['#FF5733', '#33A1FF', '#33FF57', '#FF33A1', '#FFC733', '#8B33FF'];
-    onUpdateSettings(field, [
-      ...existing,
-      {
-        id: `p-${Date.now()}`,
-        name: `Person ${existing.length + 1}`,
-        color: colors[existing.length % colors.length],
-        ...seed,
-      } as GroupParticipant,
-    ]);
+  const isTwitter = project.template === 'twitter';
+  const isGroup = project.template === 'ios'
+    ? !!project.settings.iosGroupMode
+    : project.template === 'android'
+      ? !!project.settings.androidGroupMode
+      : false;
+  const panelTitle = isTwitter ? 'Accounts' : 'People';
+
+  useEffect(() => {
+    if (mode.kind === 'overview' || mode.kind === 'library') loadedFormKey.current = '';
+    if (mode.kind === 'create') {
+      const key = `create:${mode.suggestedRole || ''}`;
+      if (loadedFormKey.current === key) return;
+      loadedFormKey.current = key;
+      setForm({ ...EMPTY_FORM, color: COLORS[(project.settings[participantField(project)] || []).length % COLORS.length] });
+      setDirty(false);
+      setReplacementId('');
+    }
+    if (mode.kind === 'edit') {
+      editTargetRef.current = mode.target;
+      const id = targetId(project, mode.target);
+      const key = `edit:${id || mode.target.kind}`;
+      if (loadedFormKey.current === key) return;
+      loadedFormKey.current = key;
+      const identity = resolveIdentityTarget(project, mode.target);
+      const participant = id ? participantForCharacter(project, id) : undefined;
+      setForm({
+        ...EMPTY_FORM,
+        name: identity.name,
+        avatarUrl: identity.avatarUrl || '',
+        twitterHandle: identity.twitterHandle || '',
+        verified: identity.verified,
+        color: participant?.color || '#33A1FF',
+      });
+      setDirty(false);
+      setReplacementId('');
+    }
+  }, [mode, project]);
+
+  const changeForm = <K extends keyof FormState>(key: K, value: FormState[K]) => {
+    setForm(previous => ({ ...previous, [key]: value }));
+    setDirty(true);
   };
 
-  const removeParticipant = (field: ParticipantField, id: string) => {
-    const existing = settings[field] || [];
-    onUpdateSettings(field, existing.filter((p: GroupParticipant) => p.id !== id));
+  const guardUnsaved = (): boolean => !dirty || window.confirm('Discard unsaved identity changes?');
+  const go = (next: IdentityPanelMode) => {
+    if (!guardUnsaved()) return;
+    setDirty(false);
+    onModeChange(next);
+  };
+  const requestClose = () => {
+    if (!guardUnsaved()) return;
+    setDirty(false);
+    onClose();
   };
 
-  const updateParticipant = (
-    field: ParticipantField,
-    id: string,
-    updates: Partial<GroupParticipant>
-  ) => {
-    const existing = settings[field] || [];
-    onUpdateSettings(
-      field,
-      existing.map((p: GroupParticipant) => (p.id === id ? { ...p, ...updates } : p))
+  const addParticipantBinding = (next: SkinProject, character: SceneCharacter, color: string): SkinProject => {
+    const field = participantField(next);
+    const existing = next.settings[field] || [];
+    return {
+      ...next,
+      settings: {
+        ...next.settings,
+        [field]: [...existing, {
+          id: `p-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          characterId: character.id,
+          name: character.name,
+          avatarUrl: character.avatarUrl,
+          color,
+        }],
+      },
+    };
+  };
+
+  const createInScene = (previous: SkinProject, draft: SceneCharacterDraft, role?: 'self' | 'contact' | 'participant' | 'account'): SkinProject => {
+    if (previous.template === 'twitter') return addSceneCharacter(previous, draft, 'account');
+    if (role === 'self') {
+      const id = previous.cast?.selfId;
+      return id ? updateSceneCharacter(previous, id, draft) : addSceneCharacter(previous, draft, 'self');
+    }
+    if (!isGroup || role === 'contact') {
+      const id = previous.cast?.contactId;
+      return id ? updateSceneCharacter(previous, id, draft) : addSceneCharacter(previous, draft, 'contact');
+    }
+    const withCharacter = addSceneCharacter(previous, draft, 'participant');
+    const character = withCharacter.cast?.characters[withCharacter.cast.characters.length - 1];
+    return character ? addParticipantBinding(withCharacter, character, form.color) : withCharacter;
+  };
+
+  const saveForm = () => {
+    const name = form.name.trim();
+    if (!name) return;
+    const draft: SceneCharacterDraft = {
+      name,
+      avatarUrl: form.avatarUrl.trim() || undefined,
+      twitterHandle: isTwitter ? normalizeTwitterHandle(form.twitterHandle) : undefined,
+      verified: isTwitter ? form.verified : undefined,
+    };
+    if (mode.kind === 'edit') {
+      const id = targetId(project, mode.target);
+      if (!id) return;
+      onChangeProject(previous => {
+        const updated = updateSceneCharacter(previous, id, draft);
+        const field = participantField(updated);
+        return {
+          ...updated,
+          settings: {
+            ...updated.settings,
+            [field]: (updated.settings[field] || []).map(participant =>
+              participant.characterId === id ? { ...participant, color: form.color } : participant
+            ),
+          },
+        };
+      });
+    } else if (mode.kind === 'create') {
+      onChangeProject(previous => createInScene(previous, draft, mode.suggestedRole));
+      if (form.alsoSave) {
+        onAddLibraryCharacter({
+          id: crypto.randomUUID(),
+          name,
+          avatarUrl: draft.avatarUrl,
+          twitterHandle: draft.twitterHandle,
+          verified: draft.verified,
+          usageCount: 0,
+        });
+      }
+    }
+    setDirty(false);
+    loadedFormKey.current = '';
+    onModeChange({ kind: 'overview' });
+  };
+
+  const applyLibraryCharacter = (source: UniversalCharacter) => {
+    onChangeProject(previous => {
+      if (previous.template === 'twitter') return copyLibraryCharacterToScene(previous, source, 'account');
+      if (!isGroup) {
+        const id = previous.cast?.contactId;
+        const draft = {
+          name: source.name,
+          avatarUrl: source.avatarUrl,
+          sourceLibraryId: source.id,
+        };
+        return id ? updateSceneCharacter(previous, id, draft) : addSceneCharacter(previous, draft, 'contact');
+      }
+      const withCharacter = copyLibraryCharacterToScene(previous, source, 'participant');
+      const character = withCharacter.cast?.characters[withCharacter.cast.characters.length - 1];
+      return character ? addParticipantBinding(withCharacter, character, COLORS[(withCharacter.settings[participantField(withCharacter)] || []).length % COLORS.length]) : withCharacter;
+    });
+    onUpdateLibraryCharacter(source.id, {
+      usageCount: (source.usageCount || 0) + 1,
+      lastUsed: new Date().toISOString(),
+    });
+    onModeChange({ kind: 'overview' });
+  };
+
+  const editTargetId = mode.kind === 'edit' ? targetId(project, mode.target) : undefined;
+  const messageReferenceCount = editTargetId
+    ? project.messages.filter(message => message.characterId === editTargetId).length
+    : 0;
+  const isBoundIdentity = !!editTargetId && [project.cast?.selfId, project.cast?.contactId, project.cast?.twitterPrimaryId].includes(editTargetId);
+  const replacementOptions = (project.cast?.characters || []).filter(character =>
+    character.id !== editTargetId
+    && !character.archived
+    && (!participantForCharacter(project, editTargetId || '') || !!participantForCharacter(project, character.id))
+  );
+
+  const removeOrArchive = (replacement?: string) => {
+    if (!editTargetId) return;
+    onChangeProject(previous => {
+      const field = participantField(previous);
+      const participant = (previous.settings[field] || []).find(entry => entry.characterId === editTargetId);
+      let prepared = previous;
+      if (participant && (messageReferenceCount === 0 || replacement)) {
+        const replacementParticipant = replacement
+          ? (previous.settings[field] || []).find(entry => entry.characterId === replacement)
+          : undefined;
+        prepared = {
+          ...previous,
+          settings: {
+            ...previous.settings,
+            [field]: (previous.settings[field] || []).filter(entry => entry.characterId !== editTargetId),
+          },
+          messages: previous.messages.map(message =>
+            message.characterId === editTargetId && replacementParticipant
+              ? { ...message, participantId: replacementParticipant.id }
+              : message
+          ),
+        };
+      }
+      return archiveOrReassignCharacter(prepared, editTargetId, replacement);
+    });
+    setDirty(false);
+    loadedFormKey.current = '';
+    onModeChange({ kind: 'overview' });
+  };
+
+  const updateSimpleSetting = (key: keyof SkinProject['settings'], value: unknown) => {
+    onChangeProject(previous => ({
+      ...previous,
+      settings: { ...previous.settings, [key]: value },
+    }));
+  };
+
+  const overview = () => {
+    const cast = project.cast?.characters || [];
+    const self = cast.find(character => character.id === project.cast?.selfId);
+    const contact = cast.find(character => character.id === project.cast?.contactId);
+    const primary = cast.find(character => character.id === project.cast?.twitterPrimaryId);
+    const participants = (project.settings[participantField(project)] || []).flatMap(participant => {
+      const character = cast.find(entry => entry.id === participant.characterId);
+      return character ? [{ character, participant }] : [];
+    });
+    const otherAccounts = cast.filter(character => character.id !== primary?.id && !character.archived);
+
+    const row = (character: SceneCharacter, target: IdentityTarget, label?: string, color?: string) => (
+      <button
+        key={`${target.kind}:${character.id}`}
+        type="button"
+        onClick={() => onModeChange({ kind: 'edit', target })}
+        className="flex w-full items-center gap-3 rounded-xl border border-stone-200 p-3 text-left hover:border-violet-300 hover:bg-violet-50/40"
+      >
+        <Avatar character={character} color={color} />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-medium text-stone-900">{character.name}</span>
+          {isTwitter && <span className="block truncate text-xs text-stone-500">@{character.twitterHandle || character.name.toLowerCase().replace(/\s+/g, '')}</span>}
+          {label && <span className="block text-[11px] text-stone-400">{label}</span>}
+        </span>
+        <span aria-hidden="true" className="text-stone-400">›</span>
+      </button>
+    );
+
+    return (
+      <div className="space-y-5">
+        {isTwitter ? (
+          <section className="space-y-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-stone-400">Primary account</h3>
+            {primary && row(primary, { kind: 'twitter-primary' }, 'Existing primary posts follow changes here')}
+            {otherAccounts.length > 0 && <h3 className="pt-3 text-xs font-semibold uppercase tracking-wide text-stone-400">Other accounts</h3>}
+            {otherAccounts.map(character => row(character, { kind: 'character', id: character.id }))}
+          </section>
+        ) : (
+          <>
+            <section className="space-y-2">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-stone-400">Conversation identities</h3>
+              {self && row(self, { kind: 'self' }, 'You')}
+              {!isGroup && contact && row(contact, { kind: 'contact' }, 'Contact')}
+            </section>
+
+            <section className="space-y-3 rounded-xl border border-stone-200 p-3">
+              {/* ToggleRow is the app-wide toggle primitive; a bare checkbox
+                  here would be a second idiom for the same control. */}
+              <ToggleRow
+                label="Group chat mode"
+                checked={isGroup}
+                onChange={value => updateSimpleSetting(project.template === 'ios' ? 'iosGroupMode' : 'androidGroupMode', value)}
+              />
+              {isGroup && (
+                <>
+                  <input
+                    value={(project.settings[project.template === 'ios' ? 'iosGroupName' : 'androidGroupName'] as string) || ''}
+                    onChange={event => updateSimpleSetting(project.template === 'ios' ? 'iosGroupName' : 'androidGroupName', event.target.value)}
+                    placeholder={project.template === 'ios' ? 'Family Chat' : 'Work Team'}
+                    aria-label="Group name"
+                    className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm focus:ring-2 focus:ring-violet-500"
+                  />
+                  <ImageUrlInput
+                    value={(project.settings[project.template === 'ios' ? 'iosAvatarUrl' : 'androidAvatarUrl'] as string) || ''}
+                    onChange={value => updateSimpleSetting(project.template === 'ios' ? 'iosAvatarUrl' : 'androidAvatarUrl', value)}
+                    ariaLabel="Group photo"
+                    placeholder="Group photo (optional)"
+                    previewShape="circle"
+                  />
+                </>
+              )}
+            </section>
+
+            {isGroup && (
+              <section className="space-y-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-stone-400">People in the group</h3>
+                {participants.filter(({ character }) => !character.archived).map(({ character, participant }) =>
+                  row(character, { kind: 'participant', id: participant.id }, undefined, participant.color)
+                )}
+                {participants.every(({ character }) => character.archived) && <p className="text-sm text-stone-500">No group members yet.</p>}
+              </section>
+            )}
+          </>
+        )}
+
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => onModeChange({ kind: 'create', suggestedRole: isTwitter ? 'account' : isGroup ? 'participant' : 'contact' })}
+            className="rounded-xl bg-violet-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-violet-700"
+          >
+            {isTwitter ? 'Add account' : 'Add person'}
+          </button>
+          <button type="button" onClick={() => onModeChange({ kind: 'library' })} className="rounded-xl border border-stone-200 px-3 py-2.5 text-sm font-semibold text-stone-700 hover:bg-stone-50">
+            Library
+          </button>
+        </div>
+      </div>
     );
   };
 
-  // ── Shared sub-sections ─────────────────────────────────────────────────
-
-  const participantSection = (field: ParticipantField) => {
-    const people = settings[field] || [];
+  const formView = () => {
+    const editing = mode.kind === 'edit';
+    const participant = editTargetId ? participantForCharacter(project, editTargetId) : undefined;
     return (
-      <div className="py-3 space-y-2">
-        <div className="flex items-center justify-between">
-          <span className="text-[11px] font-semibold text-stone-400 uppercase tracking-wider">
-            People in the group
-          </span>
+      <div className="space-y-4">
+        <button type="button" onClick={() => go({ kind: 'overview' })} className="text-sm font-medium text-violet-700">← Back to {panelTitle.toLowerCase()}</button>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-stone-600">Name</label>
+          <input
+            autoFocus
+            value={form.name}
+            onChange={event => changeForm('name', event.target.value)}
+            placeholder={isTwitter ? 'Display name' : 'Person name'}
+            maxLength={200}
+            className="w-full rounded-xl border border-stone-200 px-3 py-2.5 text-sm focus:ring-2 focus:ring-violet-500"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-stone-600">Avatar</label>
+          <ImageUrlInput value={form.avatarUrl} onChange={value => changeForm('avatarUrl', value)} ariaLabel="Avatar image address" placeholder="Paste an image address (optional)" previewShape="circle" />
           <button
-            onClick={() => addParticipant(field)}
-            className="text-xs font-medium text-violet-600 hover:text-violet-800"
+            type="button"
+            onClick={() => onModeChange({ kind: 'avatar-presets', returnTo: editing ? 'edit' : 'create' })}
+            className="mt-2 text-xs font-medium text-violet-700 hover:underline"
           >
-            + Add
+            Choose an avatar preset
           </button>
         </div>
-
-        {people.length === 0 && (
-          <p className="text-xs text-stone-500">
-            Add someone, then pick them from the selector beside the message box as you write.
-          </p>
+        {isTwitter && (
+          <div className="grid grid-cols-[1fr_auto] items-end gap-3">
+            <label className="block text-xs font-medium text-stone-600">
+              Handle
+              <div className="mt-1 flex items-center rounded-xl border border-stone-200 bg-white px-3">
+                <span className="text-stone-400">@</span>
+                <input value={form.twitterHandle} onChange={event => changeForm('twitterHandle', event.target.value)} className="min-w-0 flex-1 border-0 px-1 py-2.5 text-sm outline-none" placeholder="username" />
+              </div>
+            </label>
+            <label className="flex h-11 items-center gap-2 text-sm text-stone-700">
+              <input type="checkbox" checked={form.verified} onChange={event => changeForm('verified', event.target.checked)} className="accent-violet-600" />
+              Verified
+            </label>
+          </div>
         )}
+        {participant && (
+          <label className="block text-xs font-medium text-stone-600">
+            Group name colour
+            <input type="color" value={form.color} onChange={event => changeForm('color', event.target.value)} className="ml-3 h-8 w-12 align-middle" />
+          </label>
+        )}
+        {!editing && (
+          <label className="flex items-center gap-2 text-sm text-stone-700">
+            <input type="checkbox" checked={form.alsoSave} onChange={event => changeForm('alsoSave', event.target.checked)} className="accent-violet-600" />
+            Also save to my library
+          </label>
+        )}
+        <button type="button" onClick={saveForm} disabled={!form.name.trim()} className="w-full rounded-xl bg-violet-600 px-4 py-3 text-sm font-semibold text-white disabled:bg-stone-200 disabled:text-stone-400">
+          {editing ? 'Save changes' : `Add to this ${isTwitter ? 'scene' : 'conversation'}`}
+        </button>
 
-        {people.map((p) => (
-          <div key={p.id} className="rounded-xl border border-stone-200 p-2.5 space-y-2">
-            <div className="flex items-center gap-2">
-              <input
-                type="color"
-                value={p.color}
-                onChange={(e) => updateParticipant(field, p.id, { color: e.target.value })}
-                aria-label={`Name colour for ${p.name}`}
-                title={`Name colour for ${p.name}`}
-                className="w-6 h-6 rounded cursor-pointer border-0 flex-shrink-0"
-              />
-              <input
-                value={p.name}
-                onChange={(e) => updateParticipant(field, p.id, { name: e.target.value })}
-                aria-label="Participant name"
-                placeholder="Name"
-                className="flex-1 min-w-0 text-sm bg-stone-100 rounded-lg px-2.5 py-1.5 border-0 outline-none focus:ring-2 focus:ring-violet-500"
-              />
-              <button
-                onClick={() => removeParticipant(field, p.id)}
-                aria-label={`Remove ${p.name}`}
-                title={`Remove ${p.name}`}
-                className="flex-shrink-0 text-stone-400 hover:text-red-500 text-xs w-6 h-6"
-              >
-                ✕
-              </button>
+        {editing && !isBoundIdentity && (
+          <section className="space-y-2 border-t border-stone-100 pt-4">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-stone-400">Remove from composer</h3>
+            {messageReferenceCount > 0 ? (
+              <>
+                <p className="text-xs text-stone-500">Used by {messageReferenceCount} existing {messageReferenceCount === 1 ? 'message' : 'messages'}. Archive it to preserve those messages, or reassign them.</p>
+                <button type="button" onClick={() => removeOrArchive()} className="w-full rounded-lg border border-amber-300 px-3 py-2 text-sm font-medium text-amber-800">Archive identity</button>
+                {replacementOptions.length > 0 && (
+                  <div className="flex gap-2">
+                    <select value={replacementId} onChange={event => setReplacementId(event.target.value)} aria-label="Replacement identity" className="min-w-0 flex-1 rounded-lg border border-stone-200 px-2 py-2 text-sm">
+                      <option value="">Choose replacement</option>
+                      {replacementOptions.map(character => <option key={character.id} value={character.id}>{character.name}</option>)}
+                    </select>
+                    <button type="button" disabled={!replacementId} onClick={() => removeOrArchive(replacementId)} className="rounded-lg bg-stone-900 px-3 py-2 text-sm font-medium text-white disabled:bg-stone-300">Reassign</button>
+                  </div>
+                )}
+              </>
+            ) : (
+              <button type="button" onClick={() => removeOrArchive()} className="w-full rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-700">Remove identity</button>
+            )}
+          </section>
+        )}
+      </div>
+    );
+  };
+
+  const libraryView = () => {
+    const editingCharacter = characters.find(character => character.id === libraryEditId);
+    if (editingCharacter) {
+      return (
+        <div className="space-y-4">
+          <button type="button" onClick={() => setLibraryEditId(null)} className="text-sm font-medium text-violet-700">← Back to library</button>
+          <input value={libraryForm.name} onChange={event => setLibraryForm(previous => ({ ...previous, name: event.target.value }))} aria-label="Library character name" className="w-full rounded-xl border border-stone-200 px-3 py-2.5 text-sm" />
+          <ImageUrlInput value={libraryForm.avatarUrl} onChange={value => setLibraryForm(previous => ({ ...previous, avatarUrl: value }))} ariaLabel="Library character avatar" previewShape="circle" />
+          <div className="flex items-center gap-3">
+            <input value={libraryForm.twitterHandle} onChange={event => setLibraryForm(previous => ({ ...previous, twitterHandle: event.target.value }))} aria-label="Library Twitter handle" placeholder="Twitter handle" className="min-w-0 flex-1 rounded-xl border border-stone-200 px-3 py-2.5 text-sm" />
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={libraryForm.verified} onChange={event => setLibraryForm(previous => ({ ...previous, verified: event.target.checked }))} /> Verified</label>
+          </div>
+          <button type="button" disabled={!libraryForm.name.trim()} onClick={() => {
+            onUpdateLibraryCharacter(editingCharacter.id, {
+              name: libraryForm.name.trim(),
+              avatarUrl: libraryForm.avatarUrl.trim() || undefined,
+              twitterHandle: normalizeTwitterHandle(libraryForm.twitterHandle) || undefined,
+              verified: libraryForm.verified,
+            });
+            setLibraryEditId(null);
+          }} className="w-full rounded-xl bg-violet-600 px-4 py-3 text-sm font-semibold text-white disabled:bg-stone-200">Save library character</button>
+        </div>
+      );
+    }
+    return (
+      <div className="space-y-4">
+        <button type="button" onClick={() => onModeChange({ kind: 'overview' })} className="text-sm font-medium text-violet-700">← Back to {panelTitle.toLowerCase()}</button>
+        <p className="text-sm text-stone-500">Adding a library character makes an independent copy in this scene.</p>
+        {characters.length === 0 && <p className="rounded-xl bg-stone-50 p-4 text-sm text-stone-500">Your library is empty. Create a person and select “Also save to my library”.</p>}
+        {characters.map(character => (
+          <div key={character.id} className="flex items-center gap-3 rounded-xl border border-stone-200 p-3">
+            <Avatar character={character} />
+            <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{character.name}</p>{character.twitterHandle && <p className="truncate text-xs text-stone-500">@{normalizeTwitterHandle(character.twitterHandle)}</p>}</div>
+            <div className="flex flex-col gap-1">
+              <button type="button" onClick={() => applyLibraryCharacter(character)} className="rounded-lg bg-violet-600 px-2.5 py-1.5 text-xs font-semibold text-white">Add</button>
+              <button type="button" onClick={() => {
+                setLibraryEditId(character.id);
+                setLibraryForm({ ...EMPTY_FORM, name: character.name, avatarUrl: character.avatarUrl || '', twitterHandle: character.twitterHandle || '', verified: !!character.verified });
+              }} className="text-xs text-stone-600 hover:underline">Edit</button>
+              <button type="button" onClick={() => onDeleteLibraryCharacter(character.id)} className="text-xs text-red-600 hover:underline">Delete</button>
             </div>
-
-            {/*
-              THE FIELD THAT WAS MISSING. The generator has drawn participant
-              avatars since group chat shipped — a 20px round image beside a
-              colour-coded name, or a coloured monogram from the initials
-              without one — and `GroupParticipant.avatarUrl` has been in the
-              schema the whole time. A UI rewrite dropped the input, so the
-              rendering path stayed live and tested with nothing able to reach it.
-
-              ImageUrlInput rather than AvatarSelector, deliberately: the preset
-              browser is absolutely positioned and this list sits inside a
-              BottomSheet whose content area is overflow-y-auto, which clips it.
-              One presets entry point for the whole section, at the bottom.
-            */}
-            <ImageUrlInput
-              value={p.avatarUrl || ''}
-              onChange={(url) => updateParticipant(field, p.id, { avatarUrl: url })}
-              previewShape="circle"
-              ariaLabel={`Photo for ${p.name}`}
-              placeholder="Photo (optional) — a monogram is used without one"
-            />
           </div>
         ))}
-
-        {universalCharacters.length > 0 && (
-          <div className="pt-2">
-            <p className="text-[11px] text-stone-500 mb-1.5">Add from your library</p>
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              {universalCharacters.map((c) => (
-                <button
-                  key={c.id}
-                  onClick={() => addParticipant(field, { name: c.name, avatarUrl: c.avatarUrl })}
-                  title={`Add ${c.name}`}
-                  className="flex-shrink-0 flex flex-col items-center gap-1 w-14"
-                >
-                  <Monogram name={c.name} url={c.avatarUrl} />
-                  <span className="text-[10px] text-stone-600 truncate w-full text-center">
-                    {c.name}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <button
-          onClick={onOpenCharacterLibrary}
-          className="text-xs font-medium text-violet-600 hover:underline"
-        >
-          Browse avatar presets →
-        </button>
       </div>
     );
   };
 
-  // ── Per-platform bodies ─────────────────────────────────────────────────
-
-  const chatBody = (kind: 'ios' | 'android') => {
-    const groupOn = kind === 'ios' ? settings.iosGroupMode : settings.androidGroupMode;
-    const avatarKey = kind === 'ios' ? 'iosAvatarUrl' : 'androidAvatarUrl';
-    const groupNameKey = kind === 'ios' ? 'iosGroupName' : 'androidGroupName';
-    const groupModeKey = kind === 'ios' ? 'iosGroupMode' : 'androidGroupMode';
-    const contactKey = kind === 'ios' ? 'iosContactName' : 'androidContactName';
-    const participantField: ParticipantField =
-      kind === 'ios' ? 'iosGroupParticipants' : 'androidGroupParticipants';
-    const appName = kind === 'ios' ? 'iMessage' : 'WhatsApp';
-
-    return (
-      <>
-        <PersonCard
-          title="You"
-          // Not filler. "Where do I set my own photo?" is the question that
-          // produced this panel, and the answer is that there is nowhere for it
-          // to go — neither app draws your picture on your own messages. Saying
-          // why stops the hunt for a control that should not exist.
-          note={`Your own photo isn't shown — ${appName} never draws it on your own messages. Your name isn't shown on screen either, but it is what a reader sees if they turn the skin off or download the work as an ebook.`}
-        >
-          <TextRow
-            label="Your name"
-            value={settings.chatYourName || ''}
-            placeholder="You"
-            onChange={(v) => onUpdateSettings('chatYourName', v)}
-          />
-        </PersonCard>
-
-        <div className="border-t border-stone-100" />
-
-        {groupOn ? (
-          <PersonCard
-            title="The group"
-            // The SAME settings field as "their photo" below. In group mode the
-            // generator renders it beside the group's name in the header, so
-            // labelling it "their photo" here would be a lie.
-            note="Shown beside the group name at the top of the chat."
-          >
-            <TextRow
-              label="Group name"
-              value={(settings[groupNameKey] as string) || ''}
-              placeholder={kind === 'ios' ? 'Family Chat' : 'Work Team'}
-              onChange={(v) => onUpdateSettings(groupNameKey, v)}
-            />
-            <AvatarSelector
-              value={(settings[avatarKey] as string) || ''}
-              onChange={(v) => onUpdateSettings(avatarKey, v)}
-              placeholder="Group photo — paste an address, or pick a preset"
-            />
-          </PersonCard>
-        ) : (
-          <PersonCard title="Them" note="Shown in the header at the top of the chat.">
-            <TextRow
-              label="Their name"
-              value={(settings[contactKey] as string) || settings.chatContactName || ''}
-              placeholder="Their name, e.g. Steve"
-              // Renaming rewrites what they have already said — see
-              // handleRenameContact in index.tsx.
-              onChange={onRenameContact}
-            />
-            <AvatarSelector
-              value={(settings[avatarKey] as string) || ''}
-              onChange={(v) => onUpdateSettings(avatarKey, v)}
-              placeholder="Their photo — paste an address, or pick a preset"
-            />
-          </PersonCard>
-        )}
-
-        <div className="border-t border-stone-100" />
-
-        <ToggleRow
-          label="Group chat mode"
-          sublabel="Several people in one thread, each with their own name and colour"
-          checked={Boolean(groupOn)}
-          onChange={(v) => onUpdateSettings(groupModeKey, v)}
-        />
-
-        {groupOn && participantSection(participantField)}
-      </>
-    );
+  const returnFromAvatarPresets = (): IdentityPanelMode => {
+    if (mode.kind === 'avatar-presets' && mode.returnTo === 'edit' && editTargetRef.current) {
+      return { kind: 'edit', target: editTargetRef.current };
+    }
+    return { kind: 'create', suggestedRole: isTwitter ? 'account' : isGroup ? 'participant' : 'contact' };
   };
 
-  const twitterBody = () => {
-    // Two stores merged into one list, and only one of them is deletable here.
-    // The compose bar's "posting as" roster is
-    // `settings.twitterCharacterPresets` (project-scoped) plus
-    // `universalCharacters` (global, in localStorage). A delete control that
-    // did not distinguish them would let a click inside one fic remove a
-    // character from every project the author has ever made — so the library
-    // rows carry a tag and no ✕, and removing one stays the Character
-    // Library's job.
-    const presets: TwitterCharacter[] = settings.twitterCharacterPresets || [];
-    const fromLibrary = universalCharacters.filter(
-      (c) => !presets.some((p) => p.name === c.name)
-    );
-
-    return (
-      <>
-        <PersonCard
-          title="You"
-          // chatYourName must NOT appear here: twitterDisplayName is the
-          // equivalent and it is already the header title. Two fields for one
-          // name is the problem this panel exists to remove.
-          note="Your display name is the title at the top of the screen."
-        >
-          <TextRow
-            label="Handle"
-            value={settings.twitterHandle || ''}
-            placeholder="johndoe"
-            onChange={(v) => onUpdateSettings('twitterHandle', v)}
-          />
-          <ToggleRow
-            label="Verified badge"
-            checked={settings.twitterVerified || false}
-            onChange={(v) => onUpdateSettings('twitterVerified', v)}
-          />
-          <AvatarSelector
-            value={settings.twitterAvatarUrl || ''}
-            onChange={(v) => onUpdateSettings('twitterAvatarUrl', v)}
-            placeholder="Your photo — paste an address, or pick a preset"
-          />
-        </PersonCard>
-
-        <div className="border-t border-stone-100" />
-
-        <div className="py-3 space-y-2">
-          <span className="text-[11px] font-semibold text-stone-400 uppercase tracking-wider block">
-            Other accounts in this thread
-          </span>
-          <p className="text-xs text-stone-500">
-            These fill the &ldquo;posting as&rdquo; list beside the message box.
-          </p>
-
-          {presets.length === 0 && fromLibrary.length === 0 && (
-            <p className="text-xs text-stone-500">
-              Nobody yet. Save a character in the library and they show up here.
-            </p>
-          )}
-
-          {presets.map((c) => (
-            <div key={c.id} className="flex items-center gap-2 rounded-xl border border-stone-200 p-2">
-              <Monogram name={c.name} url={c.avatarUrl} />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-stone-900 truncate">{c.name}</p>
-                <p className="text-[11px] text-stone-500 truncate">@{c.handle.replace(/^@/, '')}</p>
-              </div>
-              <span className="text-[10px] text-stone-400 flex-shrink-0">this fic</span>
-              <button
-                onClick={() =>
-                  onUpdateSettings(
-                    'twitterCharacterPresets',
-                    presets.filter((p) => p.id !== c.id)
-                  )
-                }
-                aria-label={`Remove ${c.name}`}
-                title={`Remove ${c.name} from this project`}
-                className="flex-shrink-0 text-stone-400 hover:text-red-500 text-xs w-6 h-6"
-              >
-                ✕
-              </button>
-            </div>
-          ))}
-
-          {fromLibrary.map((c) => (
-            <div key={c.id} className="flex items-center gap-2 rounded-xl border border-stone-200 p-2">
-              <Monogram name={c.name} url={c.avatarUrl} />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-stone-900 truncate">{c.name}</p>
-                <p className="text-[11px] text-stone-500 truncate">
-                  @{(c.twitterHandle || c.name.toLowerCase().replace(/\s+/g, '')).replace(/^@/, '')}
-                </p>
-              </div>
-              {/* No ✕ — this one is global. Saying where it comes from is what
-                  makes the missing button read as intentional. */}
-              <span className="text-[10px] text-stone-400 flex-shrink-0">library</span>
-            </div>
-          ))}
-
-          <button
-            onClick={onOpenCharacterLibrary}
-            className="text-xs font-medium text-violet-600 hover:underline"
-          >
-            Browse avatar presets →
+  const avatarPresetsView = () => (
+    <div className="space-y-4">
+      <button type="button" onClick={() => onModeChange(returnFromAvatarPresets())} className="text-sm font-medium text-violet-700">← Back to form</button>
+      <p className="text-sm text-stone-500">Choose an image, then give the person their real name before saving.</p>
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+        {CHARACTER_BANK.map(preset => (
+          <button key={preset.id} type="button" onClick={() => {
+            setForm(previous => ({ ...previous, avatarUrl: preset.url }));
+            setDirty(true);
+            onModeChange(returnFromAvatarPresets());
+          }} className="overflow-hidden rounded-xl border border-stone-200 text-left hover:border-violet-400">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={preset.url} alt="" className="aspect-square w-full object-cover" />
+            <span className="block truncate px-2 py-1.5 text-[11px] text-stone-600">{preset.name}</span>
           </button>
-        </div>
-      </>
-    );
-  };
-
-  const title =
-    template === 'twitter' ? 'Accounts' : template === 'google' ? 'People' : 'People';
-
-  return (
-    <BottomSheet isOpen={isOpen} onClose={onClose} title={title}>
-      <div className="divide-y divide-stone-100">
-        {(template === 'ios' || template === 'android') && chatBody(template)}
-        {template === 'twitter' && twitterBody()}
-        {/* Google never reaches here — index.tsx routes its header button to
-            the Character Library instead, because Google has no cast and
-            hiding the button would strand that feature. */}
+        ))}
       </div>
-    </BottomSheet>
+    </div>
   );
+
+  const body = mode.kind === 'overview'
+    ? overview()
+    : mode.kind === 'library'
+      ? libraryView()
+      : mode.kind === 'avatar-presets'
+        ? avatarPresetsView()
+        : formView();
+
+  return <BottomSheet isOpen={isOpen} onClose={requestClose} title={panelTitle} height="max-h-[90vh]">{body}</BottomSheet>;
 };
 
 export default CastPanel;

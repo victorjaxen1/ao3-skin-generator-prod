@@ -1,6 +1,7 @@
 import { SkinProject, Message } from './schema';
 import { sanitizeAttribute, sanitizeText, sanitizeUrl, formatMessageText } from './sanitize';
 import { PLATFORM_ASSETS, FALLBACK_TEXT } from './platformAssets';
+import { resolveMessageIdentity } from './identity';
 
 function hexToRgba(hex: string, alpha: number): string {
   const h = hex.replace('#','');
@@ -291,7 +292,8 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
   
   // Use formatMessageText for rich formatting (bold, italic, strikethrough, code, lists, quotes)
   const sanitized = formatMessageText(msg.content);
-  const avatar = msg.avatarUrl ? `<img src="${sanitizeUrl(msg.avatarUrl)}" alt="${sanitizeAttribute(msg.sender)} avatar" class="avatar" />` : '';
+  const resolvedIdentity = resolveMessageIdentity(project, msg);
+  const avatar = resolvedIdentity.avatarUrl ? `<img src="${sanitizeUrl(resolvedIdentity.avatarUrl)}" alt="${sanitizeAttribute(resolvedIdentity.name)} avatar" class="avatar" />` : '';
   
   // Group Chat: Show sender name with avatar/initials for incoming messages (WhatsApp & iOS)
   const isGroupMode = (template === 'android' && project.settings.androidGroupMode) ||
@@ -337,12 +339,12 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
       
       // Use roleColor from message or fall back to participant color
       const displayColor = safeCssColor(msg.roleColor, safeCssColor(participant.color, '#777777'));
-      senderNameHTML = `<div class="group-sender-row" style="display:flex !important;align-items:center;gap:6px;margin-bottom:4px;visibility:visible !important;">${avatarHTML}<div class="group-sender" style="color: ${displayColor};">${sanitizeText(msg.sender)}</div></div>`;
+      senderNameHTML = `<div class="group-sender-row" style="display:flex !important;align-items:center;gap:6px;margin-bottom:4px;visibility:visible !important;">${avatarHTML}<div class="group-sender" style="color: ${displayColor};">${sanitizeText(participant.name)}</div></div>`;
     }
   }
   
   // Only show sender name for templates that need it (not WhatsApp 1-on-1)
-  const who = (template === 'android' && !isGroupMode) ? '' : `<dt class="sender">${msg.sender}</dt>`;
+  const who = (template === 'android' && !isGroupMode) ? '' : `<dt class="sender">${sanitizeText(resolvedIdentity.name)}</dt>`;
 
   /**
    * The hidden speaker label, and when to leave it out.
@@ -389,13 +391,9 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
    * handleRenameContact in index.tsx.
    */
   const isChatTemplate = template === 'ios' || template === 'android';
-  const youName = (project.settings.chatYourName || '').trim() || 'You';
-  const speaker = msg.outgoing
-    // On a chat template the setting wins over whatever was stamped on the
-    // message, which is what makes the rename retroactive. Everywhere else the
-    // stamped value is preserved exactly as before.
-    ? (isChatTemplate ? youName : (msg.sender || 'You'))
-    : (msg.sender || 'Them');
+  const speaker = isChatTemplate
+    ? resolvedIdentity.name
+    : msg.outgoing ? (msg.sender || 'You') : (msg.sender || 'Them');
 
   const hiddenSpeaker = senderNameHTML
     ? ''
@@ -491,16 +489,8 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
     // Projects saved before this carry a name on each message and nothing in
     // settings, so the stamped value stays the fallback and they render
     // unchanged.
-    const firstMsg = project.messages[0];
-    const useMainIdentity = !msg.useCustomIdentity;
-    const settingsName = (project.settings.twitterDisplayName || '').trim();
-    const settingsAvatar = (project.settings.twitterAvatarUrl || '').trim();
-    const displayName = useMainIdentity
-      ? (settingsName || msg.sender || firstMsg?.sender || 'User')
-      : (msg.sender || settingsName || 'User');
-    const displayAvatar = useMainIdentity
-      ? (settingsAvatar || msg.avatarUrl || firstMsg?.avatarUrl)
-      : msg.avatarUrl;
+    const displayName = resolvedIdentity.name;
+    const displayAvatar = resolvedIdentity.avatarUrl;
     
     // Determine if this is a reply
     const isReply = !!msg.parentId;
@@ -510,16 +500,12 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
     const safeDisplayName = sanitizeText(displayName);
     
     // Handle logic: if using custom identity and has custom handle, use it; otherwise generate from name or use main handle
-    const handle = msg.useCustomIdentity 
-      ? (msg.twitterHandle 
-          ? (msg.twitterHandle.startsWith('@') ? msg.twitterHandle : `@${msg.twitterHandle}`)
-          : `@${displayName.toLowerCase().replace(/\s+/g, '')}`)
-      : (project.settings.twitterHandle && project.settings.twitterHandle.trim().length>0)
-        ? `@${project.settings.twitterHandle.replace(/^@/, '')}`
-        : `@${displayName.toLowerCase().replace(/\s+/g, '')}`;
+    const handle = resolvedIdentity.twitterHandle
+      ? `@${resolvedIdentity.twitterHandle}`
+      : `@${displayName.toLowerCase().replace(/\s+/g, '')}`;
     
     // Use per-tweet verified status if custom identity, otherwise use main profile verified
-    const isVerified = msg.useCustomIdentity ? (msg.verified || false) : (project.settings.twitterVerified || false);
+    const isVerified = resolvedIdentity.verified;
     // Drawn, not fetched. See buildTwitterCSS's `.verified-badge` for why a
     // character in a CSS circle beats a PNG here — the short version is that
     // every chrome image is a request to our CDN from inside somebody's

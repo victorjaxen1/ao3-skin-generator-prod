@@ -30,7 +30,7 @@ test('EXPORT: non-CORS image survives, and is actually in the output', async ({ 
   await page.getByRole('button', { name: 'Start a blank iMessage conversation' }).click();
 
   // Open the detail tray and paste the image URL.
-  await page.getByRole('button', { name: /Add details/ }).click();
+  await page.getByRole('button', { name: 'Message options' }).click();
   await page.getByLabel('Image address for this message').fill(NO_CORS_IMAGE);
 
   const composer = page.getByPlaceholder('Add a message…');

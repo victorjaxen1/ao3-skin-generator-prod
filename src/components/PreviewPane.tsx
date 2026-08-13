@@ -2,16 +2,18 @@ import React, { useMemo, useEffect, useRef, memo, useCallback } from 'react';
 import { SkinProject } from '../lib/schema';
 import { buildHTML, buildCSS } from '../lib/generator';
 import { LOCAL_ASSETS_MAP, getLocalFallback, getFilenameFromUrl } from '../lib/platformAssets';
+import { IdentityTarget } from '../lib/identity';
 
 interface Props { 
   project: SkinProject; 
   mobile: boolean; 
   dark: boolean;
   onMessageClick?: (messageId: string) => void;
+  onIdentityClick?: (target?: IdentityTarget) => void;
   editModeEnabled?: boolean;
 }
 
-const PreviewPaneComponent: React.FC<Props> = ({ project, mobile, dark, onMessageClick, editModeEnabled = false }) => {
+const PreviewPaneComponent: React.FC<Props> = ({ project, mobile, dark, onMessageClick, onIdentityClick, editModeEnabled = false }) => {
   const css = useMemo(()=> buildCSS(project), [project]);
   const html = useMemo(()=> buildHTML(project), [project]);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -48,19 +50,34 @@ const PreviewPaneComponent: React.FC<Props> = ({ project, mobile, dark, onMessag
 
   // Click-to-edit handler - finds the closest message element and extracts its ID
   const handlePreviewClick = useCallback((e: React.MouseEvent) => {
-    if (!onMessageClick) return;
-    
-    // Find the closest element with data-message-id
     const target = e.target as HTMLElement;
     const messageEl = target.closest('[data-message-id]') as HTMLElement | null;
+    const identityEl = target.closest('.avatar,.name,.handle,.expanded-name,.expanded-handle,.group-avatar,.group-avatar-initials,.group-sender,.ios-header-avatar,.ios-header-avatar-placeholder,.ios-header-name,.android-header-avatar,.android-header-avatar-placeholder,.android-header-name') as HTMLElement | null;
+
+    if (project.template !== 'google' && identityEl && onIdentityClick) {
+      if (!messageEl) {
+        onIdentityClick();
+        return;
+      }
+      const messageId = messageEl.getAttribute('data-message-id');
+      const message = project.messages.find(entry => entry.id === messageId);
+      if (message) {
+        if (message.characterId) onIdentityClick({ kind: 'character', id: message.characterId });
+        else if (project.template === 'twitter') onIdentityClick({ kind: 'twitter-primary' });
+        else if (message.outgoing) onIdentityClick({ kind: 'self' });
+        else if (message.participantId) onIdentityClick({ kind: 'participant', id: message.participantId });
+        else onIdentityClick({ kind: 'contact' });
+        return;
+      }
+    }
     
-    if (messageEl) {
+    if (messageEl && onMessageClick) {
       const messageId = messageEl.getAttribute('data-message-id');
       if (messageId) {
         onMessageClick(messageId);
       }
     }
-  }, [onMessageClick]);
+  }, [onMessageClick, onIdentityClick, project]);
 
   // Add hover styles for clickable messages when edit mode is enabled
   const editModeStyles = editModeEnabled ? `
@@ -77,6 +94,14 @@ const PreviewPaneComponent: React.FC<Props> = ({ project, mobile, dark, onMessag
     #workskin .row[data-message-id]:hover {
       background: rgba(124, 58, 237, 0.04);
       border-radius: 8px;
+    }
+    #workskin .avatar:hover,#workskin .name:hover,#workskin .handle:hover,
+    #workskin .group-avatar:hover,#workskin .group-avatar-initials:hover,#workskin .group-sender:hover,
+    #workskin .ios-header-avatar:hover,#workskin .ios-header-avatar-placeholder:hover,#workskin .ios-header-name:hover,
+    #workskin .android-header-avatar:hover,#workskin .android-header-avatar-placeholder:hover,#workskin .android-header-name:hover {
+      cursor: pointer;
+      outline: 2px solid rgba(124, 58, 237, 0.65);
+      outline-offset: 2px;
     }
   ` : '';
   
@@ -126,6 +151,7 @@ export const PreviewPane = memo(PreviewPaneComponent, (prevProps, nextProps) => 
     prevProps.dark === nextProps.dark &&
     prevProps.editModeEnabled === nextProps.editModeEnabled &&
     prevProps.onMessageClick === nextProps.onMessageClick &&
+    prevProps.onIdentityClick === nextProps.onIdentityClick &&
     JSON.stringify(prevProps.project) === JSON.stringify(nextProps.project)
   );
 });
