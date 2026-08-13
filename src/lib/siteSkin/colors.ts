@@ -133,6 +133,53 @@ export function findReadabilityIssues(colors: {
   return issues;
 }
 
+/* ── Tags, coloured by what they are ──────────────────────────────────────── */
+
+export type TagType = 'warning' | 'relationship' | 'character' | 'freeform';
+
+export const TAG_TYPES: readonly TagType[] = ['warning', 'relationship', 'character', 'freeform'];
+
+/**
+ * The hue each tag type starts from.
+ *
+ * Chosen for the meaning readers already attach to them on AO3 — warnings read
+ * as red, relationships as rose, characters as blue, freeforms as green — not
+ * for novelty. They are only starting points: every one is pulled most of the
+ * way toward the theme's accent below, so a theme acquires four *relatives* of
+ * its accent rather than four unrelated colours.
+ */
+const TAG_ANCHORS: Readonly<Record<TagType, Hex>> = {
+  warning: '#a3302a',
+  relationship: '#a3417a',
+  character: '#2f6ba3',
+  freeform: '#3f7a4a',
+};
+
+/** How much of the anchor hue survives the blend with the accent. */
+const TAG_ANCHOR_WEIGHT = 0.62;
+
+/**
+ * Four literal hex colours, one per tag type, guaranteed legible on both the
+ * page and the cards.
+ *
+ * `fixAccent` does the guaranteeing, which is the whole reason this goes through
+ * it rather than emitting the anchors directly: a red tag on a Gothic Velvet
+ * card would otherwise sit below 3:1 and the type colouring would make the page
+ * *harder* to read than the accent it replaced.
+ */
+export function tagTypeColors(colors: {
+  background: string;
+  surface: string;
+  accent: string;
+}): Record<TagType, Hex> {
+  const out = {} as Record<TagType, Hex>;
+  for (const type of TAG_TYPES) {
+    const tinted = mixHex(TAG_ANCHORS[type], colors.accent, TAG_ANCHOR_WEIGHT);
+    out[type] = fixAccent(tinted, colors.background, colors.surface);
+  }
+  return out;
+}
+
 /** Whichever of near-black / near-white is more legible on both backgrounds. */
 export function bestTextColor(background: string, surface: string): Hex {
   const light = '#ffffff';

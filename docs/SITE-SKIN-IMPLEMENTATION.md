@@ -395,8 +395,10 @@ Derived values, all resolved to literal 6-digit hex before emission:
 | `header.bannerHeight` | `#header .heading` | `height` — AO3's header is two lines tall; without this there is nowhere for a banner to show |
 | `header.hideLogo` | `#header .logo` | `display: none` |
 | `header.textShadow` | `#header .heading a`, `#header .primary a` | `text-shadow`, using `headerShadow` |
+| `shape.tagColors` | `li.warnings a.tag` + `dd.warning a.tag`, and the same pair for `relationship`, `character`, `freeform` | `color`, and `border-color` when the tag shape has a border |
 | `details.divider` | `#chapters .userstuff hr` | `border-top`, `::after` glyph |
 | `details.dropCap` | `#chapters .userstuff p:first-of-type::first-letter` | `float`, `font-size`, `color` |
+| `details.scrollbar` | `::-webkit-scrollbar`, `-track`, `-thumb`, `-thumb:hover` | `width`/`height`, `background-color`, `border-radius` |
 | *(fixed, uncontrolled)* | `.notice`, `.comment_notice`, `.kudos_notice`, `ul.notes` | `color: #2a2a2a` — 4.8 |
 
 The banner sits on `#header` **with the accent still underneath it**, so a slow
@@ -555,7 +557,11 @@ export interface SiteSkinTheme {
   };
   colors: { background: string; surface: string; text: string; accent: string };
   typography: { headingFont: string; bodyFont: string; baseFontScale: number };
-  shape: { cardRadius: string; tagStyle: 'pill' | 'label' | 'plain' };
+  shape: {
+    cardRadius: string;
+    tagStyle: 'pill' | 'label' | 'plain';
+    tagColors: boolean;                // colour tags by type — §13
+  };
   header: {
     bannerUrl: string;                 // '' = none; validated against §3a
     bannerHeight: string;
@@ -563,7 +569,11 @@ export interface SiteSkinTheme {
     textShadow: boolean;
     textColor: 'auto' | 'light' | 'dark';
   };
-  details: { divider: boolean; dropCap: boolean };
+  details: {
+    divider: boolean;
+    dropCap: boolean;
+    scrollbar: boolean;                // ::-webkit-scrollbar — §13
+  };
 }
 ```
 
@@ -602,6 +612,7 @@ Always emit a fallback stack, and keep every family name inside
 | 6 | `ExportSkinDialog.tsx` + picker card + route | ✅ copy blocked while the lint fails |
 | 7 | A11y, tests, **manual AO3 save of every template** | ⬜ **the remaining gate** — see §8 |
 | 8 | Header banners, hide-logo, URL validator, 4 banner-ready presets | ✅ 16 templates; see §3a and §11 |
+| 9 | Tag colours by type, themed scrollbars, banner-hosting copy, the Phase 7 checklist file | ✅ 13 Aug 2026; see §13 |
 
 ### Corrections made to `ao3Css.ts` after Phase 8
 
@@ -851,7 +862,9 @@ Three site skins distributed as AO3 works, read against the sanitizer:
 **Worth taking next, in this order.** Tag colours *by type* — the
 `--tag-fandom-bg` / `--tag-warning-bg` / `--tag-character-bg` family is the
 most-requested AO3 customisation, it is semantic rather than decorative, and
-it is previewable in the Browse mock. Then `.site-skin-metadata { content: "…" }`,
+it is previewable in the Browse mock. **Shipped in Phase 9** (§13), as literal
+colours derived from the accent rather than as custom properties. Then
+`.site-skin-metadata { content: "…" }`,
 which is how Rosé Pine smuggles attribution past a sanitizer that strips
 comments — our own header comment is deleted the moment a user submits.
 
@@ -920,10 +933,8 @@ Read out of CSS AO3 is currently serving, so these are known-legal:
   page state without JavaScript.
 - **`<details>` / `[open]`** — 175 and 213 occurrences. Not obviously useful for
   restyling AO3, since we do not control the markup.
-- **`::-webkit-scrollbar`** — legal because `scrollbar` is on the shorthand list.
-  **This is a real feature idea**: a themed scrollbar is one of the most visible
-  things a site skin can do, it costs a handful of rules, and none of the three
-  published skins in §11 does it.
+- **`::-webkit-scrollbar`** — legal, though not for the reason first written
+  here; **shipped in Phase 9**, see §13 for the corrected mechanism.
 - **`clip: rect(0,0,0,0)`** — `clip` is on the property list and `rect()` reaches
   `VALUE_REGEX` through `SHAPE_FUNCTION_REGEX`.
 
@@ -931,7 +942,7 @@ Read out of CSS AO3 is currently serving, so these are known-legal:
 
 | | Status |
 | --- | --- |
-| Compiler, editor, gallery, export | ✅ Phases 0–6 and 8 complete |
+| Compiler, editor, gallery, export | ✅ Phases 0–6, 8 and 9 complete |
 | 16 templates lint clean | ✅ |
 | Saved on real AO3 | ❌ **never** — the open gate |
 | Mobile preview | ⚠️ scrolls sideways rather than scaling |
@@ -939,21 +950,24 @@ Read out of CSS AO3 is currently serving, so these are known-legal:
 
 ### What to do next, in order
 
+Items 2–4 of the previous revision's list are **done** — see §13. What is left
+is the one thing a test cannot do.
+
 1. **Phase 7 — the release gate.** Save all sixteen templates on AO3 by hand and
-   confirm each applies. Then the two probes §8 names: the
+   confirm each applies. Then the probes §8 names: the
    `#chapters .userstuff` drop cap and divider on a single-chapter *and* a
    multi-chapter work, and the header dropdown from §4.4 with a logged-in
    account. Until this is done "AO3-safe" is a well-tested prediction rather
-   than an observation. There is no checklist file yet; make one.
+   than an observation. **The checklist now exists:
+   `docs/SITE-SKIN-AO3-CHECKLIST.md`** — sixteen rows and nine named probes,
+   including two new ones for the Phase 9 features.
    - While you are there: **reopen each saved skin in AO3's editor.** AO3 stores
      the *cleaned* CSS, so that box is a direct readout of what the sanitizer
      kept. Diff it against what we emitted. Anything missing is a rule our lint
      does not know about, and belongs in §7 as a correction.
-2. **Export-dialog copy on image hosting** — one paragraph, and it prevents the
-   failure mode that has already broken a published skin.
-3. **Themed scrollbars** — small, visible, legal, and nobody else ships it.
-4. **Tag colours by type** (§11) — still the most-requested AO3 customisation,
-   still semantic rather than decorative, still previewable in the Browse mock.
+2. **Marketing copy** still describes two products and does not mention that the
+   conversation generator now emits a real work skin for two platforms.
+3. **The mobile preview** still scrolls sideways rather than scaling.
 
 `BACKLOG.md` carries the cross-product list; item 20 is this product's release
 gate. The other 28 items are work-skin work and do not touch this codebase.
@@ -964,6 +978,78 @@ gate. The other 28 items are work-skin work and do not touch this codebase.
   it by accident. We are stricter than the archive, which §3 says never to be.
   It does not bite while we emit no alpha colours.
 - **The mobile preview** does not scale. Left out rather than added untested.
+
+---
+
+## 13. Phase 9 — the three things §12 said to do next
+
+**Built 13 Aug 2026.** §12 named four next steps and one of them needs a human.
+The other three are in, plus the checklist file that the release gate was
+missing.
+
+### Tag colours by type
+
+The most-requested AO3 customisation, and semantic rather than decorative: the
+colour tells you what kind of tag you are reading before you read it. One
+toggle, `shape.tagColors`, on for every template except the six carrying the
+`minimal` mood — four tag hues is exactly what a reader choosing "minimal" is
+asking us not to do.
+
+Two things were not obvious going in:
+
+- **AO3 marks the type up in two different places.** A listing puts it on the
+  `li` (`li.warnings a.tag`, `works/_work_module`); a work page puts it on the
+  `dd` (`dd.warning a.tag`, `works/_meta`). Emitting only the first colours half
+  the site, and the half nobody would notice missing is the work page. Both are
+  now in the mock — the Reading state gained a real `dl.work.meta` table — so
+  both are watchable rather than taken on trust (§10).
+- **The four hues have to be derived, and then made legible.**
+  `colors.tagTypeColors()` starts from four fixed anchors — red, rose, blue,
+  green, chosen for the meaning readers already attach to them — pulls each 62%
+  of the way toward the theme's accent, then runs it through the existing
+  `fixAccent` so it clears 3:1 against both the page and the cards. Without that
+  last step this control would make a page *harder* to read than the accent it
+  replaces: a red tag on a Gothic Velvet card sits below the bar. A test asserts
+  the floor for all four types across all sixteen templates, and that the four
+  stay distinct.
+
+### Themed scrollbars
+
+`details.scrollbar`, on for all sixteen. Four rules:
+`::-webkit-scrollbar`, `-track`, `-thumb`, `-thumb:hover`.
+
+§12 said this was legal "because `scrollbar` is on the shorthand list", which is
+the right answer for the wrong reason — the shorthand list is about *properties*
+and `::-webkit-scrollbar` is a *selector*. Re-read against `css_cleaner.rb`:
+**AO3 never validates a selector.** `clean_css_code` maps `rs.selectors` through
+a newline strip, an `&gt;` unescape and a prefix test, refusing only a selector
+containing `@font-face`. So the pseudo-element passes through untouched and the
+declarations inside are ordinary `width` / `background-color` / `border-radius`.
+Chromium-only by nature, which is why the control says so and why the off state
+emits nothing at all. **P8 in the checklist is what turns that reading into an
+observation.**
+
+### Banner hosting, in the export dialog
+
+One section, shown only when a banner is set — AO3 links to the image rather
+than storing a copy, so the skin outlives the picture only if the host does. It
+names imgur and postimg, says to keep the original file, and says the thing
+nobody else says: a hotlink is someone else's artwork and someone else's
+bandwidth. The failure it prevents has already happened to a published skin
+(§12).
+
+Found while editing that file: the theme-backup section had been nested **inside
+the dialog's dark title bar**, in a `flex items-center justify-between` row.
+Moved into the scrolling body where it belongs. `tests/project-backup.spec.ts`
+still passes — it locates the buttons by role, which is why it never caught the
+placement.
+
+### What it cost
+
+No change to `ao3Css.ts`, no new value shapes, no new `url()`. All 270 unit
+tests pass, 19 site-skin browser tests pass against a local build, and the
+three new browser tests assert the *compiled CSS* changed, not that a switch
+moved.
 
 ---
 

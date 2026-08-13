@@ -161,6 +161,52 @@ test('the detail toggles add and remove their rules', async ({ page }) => {
   expect(css).not.toContain('#workskin p:first-of-type');
 });
 
+test('tags coloured by type reach the preview, in both AO3 markups', async ({ page }) => {
+  await openEditor(page); // Moonlit Library ships with the control on.
+  const frame = page.frameLocator('iframe[title="Site skin preview"]');
+
+  const warningColor = () =>
+    frame.locator('li.warnings a.tag').first().evaluate(el => getComputedStyle(el).color);
+  const freeformColor = () =>
+    frame.locator('li.freeforms a.tag').first().evaluate(el => getComputedStyle(el).color);
+
+  // Different kinds of tag, different colours — that is the whole feature.
+  expect(await warningColor()).not.toBe(await freeformColor());
+
+  // The work page marks the type up on the `dd`, not the `li`, so it needs its
+  // own selector and its own check.
+  await page.getByRole('tab', { name: 'Reading' }).click();
+  const metaWarning = await frame
+    .locator('dd.warning a.tag')
+    .first()
+    .evaluate(el => getComputedStyle(el).color);
+  const metaFreeform = await frame
+    .locator('dd.freeform a.tag')
+    .first()
+    .evaluate(el => getComputedStyle(el).color);
+  expect(metaWarning).not.toBe(metaFreeform);
+
+  await page.getByRole('tab', { name: 'Browse' }).click();
+  await page.getByRole('switch', { name: 'Colour tags by type' }).click();
+
+  // Off, every tag is the accent again, and none of the rules ship.
+  await expect.poll(async () => await warningColor()).toBe(await freeformColor());
+  const css = await exportedCss(page);
+  expect(css).not.toContain('li.warnings');
+  expect(css).not.toContain('dd.freeform');
+});
+
+test('the themed scrollbar is emitted, and removable', async ({ page }) => {
+  await openEditor(page);
+
+  let css = await exportedCss(page);
+  expect(css).toContain('::-webkit-scrollbar-thumb');
+
+  await page.getByRole('switch', { name: 'Themed scrollbar' }).click();
+  css = await exportedCss(page);
+  expect(css).not.toContain('scrollbar');
+});
+
 test('a low-contrast accent is warned about, and the fix repairs it', async ({ page }) => {
   await openEditor(page);
 
@@ -222,6 +268,26 @@ test('a banner reaches the preview and the compiled CSS', async ({ page }) => {
   expect(css).toContain(`url("${banner}")`);
   expect(css).toContain('background-size: cover');
   expect(css).toContain('#header .logo');
+});
+
+test('the export dialog warns about image hosting, but only with a banner', async ({ page }) => {
+  // AO3 hotlinks the image rather than storing it, so the skin outlives the
+  // picture only if the host does. A published work skin lost every image in
+  // every fic using it to a free-tier bandwidth cap (plan §12), which is a
+  // failure one paragraph here prevents.
+  await openEditor(page, 'Midnight Academia');
+
+  await page.getByRole('button', { name: 'Copy to AO3' }).click();
+  await expect(page.getByText('About your banner image')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Close' }).click();
+
+  await page.getByLabel('Banner image').fill('https://i.imgur.com/aBcD123.png');
+  await page.getByRole('button', { name: 'Copy to AO3' }).click();
+
+  const note = page.locator('section', { hasText: 'About your banner image' });
+  await expect(note).toBeVisible();
+  await expect(note).toContainText('does not store a copy');
+  await expect(note).toContainText('postimg.cc');
 });
 
 test('a Discord link is refused before the user ever reaches AO3', async ({ page }) => {

@@ -227,6 +227,15 @@ export const ThemeEditor: React.FC<Props> = ({ theme, onChange, issues, onFix })
         options={TAG_STYLES}
         onChange={(v: TagStyle) => onChange('shape', { ...theme.shape, tagStyle: v })}
       />
+      {/* Semantic, not decorative: the colour says what kind of tag it is
+          before you read it. The four hues are derived from the accent, so
+          this stays one theme rather than becoming four. */}
+      <ToggleRow
+        label="Colour tags by type"
+        sublabel="Warnings, relationships, characters and extra tags each get their own shade"
+        checked={theme.shape.tagColors}
+        onChange={v => onChange('shape', { ...theme.shape, tagColors: v })}
+      />
 
       <SectionDivider label="Header" />
       <BannerRow
@@ -285,9 +294,15 @@ export const ThemeEditor: React.FC<Props> = ({ theme, onChange, issues, onFix })
         checked={theme.details.dropCap}
         onChange={v => onChange('details', { ...theme.details, dropCap: v })}
       />
+      <ToggleRow
+        label="Themed scrollbar"
+        sublabel="Chrome and Edge only — Firefox and Safari keep their own"
+        checked={theme.details.scrollbar}
+        onChange={v => onChange('details', { ...theme.details, scrollbar: v })}
+      />
       <p className="text-xs text-stone-400 py-3 leading-relaxed">
-        Both appear in the Reading preview. They affect chapter text only — not
-        summaries or notes.
+        The divider and drop cap appear in the Reading preview. They affect
+        chapter text only — not summaries or notes.
       </p>
     </div>
   );

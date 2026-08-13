@@ -136,6 +136,13 @@ ul, ol { margin: 0; padding: 0; }
 a.tag { color: #111; line-height: 1.5; text-decoration: none; padding: 0; border-bottom: 1px dotted; }
 .tags li { display: inline; padding-left: 0; padding-right: 0.25em; }
 
+/* 10-types-groups — the work metadata table. Labels float left of their
+   values, which is what makes a work page's tags read as a list of rows. */
+dl.meta { border: 1px solid #ddd; padding: 0.75em; margin: 0 0 1em; }
+dl.meta dt { float: left; clear: left; margin: 0 0.25em 0 0; font-weight: bold; }
+dl.meta dd { margin: 0 0 0.25em; padding: 0 0 0 12em; }
+dl.meta ul.commas li { display: inline; padding-right: 0.25em; }
+
 /* 13-group-blurb */
 li.blurb { display: block; position: relative; clear: left; padding: 0.429em 0.75em; overflow: visible; }
 .blurb .header { margin-bottom: 0.375em; }
@@ -247,11 +254,20 @@ const FOOTER = `
   </ul>
 </div>`;
 
+/**
+ * A tag in a listing, carrying the type class AO3 puts on the `li`.
+ *
+ * The class is what makes "colour tags by type" previewable at all: the
+ * compiler targets `li.warnings a.tag` and friends, and a mock whose every tag
+ * was a freeform would show three quarters of the control doing nothing.
+ */
+type MockTag = { type: 'warnings' | 'relationships' | 'characters' | 'freeforms'; label: string };
+
 function blurb(
   id: string,
   title: string,
   author: string,
-  tags: string[],
+  tags: MockTag[],
   summary: string,
   words: string,
   chapters: string
@@ -268,7 +284,9 @@ function blurb(
       <p class="datetime">06 Aug 2026</p>
     </div>
     <ul class="tags commas">
-      ${tags.map(t => `<li class="freeforms"><a class="tag" href="#">${t}</a></li>`).join('\n      ')}
+      ${tags
+        .map(t => `<li class="${t.type}"><a class="tag" href="#">${t.label}</a></li>`)
+        .join('\n      ')}
     </ul>
     <blockquote class="userstuff summary"><p>${summary}</p></blockquote>
     <dl class="stats">
@@ -288,25 +306,69 @@ ${blurb(
   '1',
   "The Cartographer's Impossible Map",
   'inkandstarlight',
-  ['Slow Burn', 'Mutual Pining', 'Happy Ending'],
+  [
+    { type: 'warnings', label: 'No Archive Warnings Apply' },
+    { type: 'relationships', label: 'Mara/The Messenger' },
+    { type: 'characters', label: 'Mara' },
+    { type: 'freeforms', label: 'Slow Burn' },
+    { type: 'freeforms', label: 'Mutual Pining' },
+  ],
   'Mara discovers a map that redraws itself whenever someone tells a lie. It is, she thinks, a deeply inconvenient thing to own — particularly once the palace messenger arrives with a letter she cannot bring herself to read aloud, and particularly once the map starts redrawing itself around him.',
   '12,842',
   '4/4'
 )}
-${blurb('2', 'Nine Letters, Unsent', 'quietharbour', ['Epistolary', 'Angst'], 'He wrote them all. He sent none.', '3,104', '1/1')}
+${blurb(
+  '2',
+  'Nine Letters, Unsent',
+  'quietharbour',
+  [
+    { type: 'warnings', label: 'Graphic Depictions Of Violence' },
+    { type: 'characters', label: 'Original Characters' },
+    { type: 'freeforms', label: 'Epistolary' },
+    { type: 'freeforms', label: 'Angst' },
+  ],
+  'He wrote them all. He sent none.',
+  '3,104',
+  '1/1'
+)}
 ${blurb(
   '3',
   'A Study in Lamplight',
   'greenglassmoth',
-  ['Found Family', 'Hurt/Comfort', 'Winter'],
+  [
+    { type: 'relationships', label: 'Ash & Wren' },
+    { type: 'characters', label: 'Wren' },
+    { type: 'freeforms', label: 'Found Family' },
+    { type: 'freeforms', label: 'Hurt/Comfort' },
+  ],
   'Three months of quiet evenings, one shared apartment, and the slow discovery that home is a verb.',
   '47,219',
   '12/15'
 )}
 </ol>`;
 
+/**
+ * A work's metadata table (works/_meta). The type class sits on the `dd` here,
+ * not on the `li` as it does in a listing — which is why the tag-colour rules
+ * need two selectors per type, and why both places are in the mock.
+ */
+const WORK_META = `
+  <dl class="work meta group">
+    <dt class="rating tags">Rating:</dt>
+    <dd class="rating tags"><ul class="commas"><li><a class="tag" href="#">Teen And Up Audiences</a></li></ul></dd>
+    <dt class="warning tags">Archive Warnings:</dt>
+    <dd class="warning tags"><ul class="commas"><li><a class="tag" href="#">No Archive Warnings Apply</a></li></ul></dd>
+    <dt class="relationship tags">Relationships:</dt>
+    <dd class="relationship tags"><ul class="commas"><li><a class="tag" href="#">Mara/The Messenger</a></li></ul></dd>
+    <dt class="character tags">Characters:</dt>
+    <dd class="character tags"><ul class="commas"><li><a class="tag" href="#">Mara</a></li><li><a class="tag" href="#">The Messenger</a></li></ul></dd>
+    <dt class="freeform tags">Additional Tags:</dt>
+    <dd class="freeform tags"><ul class="commas"><li><a class="tag" href="#">Slow Burn</a></li><li><a class="tag" href="#">Mutual Pining</a></li></ul></dd>
+  </dl>`;
+
 const READING = `
 <div class="work">
+  ${WORK_META}
   <div id="work-skin" class="wrapper">
     <div id="workskin">
       <div class="preface group">
@@ -356,7 +418,18 @@ const DASHBOARD_MAIN = `
   <p>Writing mostly about maps, messengers, and the long way round.</p>
 </div>
 <ol class="work index group">
-${blurb('4', 'Nine Letters, Unsent', 'inkandstarlight', ['Epistolary'], 'He wrote them all. He sent none.', '3,104', '1/1')}
+${blurb(
+  '4',
+  'Nine Letters, Unsent',
+  'inkandstarlight',
+  [
+    { type: 'relationships', label: 'Mara/The Messenger' },
+    { type: 'freeforms', label: 'Epistolary' },
+  ],
+  'He wrote them all. He sent none.',
+  '3,104',
+  '1/1'
+)}
 </ol>`;
 
 /** The `#main` content and any sibling regions, per preview state. */

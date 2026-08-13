@@ -49,13 +49,18 @@ test.describe('every launch template compiles to CSS AO3 accepts', () => {
   test('every detail toggle combination also passes', () => {
     for (const divider of [true, false]) {
       for (const dropCap of [true, false]) {
-        for (const tagStyle of ['pill', 'label', 'plain'] as const) {
-          const theme: SiteSkinTheme = {
-            ...SAMPLE,
-            shape: { ...SAMPLE.shape, tagStyle },
-            details: { divider, dropCap },
-          };
-          expect(lintAo3Css(compile(theme)), `${tagStyle}/${divider}/${dropCap}`).toEqual([]);
+        for (const scrollbar of [true, false]) {
+          for (const tagColors of [true, false]) {
+            for (const tagStyle of ['pill', 'label', 'plain'] as const) {
+              const theme: SiteSkinTheme = {
+                ...SAMPLE,
+                shape: { ...SAMPLE.shape, tagStyle, tagColors },
+                details: { divider, dropCap, scrollbar },
+              };
+              const label = `${tagStyle}/${tagColors}/${divider}/${dropCap}/${scrollbar}`;
+              expect(lintAo3Css(compile(theme)), label).toEqual([]);
+            }
+          }
         }
       }
     }
@@ -159,7 +164,12 @@ test.describe('the header controls', () => {
     expect(compile(withBanner({ bannerHeight: '15em' }))).toContain('height: 15em');
     // Structural, not a substring search: the drop cap's `line-height` also
     // contains "height:", which is how this assertion was wrong the first time.
-    const heights = compileRules(SAMPLE).filter(r => r.decls.some(([p]) => p === 'height'));
+    // The scrollbar's own `height` (its thickness when horizontal) is a
+    // different thing from the header's, and is excluded rather than allowed to
+    // weaken the assertion.
+    const heights = compileRules(SAMPLE)
+      .filter(r => !r.selectors.some(s => s.startsWith('::-webkit-scrollbar')))
+      .filter(r => r.decls.some(([p]) => p === 'height'));
     expect(heights).toEqual([]);
   });
 
@@ -246,7 +256,7 @@ test.describe('region ownership', () => {
     // #outer.wrapper AND #main in one rule, and nested percentages multiply.
     // The drop cap's `font-size: 4em` is a different thing and is allowed —
     // what must be unique is the percentage that scales the whole page.
-    const carriers = compileRules({ ...SAMPLE, details: { divider: true, dropCap: true } })
+    const carriers = compileRules({ ...SAMPLE, details: { ...SAMPLE.details, divider: true, dropCap: true } })
       .filter(r => r.decls.some(([p, v]) => p === 'font-size' && v.endsWith('%')))
       .flatMap(r => r.selectors);
     expect(carriers).toEqual(['body']);
@@ -255,7 +265,7 @@ test.describe('region ownership', () => {
   test('the drop cap is scoped to chapter text, never to #workskin', () => {
     // Defect 4.1: :first-of-type matches once per PARENT, so an unscoped
     // selector decorates the summary and every set of notes too.
-    const css = compile({ ...SAMPLE, details: { divider: false, dropCap: true } });
+    const css = compile({ ...SAMPLE, details: { ...SAMPLE.details, divider: false, dropCap: true } });
     expect(css).toContain('#chapters .userstuff p:first-of-type::first-letter');
     expect(css).not.toContain('#workskin p:first-of-type');
   });
@@ -301,6 +311,115 @@ test.describe('the header is legible', () => {
       expect(rule, `${selector} is unowned`).toBeDefined();
       expect(rule!.decls).toContainEqual(['background-image', 'none']);
     }
+  });
+});
+
+// ── Tags coloured by type ─────────────────────────────────────────────────
+
+test.describe('tag colours by type', () => {
+  const on = (theme: SiteSkinTheme = SAMPLE): SiteSkinTheme => ({
+    ...theme,
+    shape: { ...theme.shape, tagColors: true },
+  });
+
+  test('both AO3 markups are targeted — a listing and a work page', () => {
+    // The type class is on the `li` in works/_work_module and on the `dd` in
+    // works/_meta. Emitting only one of them colours half the site.
+    const css = compile(on());
+    for (const selector of [
+      'li.warnings a.tag',
+      'dd.warning a.tag',
+      'li.relationships a.tag',
+      'dd.relationship a.tag',
+      'li.characters a.tag',
+      'dd.character a.tag',
+      'li.freeforms a.tag',
+      'dd.freeform a.tag',
+    ]) {
+      expect(css, selector).toContain(selector);
+    }
+  });
+
+  test('turning it off emits nothing, so the accent still owns every tag', () => {
+    const css = compile({ ...SAMPLE, shape: { ...SAMPLE.shape, tagColors: false } });
+    expect(css).not.toContain('li.warnings');
+    expect(css).not.toContain('dd.freeform');
+    expect(css).toContain('a.tag');
+  });
+
+  test('the four colours are distinct, and each is legible on page and cards', () => {
+    // Without the contrast floor this control would make a page HARDER to read
+    // than the accent it replaces — a red tag on a near-black card.
+    for (const template of TEMPLATES) {
+      const colors = derive(on(template)).tagColors;
+      const values = Object.values(colors);
+      expect(new Set(values).size, `${template.meta.name}: duplicate tag colours`).toBe(4);
+      for (const [type, color] of Object.entries(colors)) {
+        const ratio = Math.min(
+          contrastRatio(color, template.colors.background),
+          contrastRatio(color, template.colors.surface)
+        );
+        expect(ratio, `${template.meta.name}/${type}`).toBeGreaterThanOrEqual(WCAG_LARGE_MIN);
+      }
+    }
+  });
+
+  test('the border follows the text, but only when the tag shape has one', () => {
+    const bordered = compileRules(on({ ...SAMPLE, shape: { ...SAMPLE.shape, tagStyle: 'label', tagColors: true } }));
+    const plain = compileRules(on({ ...SAMPLE, shape: { ...SAMPLE.shape, tagStyle: 'plain', tagColors: true } }));
+    const warning = (rules: ReturnType<typeof compileRules>) =>
+      rules.find(r => r.selectors.includes('li.warnings a.tag'))!;
+
+    expect(warning(bordered).decls.map(([p]) => p)).toEqual(['color', 'border-color']);
+    // On 'plain' the shape rule emits `border: 0`, so an edge colour would be a
+    // declaration with nothing to colour.
+    expect(warning(plain).decls.map(([p]) => p)).toEqual(['color']);
+  });
+
+  test('the mock renders both markups, so the control is watchable', () => {
+    // Plan §10: a rule that cannot be previewed honestly does not ship.
+    const browse = mockBody('browse');
+    expect(browse).toContain('<li class="warnings">');
+    expect(browse).toContain('<li class="relationships">');
+    expect(browse).toContain('<li class="characters">');
+    expect(browse).toContain('<li class="freeforms">');
+
+    const reading = mockBody('reading');
+    expect(reading).toContain('class="warning tags"');
+    expect(reading).toContain('class="relationship tags"');
+    expect(reading).toContain('class="character tags"');
+    expect(reading).toContain('class="freeform tags"');
+  });
+});
+
+// ── The themed scrollbar ──────────────────────────────────────────────────
+
+test.describe('the themed scrollbar', () => {
+  test('emits vendor pseudo-elements AO3 accepts', () => {
+    // AO3 validates declarations, never selectors: clean_css_code maps
+    // rs.selectors through a gsub and a prefix test, refusing only @font-face.
+    // The declarations inside are plain width/background-color/border-radius.
+    const css = compile({ ...SAMPLE, details: { ...SAMPLE.details, scrollbar: true } });
+    expect(css).toContain('::-webkit-scrollbar {');
+    expect(css).toContain('::-webkit-scrollbar-track {');
+    expect(css).toContain('::-webkit-scrollbar-thumb {');
+    expect(css).toContain('::-webkit-scrollbar-thumb:hover {');
+    expect(lintAo3Css(css)).toEqual([]);
+  });
+
+  test('the track is the card colour and the thumb is closer to the accent', () => {
+    const d = derive(SAMPLE);
+    const rules = compileRules({ ...SAMPLE, details: { ...SAMPLE.details, scrollbar: true } });
+    const track = rules.find(r => r.selectors.includes('::-webkit-scrollbar-track'))!;
+    const thumb = rules.find(r => r.selectors.includes('::-webkit-scrollbar-thumb'))!;
+    expect(track.decls).toContainEqual(['background-color', d.surface]);
+    expect(thumb.decls).toContainEqual(['background-color', d.scrollThumb]);
+    expect(d.scrollThumb).not.toBe(d.surface);
+  });
+
+  test('turning it off emits no scrollbar rules at all', () => {
+    const css = compile({ ...SAMPLE, details: { ...SAMPLE.details, scrollbar: false } });
+    expect(css).not.toContain('scrollbar');
   });
 });
 
@@ -365,8 +484,8 @@ test.describe('validateTheme', () => {
         meta: { id: 'x', name: 'Mine', category: 'nonsense', moods: ['dark', 'bogus'] },
         colors: { background: 'red', surface: '#FFF000', text: '#123456', accent: 'javascript:x' },
         typography: { headingFont: 'Comic Sans MS, cursive', bodyFont: 'Georgia, serif', baseFontScale: 99 },
-        shape: { cardRadius: 'huge', tagStyle: 'sparkly' },
-        details: { divider: 'yes', dropCap: false },
+        shape: { cardRadius: 'huge', tagStyle: 'sparkly', tagColors: 'sometimes' },
+        details: { divider: 'yes', dropCap: false, scrollbar: 1 },
       },
       SAMPLE
     );
@@ -380,8 +499,10 @@ test.describe('validateTheme', () => {
     expect(result.typography.baseFontScale).toBe(SAMPLE.typography.baseFontScale);
     expect(result.shape.cardRadius).toBe(SAMPLE.shape.cardRadius);
     expect(result.shape.tagStyle).toBe(SAMPLE.shape.tagStyle);
+    expect(result.shape.tagColors).toBe(SAMPLE.shape.tagColors); // a string is not a boolean
     expect(result.details.divider).toBe(SAMPLE.details.divider); // 'yes' is not a boolean
     expect(result.details.dropCap).toBe(false);
+    expect(result.details.scrollbar).toBe(SAMPLE.details.scrollbar); // 1 is not a boolean
   });
 
   test('a validated theme still compiles to legal CSS', () => {

@@ -152,31 +152,6 @@ export const ExportSkinDialog: React.FC<Props> = ({
           >
             ×
           </button>
-
-          <section className="mt-5 rounded-xl border border-stone-200 p-4">
-            <h4 className="text-sm font-semibold text-stone-900">Theme backup</h4>
-            <p className="mt-1 text-xs leading-relaxed text-stone-500">Download or restore this editable theme locally. It is separate from scene-project backups.</p>
-            <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              <button type="button" onClick={() => downloadThemeBackup()} className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-xs font-semibold text-stone-700 hover:bg-stone-50">
-                Download theme backup
-              </button>
-              <label className="cursor-pointer rounded-lg border border-stone-300 bg-white px-3 py-2 text-center text-xs font-semibold text-stone-700 hover:bg-stone-50">
-                Restore theme backup
-                <input type="file" accept=".json,application/json" className="sr-only" onChange={event => { void selectThemeFile(event.target.files?.[0]); event.currentTarget.value = ''; }} />
-              </label>
-            </div>
-            {importCandidate && (
-              <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-                <p><strong>{importCandidate.theme.meta.name}</strong></p>
-                <p className="mt-1">Exported {new Date(importCandidate.exportedAt).toLocaleString()} · Banner link {importCandidate.theme.header.bannerUrl ? 'included' : 'not included'}</p>
-                <p className="mt-1 text-[11px]">Replacing downloads the current theme first. No merge is performed.</p>
-                <div className="mt-2 flex gap-2">
-                  <button type="button" onClick={replaceTheme} className="rounded-lg bg-amber-700 px-3 py-2 font-semibold text-white">Replace current theme</button>
-                  <button type="button" onClick={() => setImportCandidate(null)} className="rounded-lg border border-amber-300 bg-white px-3 py-2 font-semibold">Cancel</button>
-                </div>
-              </div>
-            )}
-          </section>
         </div>
 
         <div className="p-5 overflow-y-auto">
@@ -252,6 +227,61 @@ export const ExportSkinDialog: React.FC<Props> = ({
               </li>
             ))}
           </ol>
+
+          {/* Only with a banner, because only then is any of it true. AO3 does
+              not copy the image — it links to it — so the skin outlives the
+              picture only if the host does. A published work skin lost every
+              image in every fic using it when its author's free-tier account
+              hit a bandwidth cap, and nobody reading those fics could tell why
+              (plan §12). Saying so here is cheap; the failure is not. */}
+          {theme.header.bannerUrl.trim() && (
+            <section className="mt-5 rounded-xl border border-stone-200 bg-stone-50 p-4">
+              <h4 className="text-sm font-semibold text-stone-900">About your banner image</h4>
+              <p className="mt-1 text-xs text-stone-600 leading-relaxed">
+                AO3 links to your image, it does not store a copy. Every reader&apos;s
+                browser fetches it from your host on every page — so if that host
+                deletes it, moves it, or runs out of free bandwidth, the banner
+                disappears from your whole archive at once.
+              </p>
+              <ul className="mt-2 space-y-1 text-xs text-stone-600 leading-relaxed list-disc pl-4">
+                <li>
+                  <strong className="text-stone-800">imgur.com</strong> or{' '}
+                  <strong className="text-stone-800">postimg.cc</strong> are the safe
+                  choices — no quota, no expiry, and AO3 accepts their addresses.
+                </li>
+                <li>Keep the original file. If the link ever dies, you re-upload and paste again.</li>
+                <li>
+                  Use an image you have the right to use. A skin is yours, but a hotlink
+                  is still someone else&apos;s artwork and someone else&apos;s bandwidth.
+                </li>
+              </ul>
+            </section>
+          )}
+
+          <section className="mt-5 rounded-xl border border-stone-200 p-4">
+            <h4 className="text-sm font-semibold text-stone-900">Theme backup</h4>
+            <p className="mt-1 text-xs leading-relaxed text-stone-500">Download or restore this editable theme locally. It is separate from scene-project backups.</p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <button type="button" onClick={() => downloadThemeBackup()} className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-xs font-semibold text-stone-700 hover:bg-stone-50">
+                Download theme backup
+              </button>
+              <label className="cursor-pointer rounded-lg border border-stone-300 bg-white px-3 py-2 text-center text-xs font-semibold text-stone-700 hover:bg-stone-50">
+                Restore theme backup
+                <input type="file" accept=".json,application/json" className="sr-only" onChange={event => { void selectThemeFile(event.target.files?.[0]); event.currentTarget.value = ''; }} />
+              </label>
+            </div>
+            {importCandidate && (
+              <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                <p><strong>{importCandidate.theme.meta.name}</strong></p>
+                <p className="mt-1">Exported {new Date(importCandidate.exportedAt).toLocaleString()} · Banner link {importCandidate.theme.header.bannerUrl ? 'included' : 'not included'}</p>
+                <p className="mt-1 text-[11px]">Replacing downloads the current theme first. No merge is performed.</p>
+                <div className="mt-2 flex gap-2">
+                  <button type="button" onClick={replaceTheme} className="rounded-lg bg-amber-700 px-3 py-2 font-semibold text-white">Replace current theme</button>
+                  <button type="button" onClick={() => setImportCandidate(null)} className="rounded-lg border border-amber-300 bg-white px-3 py-2 font-semibold">Cancel</button>
+                </div>
+              </div>
+            )}
+          </section>
 
           <p className="text-[11px] text-stone-400 mt-5 text-center leading-relaxed">
             Unofficial. Not affiliated with the Organization for Transformative Works.

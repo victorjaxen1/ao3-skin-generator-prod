@@ -39,6 +39,16 @@ export interface SiteSkinTheme {
   shape: {
     cardRadius: string;
     tagStyle: TagStyle;
+    /**
+     * Colour tags by what they *are* — warnings, relationships, characters,
+     * freeforms — instead of painting all four with the accent.
+     *
+     * Semantic rather than decorative, which is why it is here at all: the
+     * colour tells you what kind of tag you are reading before you read it.
+     * The four hues are derived from the accent (see colors.tagTypeColors), so
+     * a theme stays a theme rather than acquiring four unrelated colours.
+     */
+    tagColors: boolean;
   };
   /**
    * The only group where the user supplies content rather than picking from a
@@ -66,6 +76,19 @@ export interface SiteSkinTheme {
   details: {
     divider: boolean;
     dropCap: boolean;
+    /**
+     * A scrollbar in the theme's colours, via `::-webkit-scrollbar`.
+     *
+     * Legal because AO3 validates *declarations*, never selectors — the only
+     * selector it refuses is one containing `@font-face` (css_cleaner.rb maps
+     * `rs.selectors` through a gsub and a prefix test and nothing else). The
+     * declarations inside are ordinary `width`, `background-color` and
+     * `border-radius`.
+     *
+     * Chromium-only by nature, and none of the three published skins in plan
+     * §11 does it.
+     */
+    scrollbar: boolean;
   };
 }
 
@@ -186,6 +209,8 @@ export function validateTheme(input: unknown, fallback: SiteSkinTheme): SiteSkin
       tagStyle: TAG_STYLES.some(t => t.value === shape.tagStyle)
         ? shape.tagStyle
         : fallback.shape.tagStyle,
+      tagColors:
+        typeof shape.tagColors === 'boolean' ? shape.tagColors : fallback.shape.tagColors,
     },
     header: {
       // Validated, not merely length-capped. A stored theme is user-writable
@@ -208,6 +233,8 @@ export function validateTheme(input: unknown, fallback: SiteSkinTheme): SiteSkin
     details: {
       divider: typeof details.divider === 'boolean' ? details.divider : fallback.details.divider,
       dropCap: typeof details.dropCap === 'boolean' ? details.dropCap : fallback.details.dropCap,
+      scrollbar:
+        typeof details.scrollbar === 'boolean' ? details.scrollbar : fallback.details.scrollbar,
     },
   };
 }

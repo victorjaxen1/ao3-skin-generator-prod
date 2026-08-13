@@ -1,5 +1,5 @@
 import { SiteSkinTheme } from './theme';
-import { mixHex, normalizeHex, readableOn } from './colors';
+import { mixHex, normalizeHex, readableOn, tagTypeColors, TAG_TYPES } from './colors';
 
 /**
  * theme → AO3 site skin CSS.
@@ -68,6 +68,13 @@ export function derive(theme: SiteSkinTheme) {
     /** Card edges: the accent, mostly dissolved into the card. */
     border: mixHex(accent, surface, 0.27),
     tagBorder: mixHex(accent, surface, 0.45),
+    /**
+     * The scrollbar thumb. Further toward the accent than a card edge, because
+     * a scrollbar is a thing you aim at rather than a boundary you notice.
+     */
+    scrollThumb: mixHex(accent, surface, 0.7),
+    /** One legible colour per tag type. Emitted only when the control is on. */
+    tagColors: tagTypeColors({ accent, surface, background }),
     /**
      * A glow *behind* the header text, so it survives a busy banner. The
      * opposite of the foreground: dark text gets a light halo and vice versa,
@@ -263,6 +270,64 @@ function buildRules(theme: SiteSkinTheme): Rule[] {
       ['color', d.headerFg],
     ],
   });
+
+  // ── Tags, by type ───────────────────────────────────────────────────────
+  // Two selectors per type, because AO3 marks the type up in two different
+  // places: `li.warnings` on a blurb in a listing (works/_work_module) and
+  // `dd.warning` in a work's metadata table (works/_meta). Both are rendered in
+  // the mock, so both are watchable rather than taken on trust.
+  //
+  // Higher specificity than the plain `a.tag` accent rule above, so these win
+  // where they apply and the accent still covers fandoms and everything else.
+  // `border-color` follows the text only when the tag shape has a border at
+  // all; on 'plain' the shape rule emits `border: 0` and an edge colour would
+  // be a declaration with nothing to colour.
+  if (theme.shape.tagColors) {
+    const TAG_SELECTORS: Record<(typeof TAG_TYPES)[number], string[]> = {
+      warning: ['li.warnings a.tag', 'dd.warning a.tag'],
+      relationship: ['li.relationships a.tag', 'dd.relationship a.tag'],
+      character: ['li.characters a.tag', 'dd.character a.tag'],
+      freeform: ['li.freeforms a.tag', 'dd.freeform a.tag'],
+    };
+    for (const type of TAG_TYPES) {
+      const color = d.tagColors[type];
+      rules.push({
+        selectors: TAG_SELECTORS[type],
+        decls: [['color', color], ...(tag.border ? ([['border-color', color]] as [string, string][]) : [])],
+      });
+    }
+  }
+
+  // ── Scrollbar ───────────────────────────────────────────────────────────
+  // AO3 validates declarations, not selectors — `clean_css_code` only ever
+  // refuses a selector containing @font-face — so a vendor pseudo-element is
+  // carried through untouched, and `width`/`background-color`/`border-radius`
+  // are ordinary allowed properties. Chromium-only, which is why it is a
+  // detail toggle and not part of the palette.
+  if (theme.details.scrollbar) {
+    rules.push({
+      selectors: ['::-webkit-scrollbar'],
+      decls: [
+        ['width', '12px'],
+        ['height', '12px'],
+      ],
+    });
+    rules.push({
+      selectors: ['::-webkit-scrollbar-track'],
+      decls: [['background-color', d.surface]],
+    });
+    rules.push({
+      selectors: ['::-webkit-scrollbar-thumb'],
+      decls: [
+        ['background-color', d.scrollThumb],
+        ['border-radius', '999px'],
+      ],
+    });
+    rules.push({
+      selectors: ['::-webkit-scrollbar-thumb:hover'],
+      decls: [['background-color', d.accent]],
+    });
+  }
 
   // ── Fixed corrections, owned by no control ──────────────────────────────
   // System messages set a pale background and no colour, so they inherit body
