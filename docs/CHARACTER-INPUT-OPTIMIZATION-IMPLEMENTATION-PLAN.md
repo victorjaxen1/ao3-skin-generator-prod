@@ -2,8 +2,8 @@
 
 **Prepared:** 12 August 2026  
 **Scope:** the conversation generator (`/`), not the separate site-skin builder  
-**Audience:** developer implementing the change  
-**Status:** code complete on 13 August 2026. Both releasable slices have shipped, the whole automated suite is green, and the documentation is updated. Only human-in-the-loop QA and one product decision remain — see §11.
+**Audience:** the next developer to work on identity  
+**Status:** **Shipped** 13 August 2026 as commit `5e8d9bc` on `main`. Both releasable slices are merged and live. Only human-in-the-loop QA and one product decision remain — start at §11.
 
 ## 1. Outcome
 
@@ -473,83 +473,241 @@ Do not ship the new click targets before the integrity release. Otherwise users 
 
 ## 11. Implementation progress and developer handoff
 
-### Stopping point
+### 11.1 Status
 
-Both slices are code complete. Stable scene identities drive editing and output, the unified People/Accounts sheet and every entry point are wired, the automated suites are green end to end, and the character documentation matches the shipped workflow. What is left cannot be finished by writing code: the observational usability study and the visual/dark-mode sweep in §8, plus one product decision (blank-Twitter primary account). No schema or UI redesign is needed.
+**Shipped.** Both releasable slices from §10 are merged and live.
 
-### Completed implementation
+| | |
+| --- | --- |
+| Commit | `5e8d9bc` — *feat: make character identity one coherent feature* |
+| Pushed | 13 August 2026, `f2bc76c..5e8d9bc` → `origin/main` (`victorjaxen1/ao3-skin-generator-prod`) |
+| Size | 27 files, +2748 / −784 |
+| Open | Human QA (§11.7) and one product decision (§11.7 item 4) |
 
-- Added `SceneCharacter`, `SceneCast`, stable `Message.characterId`, and participant bindings in `src/lib/schema.ts`.
-- Added `src/lib/identity.ts` with normalization, resolution, complete-profile add/update/copy operations, referenced-identity archive/reassign behavior, and idempotent legacy migration.
-- Migrated autosaves on load and upgraded project backups to schema v2 while retaining v1 imports.
-- Added cloned template instantiation. Twitter quick-template posts now follow the stable primary account instead of carrying detached custom identity fields.
-- Routed preview HTML, AO3 output, work-skin/skin-off projection, and transcript identity reads through the shared resolver. PNG continues to render from the same preview HTML.
-- Rebuilt `CastPanel` as one controlled People/Accounts sheet with overview, create, edit, Library, and Avatar presets states. Library entries are explicitly copied into a scene and scene edits do not mutate the saved source.
-- Added full-profile library editing and removed the partial `(name, avatarUrl)` apply path.
-- Added dialog focus restoration, initial focus, Escape behavior, a basic Tab trap, and unsaved-change confirmation.
-- Wired header, composer, timeline sender, and preview identity entry points. Preview identity clicks take precedence only on names, handles, and avatars; message bodies retain click-to-edit.
-- Split composer identity creation from Message options. Twitter always exposes a stable Posting as selector; chat keeps speaker switching. Google instead exposes Add result details and renders no identity controls.
-- Added responsive flex sizing so the mobile composer remains clickable above the measured fixed export bar when the preview is expanded.
+No schema or UI redesign is needed to continue. Everything below is orientation
+for whoever picks this up next.
 
-### Completed in the final pass (13 August 2026)
+### 11.2 What shipped
 
-- Expanded `tests/identity-flows.spec.ts` from 4 scenarios to 20, run on both desktop and mobile: iMessage group members staying distinct through a rename, a WhatsApp participant keeping its avatar through a rename, same-name Twitter accounts staying separate, timeline sender and preview avatar opening the same editor, Escape closing the sheet and returning focus to its opener, all three Google quick templates having no identity controls, every avatar-bearing quick template reaching `naturalWidth > 0`, and PNG export for one chat and one Twitter template.
-- Reconciled the pre-existing browser suite with the new vocabulary: `Add details` → `Message options`, the header's `Edit display name` → `Edit identity for …`, and the participant `+ Add` flow → the complete-profile Add person form.
-- Fixed three accessibility/consistency gaps the wider suite exposed: the group member selector had no accessible name (now `Speaking as`); the group-mode toggle had become a bare checkbox instead of the app-wide `ToggleRow` (`role="switch"`) primitive; and the initials badge in the People sheet stuttered each row's name into its accessible name (now `aria-hidden`).
-- Restored the platform-specific group-name placeholders (`Family Chat` / `Work Team`).
-- Added the remaining unit cases from §8: two projects seeded from one library entry staying independent after an edit, hostile and oversized avatar values still going through the shared URL validation, and a saved library character round-tripping its whole profile rather than name and avatar alone.
-- Rewrote `docs/CHARACTER-BANK-GUIDE.md`: the section documenting the removed `onSetAsContact(name, avatarUrl)` API is replaced by the scene-identity model, the sheet's five states, copy-not-link library semantics, and archive/reassign. Its preset roster and category union are now regenerated from `characterBank.ts` rather than describing a bank that no longer exists.
+**Domain and data**
 
-### Verification
+- `SceneCharacter`, `SceneCast`, stable `Message.characterId`, and participant
+  bindings in `src/lib/schema.ts`.
+- New `src/lib/identity.ts`: resolution, handle normalization, complete-profile
+  add/update/copy, archive-or-reassign, and idempotent legacy migration.
+- Autosaves migrate on load; project backups are schema v2 and still import v1.
+- Quick templates instantiate as isolated clones. Twitter template posts follow
+  the stable primary account instead of carrying detached custom identity fields.
 
-Run against a local production build at `http://localhost:3000`, not the configured production default:
+**Output**
 
-- `npm run typecheck`: passed.
-- `npm run build`: passed.
-- `npm run test:unit`: 262 passed.
-- `npx playwright test --project=desktop`: 161 passed, 3 skipped, 0 failed.
-- `npx playwright test --project=mobile`: 163 passed, 1 skipped, 0 failed.
-- `npm run lint` is still not a usable gate: the repository uses ESLint 9 without an `eslint.config.*` file.
+- Preview HTML, AO3 output, work-skin/skin-off projection, and the transcript all
+  read identity through the one resolver. PNG renders from the same preview HTML,
+  so it agrees by construction.
 
-Two notes for whoever runs these next:
+**UI**
 
-- The focused browser tests set `ao3skingen_analytics_consent=denied`; without that exact key, the consent banner changes the available mobile viewport and can obscure the result being tested.
-- `next start` serves the build that existed when it started. After any source change, rebuild **and restart** the server, or the suite silently tests stale code.
+- `CastPanel` rebuilt as one controlled People/Accounts sheet: overview, create,
+  edit, library, avatar presets.
+- Full-profile library editing; the partial `onSetAsContact(name, avatarUrl)`
+  path is gone.
+- Focus restoration, initial focus, Escape, a basic Tab trap, unsaved-change
+  confirmation.
+- Entry points wired at the header, composer, timeline sender, and preview.
+  Preview identity clicks win only on names, handles, and avatars; message bodies
+  keep click-to-edit.
+- Composer identity creation split from Message options. Google renders no
+  identity controls and offers *Add result details* instead.
+- Responsive sizing so the mobile composer stays clickable above the fixed export
+  bar when the preview is expanded.
 
-### Decisions and behavior to preserve
+**Final pass (13 August 2026)**
 
-- Scene identities are copies, not live references to the global library. `sourceLibraryId` records provenance only.
-- Duplicate display names are valid. Never restore name-based merging or use a name as an identity key.
-- Legacy settings and per-message identity fields remain as fallback for this release; do not remove them until migration has shipped and old files have been exercised in production.
-- A referenced identity is archived or explicitly reassigned, never silently deleted. Archived identities disappear from new-message selectors but remain resolvable and editable from old messages.
-- In a one-to-one chat, Add person updates/replaces the contact role; in a group it adds a participant. Twitter Add account creates a secondary account because migration always provides a primary account, even for an otherwise blank project.
-- The group conversation title/photo is conversation metadata, not a participant identity, so clicking a group header opens the overview.
-- Chat self avatars can be stored in the scene identity but are not currently rendered by the platform templates.
-- The DOM can contain both visible and responsive-hidden preview instances. Scope preview assertions through the `preview()` helper in `tests/identity-flows.spec.ts`, which selects `#workskin:visible`; an unscoped `.first()` picks the hidden instance and an unscoped `.last()` picks the wrong one on mobile.
-- Blank projects ship with seed messages, so anchor preview assertions to a message's own text via `[data-message-id]` rather than to list position.
-- The composer auto-alternates the chat sender after each send, so a test posting twice as "them" must re-select the direction each time.
-- Toggles use the shared `ToggleRow` (`role="switch"`) primitive from `SettingsRows.tsx`. Form fields (Verified, Also save to my library) stay plain checkboxes.
+- `tests/identity-flows.spec.ts` grew from 4 scenarios to 20, run on desktop and
+  mobile: group renames on both chat platforms, same-name Twitter accounts,
+  timeline-sender and preview-avatar routing to the same editor, Escape plus
+  focus return, all three Google quick templates, every avatar-bearing quick
+  template reaching `naturalWidth > 0`, and PNG export for one chat and one
+  Twitter template.
+- The pre-existing browser suite was reconciled with the new vocabulary:
+  `Add details` → `Message options`, header `Edit display name` →
+  `Edit identity for …`, participant `+ Add` → the complete-profile form.
+- Three real defects the wider suite exposed were fixed **in source, not in the
+  tests** (see §11.5): the group member selector had no accessible name (now
+  `Speaking as`); the group-mode toggle had drifted to a bare checkbox instead of
+  the shared `ToggleRow` (`role="switch"`); the initials badge stuttered each
+  row's name into its accessible name (now `aria-hidden`).
+- Platform-specific group-name placeholders restored (`Family Chat` / `Work Team`).
+- Remaining §8 unit cases added: two projects seeded from one library entry
+  staying independent, hostile/oversized avatars still going through the shared
+  URL validation, and a library character round-tripping its whole profile.
+- `docs/CHARACTER-BANK-GUIDE.md` rewritten — its final section documented the
+  deleted `onSetAsContact` API. Its preset roster is now regenerated from
+  `characterBank.ts`.
 
-### Remaining work
+### 11.3 How it works — orientation
 
-Everything that can be verified by code is done. What is left needs a human:
+Read `src/lib/identity.ts` first. It is the whole domain; everything else calls
+into it.
 
-1. **Observational usability study (§8).** Watch at least five AO3/fandom users attempt, without coaching: add a person, change an avatar, post as a second account, edit a template account, and add a Google result.
-2. **Visual sweep.** Desktop and iPhone widths across all four platforms, light/dark where supported, long names, empty handles, broken avatar URL, uploaded avatar, and no avatar. The automated suite proves these resolve correctly; it does not prove they look right.
-3. **The sheet at small heights.** Its state model and focus behavior are covered by tests, but the dense archive/reassign and library screens still want a human eye.
-4. **One product decision.** Should a blank Twitter project present primary-account creation instead of synthesizing a default `User`? Migration always provides a primary account, so this is polish, not a correctness requirement, and it is the only open question in the plan.
+**The model.** A project carries `project.cast` — `SceneCharacter[]` plus the
+role bindings `selfId`, `contactId`, `twitterPrimaryId`. Messages point at
+characters by `Message.characterId`; group participants by
+`GroupParticipant.characterId`. Ids are stable, so an edit reaches every message
+that identity already speaks in.
 
-Deliberately deferred to a later compatibility release: removing the legacy settings and per-message identity fields that migration still reads as a fallback. Do not remove them until old files have been exercised in production.
+**Resolution order** (`resolveMessageIdentity`), highest priority first:
 
-### Resume commands
+1. `message.characterId` resolved against `project.cast.characters`;
+2. the bound scene role — self, contact, or Twitter primary;
+3. legacy fallbacks: settings fields, participant fields, per-message Twitter
+   fields;
+4. safe labels (`You`, `Them`, `User`) only when everything stored is empty.
+
+Steps 3 and 4 exist for files written before this release. They are load-bearing
+until the compatibility cleanup in §11.7.
+
+**Migration** is shape-based and idempotent — it must be, because local autosave
+has no schema envelope. It runs at five entry points:
+
+| Where | Why |
+| --- | --- |
+| `src/lib/storage.ts:174` | autosave load |
+| `src/lib/projectFile.ts:359,368,384` | v1 import, v2 round-trip |
+| `src/lib/examples.ts:844` | quick-template instantiation |
+| `src/pages/index.tsx:148` | mount |
+| `src/pages/index.tsx:219` | defensive re-normalization |
+
+**Mutations.** Never assemble identity changes from several `setProject` calls —
+that is the bug this whole plan existed to fix. Go through one helper so undo/redo
+sees one coherent change:
+
+```ts
+addSceneCharacter(project, draft, role)
+updateSceneCharacter(project, id, updates)
+copyLibraryCharacterToScene(project, source, role)
+archiveOrReassignCharacter(project, id, replacementId?)
+```
+
+`updateSceneCharacter` also syncs the legacy settings fields for whichever role
+the character is bound to, which is why old code paths keep working.
+
+**Adding a new surface that shows a person.** Resolve through
+`resolveMessageIdentity` / `resolveIdentityTarget` — never read
+`settings.twitterDisplayName` or `message.sender` directly. To make it clickable,
+hand an `IdentityTarget` to the existing `onIdentityClick` prop; `index.tsx` owns
+the single panel state and routes it.
+
+### 11.4 Invariants — do not regress these
+
+- Scene identities are **copies**, not live references to the global library.
+  `sourceLibraryId` records provenance only.
+- Duplicate display names are valid. Never restore name-based merging, and never
+  use a name as an identity key.
+- A referenced identity is archived or explicitly reassigned, never silently
+  deleted. Archived identities leave new-message selectors but stay resolvable
+  and editable from old messages.
+- Legacy settings and per-message identity fields stay as fallback this release.
+- Google has no cast. No identity control may render there.
+- In a one-to-one chat, *Add person* updates the contact role; in a group it adds
+  a participant. Twitter *Add account* creates a secondary account, because
+  migration always supplies a primary — even for a blank project.
+- The group conversation title/photo is conversation metadata, not a participant
+  identity, so clicking a group header opens the overview.
+- Chat self avatars can be stored on the scene identity but are not currently
+  rendered by the platform templates.
+- Toggles use the shared `ToggleRow` (`role="switch"`) from `SettingsRows.tsx`.
+  Form fields — Verified, Also save to my library — stay plain checkboxes.
+
+### 11.5 Lessons from this cycle
+
+Worth reading before the next change; each of these cost real time.
+
+1. **A feature-local suite passing is not evidence the app works.** The focused
+   identity suite was green while twelve specs elsewhere were failing. Renaming a
+   control is an API change to every test that selects it — budget for the sweep.
+2. **When a rename breaks a test, decide which side is wrong.** Most of the twelve
+   were genuine intended renames and the tests were updated. Three were not: the
+   suite had caught a missing accessible name, a drifted toggle primitive, and a
+   stuttering label. Fixing those in the test file would have discarded the
+   finding.
+3. **`next start` serves the build it started with.** Rebuild *and restart*, or
+   the suite silently tests stale code. This produced one confusing round of
+   "impossible" failures.
+4. **The DOM holds two previews**, one hidden by CSS. Unscoped `#workskin` matches
+   both: `.first()` picks the hidden one, `.last()` picks the wrong one on mobile.
+   Use the `preview()` helper in `tests/identity-flows.spec.ts`, which selects
+   `#workskin:visible`.
+5. **Anchor preview assertions to content, not position.** Blank projects ship
+   with seed messages, so `.nth(0)` is a seed message, not the one just sent.
+   Locate via `[data-message-id]` filtered by the message's own text.
+6. **The composer auto-alternates the chat sender after each send.** A test
+   posting twice as "them" must re-select the direction each time.
+7. **Playwright timeouts under parallel load look like product bugs.** One
+   scenario failed at `--workers=2` and passed in isolation. Confirm with
+   `--workers=1` before investigating the app.
+8. **The consent banner changes the mobile viewport.** The identity specs set
+   `ao3skingen_analytics_consent=denied` in `beforeEach`; without that exact key
+   the banner can cover the control under test.
+
+### 11.6 Verification
+
+Run against a local production build, not the configured production default:
 
 ```powershell
 npm run typecheck
 npm run test:unit
 npm run build
-npm run start -- -p 3000   # restart this after every rebuild
+npm run start -- -p 3000   # restart after every rebuild
 $env:UX_BASE_URL='http://localhost:3000'
 npx playwright test --workers=1
 ```
 
-Before editing, run `git status --short`. This workspace already contains unrelated user files and untracked artifacts; preserve them and limit changes to this feature's files.
+Results at ship time:
+
+- `npm run typecheck` — passed
+- `npm run build` — passed
+- `npm run test:unit` — **270 passed**
+- `npx playwright test --project=desktop` — 161 passed, 3 skipped, 0 failed
+- `npx playwright test --project=mobile` — 163 passed, 1 skipped, 0 failed
+- `npm run lint` is still not a usable gate: ESLint 9 with no `eslint.config.*`
+
+**One honest gap in that evidence.** An unrelated commit, `f2bc76c`
+(*feat(site-skin)*), landed on `main` mid-session and brought 8 new unit tests —
+which is why the count is 270 rather than the 262 measured earlier. The unit suite
+and typecheck were re-run at the merged HEAD; **the browser suites were not**.
+They were measured just before that commit was in the tree in its final form.
+`f2bc76c` touches only `siteSkin/` sources, `docs/`, and the site-skin specs, so
+interaction with identity is very unlikely — but the first person back should run
+`npx playwright test --workers=1` once at current `main` to close it properly.
+
+### 11.7 Remaining work
+
+Everything verifiable by code is done. What is left needs a human:
+
+1. **Observational usability study (§8).** Watch at least five AO3/fandom users
+   attempt, without coaching: add a person, change an avatar, post as a second
+   account, edit a template account, add a Google result.
+2. **Visual sweep.** Desktop and iPhone widths on all four platforms, light/dark
+   where supported, long names, empty handles, broken avatar URL, uploaded
+   avatar, no avatar, duplicate names. The suite proves these *resolve*
+   correctly; it does not prove they *look* right.
+3. **The sheet at small heights.** State model and focus behaviour are covered by
+   tests, but the dense archive/reassign and library screens want a human eye.
+4. **Product decision — the only open question in this plan.** Should a blank
+   Twitter project present primary-account creation instead of synthesizing a
+   default `User`? Migration always supplies a primary account, so this is polish,
+   not a correctness requirement.
+
+**Deferred to a later compatibility release:** removing the legacy settings and
+per-message identity fields that migration still reads as fallback. Do not remove
+them until old files have been exercised in production. When that day comes, the
+work is: delete steps 3–4 of the resolution order in §11.3, drop the legacy
+branches in `migrateProjectIdentities`, and keep the v1 backup fixtures.
+
+### 11.8 Before you start
+
+Run `git status --short`. This workspace carries ~20 untracked user files —
+`.docx` blueprints, WordPress article HTML, PNG exports, `reaction-check/`,
+article-generation scripts — that are **not** part of this feature. Stage by
+explicit path; never `git add -A` here.
