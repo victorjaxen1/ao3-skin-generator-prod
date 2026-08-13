@@ -616,7 +616,219 @@ reference if we build one.
 Five independent skins, same defence. **BACKLOG 2a is not a nice-to-have; it is
 the thing every experienced AO3 skin author does first.**
 
-## Actions this suggests
+---
+
+## Part 4 — A full mobile Twitter vocabulary
+
+**Source, 13 Aug 2026:**
+[Twitter Mobile Workskin Documentation](https://archiveofourown.org/works/76859551/chapters/201171641)
+by LittleMissGhostette. The work has a 91-page downloadable reference covering
+markup examples and complete dim, light and dark CSS variants. Representative
+pages for main posts, replies, threads, quote posts, media, accounts, polls and
+translations were also visually reviewed.
+
+The author describes the design as a mixture of old Twitter, current Twitter
+and a little Bluesky rather than a pixel-identical copy of one release. That
+makes this source especially useful for **fiction-oriented information
+architecture**: it shows which pieces make a post legible in a story, not merely
+which controls happen to exist on the live product this month.
+
+## 27. “A tweet” is at least four display contexts — **PROVEN**
+
+The documentation gives distinct examples and class families for:
+
+1. a main/expanded post;
+2. a compact reply;
+3. a reply opened as the main post;
+4. a compact timeline entry.
+
+These are not cosmetic aliases. They carry different information hierarchy:
+
+- the main post gives the body and timestamp more visual weight;
+- a compact reply keeps the account, handle, time and relationship together;
+- an opened reply is still semantically a reply even though it uses the main
+  post treatment;
+- timeline entries prioritize scanning over full detail.
+
+**Reusable lesson:** relationship and presentation are separate axes. “This
+post replies to X” is data; “show this post expanded” is a view choice. Do not
+encode both in one `isReply`/`threadMode` flag. A renderer should be able to show
+a reply in either compact or expanded form without losing its parent.
+
+This supports the distinction already latent in our own `parentId` and
+`expandedView` fields. The mistake is not the model; it is that the current UI
+cannot author either state.
+
+## 28. A thread is a relationship structure, not a line effect — **PROVEN + CONVENTION**
+
+The source documents:
+
+- a root post with replies;
+- replies to a main post;
+- reply chains;
+- “Replying to” account context;
+- “Show replies” and “Show thread” separators;
+- timeline threads that expand into a connected sequence.
+
+The connector is only the visible consequence. The actual structure is an
+ordered set of parent/child relationships plus a focal post. A global “thread
+mode” toggle that merely draws a line cannot express that.
+
+**Reusable lesson:** store stable post relationships and derive the line,
+indentation and replying-to handles. Do not infer parentage from adjacency or
+from who posted. Preserve authored order among roots and siblings, and render a
+malformed orphan as a visible top-level post rather than silently dropping it.
+
+The same principle applies to paged/image exports: a reply must not vanish just
+because its parent landed in the previous export chunk. Chunking must respect
+relationship boundaries or repeat enough context for the next part to remain
+legible.
+
+## 29. Quote posts belong to individual posts — **PROVEN**
+
+The reference demonstrates quoted posts inside main posts, replies and timeline
+entries. A quote is therefore a composable block attached to one post, not a
+page-wide setting.
+
+The quoted account has its own:
+
+- display name and handle;
+- avatar and verified state;
+- body text;
+- optional image;
+- compact styling appropriate to nesting.
+
+**Reusable lesson:** model an embed on the message that contains it. A
+project-wide quote setting is structurally wrong because it repeats the same
+embed on every post. When the quoted account is a known scene character, keep a
+stable identity reference so later avatar/handle edits reach old quotes. For an
+external account, store a deliberate snapshot.
+
+This also reinforces §20: outer and embedded posts should share primitives and
+variants rather than becoming two unrelated renderers.
+
+## 30. Media count changes markup; cropping is author intent — **PROVEN + REPORTED**
+
+The source provides separate structures for one, two, three and four images:
+
+| Count | Documented composition |
+| --- | --- |
+| 1 | One full-width media card |
+| 2 | Two side-by-side cells |
+| 3 | One large cell beside two stacked cells |
+| 4 | A two-by-two grid |
+
+This is stronger than “allow four attachments.” The renderer needs an explicit
+layout variant for each count, particularly for the asymmetric three-image
+case.
+
+The guide also distinguishes images that should fill by width from images that
+should fill by height. The author presents this as a manual choice because AO3's
+CSS constraints do not provide the reliable `object-fit` behavior a normal web
+app would use.
+
+**Reusable lesson:** attachment order, count and crop intent are content data.
+Store a small crop enum such as `auto`, `fill-width` and `fill-height`; emit
+explicit AO3-safe classes. Do not attempt to recover the author's composition
+from the image URL or natural dimensions at export time.
+
+Every cell still needs useful alt text. A grid is one visual unit, but skin-off
+and screen-reader output must retain the images' authored order and individual
+descriptions.
+
+## 31. Account identity has independent adornments — **PROVEN**
+
+The account section covers:
+
+- custom profile pictures;
+- several generic/default avatar treatments;
+- verified accounts;
+- an account label such as “Parody account.”
+
+Verification and account labels are separate concepts. A label is visible
+narrative context, not another kind of badge, and must not be represented only
+by color or an icon.
+
+**Reusable lesson:** resolve the core identity—name, handle, avatar and verified
+state—from a stable account record, while keeping scene-specific adornments such
+as an account label on the post. Generic avatars should be generated locally or
+drawn from text/CSS where possible; they are not worth another permanent remote
+chrome dependency.
+
+## 32. Polls have open and final states — **PROVEN**, independently corroborating §13
+
+This second Twitter source documents the same two-state poll model as
+Repository: Twitter:
+
+- an unfinished poll with options and remaining time;
+- a finished poll with percentages, a result/winner treatment and final-state
+  context.
+
+Independent convergence makes the model more trustworthy than either skin
+alone. A poll is not merely a list of percentage bars; its state determines
+which facts should appear.
+
+**Reusable lesson:** store two to four options and an explicit open/closed state.
+For final results, widths still need the `.p1` … `.p100` enumeration from §10
+because AO3 strips inline style and work skins cannot use custom properties.
+Always print percentages and result labels as text so the poll survives without
+bars or color.
+
+## 33. Translation needs a state even when it is not interactive — **PROVEN**
+
+The reference provides both an interactive translation example and a static
+translated example. The important reusable idea is not the toggle mechanism;
+it is that one post owns:
+
+- original text;
+- translated text;
+- language/context label;
+- which version is currently visible.
+
+**Reusable lesson:** model translation state separately from the post body. A
+generator can emit the selected static state everywhere and consider a
+`<details>`/`:has()` enhancement only after real AO3 save/readback testing.
+Static output is the safe baseline because it survives downloads, reparsing and
+Creator's Style being disabled.
+
+If an interactive version is added, both states must remain understandable to
+assistive technology. §2 still applies: AO3 strips ARIA, so a clever visual
+toggle cannot be repaired with `aria-hidden` or `aria-live`.
+
+## 34. Dim is a first-class palette, not “less dark mode” — **PROVEN**
+
+The downloadable guide contains three full CSS sections:
+
+- dim (pages 46–60);
+- light (pages 61–75);
+- dark (pages 76–90).
+
+Dim has its own background, surface, border and secondary-text relationships.
+It is not safely derived by changing one background color on the light or dark
+sheet.
+
+**Reusable lesson:** once a platform supports three appearances, store a theme
+enum rather than adding booleans. Variant classes remain the proven AO3 idiom
+from §§3, 12 and 18, but each palette must be generated and visually tested as a
+complete reachable state. Do not programmatically diff compiled stylesheets to
+manufacture overrides; §18 records why that is cascade-unsafe for our generator.
+
+## 35. Selective fidelity is a feature — **REPORTED**, supported by the source's design
+
+The author explicitly omits bookmarks, views and Grok, and describes the result
+as a deliberate blend of Twitter eras and Bluesky. Yet the mockup still reads
+immediately as a Twitter conversation because it preserves the fiction-relevant
+grammar: account identity, post hierarchy, reply context, embeds, media,
+engagement and timestamps.
+
+**Reusable lesson:** a work skin is narrative UI, not a live-site archive. Add
+chrome only when it helps a reader understand the scene. Frequently changing
+or non-narrative controls increase CSS, accessibility noise and visual-aging
+risk without improving the story. Metrics such as views and bookmarks can be
+optional; ads, live navigation and network behavior are outside the useful
+fidelity boundary.
+
+## Actions from Parts 1–3
 
 All of these are now in **`BACKLOG.md`**, which is the single ranked list —
 items 2, 5, 8 and 11–15. In summary, and in order of value:
@@ -632,3 +844,22 @@ items 2, 5, 8 and 11–15. In summary, and in order of value:
    conversations, and legal.
 5. Emoji sizing, reaction counts, link previews, system rows (§6) — genuine
    gaps, none urgent.
+
+## Actions from Part 4
+
+These are specified in
+`TWITTER-PLATFORM-IMPROVEMENT-IMPLEMENTATION-PLAN.md`, rather than duplicated in
+the general backlog:
+
+1. **Make Twitter replies authorable before adding more decoration** (§§27–28).
+   Stable parent relationships, reply context and compact/expanded layout are
+   the foundation every other Twitter component attaches to.
+2. **Move quote posts to per-message data and support explicit 1–4 image
+   layouts** (§§29–30). Preserve live scene identities where appropriate and
+   store crop intent rather than guessing it.
+3. **Add polls, translations, activity context and account labels as composable
+   post blocks** (§§31–33), each with complete skin-off prose.
+4. **Replace the dark-mode boolean with a light/dim/dark theme enum** (§34),
+   retaining legacy fields as migration inputs.
+5. **Keep fidelity selective** (§35). Validate each addition against narrative
+   value, AO3 safety, accessibility and long-term image-hosting cost.
