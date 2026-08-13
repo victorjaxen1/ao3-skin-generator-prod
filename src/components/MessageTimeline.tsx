@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Message, SkinProject, SkinSettings } from '../lib/schema';
 import { IdentityTarget, resolveMessageIdentity } from '../lib/identity';
 import { ImageUrlInput } from './ImageUrlInput';
+import { MessageEmojiPicker, MessageEmojiTrigger } from './MessageEmojiPicker';
 import { ReactionPicker } from './ReactionPicker';
 
 interface Props {
@@ -88,7 +89,9 @@ export const MessageTimeline: React.FC<Props> = ({
 }) => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  const [emojiOpenId, setEmojiOpenId] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const messageInputRefs = useRef(new Map<string, HTMLTextAreaElement>());
 
   // Scroll to focused message
   useEffect(() => {
@@ -155,6 +158,23 @@ export const MessageTimeline: React.FC<Props> = ({
     return msg.outgoing ? 'text-violet-600' : 'text-stone-500';
   };
 
+  const insertMessageEmoji = (msg: Message, emoji: string) => {
+    const input = messageInputRefs.current.get(msg.id);
+    const start = input?.selectionStart ?? msg.content.length;
+    const end = input?.selectionEnd ?? start;
+    onUpdateMessage(msg.id, {
+      content: `${msg.content.slice(0, start)}${emoji}${msg.content.slice(end)}`,
+    });
+
+    requestAnimationFrame(() => {
+      const nextInput = messageInputRefs.current.get(msg.id);
+      if (!nextInput) return;
+      const caret = start + emoji.length;
+      nextInput.focus();
+      nextInput.setSelectionRange(caret, caret);
+    });
+  };
+
   return (
     <div ref={containerRef} className="flex-1 overflow-y-auto px-3 py-2 space-y-1">
       {messages.map((msg, index) => {
@@ -174,7 +194,10 @@ export const MessageTimeline: React.FC<Props> = ({
             {/* Compact row */}
             <div
               className="flex items-center gap-2 px-3 py-2.5 cursor-pointer select-none"
-              onClick={() => setExpandedId(isExpanded ? null : msg.id)}
+              onClick={() => {
+                setExpandedId(isExpanded ? null : msg.id);
+                if (isExpanded) setEmojiOpenId(null);
+              }}
             >
               {/* Direction indicator */}
               {(template === 'ios' || template === 'android') && (
@@ -240,12 +263,39 @@ export const MessageTimeline: React.FC<Props> = ({
             {/* Expanded edit panel */}
             {isExpanded && (
               <div className="px-3 pb-3 space-y-2 animate-fade-in">
-                <textarea
-                  value={msg.content}
-                  onChange={(e) => onUpdateMessage(msg.id, { content: e.target.value })}
-                  className="w-full text-sm bg-white border border-stone-200 rounded-lg px-3 py-2 resize-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
-                  rows={2}
-                />
+                <div className="relative">
+                  <textarea
+                    ref={element => {
+                      if (element) messageInputRefs.current.set(msg.id, element);
+                      else messageInputRefs.current.delete(msg.id);
+                    }}
+                    value={msg.content}
+                    onChange={(e) => onUpdateMessage(msg.id, { content: e.target.value })}
+                    onKeyDown={event => {
+                      if (event.key === 'Escape' && emojiOpenId === msg.id) {
+                        event.preventDefault();
+                        setEmojiOpenId(null);
+                      }
+                    }}
+                    className={`w-full resize-none rounded-lg border border-stone-200 bg-white py-2 pl-3 text-sm focus:border-transparent focus:ring-2 focus:ring-violet-500 ${template === 'google' ? 'pr-3' : 'pr-10'}`}
+                    rows={2}
+                  />
+                  {template !== 'google' && (
+                    <MessageEmojiTrigger
+                      expanded={emojiOpenId === msg.id}
+                      controlsId={`timeline-${msg.id}-emoji-options`}
+                      onToggle={() => setEmojiOpenId(openId => openId === msg.id ? null : msg.id)}
+                    />
+                  )}
+                </div>
+                {template !== 'google' && emojiOpenId === msg.id && (
+                  <div className="rounded-lg border border-stone-200 bg-stone-50/70 p-2">
+                    <MessageEmojiPicker
+                      id={`timeline-${msg.id}-emoji-options`}
+                      onInsert={emoji => insertMessageEmoji(msg, emoji)}
+                    />
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-2">
                   {(template === 'ios' || template === 'android') && (
                     <>

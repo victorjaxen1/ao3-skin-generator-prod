@@ -2,9 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Message, SceneCast, SkinSettings, GroupParticipant, TwitterCharacter } from '../lib/schema';
 import { normalizeImageUrl } from '../lib/urlNormalize';
 import { ImageUrlInput } from './ImageUrlInput';
+import { MessageEmojiPicker, MessageEmojiTrigger } from './MessageEmojiPicker';
 import { ReactionPicker } from './ReactionPicker';
-
-const MESSAGE_EMOJIS = ['😂', '❤️', '😭', '👍', '🔥', '👀', '✨', '🥺', '🎉'] as const;
 
 interface Props {
   template: 'ios' | 'android' | 'twitter' | 'google';
@@ -353,21 +352,8 @@ export const ComposeBar: React.FC<Props> = ({
       )}
 
       {template !== 'google' && showEmojiPicker && (
-        <div id="message-emoji-picker" className="border-b border-stone-100 bg-stone-50/70 px-3 py-2">
-          <div role="group" aria-label="Message emoji picker" className="grid grid-cols-9 gap-1">
-            {MESSAGE_EMOJIS.map(emoji => (
-              <button
-                key={emoji}
-                type="button"
-                onClick={() => insertEmoji(emoji)}
-                aria-label={`Insert ${emoji}`}
-                title={`Insert ${emoji}`}
-                className="flex aspect-square min-w-0 items-center justify-center rounded-lg border border-stone-200 bg-white text-base leading-none transition-colors hover:border-violet-300 hover:bg-violet-50 focus:ring-2 focus:ring-violet-500"
-              >
-                {emoji}
-              </button>
-            ))}
-          </div>
+        <div className="border-b border-stone-100 bg-stone-50/70 px-3 py-2">
+          <MessageEmojiPicker id="compose-message-emoji-options" onInsert={insertEmoji} />
         </div>
       )}
 
@@ -486,21 +472,11 @@ export const ComposeBar: React.FC<Props> = ({
             className={`block w-full max-h-[120px] resize-none rounded-2xl border-0 bg-stone-100 py-2 pl-4 text-sm transition-colors focus:bg-white focus:ring-2 focus:ring-violet-500 ${template === 'google' ? 'pr-4' : 'pr-10'}`}
           />
           {template !== 'google' && (
-            <button
-              type="button"
-              onClick={() => setShowEmojiPicker(open => !open)}
-              aria-label="Add emoji to message"
-              title="Add emoji"
-              aria-expanded={showEmojiPicker}
-              aria-controls="message-emoji-picker"
-              className={`absolute bottom-1 right-1 flex h-7 w-7 items-center justify-center rounded-full text-base leading-none transition-colors ${
-                showEmojiPicker
-                  ? 'bg-violet-100 text-violet-700'
-                  : 'text-stone-400 hover:bg-stone-200 hover:text-stone-700'
-              }`}
-            >
-              <span aria-hidden="true">😊</span>
-            </button>
+            <MessageEmojiTrigger
+              expanded={showEmojiPicker}
+              controlsId="compose-message-emoji-options"
+              onToggle={() => setShowEmojiPicker(open => !open)}
+            />
           )}
         </div>
 
