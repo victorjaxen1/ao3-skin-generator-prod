@@ -266,19 +266,109 @@ test.describe('region ownership', () => {
     // Defect 4.1: :first-of-type matches once per PARENT, so an unscoped
     // selector decorates the summary and every set of notes too.
     const css = compile({ ...SAMPLE, details: { ...SAMPLE.details, divider: false, dropCap: true } });
-    expect(css).toContain('#chapters .userstuff p:first-of-type::first-letter');
+    expect(css).toContain('#chapters .userstuff > p:first-of-type::first-letter');
     expect(css).not.toContain('#workskin p:first-of-type');
   });
 
-  test('every declaration carries !important', () => {
+  test('the details rules reach direct children only, never into a work skin', () => {
+    // Plan §14, found on a real AO3 page. A work skin is nested markup inside
+    // the chapter — divs inside divs, each holding a <p> — and every one of
+    // those divs is a parent that `:first-of-type` matches. The descendant form
+    // put a floated 4em capital on every chat bubble in the work.
+    //
+    // Asserted as the ABSENCE of the descendant form, because that is the bug:
+    // a `>` sitting somewhere in the stylesheet proves nothing if the loose
+    // selector is still there too.
+    const css = compile({ ...SAMPLE, details: { ...SAMPLE.details, divider: true, dropCap: true } });
+    expect(css).not.toContain('#chapters .userstuff p:first-of-type');
+    expect(css).not.toContain('#chapters .userstuff hr');
+    expect(css).toContain('#chapters .userstuff > p:first-of-type::first-letter');
+    expect(css).toContain('#chapters .userstuff > hr');
+    expect(css).toContain('#chapters .userstuff > hr::after');
+  });
+
+  test('the Reading mock contains an author work skin for those rules to spare', () => {
+    // Without nested markup in the mock, an over-reaching selector looks
+    // perfect until a reader turns the skin on over a real fic — which is
+    // exactly how this shipped.
+    const reading = mockBody('reading');
+    expect(reading).toContain('class="chat ios"');
+    expect(reading).toContain('class="bubble in"');
+    // A <p> that is :first-of-type inside its own parent, and must stay plain.
+    expect(reading).toMatch(/<div class="bubble in"><p>/);
+    // An author's own <hr>, which must not receive our ornament.
+    expect(reading).toContain('<hr class="rule" />');
+  });
+
+  test('every declaration carries !important, except where an author must win', () => {
     // A user site skin loads with role "user", so AO3's ID- and class-scoped
     // defaults are still there and outrank ours on specificity.
-    const body = stripCssComments(compile(SAMPLE));
-    const declarations = body.match(/[a-z-]+\s*:[^;{}]+;/g) ?? [];
-    expect(declarations.length).toBeGreaterThan(30);
-    for (const declaration of declarations) {
-      expect(declaration, declaration).toContain('!important');
+    //
+    // The exceptions are not an escape hatch: they are the rules that can land
+    // inside somebody's story (plan §14). A work skin is rendered in the body,
+    // after our stylesheet, and scoped to #workskin — so `!important` is the
+    // only thing that would let a reader's theme rewrite an author's layout.
+    // Enumerated here, so adding a sixth is a deliberate act with a test to
+    // change rather than a quiet omission.
+    const AUTHOR_WINS = [
+      'blockquote',
+      'address',
+      '#workskin',
+      '#chapters .userstuff > hr',
+      '#chapters .userstuff > hr::after',
+      '#chapters .userstuff > p:first-of-type::first-letter',
+    ];
+
+    const themed = { ...SAMPLE, details: { ...SAMPLE.details, divider: true, dropCap: true } };
+    let counted = 0;
+
+    for (const rule of compileRules(themed)) {
+      const quiet = rule.selectors.every(s => AUTHOR_WINS.includes(s));
+      // A rule must be wholly one or the other; a mixed rule would give one of
+      // its selectors the wrong cascade weight.
+      expect(
+        rule.selectors.some(s => AUTHOR_WINS.includes(s)),
+        `${rule.selectors.join(', ')} mixes author-wins and chrome selectors`
+      ).toBe(quiet);
+      if (!quiet) counted += rule.decls.length;
     }
+    expect(counted).toBeGreaterThan(30);
+
+    // And the emitted text agrees with the structure.
+    const body = stripCssComments(compile(themed));
+    for (const block of body.split('\n\n')) {
+      const selectors = block.slice(0, block.indexOf('{')).split(',').map(s => s.trim());
+      const quiet = selectors.every(s => AUTHOR_WINS.includes(s));
+      const declarations = block.match(/[a-z-]+\s*:[^;{}]+;/g) ?? [];
+      for (const declaration of declarations) {
+        if (quiet) expect(declaration, `${selectors[0]}: ${declaration}`).not.toContain('!important');
+        else expect(declaration, `${selectors[0]}: ${declaration}`).toContain('!important');
+      }
+    }
+  });
+
+  test('the rules that reach into a work do not shout at its author', () => {
+    // The specific failure: a reader's site skin overriding a work skin. AO3
+    // renders a work skin in the BODY, after our stylesheet, and prefixes every
+    // selector with #workskin — so the author beats us on order and specificity
+    // both, and only `!important` could take that away from them.
+    const css = compile({ ...SAMPLE, details: { ...SAMPLE.details, divider: true, dropCap: true } });
+
+    const ruleFor = (selector: string) =>
+      css.split('\n\n').find(block => block.startsWith(`${selector} {`))!;
+
+    for (const selector of [
+      '#workskin',
+      '#chapters .userstuff > hr',
+      '#chapters .userstuff > p:first-of-type::first-letter',
+    ]) {
+      expect(ruleFor(selector), selector).toBeDefined();
+      expect(ruleFor(selector), selector).not.toContain('!important');
+    }
+
+    // Chrome still shouts, or half the skin does nothing on a real page (§3b).
+    expect(ruleFor('#header .primary')).toContain('!important');
+    expect(css).toContain('background-color: #101725 !important'); // body
   });
 });
 

@@ -84,6 +84,7 @@ real page.
 | P7 | **Tag colours on a real listing and a real work page** | `li.warnings a.tag` vs `dd.warning a.tag` — two markups, and only the listing one is common | ⬜ |
 | P8 | **Themed scrollbar in Chrome, and Firefox unharmed** | `::-webkit-scrollbar` is a selector AO3 has no opinion about; confirm it survives the save and that Firefox simply ignores it | ⬜ |
 | P9 | **Footer and system messages** | AO3's red tile and `.notice`'s pale blue, on one dark and one light theme (§4.6, §4.8) | ⬜ |
+| P10 | **A work that has its own work skin** — read it with a site skin on | The bug that shipped on 13 Aug 2026 (§14): the drop cap landed on every chat bubble in the work. Confirm one capital at the top of the chapter and none inside the author's markup, that the author's own `<hr>` keeps its own styling, and that their fonts and backgrounds survive. Use a work made with this app's conversation generator | ⬜ |
 
 ## Known open risks, to confirm or clear while you are in there
 

@@ -98,6 +98,12 @@ ul, ol { margin: 0; padding: 0; }
   background-image: linear-gradient(to bottom, rgba(221,221,221,0.98) 0%, rgba(204,204,204,0.98) 100%);
   box-shadow: 1px 1px 3px -1px #444;
 }
+/* A closed dropdown is hidden. Missing from this subset until 13 Aug 2026,
+   which made the panel visible in every preview state — including Reading,
+   where it sat on top of the work — and quietly falsified the "opens in Browse
+   only" contract in the header() helper below. */
+#header .dropdown .menu { display: none; }
+#header .dropdown:hover .menu, #header .dropdown.open .menu { display: block; }
 #header .open .menu, #header .menu li { display: block; float: none; }
 #header .menu li { border-bottom: 1px solid #888; }
 #header .search { float: right; color: #2a2a2a; margin-right: 0.25em; }
@@ -348,6 +354,71 @@ ${blurb(
 </ol>`;
 
 /**
+ * **An author's work skin, sitting in the middle of the chapter.**
+ *
+ * Not decoration, and not transcribed from AO3 — this is the thing our own
+ * details rules were vandalising. A work skin is nested markup pasted into
+ * chapter text: divs inside divs, each holding a `<p>`. Every one of those divs
+ * is a *parent*, and `:first-of-type` matches once per parent, so a descendant
+ * drop-cap selector put a floated 4em capital on every bubble, caption and
+ * footer line in the work. It shipped, and a real AO3 page showed it (plan §14).
+ *
+ * It stays in the mock permanently. The Reading state is the only place our
+ * rules can reach into somebody else's design, so the preview has to contain
+ * somebody else's design — otherwise the next selector that over-reaches looks
+ * perfect right up until a reader turns the skin on over a real fic.
+ *
+ * The shape is deliberately our own conversation generator's: it is the work
+ * skin most likely to be underneath one of our site skins.
+ */
+const AUTHOR_WORK_SKIN = `
+            <div class="chat ios">
+              <div class="bubble in"><p>Where are you? I&apos;m waiting at the cafe.</p></div>
+              <div class="bubble out"><p>On my way — see you shortly!</p></div>
+              <div class="bubble in"><p>Who are you guys?</p></div>
+              <hr class="rule" />
+              <div class="caption"><p>Two hours earlier</p></div>
+            </div>
+            <blockquote class="note"><p>Found tucked inside the map case.</p></blockquote>`;
+
+/**
+ * The author's work-skin CSS, and **it loads after ours**.
+ *
+ * That order is the whole point, and getting it wrong here would hide the exact
+ * bug this block exists to expose. On AO3 the site skin is a stylesheet in
+ * `<head>`; a work skin is rendered *in the body* by `works/show.html.erb`
+ * (`<div id="work-skin"><%= render "works/work_skin" %></div>`). So an author's
+ * rule is both later in the document and `#workskin`-prefixed — it beats
+ * anything of ours at equal specificity, **unless we write `!important`**.
+ *
+ * Which is why the preview has to load it here rather than alongside AO3's
+ * defaults: with this third stylesheet in the right place, "does our skin
+ * trample the author's work?" is a question you can answer by looking.
+ *
+ * Never part of the export, exactly like AO3_BASE_CSS.
+ */
+export const AUTHOR_WORK_SKIN_CSS = `
+#workskin .chat { margin: 1.5em 0; }
+#workskin .chat .bubble {
+  max-width: 70%; margin: 0.4em 0; padding: 0.5em 0.75em; border-radius: 1.1em;
+  background: #e9e9eb; color: #111;
+}
+#workskin .chat .bubble.out { margin-left: auto; background: #1c8cf8; color: #fff; }
+#workskin .chat .bubble p { margin: 0; }
+#workskin .chat .caption { text-align: center; font-size: 0.85em; opacity: 0.7; }
+#workskin .chat .caption p { margin: 0.5em 0; }
+#workskin .chat hr.rule { border: 0; border-top: 1px solid #ccc; width: 40%; margin: 1em auto; }
+
+/* A deliberately opinionated blockquote. If the reader's body font appears here
+   instead of this one, our skin is overriding the author — which is what the
+   Reading preview is for. */
+#workskin blockquote.note {
+  font-family: 'Courier New', Courier, monospace;
+  background: #fffbe6; color: #4a3c10; border-inline-start: 2px solid #d8c37a;
+  padding: 0.75em;
+}`.trim();
+
+/**
  * A work's metadata table (works/_meta). The type class sits on the `dd` here,
  * not on the `li` as it does in a listing — which is why the tag-colour rules
  * need two selectors per type, and why both places are in the mock.
@@ -393,6 +464,8 @@ const READING = `
             <hr />
             <p>By noon the palace messenger had arrived, and the map, with what Mara could only
             describe as enthusiasm, redrew the entire eastern road.</p>
+${AUTHOR_WORK_SKIN}
+            <p>She read it twice, then folded it into her sleeve.</p>
           </div>
         </div>
       </div>
@@ -461,9 +534,14 @@ export const SKIN_STYLE_ID = 'compiled-site-skin';
 /**
  * A complete document for `<iframe srcdoc>`.
  *
- * Two stylesheets, in AO3's own order: the archive's default first, then the
- * compiled skin. That order is not cosmetic — it is what makes the preview
- * honest about which of our rules actually win.
+ * **Three stylesheets, in AO3's own order**, and the order is not cosmetic — it
+ * is what makes the preview honest about which rules actually win:
+ *
+ *  1. AO3's defaults, in `<head>`
+ *  2. our compiled skin, also in `<head>` (a site skin is a stylesheet there)
+ *  3. the author's work skin, which AO3 renders **in the body**
+ *
+ * Only the middle one is ours, and only the middle one is exported.
  */
 export function mockDocument(state: PreviewState, skinCss: string): string {
   return `<!DOCTYPE html>
@@ -473,6 +551,7 @@ export function mockDocument(state: PreviewState, skinCss: string): string {
 <title>Site skin preview</title>
 <style id="ao3-base">${AO3_BASE_CSS}</style>
 <style id="${SKIN_STYLE_ID}">${skinCss}</style>
+<style id="author-work-skin" data-loads-after="the site skin, as AO3 renders it in the body">${AUTHOR_WORK_SKIN_CSS}</style>
 </head>
 <body class="logged-in">
 ${mockBody(state)}

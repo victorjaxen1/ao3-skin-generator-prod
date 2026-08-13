@@ -114,7 +114,9 @@ test('each preview state renders the selectors its rules depend on', async ({ pa
 
   await page.getByRole('tab', { name: 'Reading' }).click();
   await expect(frame.locator('#workskin')).toBeVisible();
-  await expect(frame.locator('#chapters .userstuff hr')).toBeVisible();
+  // `> hr`, not any descendant: the mock's chapter also contains an author work
+  // skin with an `<hr>` of its own, which our ornament deliberately misses.
+  await expect(frame.locator('#chapters .userstuff > hr')).toBeVisible();
 
   await page.getByRole('tab', { name: 'Dashboard' }).click();
   await expect(frame.locator('#dashboard')).toBeVisible();
@@ -152,13 +154,74 @@ test('the detail toggles add and remove their rules', async ({ page }) => {
   await openEditor(page);
 
   let css = await exportedCss(page);
-  expect(css).toContain('#chapters .userstuff p:first-of-type::first-letter');
+  expect(css).toContain('#chapters .userstuff > p:first-of-type::first-letter');
 
   await page.getByRole('switch', { name: 'Drop cap' }).click();
   css = await exportedCss(page);
   expect(css).not.toContain('first-letter');
   // And never the unscoped form, which decorates summaries and notes too.
   expect(css).not.toContain('#workskin p:first-of-type');
+});
+
+test('the drop cap and divider leave an author work skin alone', async ({ page }) => {
+  // Plan §14. Shipped, then seen on a real AO3 page: the drop cap landed on
+  // every chat bubble, caption and footer line of a work skin, because
+  // `:first-of-type` matches once per parent and a work skin is nested markup.
+  //
+  // Counted in the DOM rather than asserted as a string, so the test measures
+  // what the browser does with the selector, not what we hoped it meant.
+  await openEditor(page); // Moonlit Library ships divider + drop cap on.
+  await page.getByRole('tab', { name: 'Reading' }).click();
+  const frame = page.frameLocator('iframe[title="Site skin preview"]');
+
+  await expect(frame.locator('#workskin .chat .bubble').first()).toBeVisible();
+
+  const counts = await frame.locator('#chapters').evaluate(el => ({
+    // What our selectors actually reach.
+    capped: el.querySelectorAll('.userstuff > p:first-of-type').length,
+    ruled: el.querySelectorAll('.userstuff > hr').length,
+    // What the descendant form used to reach. Both numbers being higher is the
+    // bug, and is why this test would have failed before the fix.
+    loose: el.querySelectorAll('.userstuff p:first-of-type').length,
+    looseRules: el.querySelectorAll('.userstuff hr').length,
+  }));
+
+  expect(counts.capped).toBe(1); // one capital, at the top of the chapter
+  expect(counts.ruled).toBe(1); // one ornament, the author's rule untouched
+  expect(counts.loose).toBeGreaterThan(1);
+  expect(counts.looseRules).toBeGreaterThan(1);
+
+  // And what the browser actually paints. getComputedStyle reads pseudo-element
+  // styles, so this measures the rendered result rather than our intent: the
+  // chapter's opening letter is enlarged, the bubble's is not.
+  const firstLetterSize = (selector: string) =>
+    frame
+      .locator(selector)
+      .first()
+      .evaluate(el => ({
+        cap: parseFloat(getComputedStyle(el, '::first-letter').fontSize),
+        body: parseFloat(getComputedStyle(el).fontSize),
+      }));
+
+  const chapter = await firstLetterSize('#chapters .userstuff > p');
+  expect(chapter.cap).toBeGreaterThan(chapter.body * 3);
+
+  const bubble = await firstLetterSize('#workskin .chat .bubble p');
+  expect(bubble.cap).toBeCloseTo(bubble.body, 1);
+
+  // The author's own typography survives too. Their work skin is rendered in
+  // the body, after our stylesheet, and scoped to #workskin — so it wins on
+  // order and specificity, and would lose only to an `!important` of ours.
+  const fontOf = (selector: string) =>
+    frame.locator(selector).first().evaluate(el => getComputedStyle(el).fontFamily);
+
+  expect(await fontOf('#workskin blockquote.note')).toContain('Courier');
+  // While a blockquote the author did not style still follows the theme.
+  expect(await fontOf('.preface blockquote.userstuff')).toContain('Georgia');
+
+  const css = await exportedCss(page);
+  expect(css).not.toContain('#chapters .userstuff p:first-of-type');
+  expect(css).not.toContain('#chapters .userstuff hr');
 });
 
 test('tags coloured by type reach the preview, in both AO3 markups', async ({ page }) => {
@@ -190,7 +253,14 @@ test('tags coloured by type reach the preview, in both AO3 markups', async ({ pa
   await page.getByRole('switch', { name: 'Colour tags by type' }).click();
 
   // Off, every tag is the accent again, and none of the rules ship.
-  await expect.poll(async () => await warningColor()).toBe(await freeformColor());
+  //
+  // Both sides are read inside the poll. Reading the expected value outside it
+  // captures a colour from before the stylesheet was patched, and the poll then
+  // waits for a match that will never come — which is how this test flaked once
+  // before it was written this way.
+  await expect
+    .poll(async () => (await warningColor()) === (await freeformColor()))
+    .toBe(true);
   const css = await exportedCss(page);
   expect(css).not.toContain('li.warnings');
   expect(css).not.toContain('dd.freeform');

@@ -16,11 +16,19 @@ import { mixHex, normalizeHex, readableOn, tagTypeColors, TAG_TYPES } from './co
  *    property needs to react to two controls, that is a design conversation,
  *    not a second `!important`.
  *
- * 2. **Every declaration carries `!important`.** Not defensive clutter: a user
- *    site skin loads with role "user", which means AO3's own stylesheets are
- *    still there and are full of ID- and class-scoped rules. `body {…}` loses
- *    to `#dashboard.own`, `h1 {…}` loses to `.heading`. `important()` below
- *    applies it structurally so nobody can forget.
+ * 2. **Every declaration carries `!important` — except where it would trample
+ *    an author.** The rule is not defensive clutter: a user site skin loads with
+ *    role "user", which means AO3's own stylesheets are still there and are full
+ *    of ID- and class-scoped rules. `body {…}` loses to `#dashboard.own`,
+ *    `h1 {…}` loses to `.heading`.
+ *
+ *    But AO3's chrome is not the only thing our selectors can reach. A **work
+ *    skin** is the author's own design, rendered in the page body — after our
+ *    stylesheet — and scoped by AO3 to `#workskin`. Shouting at it means a
+ *    reader's theme silently rewrites somebody's story layout, which is what
+ *    happened: see `Rule.authorWins` and plan §14. Rules that can land inside a
+ *    work are emitted quietly and win against AO3's defaults on specificity or
+ *    source order instead.
  *
  * The output is also the preview's stylesheet — see mockPage.ts. There is no
  * second rendering path that could disagree with this one.
@@ -29,6 +37,22 @@ import { mixHex, normalizeHex, readableOn, tagTypeColors, TAG_TYPES } from './co
 interface Rule {
   selectors: string[];
   decls: [property: string, value: string][];
+  /**
+   * Emit this rule **without** `!important`, so an author's work skin wins.
+   *
+   * The invariant above is right for AO3's chrome and wrong the moment a rule
+   * can land inside somebody's story. A work skin is rendered by
+   * `works/show.html.erb` **in the body**, after our stylesheet in `<head>`, and
+   * every one of its rules is `#workskin`-prefixed by AO3 itself. So an author
+   * beats us on both source order and specificity — *unless we shout*, and then
+   * we beat them on nothing but volume.
+   *
+   * Each rule marked here was checked against the AO3 default it still has to
+   * overcome, and wins that one on specificity or source order alone. The two
+   * questions are separate: "does our rule beat AO3's default" (yes, without
+   * `!important`) and "does it beat the author's" (no, deliberately).
+   */
+  authorWins?: true;
 }
 
 const TAG_SHAPE: Record<SiteSkinTheme['shape']['tagStyle'], { radius: string; border: boolean }> = {
@@ -107,9 +131,17 @@ function buildRules(theme: SiteSkinTheme): Rule[] {
 
   // Summaries and notes set their own font, so they need naming separately.
   // Code blocks are left alone on purpose.
+  //
+  // No `!important`, and it does not need one: AO3's font for these comes from
+  // `blockquote, pre, address { font: 1em … }` in 02-elements at (0,0,1), the
+  // same specificity as ours, and we load after it. `.userstuff blockquote` in
+  // 21-userstuff sets margins and a border but no font at all. What the missing
+  // `!important` buys is that an author styling a blockquote inside their work
+  // — `#workskin blockquote.note`, (1,0,1), rendered later — keeps their font.
   rules.push({
     selectors: ['blockquote', 'address'],
     decls: [['font-family', theme.typography.bodyFont]],
+    authorWins: true,
   });
 
   // Mirrors AO3's own `h1, h2, h3, h4, h5, h6, .heading` selector. Without
@@ -214,12 +246,28 @@ function buildRules(theme: SiteSkinTheme): Rule[] {
   // `.listbox li.blurb` is deliberately absent: 11-group-listbox.css sets only
   // display and box-shadow there, so `li.blurb` already reaches those.
   rules.push({
-    selectors: ['li.blurb', '#dashboard', '#workskin'],
+    selectors: ['li.blurb', '#dashboard'],
     decls: [
       ['background-color', d.surface],
       ['border-color', d.border],
       ['border-radius', theme.shape.cardRadius],
     ],
+  });
+
+  // `#workskin` gets the same card treatment in its own rule, so it can be the
+  // one that yields. AO3's defaults paint it not at all — it is the container a
+  // work skin is scoped to — so no `!important` is needed to reach it, and
+  // leaving it off means an author who chose a background for their work keeps
+  // it. A reader still gets their card colour on every work that has no skin,
+  // which is nearly all of them.
+  rules.push({
+    selectors: ['#workskin'],
+    decls: [
+      ['background-color', d.surface],
+      ['border-color', d.border],
+      ['border-radius', theme.shape.cardRadius],
+    ],
+    authorWins: true,
   });
 
   // The footer is a card too, but AO3 tiles a red texture over it (§4.6).
@@ -340,13 +388,30 @@ function buildRules(theme: SiteSkinTheme): Rule[] {
   });
 
   // ── Details ─────────────────────────────────────────────────────────────
-  // Scoped to #chapters, not #workskin: `:first-of-type` matches once per
-  // PARENT, so an unscoped selector decorates the summary and every set of
-  // notes as well as the chapter (§4.1). #chapters covers both the
-  // multi-chapter `.userstuff.module` and the single-chapter `.userstuff`.
+  // **Direct children of the chapter body, and nothing deeper.** Both selectors
+  // below say `>` for the same reason, and it is the reason §4.1 existed
+  // already without going far enough:
+  //
+  // `:first-of-type` matches once per PARENT. Scoping to `#chapters .userstuff`
+  // keeps the drop cap off the summary and the notes, but the chapter body
+  // itself can contain hundreds of parents — because that is exactly what a
+  // WORK SKIN is. An author's chat mock-up, ours included, is nested divs each
+  // holding a `<p>`, so a descendant selector put a floated 4em capital on
+  // every bubble, every caption and every ad line in the work. Seen on a real
+  // AO3 page on 13 Aug 2026; see plan §14.
+  //
+  // The same argument applies to `hr`: an author using a rule inside their own
+  // markup should not have our ornament welded onto it.
+  //
+  // `>` degrades the right way. A prose chapter opens with a top-level `<p>`
+  // and still gets its capital; a chapter that opens with a work skin's
+  // container gets nothing, which is the correct amount of our decoration to
+  // put inside someone else's design. Note `:first-child` would NOT do — AO3
+  // renders `<h3 class="landmark heading">Chapter Text</h3>` first, so the
+  // opening paragraph is never the first child.
   if (theme.details.divider) {
     rules.push({
-      selectors: ['#chapters .userstuff hr'],
+      selectors: ['#chapters .userstuff > hr'],
       decls: [
         // Longhands, not `border: 0` followed by `border-top`. AO3 parses our
         // CSS with the css_parser gem before storing it, and relying on
@@ -362,9 +427,12 @@ function buildRules(theme: SiteSkinTheme): Rule[] {
         ['overflow', 'visible'],
         ['text-align', 'center'],
       ],
+      // Beats AO3's `.userstuff hr` (0,1,1) with (0,2,2) and no `!important`.
+      // Loses to an author's `#workskin hr` (1,0,1), which is the point.
+      authorWins: true,
     });
     rules.push({
-      selectors: ['#chapters .userstuff hr::after'],
+      selectors: ['#chapters .userstuff > hr::after'],
       decls: [
         ['background-color', d.surface],
         ['color', d.accent],
@@ -375,12 +443,13 @@ function buildRules(theme: SiteSkinTheme): Rule[] {
         ['position', 'relative'],
         ['top', '-0.75em'],
       ],
+      authorWins: true,
     });
   }
 
   if (theme.details.dropCap) {
     rules.push({
-      selectors: ['#chapters .userstuff p:first-of-type::first-letter'],
+      selectors: ['#chapters .userstuff > p:first-of-type::first-letter'],
       decls: [
         ['color', d.accent],
         ['float', 'left'],
@@ -389,6 +458,9 @@ function buildRules(theme: SiteSkinTheme): Rule[] {
         ['line-height', '0.8'],
         ['padding', '0.1em 0.12em 0 0'],
       ],
+      // Nothing in AO3's defaults styles ::first-letter, so there is nothing to
+      // shout over — and an author we do still reach keeps the power to override.
+      authorWins: true,
     });
   }
 
@@ -398,8 +470,11 @@ function buildRules(theme: SiteSkinTheme): Rule[] {
 function serialize(rules: Rule[]): string {
   return rules
     .map(rule => {
+      // `!important` unless the rule can land inside somebody's story — see
+      // Rule.authorWins. Applied structurally either way, so nobody can forget.
+      const bang = rule.authorWins ? '' : ' !important';
       const body = rule.decls
-        .map(([property, value]) => `  ${property}: ${value} !important;`)
+        .map(([property, value]) => `  ${property}: ${value}${bang};`)
         .join('\n');
       return `${rule.selectors.join(',\n')} {\n${body}\n}`;
     })

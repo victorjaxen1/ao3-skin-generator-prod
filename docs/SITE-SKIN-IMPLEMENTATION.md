@@ -247,6 +247,10 @@ the default) and `override` ("replace archive skin entirely"). At role `user`,
 
 Two consequences, and they drive everything in §4b:
 
+> **§14b limits the `!important` rule below to AO3's own chrome.** A work skin is
+> rendered *after* our stylesheet and is `#workskin`-prefixed, so shouting at it
+> overrides the author. Six selectors are now emitted quietly for that reason.
+
 - **Source order favours us on ties, specificity does not.** AO3's defaults are
   full of ID- and class-scoped rules — `#dashboard.own`, `#header .heading a`,
   `.blurb h4 a:link`, `h1,…,h6,.heading`. A bare `body {…}` or `h1 {…}` from us
@@ -268,6 +272,11 @@ CSS and our skin becomes unstyled HTML.
 4.1–4.3 were found by reading `compileSkin()` against AO3's templates.
 4.4–4.8 were found by reading it against AO3's *stylesheets*, and 4.4 is the
 one that would have shipped a visibly broken skin.
+
+> **§14a corrects this section.** Scoping to `#chapters` is necessary and not
+> sufficient: the chapter body has parents of its own whenever it contains a work
+> skin, and `:first-of-type` matches once per parent. Both details rules now use
+> a child combinator. Read §14 before touching either selector.
 
 **4.1 The drop cap lands on summaries and notes, not just the chapter.**
 `#workskin p:first-of-type::first-letter` (prototype line 533).
@@ -375,7 +384,8 @@ Derived values, all resolved to literal 6-digit hex before emission:
 | --- | --- | --- |
 | `colors.background` | `body` | `background-color` |
 | `colors.text` | `body` | `color` |
-| `colors.surface` | `li.blurb`, `#dashboard`, `#workskin` | `background-color`, `color` |
+| `colors.surface` | `li.blurb`, `#dashboard` | `background-color`, `color` |
+| `colors.surface` | `#workskin` | its own rule, and the one that yields to an author — §14b |
 | `colors.surface` | `#footer` | `background-color`, `background-image: none`, `color` — 4.6 |
 | `colors.text` | `#footer .heading`, `#footer button`, `#dashboard span` | `color` — 4.6, 4.7 |
 | `colors.accent` | `#header` | `background-color`, `border-color` (`headerDeep`) |
@@ -396,8 +406,8 @@ Derived values, all resolved to literal 6-digit hex before emission:
 | `header.hideLogo` | `#header .logo` | `display: none` |
 | `header.textShadow` | `#header .heading a`, `#header .primary a` | `text-shadow`, using `headerShadow` |
 | `shape.tagColors` | `li.warnings a.tag` + `dd.warning a.tag`, and the same pair for `relationship`, `character`, `freeform` | `color`, and `border-color` when the tag shape has a border |
-| `details.divider` | `#chapters .userstuff hr` | `border-top`, `::after` glyph |
-| `details.dropCap` | `#chapters .userstuff p:first-of-type::first-letter` | `float`, `font-size`, `color` |
+| `details.divider` | `#chapters .userstuff > hr` | `border-top`, `::after` glyph — `>`, see §14a |
+| `details.dropCap` | `#chapters .userstuff > p:first-of-type::first-letter` | `float`, `font-size`, `color` — `>`, see §14a |
 | `details.scrollbar` | `::-webkit-scrollbar`, `-track`, `-thumb`, `-thumb:hover` | `width`/`height`, `background-color`, `border-radius` |
 | *(fixed, uncontrolled)* | `.notice`, `.comment_notice`, `.kudos_notice`, `ul.notes` | `color: #2a2a2a` — 4.8 |
 
@@ -1050,6 +1060,126 @@ No change to `ao3Css.ts`, no new value shapes, no new `url()`. All 270 unit
 tests pass, 19 site-skin browser tests pass against a local build, and the
 three new browser tests assert the *compiled CSS* changed, not that a switch
 moved.
+
+---
+
+## 14. The defect that shipped — a site skin vandalising a work skin
+
+**13 Aug 2026, found on a real AO3 page**, hours after Phase 9 deployed. A work
+using the conversation generator's own work skin, viewed by a reader with
+Moonlit Library on: **a floated 4em drop capital on every chat bubble, every
+caption and every footer line in the work.** The screenshot is
+`tester skn - Proverbialfun - No Fandom [Arc-mh.png`.
+
+Two separate mistakes, one visible and one structural. Both are the same
+misjudgement — treating "inside a work" as our territory.
+
+### 14a. `:first-of-type` matches once per parent, and a work skin is all parents
+
+`#chapters .userstuff p:first-of-type::first-letter` — the §4.1 selector, and
+§4.1 was **right about the mechanism and one level short on the scope**. It
+reasoned about the summary and the notes, which are siblings of the chapter, and
+concluded that scoping to `#chapters` was enough. It is not: the chapter body
+itself contains as many parents as the author pasted into it, and a work skin is
+precisely a tree of nested divs each holding a `<p>`. Every one of them is a
+`:first-of-type` match.
+
+Fixed by scoping both details rules to **direct children**:
+
+```css
+#chapters .userstuff > p:first-of-type::first-letter { … }
+#chapters .userstuff > hr { … }
+```
+
+This degrades the right way. Prose opens with a top-level `<p>` and still gets
+its capital; a chapter that opens with a work skin's container gets nothing,
+which is the correct amount of our decoration to put inside someone else's
+design. **`:first-child` would not work** — AO3 renders
+`<h3 class="landmark heading">Chapter Text</h3>` first, so the opening paragraph
+is never the first child.
+
+The `hr` rule had the same latent bug and was fixed the same way: an author's own
+rule inside their markup no longer gets our ornament welded onto it.
+
+### 14b. `!important` on everything means we always beat the author
+
+The deeper one. §3b's argument for blanket `!important` is sound and is about
+**AO3's chrome** — `#dashboard.own` and friends outrank us on specificity. It
+says nothing about work skins, and nobody noticed that the same hammer lands on
+them:
+
+- AO3 renders a work skin **in the page body** — `works/show.html.erb` has
+  `<div id="work-skin"><%= render "works/work_skin" %></div>` — so it is *later*
+  in the document than our stylesheet in `<head>`.
+- AO3 prefixes every work-skin selector with `#workskin`, so the author carries
+  an ID we do not.
+
+The author therefore beats us on **both** source order and specificity — unless
+we shout, and then we beat them on nothing but volume. A reader's colour scheme
+was silently rewriting authors' layouts.
+
+`Rule.authorWins` now marks the rules that can land inside a work, and they are
+emitted **without** `!important`. Each was checked against the AO3 default it
+still has to overcome, and wins that on specificity or order alone:
+
+| Rule | Beats AO3's default because | Loses to |
+| --- | --- | --- |
+| `blockquote, address` | AO3's font comes from `blockquote, pre, address { font: 1em … }` at (0,0,1); ours is (0,0,1) and later. `.userstuff blockquote` sets margins and a border, no font | `#workskin blockquote.note` (1,0,1) |
+| `#workskin` | AO3 paints it not at all — it is only the container | the author's own `#workskin` rule, later in the document |
+| `#chapters .userstuff > hr` and `> hr::after` | (0,2,2) against `.userstuff hr` (0,1,1) | `#workskin hr` (1,0,1) |
+| `#chapters .userstuff > p:first-of-type::first-letter` | nothing in AO3 styles `::first-letter` | any `#workskin` rule the author writes |
+
+`#workskin` was split out of the `li.blurb, #dashboard` card rule so it could be
+the one that yields. A reader still gets their card colour on every work with no
+skin, which is nearly all of them.
+
+**What keeps its `!important`, deliberately.** Links, headings and the chrome
+regions. `a { color }` has to beat `.blurb h4 a:link` (0,2,1) or every work
+title in a listing stays AO3 red, and there is no way to win that without
+shouting. So a reader's link and heading colours do reach inside works. That is
+ordinary site-skin behaviour — it is what the reader asked for, it is what AO3's
+own skins do, and it changes colour rather than layout.
+
+### 14c. Why the preview did not catch it
+
+Because the preview contained no work skin. The Reading mock was clean prose,
+which is the one kind of chapter these selectors cannot hurt. §5's "one
+stylesheet, one truth" makes the preview honest about *our* CSS; it said nothing
+about the CSS underneath ours.
+
+Two changes, both permanent:
+
+- **The Reading mock now contains an author's work skin** — nested bubbles, a
+  caption, an author `<hr>`, and a deliberately opinionated Courier blockquote —
+  shaped like the conversation generator's output, since that is the work skin
+  most likely to be under one of our site skins.
+- **`mockDocument` now loads three stylesheets in AO3's real order**: AO3's
+  defaults, our compiled skin, then `AUTHOR_WORK_SKIN_CSS`. The third one is the
+  point. With the author's CSS in its real position, "does our skin trample the
+  author's work?" is a question you can answer by looking.
+
+Regression tests, both verified non-vacuous by reverting the fix and watching
+them fail: a browser test counts what the selectors actually reach in the DOM and
+reads `getComputedStyle(el, '::first-letter')` on both a chapter paragraph and a
+bubble paragraph (56px vs 14px before the fix), and asserts the author's Courier
+blockquote survives; a unit test enumerates the six author-wins selectors and
+pins that every other declaration still carries `!important`.
+
+### 14d. Fixed alongside, found in the same screenshot
+
+The header dropdown panel was visible in **every** preview state, sitting on top
+of the work in Reading. `AO3_BASE_CSS` had transcribed the rules that *show* an
+open menu but never the `display: none` that hides a closed one, so the
+`openDropdown` flag's "opens in Browse only" contract had been false since Phase
+3. Now transcribed.
+
+### What this says about the release gate
+
+Every one of these was invisible to 273 passing unit tests and to a preview that
+matched the export exactly, and visible within minutes of a real reader opening
+a real work. **The mock is a model of AO3, and a model of AO3 with no work skin
+in it was a model of the wrong page.** `docs/SITE-SKIN-AO3-CHECKLIST.md` gained a
+probe: P10, the drop cap and divider over a work that has its own work skin.
 
 ---
 
