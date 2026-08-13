@@ -129,22 +129,48 @@ test('iMessage group members stay distinct and old messages follow a rename', as
   await expect(senderOf('devi speaks')).toHaveText('Devi Rao');
 });
 
-test('WhatsApp group participant keeps its avatar through a rename', async ({ page }) => {
+test('people added before group mode stay in the iMessage group roster', async ({ page }) => {
+  await page.goto('/?platform=ios');
+
+  await page.getByRole('button', { name: 'Open people' }).click();
+  const sheet = page.getByRole('dialog', { name: 'People' });
+
+  await sheet.getByRole('button', { name: 'Add person' }).click();
+  await sheet.getByPlaceholder('Person name').fill('Casey');
+  await sheet.getByRole('button', { name: 'Add to this conversation' }).click();
+
+  await sheet.getByRole('button', { name: 'Add person' }).click();
+  await sheet.getByPlaceholder('Person name').fill('Samuel');
+  await sheet.getByRole('button', { name: 'Add to this conversation' }).click();
+
+  await expect(sheet.getByRole('button', { name: /Casey/ })).toBeVisible();
+  await expect(sheet.getByRole('button', { name: /Samuel/ })).toBeVisible();
+  await sheet.getByRole('switch', { name: 'Group chat mode' }).click();
+
+  const group = sheet.getByRole('heading', { name: 'People in the group' }).locator('..');
+  await expect(group.getByRole('button', { name: /Casey/ })).toBeVisible();
+  await expect(group.getByRole('button', { name: /Samuel/ })).toBeVisible();
+});
+
+test('WhatsApp group participant edits refresh old message names and avatars', async ({ page }) => {
   await page.goto('/?template=whatsapp-group-chat');
 
   const alexRow = page.locator('#workskin:visible [data-message-id]', { hasText: 'Anyone free for coffee tomorrow?' });
   const before = await alexRow.locator('.group-avatar').getAttribute('src');
   expect(before, 'the template participant should start with an avatar').toBeTruthy();
+  const replacementAvatar = '/assets/jordan-avatar.png';
 
   const sheet = page.getByRole('dialog', { name: 'People' });
   await page.getByRole('button', { name: 'Open people' }).click();
   await sheet.getByRole('button', { name: /^Alex/ }).click();
   await sheet.getByPlaceholder('Person name').fill('Alexis');
+  await sheet.getByLabel('Avatar image address').fill(replacementAvatar);
   await sheet.getByRole('button', { name: 'Save changes' }).click();
   await sheet.getByRole('button', { name: 'Close' }).click();
 
   await expect(alexRow.locator('.group-sender')).toHaveText('Alexis');
-  await expect(alexRow.locator('.group-avatar')).toHaveAttribute('src', before!);
+  await expect(alexRow.locator('.group-avatar')).toHaveAttribute('src', replacementAvatar);
+  expect(replacementAvatar).not.toBe(before);
 });
 
 test('two Twitter accounts with the same display name remain separate identities', async ({ page }) => {

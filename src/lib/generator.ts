@@ -299,47 +299,48 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
   const isGroupMode = (template === 'android' && project.settings.androidGroupMode) ||
                        (template === 'ios' && project.settings.iosGroupMode);
   
-  // Auto-match participantId if not set but we're in group mode
+  // Resolve the participant from the stable scene identity first. Messages
+  // written before group mode was enabled have a characterId but no
+  // participantId, and their stamped sender name can become stale after an
+  // edit. The old id/name paths remain as compatibility fallbacks.
   let participantId = msg.participantId;
   const groupParticipants = template === 'android'
     ? project.settings.androidGroupParticipants
     : project.settings.iosGroupParticipants;
-  
-  if (isGroupMode && !msg.outgoing && !participantId && groupParticipants) {
-    // Try to match by sender name to participant name
-    const matchedParticipant = groupParticipants.find(
-      p => p.name.toLowerCase() === msg.sender.toLowerCase()
-    );
-    if (matchedParticipant) {
-      participantId = matchedParticipant.id;
-    }
-  }
+
+  const participant = isGroupMode && !msg.outgoing
+    ? groupParticipants?.find(entry => !!msg.characterId && entry.characterId === msg.characterId)
+      || groupParticipants?.find(entry => entry.id === participantId)
+      || groupParticipants?.find(entry => entry.name.toLowerCase() === msg.sender.toLowerCase())
+    : undefined;
+  if (participant) participantId = participant.id;
   
   const showSenderName = isGroupMode && !msg.outgoing && participantId;
   
   let senderNameHTML = '';
   if (showSenderName) {
-    // Find participant to get avatar and color
-    const participant = groupParticipants?.find(p => p.id === participantId);
-    
     if (participant) {
+      // Identity fields come from the canonical scene character so edits apply
+      // retroactively. The participant binding owns only group-specific colour.
+      const displayName = resolvedIdentity.name;
+      const displayAvatar = resolvedIdentity.avatarUrl;
       // Build avatar or initials with inline styles for maximum specificity
       let avatarHTML = '';
-      if (participant.avatarUrl) {
+      if (displayAvatar) {
         // The width/height ATTRIBUTES are the ones that matter on AO3: `style`
         // is on no allowed-attribute list, so the sanitizer strips it silently
         // and the inline sizing below never reaches the archive at all.
-        avatarHTML = `<img src="${sanitizeUrl(participant.avatarUrl)}" alt="${sanitizeAttribute(participant.name)}" class="group-avatar" width="20" height="20" style="width:20px;height:20px;border-radius:50%;object-fit:cover;flex-shrink:0;display:block !important;" />`;
+        avatarHTML = `<img src="${sanitizeUrl(displayAvatar)}" alt="${sanitizeAttribute(displayName)}" class="group-avatar" width="20" height="20" style="width:20px;height:20px;border-radius:50%;object-fit:cover;flex-shrink:0;display:block !important;" />`;
       } else {
         // Generate initials (first 2 chars of name)
-        const initials = participant.name.substring(0, 2).toUpperCase();
+        const initials = displayName.substring(0, 2).toUpperCase();
         const participantColor = safeCssColor(participant.color, '#777777');
         avatarHTML = `<div class="group-avatar-initials" style="width:20px;height:20px;border-radius:50%;display:flex !important;align-items:center;justify-content:center;font-size:8px;font-weight:700;flex-shrink:0;background-color:${participantColor}20;color:${participantColor};">${sanitizeText(initials)}</div>`;
       }
       
       // Use roleColor from message or fall back to participant color
       const displayColor = safeCssColor(msg.roleColor, safeCssColor(participant.color, '#777777'));
-      senderNameHTML = `<div class="group-sender-row" style="display:flex !important;align-items:center;gap:6px;margin-bottom:4px;visibility:visible !important;">${avatarHTML}<div class="group-sender" style="color: ${displayColor};">${sanitizeText(participant.name)}</div></div>`;
+      senderNameHTML = `<div class="group-sender-row" style="display:flex !important;align-items:center;gap:6px;margin-bottom:4px;visibility:visible !important;">${avatarHTML}<div class="group-sender" style="color: ${displayColor};">${sanitizeText(displayName)}</div></div>`;
     }
   }
   

@@ -8,6 +8,7 @@ import {
   migrateProjectIdentities,
   normalizeTwitterHandle,
   resolveMessageIdentity,
+  syncChatGroupParticipants,
   updateSceneCharacter,
 } from '../src/lib/identity';
 import { validateCharacterLibrary } from '../src/lib/characterStorage';
@@ -135,6 +136,64 @@ test.describe('scene identities', () => {
 
     expect(archived.cast!.characters.find(entry => entry.id === character.id)?.archived).toBe(true);
     expect(resolveMessageIdentity(archived, archived.messages[1]).name).toBe('B');
+  });
+
+  test('turning a two-person chat into a group enrolls every added person and drops removed people', () => {
+    let project = migrateProjectIdentities(defaultProject());
+    const contactId = project.cast!.contactId!;
+    project = updateSceneCharacter(project, contactId, { name: 'Casey' });
+    project = copyLibraryCharacterToScene(project, { id: 'library-samuel', name: 'Samuel', usageCount: 0 });
+    project = syncChatGroupParticipants(project);
+
+    expect(project.settings.iosGroupParticipants?.map(participant => participant.name)).toEqual(['Casey', 'Samuel']);
+    expect(new Set(project.settings.iosGroupParticipants?.map(participant => participant.characterId))).toEqual(
+      new Set([contactId, project.cast!.characters.find(character => character.name === 'Samuel')!.id])
+    );
+
+    const samuelId = project.cast!.characters.find(character => character.name === 'Samuel')!.id;
+    project = archiveOrReassignCharacter({
+      ...project,
+      settings: {
+        ...project.settings,
+        iosGroupParticipants: project.settings.iosGroupParticipants?.filter(participant => participant.characterId !== samuelId),
+      },
+    }, samuelId);
+    project = syncChatGroupParticipants(project);
+
+    expect(project.settings.iosGroupParticipants?.map(participant => participant.name)).toEqual(['Casey']);
+  });
+
+  test('an old chat message follows later character name and avatar edits in group output', () => {
+    let project = migrateProjectIdentities(defaultProject());
+    const contactId = project.cast!.contactId!;
+    project = updateSceneCharacter(project, contactId, { name: 'Casey' });
+    project = {
+      ...project,
+      settings: { ...project.settings, iosGroupMode: true },
+      messages: [{
+        id: 'before-group-mode',
+        sender: 'Casey',
+        content: 'This message already existed',
+        outgoing: false,
+        characterId: contactId,
+        // Deliberately absent: one-to-one messages predate participant binding.
+        participantId: undefined,
+      }],
+    };
+    project = syncChatGroupParticipants(project);
+    project = updateSceneCharacter(project, contactId, {
+      name: 'Casey Jones',
+      avatarUrl: '/assets/casey-avatar.png',
+    });
+
+    const html = buildHTML(project);
+    expect(resolveMessageIdentity(project, project.messages[0])).toMatchObject({
+      name: 'Casey Jones',
+      avatarUrl: '/assets/casey-avatar.png',
+    });
+    expect(html).toContain('class="group-avatar"');
+    expect(html).toContain('src="/assets/casey-avatar.png"');
+    expect(html).toContain('>Casey Jones</div>');
   });
 
   test('instantiates isolated Twitter templates whose main posts follow the primary account', () => {

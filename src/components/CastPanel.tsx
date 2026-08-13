@@ -8,6 +8,7 @@ import {
   copyLibraryCharacterToScene,
   normalizeTwitterHandle,
   resolveIdentityTarget,
+  syncChatGroupParticipants,
   updateSceneCharacter,
 } from '../lib/identity';
 import { SceneCharacter, SkinProject, UniversalCharacter } from '../lib/schema';
@@ -190,9 +191,17 @@ export const CastPanel: React.FC<Props> = ({
       const id = previous.cast?.selfId;
       return id ? updateSceneCharacter(previous, id, draft) : addSceneCharacter(previous, draft, 'self');
     }
-    if (!isGroup || role === 'contact') {
+    if (!isGroup && role === 'contact') {
+      const configuredContactName = previous.template === 'ios'
+        ? previous.settings.iosContactName || previous.settings.chatContactName
+        : previous.settings.androidContactName || previous.settings.chatContactName;
       const id = previous.cast?.contactId;
-      return id ? updateSceneCharacter(previous, id, draft) : addSceneCharacter(previous, draft, 'contact');
+      // The first person replaces the blank/default contact. Once that contact
+      // has been explicitly named, later additions are distinct people waiting
+      // to join the group rather than replacements for the current contact.
+      if (!configuredContactName?.trim()) {
+        return id ? updateSceneCharacter(previous, id, draft) : addSceneCharacter(previous, draft, 'contact');
+      }
     }
     const withCharacter = addSceneCharacter(previous, draft, 'participant');
     const character = withCharacter.cast?.characters[withCharacter.cast.characters.length - 1];
@@ -313,6 +322,17 @@ export const CastPanel: React.FC<Props> = ({
     }));
   };
 
+  const updateGroupMode = (value: boolean) => {
+    onChangeProject(previous => {
+      const key = previous.template === 'ios' ? 'iosGroupMode' : 'androidGroupMode';
+      const updated = {
+        ...previous,
+        settings: { ...previous.settings, [key]: value },
+      };
+      return value ? syncChatGroupParticipants(updated) : updated;
+    });
+  };
+
   const overview = () => {
     const cast = project.cast?.characters || [];
     const self = cast.find(character => character.id === project.cast?.selfId);
@@ -322,6 +342,11 @@ export const CastPanel: React.FC<Props> = ({
       const character = cast.find(entry => entry.id === participant.characterId);
       return character ? [{ character, participant }] : [];
     });
+    const otherPeople = cast.filter(character =>
+      character.id !== self?.id
+      && character.id !== contact?.id
+      && !character.archived
+    );
     const otherAccounts = cast.filter(character => character.id !== primary?.id && !character.archived);
 
     const row = (character: SceneCharacter, target: IdentityTarget, label?: string, color?: string) => (
@@ -356,6 +381,9 @@ export const CastPanel: React.FC<Props> = ({
               <h3 className="text-xs font-semibold uppercase tracking-wide text-stone-400">Conversation identities</h3>
               {self && row(self, { kind: 'self' }, 'You')}
               {!isGroup && contact && row(contact, { kind: 'contact' }, 'Contact')}
+              {!isGroup && otherPeople.map(character =>
+                row(character, { kind: 'character', id: character.id }, 'Added to this conversation')
+              )}
             </section>
 
             <section className="space-y-3 rounded-xl border border-stone-200 p-3">
@@ -364,7 +392,7 @@ export const CastPanel: React.FC<Props> = ({
               <ToggleRow
                 label="Group chat mode"
                 checked={isGroup}
-                onChange={value => updateSimpleSetting(project.template === 'ios' ? 'iosGroupMode' : 'androidGroupMode', value)}
+                onChange={updateGroupMode}
               />
               {isGroup && (
                 <>

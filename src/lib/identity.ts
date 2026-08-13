@@ -9,6 +9,8 @@ import {
 
 export type SceneCharacterRole = 'self' | 'contact' | 'participant' | 'account';
 
+const GROUP_PARTICIPANT_COLORS = ['#FF5733', '#33A1FF', '#33FF57', '#FF33A1', '#FFC733', '#8B33FF'];
+
 export interface SceneCharacterDraft {
   name: string;
   avatarUrl?: string;
@@ -218,6 +220,61 @@ export function addSceneCharacter(
   if (role === 'contact') cast.contactId = character.id;
   if (role === 'account' && !cast.twitterPrimaryId) cast.twitterPrimaryId = character.id;
   return syncBoundLegacyFields({ ...project, cast }, character);
+}
+
+/**
+ * Reconcile the active chat platform's group roster with its project cast.
+ *
+ * People can be added while a conversation is still one-to-one. Turning group
+ * mode on must not leave those scene identities stranded outside the legacy
+ * participant array used by the composer and renderer. Existing bindings keep
+ * their ids and colours so old messages remain stable; archived/deleted people
+ * leave the new-message roster.
+ */
+export function syncChatGroupParticipants(project: SkinProject): SkinProject {
+  if (project.template !== 'ios' && project.template !== 'android') return project;
+
+  const field = project.template === 'ios' ? 'iosGroupParticipants' : 'androidGroupParticipants';
+  const existing = project.settings[field] || [];
+  const eligibleCharacters = (project.cast?.characters || []).filter(character =>
+    character.id !== project.cast?.selfId && !character.archived
+  );
+  const usedParticipantIds = new Set(existing.map(participant => participant.id));
+  let added = 0;
+
+  const participants = eligibleCharacters.map(character => {
+    const current = existing.find(participant => participant.characterId === character.id);
+    if (current) {
+      return {
+        ...current,
+        name: character.name,
+        avatarUrl: character.avatarUrl,
+      };
+    }
+
+    const baseId = `p-${character.id}`;
+    let id = baseId;
+    let suffix = 2;
+    while (usedParticipantIds.has(id)) id = `${baseId}-${suffix++}`;
+    usedParticipantIds.add(id);
+    const participant: GroupParticipant = {
+      id,
+      characterId: character.id,
+      name: character.name,
+      avatarUrl: character.avatarUrl,
+      color: GROUP_PARTICIPANT_COLORS[(existing.length + added) % GROUP_PARTICIPANT_COLORS.length],
+    };
+    added += 1;
+    return participant;
+  });
+
+  return {
+    ...project,
+    settings: {
+      ...project.settings,
+      [field]: participants,
+    },
+  };
 }
 
 export function copyLibraryCharacterToScene(
