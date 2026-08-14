@@ -30,7 +30,10 @@ import { richProject } from './_ao3-render';
 async function readAsPlainHtml(page: import('@playwright/test').Page, html: string) {
   await page.setContent(
     `<!doctype html><meta charset="utf-8"><body><div id="workskin">${html}</div></body>`,
-    { waitUntil: 'load' }
+    // Plain-reading assertions need parsed markup, not completion of arbitrary
+    // remote image requests embedded in a fixture. Waiting for `load` made this
+    // deterministic test depend on external hosts.
+    { waitUntil: 'domcontentloaded' }
   );
   return page.evaluate(() => (document.querySelector('#workskin') as HTMLElement).innerText);
 }
@@ -122,4 +125,80 @@ test('a tweet says who tweeted and what the counts mean', async ({ page }) => {
   expect(read).toMatch(/156 replies/);
   expect(read).toMatch(/89 retweets/);
   expect(read).toMatch(/847 likes/);
+});
+
+/**
+ * Every iOS structured block, read with no CSS at all.
+ *
+ * The point of the collage rule in §3.4 is exactly this rendering: Apple hides
+ * extra photos behind a stack you tap, and a download has nothing to tap — so
+ * three of four descriptions would simply be gone. Same reasoning for the link
+ * URL, the voice transcript, and the media source links.
+ */
+test('an iMessage scene explains every structured block with no CSS', async ({ page }) => {
+  const p = richProject('ios');
+  p.settings.iosGroupMode = true;
+  p.settings.iosGroupName = 'Night Shift';
+  p.settings.iosGroupParticipants = [
+    { id: 'p1', name: 'Alex', color: '#c8102e', iosTone: 'red' },
+  ] as never;
+  p.messages = [
+    { id: 'date', sender: '', content: '', outgoing: false, iosEvent: { kind: 'date', text: 'Today' } },
+    { id: 'a', sender: 'Alex', participantId: 'p1', content: 'The side door is open.', outgoing: false, timestamp: '22:14' },
+    { id: 'b', sender: 'You', content: 'Checking now.', outgoing: true, timestamp: '22:16', iosReply: { messageId: 'a' } },
+    { id: 'photos', sender: 'You', content: 'Four views.', outgoing: true, timestamp: '22:17',
+      attachments: [1, 2, 3, 4].map(i => ({ type: 'image', url: `https://example.com/d${i}.png`, alt: `Door view ${i}` })) },
+    { id: 'link', sender: 'Alex', participantId: 'p1', content: 'Log here.', outgoing: false, timestamp: '22:18',
+      iosLinkPreview: { url: 'https://example.com/log', title: 'Access log', siteName: 'example.com', description: 'Recent entries.' } },
+    { id: 'voice', sender: 'Alex', participantId: 'p1', content: '', outgoing: false, timestamp: '22:19',
+      iosMedia: { kind: 'audio', url: 'https://example.com/note.mp3', mimeType: 'audio/mpeg', duration: '0:08', transcript: 'The latch moved.' } },
+    { id: 'video', sender: 'You', content: '', outgoing: true, timestamp: '22:20', iosTapbacks: [{ emoji: '😮', count: 2 }],
+      iosMedia: { kind: 'video', source: 'youtube', url: 'https://youtu.be/XlcK4VYSWZk', title: 'Door camera', duration: '0:12', description: 'The door swings in.' } },
+    { id: 'system', sender: '', content: '', outgoing: false, iosEvent: { kind: 'system', text: 'Alex named the conversation Night Shift' } },
+  ] as typeof p.messages;
+
+  const html = buildWorkSkin(p).html;
+  const read = (await readAsPlainHtml(page, html)).replace(/\s+/g, ' ');
+
+  // Events read as narration, not as something someone said.
+  expect(read).toContain('Today');
+  expect(read).toContain('Alex named the conversation Night Shift');
+
+  // A group speaker is named once per row. The visible group name is real text
+  // here, so emitting the hidden "Alex: " label as well produced the three-names
+  // -for-one-speaker reading found on a real posted work (§16b): the label, the
+  // monogram, and the name, stacked.
+  expect(read).toContain('Alex The side door is open.');
+  expect(read).not.toContain('Alex: AL');
+  expect(read).not.toMatch(/Alex:\s*Alex/);
+  // The reply quote repeats the excerpt on purpose — that is what makes the
+  // reply legible with no CSS — so the phrase appears twice in the scene, once
+  // as the original and once inside the quote.
+  expect(read).toContain('You: Replying to Alex The side door is open.');
+  expect(read.match(/The side door is open\./g)).toHaveLength(2);
+
+  // All four descriptions survive, not just the top of a stack.
+  //
+  // Asserted on the markup rather than on innerText: an EPUB reader and a
+  // screen reader both get the alt attribute, but whether Chrome has *painted*
+  // placeholder text for a broken image depends on when the load failed, and
+  // this page is deliberately rendered without network. Reading innerText here
+  // would make a deterministic test depend on external hosts — the same trap
+  // that made two identical Google renders differ by 6.69px.
+  for (const i of [1, 2, 3, 4]) expect(html, `image ${i}`).toContain(`alt="Door view ${i}"`);
+
+  // The link card keeps its destination readable.
+  expect(read).toContain('Access log');
+  expect(read).toContain('Recent entries.');
+  expect(read).toContain('https://example.com/log');
+
+  // Media is described rather than merely linked.
+  expect(read).toContain('Transcript: The latch moved.');
+  expect(read).toContain('Audio source');
+  expect(read).toContain('Door camera');
+  expect(read).toContain('The door swings in.');
+  expect(read).toContain('Video source');
+
+  // Tapbacks are named, not left as a bare emoji with no context.
+  expect(read).toContain('Tapbacks: 😮 2');
 });

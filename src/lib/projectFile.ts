@@ -1,4 +1,4 @@
-import { defaultProject, GroupParticipant, Message, SceneCast, SceneCharacter, SkinProject, SkinSettings, TwitterActivity, TwitterCharacter, TwitterPoll, TwitterQuotePost, TwitterTranslation, TwitterVideo, UniversalCharacter } from './schema';
+import { defaultProject, GroupParticipant, IOSLinkPreview, IOSMedia, IOSParticipantTone, IOSTapback, Message, SceneCast, SceneCharacter, SkinProject, SkinSettings, TwitterActivity, TwitterCharacter, TwitterPoll, TwitterQuotePost, TwitterTranslation, TwitterVideo, UniversalCharacter, WhatsAppLinkPreview, WhatsAppMedia, WhatsAppParticipantTone, WhatsAppReaction } from './schema';
 import { validateCharacterLibrary } from './characterStorage';
 import { migrateProjectIdentities, normalizeTwitterHandle } from './identity';
 import {
@@ -15,8 +15,10 @@ import {
 import { checkAo3ImageUrl } from './siteSkin/ao3Css';
 import { DEFAULT_TEMPLATE, cloneTheme } from './siteSkin/templates';
 import { getTwitterPollError, migrateTwitterProject, validateTwitterRelationships, validateTwitterVideo } from './twitter';
+import { normalizeWhatsAppReactions, validateWhatsAppMedia, validateWhatsAppMessage, WHATSAPP_TONE_IDS } from './whatsapp';
+import { IOS_AUDIO_MIME_TYPES, IOS_TONE_IDS, IOS_VIDEO_MIME_TYPES, normalizeIOSTapbacks, validateIOSMedia, validateIOSMessage } from './ios';
 
-export const PROJECT_FILE_SCHEMA_VERSION = 4;
+export const PROJECT_FILE_SCHEMA_VERSION = 7;
 export const PROJECT_FILE_MAX_BYTES = 2 * 1024 * 1024;
 export const APPLICATION_VERSION = '0.1.0';
 
@@ -65,7 +67,34 @@ export interface SceneProjectFileV4 {
   characterLibrary: UniversalCharacter[];
 }
 
-export type SceneProjectFile = SceneProjectFileV4;
+export interface SceneProjectFileV5 {
+  format: 'ao3skingen-project';
+  schemaVersion: 5;
+  exportedAt: string;
+  application: { name: 'AO3 SkinGen'; version: string };
+  project: SkinProject;
+  characterLibrary: UniversalCharacter[];
+}
+
+export interface SceneProjectFileV6 {
+  format: 'ao3skingen-project';
+  schemaVersion: 6;
+  exportedAt: string;
+  application: { name: 'AO3 SkinGen'; version: string };
+  project: SkinProject;
+  characterLibrary: UniversalCharacter[];
+}
+
+export interface SceneProjectFileV7 {
+  format: 'ao3skingen-project';
+  schemaVersion: 7;
+  exportedAt: string;
+  application: { name: 'AO3 SkinGen'; version: string };
+  project: SkinProject;
+  characterLibrary: UniversalCharacter[];
+}
+
+export type SceneProjectFile = SceneProjectFileV7;
 
 export interface SiteThemeFileV1 {
   format: 'ao3skingen-site-theme';
@@ -103,11 +132,13 @@ const STRING_SETTING_KEYS = new Set<keyof SkinSettings>([
   'iosStatusBarTime', 'iosInputPlaceholder', 'iosHeaderImageUrl', 'iosFooterImageUrl',
   'iosAvatarUrl', 'androidStatusText', 'androidHeaderImageUrl', 'androidFooterImageUrl',
   'androidAvatarUrl', 'androidContactName', 'androidGroupName',
+  'androidGroupSubtitleText', 'androidWallpaperUrl',
 ]);
 const URL_SETTING_KEYS = new Set<keyof SkinSettings>([
   'twitterAvatarUrl', 'twitterQuoteAvatar', 'twitterQuoteImage', 'iosHeaderImageUrl',
   'iosFooterImageUrl', 'iosAvatarUrl', 'androidHeaderImageUrl', 'androidFooterImageUrl',
   'androidAvatarUrl',
+  'androidWallpaperUrl',
 ]);
 const BOOLEAN_SETTING_KEYS = new Set<keyof SkinSettings>([
   'useDarkNeutral', 'fictionLabel', 'toolAttribution', 'watermark', 'twitterVerified',
@@ -116,9 +147,11 @@ const BOOLEAN_SETTING_KEYS = new Set<keyof SkinSettings>([
   'iosDarkMode', 'iosShowReadReceipt', 'iosAutoAlternate', 'iosGroupMode',
   'iosShowStatusBar', 'iosShowInputBar', 'androidShowStatus', 'androidCheckmarks',
   'androidDarkMode', 'androidAutoAlternate', 'androidGroupMode',
+  'androidScrollable', 'iosScrollable',
 ]);
 const NUMBER_SETTING_KEYS = new Set<keyof SkinSettings>([
   'bubbleOpacity', 'maxWidthPx', 'twitterLikes', 'twitterRetweets', 'twitterReplies',
+  'androidViewportHeightEm', 'iosViewportHeightEm',
 ]);
 
 function object(value: unknown, label: string): Record<string, unknown> {
@@ -190,6 +223,21 @@ function httpsUrl(value: unknown, label: string, required = false): string {
   invalid(`${label} must be an absolute HTTPS address.`);
 }
 
+/**
+ * A YouTube poster is an optional override, never the source of the player.
+ * Discard an unfinished override so project backups and automatic thumbnails
+ * keep working while the author edits that field.
+ */
+function optionalYouTubePoster(value: unknown): string {
+  if (typeof value !== 'string' || !value.trim() || /[<>]/.test(value)) return '';
+  try {
+    const parsed = new URL(value.trim());
+    return parsed.protocol === 'https:' ? value.trim().slice(0, 2048) : '';
+  } catch {
+    return '';
+  }
+}
+
 function validateTwitterQuote(value: unknown, label: string): TwitterQuotePost {
   const raw = object(value, label);
   const attachments = raw.attachments === undefined
@@ -212,11 +260,16 @@ function validateTwitterQuote(value: unknown, label: string): TwitterQuotePost {
 function validateTwitterVideoModel(value: unknown, label: string): TwitterVideo {
   const raw = object(value, label);
   if (raw.source !== 'youtube' && raw.source !== 'direct') invalid(`${label} source must be youtube or direct.`);
+  const posterUrl = raw.source === 'youtube'
+    ? optionalYouTubePoster(raw.posterUrl)
+    : typeof raw.posterUrl === 'string' && raw.posterUrl
+      ? httpsUrl(raw.posterUrl, `${label} poster`)
+      : '';
   const result: TwitterVideo = {
     source: raw.source,
     url: httpsUrl(raw.url, `${label} URL`, true),
     title: string(raw.title, `${label} title`, 200),
-    ...(typeof raw.posterUrl === 'string' && raw.posterUrl ? { posterUrl: httpsUrl(raw.posterUrl, `${label} poster`) } : {}),
+    ...(posterUrl ? { posterUrl } : {}),
     ...(typeof raw.duration === 'string' ? { duration: string(raw.duration, `${label} duration`, 30) } : {}),
     ...(typeof raw.description === 'string' ? { description: string(raw.description, `${label} description`, 2_000) } : {}),
     ...(typeof raw.mimeType === 'string' ? { mimeType: string(raw.mimeType, `${label} MIME type`, 100) } : {}),
@@ -279,6 +332,147 @@ function validateTwitterActivityModel(value: unknown, label: string): TwitterAct
   };
 }
 
+function validateWhatsAppLinkModel(value: unknown, label: string): WhatsAppLinkPreview {
+  const raw = object(value, label);
+  const image = raw.image === undefined ? undefined : validateAttachment(raw.image, 0);
+  return {
+    url: httpsUrl(raw.url, `${label} URL`, true),
+    title: string(raw.title, `${label} title`, 200, true),
+    ...(typeof raw.siteName === 'string' ? { siteName: string(raw.siteName, `${label} site name`, 100) } : {}),
+    ...(typeof raw.description === 'string' ? { description: string(raw.description, `${label} description`, 500) } : {}),
+    ...(image ? { image } : {}),
+  };
+}
+
+function validateWhatsAppMediaModel(value: unknown, label: string): WhatsAppMedia {
+  const raw = object(value, label);
+  const url = httpsUrl(raw.url, `${label} URL`, true);
+  if (raw.kind === 'audio') {
+    if (!['audio/mpeg', 'audio/ogg', 'audio/wav', 'audio/mp4'].includes(String(raw.mimeType))) invalid(`${label} audio type is unsupported.`);
+    return { kind: 'audio', url, mimeType: raw.mimeType as Extract<WhatsAppMedia, { kind: 'audio' }>['mimeType'], ...(typeof raw.duration === 'string' ? { duration: string(raw.duration, `${label} duration`, 30) } : {}), ...(typeof raw.transcript === 'string' ? { transcript: string(raw.transcript, `${label} transcript`, 10_000) } : {}) };
+  }
+  if (raw.kind !== 'video' || (raw.source !== 'youtube' && raw.source !== 'direct')) invalid(`${label} video source must be youtube or direct.`);
+  const posterUrl = raw.source === 'youtube'
+    ? optionalYouTubePoster(raw.posterUrl)
+    : typeof raw.posterUrl === 'string' && raw.posterUrl
+      ? httpsUrl(raw.posterUrl, `${label} poster`)
+      : '';
+  const common = {
+    ...(posterUrl ? { posterUrl } : {}),
+    ...(typeof raw.duration === 'string' ? { duration: string(raw.duration, `${label} duration`, 30) } : {}),
+    ...(typeof raw.description === 'string' ? { description: string(raw.description, `${label} description`, 2_000) } : {}),
+  };
+  if (raw.source === 'youtube') {
+    const result: WhatsAppMedia = { kind: 'video', source: 'youtube', url, ...common };
+    const issue = validateWhatsAppMedia(result)[0];
+    if (issue) invalid(`${label}: ${issue}`);
+    return result;
+  }
+  if (!['video/mp4', 'video/webm', 'video/ogg'].includes(String(raw.mimeType))) invalid(`${label} video type is unsupported.`);
+  const captionTrackUrl = typeof raw.captionTrackUrl === 'string' && raw.captionTrackUrl ? httpsUrl(raw.captionTrackUrl, `${label} caption track`) : '';
+  const captionLanguage = typeof raw.captionLanguage === 'string' ? string(raw.captionLanguage, `${label} caption language`, 40) : '';
+  const captionLabel = typeof raw.captionLabel === 'string' ? string(raw.captionLabel, `${label} caption label`, 100) : '';
+  if (!!captionTrackUrl !== !!captionLanguage || !!captionTrackUrl !== !!captionLabel) invalid(`${label} caption URL, language, and label must be provided together.`);
+  return {
+    kind: 'video', source: 'direct', url, mimeType: raw.mimeType as 'video/mp4' | 'video/webm' | 'video/ogg',
+    ...common,
+    ...(captionTrackUrl ? { captionTrackUrl, captionLanguage, captionLabel } : {}),
+  };
+}
+
+function validateWhatsAppReactionsModel(value: unknown, label: string): WhatsAppReaction[] {
+  if (!Array.isArray(value)) invalid(`${label} must be a list.`);
+  if (value.length > 3) invalid(`${label} can contain at most three entries.`);
+  const reactions = value.map((candidate, index) => {
+    const raw = object(candidate, `${label} ${index + 1}`);
+    const emoji = string(raw.emoji, `${label} ${index + 1} emoji`, 20, true);
+    const count = raw.count === undefined ? undefined : finite(raw.count, 1, 1, 9999);
+    if (count !== undefined && !Number.isInteger(raw.count)) invalid(`${label} ${index + 1} count must be an integer.`);
+    return { emoji, ...(count && count > 1 ? { count } : {}) };
+  });
+  const normalized = normalizeWhatsAppReactions(reactions);
+  if (normalized.length !== reactions.length) invalid(`${label} must use distinct single-emoji entries.`);
+  return normalized;
+}
+
+function validateIOSLinkModel(value: unknown, label: string): IOSLinkPreview {
+  const raw = object(value, label);
+  const image = raw.image === undefined ? undefined : validateAttachment(raw.image, 0);
+  return {
+    url: httpsUrl(raw.url, `${label} URL`, true),
+    title: string(raw.title, `${label} title`, 200, true),
+    ...(typeof raw.siteName === 'string' ? { siteName: string(raw.siteName, `${label} site name`, 100) } : {}),
+    ...(typeof raw.description === 'string' ? { description: string(raw.description, `${label} description`, 500) } : {}),
+    ...(image ? { image } : {}),
+  };
+}
+
+/**
+ * Strict iOS media, validated by its own discriminators.
+ *
+ * `kind` then `source` decide the shape; a file that disagrees with itself is
+ * rejected rather than coerced. Two details are load-bearing and both have a
+ * test: a video `title` is genuinely optional and must survive as absent rather
+ * than becoming an empty string, and an empty or whitespace-only YouTube poster
+ * must normalize *away* so the renderer falls back to the derived thumbnail
+ * (§0.5).
+ */
+function validateIOSMediaModel(value: unknown, label: string): IOSMedia {
+  const raw = object(value, label);
+  const url = httpsUrl(raw.url, `${label} URL`, true);
+  if (raw.kind === 'audio') {
+    if (!IOS_AUDIO_MIME_TYPES.includes(String(raw.mimeType) as 'audio/mpeg')) invalid(`${label} audio type is unsupported.`);
+    return {
+      kind: 'audio', url, mimeType: raw.mimeType as Extract<IOSMedia, { kind: 'audio' }>['mimeType'],
+      ...(typeof raw.duration === 'string' ? { duration: string(raw.duration, `${label} duration`, 30) } : {}),
+      ...(typeof raw.transcript === 'string' ? { transcript: string(raw.transcript, `${label} transcript`, 10_000) } : {}),
+    };
+  }
+  if (raw.kind !== 'video' || (raw.source !== 'youtube' && raw.source !== 'direct')) invalid(`${label} video source must be youtube or direct.`);
+  const posterUrl = raw.source === 'youtube'
+    ? optionalYouTubePoster(raw.posterUrl)
+    : typeof raw.posterUrl === 'string' && raw.posterUrl.trim()
+      ? httpsUrl(raw.posterUrl, `${label} poster`)
+      : '';
+  const common = {
+    ...(posterUrl ? { posterUrl } : {}),
+    ...(typeof raw.title === 'string' && raw.title.trim() ? { title: string(raw.title, `${label} title`, 200) } : {}),
+    ...(typeof raw.duration === 'string' ? { duration: string(raw.duration, `${label} duration`, 30) } : {}),
+    ...(typeof raw.description === 'string' ? { description: string(raw.description, `${label} description`, 2_000) } : {}),
+  };
+  if (raw.source === 'youtube') {
+    const result: IOSMedia = { kind: 'video', source: 'youtube', url, ...common };
+    const issue = validateIOSMedia(result)[0];
+    if (issue) invalid(`${label}: ${issue}`);
+    return result;
+  }
+  if (!IOS_VIDEO_MIME_TYPES.includes(String(raw.mimeType) as 'video/mp4')) invalid(`${label} video type is unsupported.`);
+  const captionTrackUrl = typeof raw.captionTrackUrl === 'string' && raw.captionTrackUrl ? httpsUrl(raw.captionTrackUrl, `${label} caption track`) : '';
+  const captionLanguage = typeof raw.captionLanguage === 'string' ? string(raw.captionLanguage, `${label} caption language`, 40) : '';
+  const captionLabel = typeof raw.captionLabel === 'string' ? string(raw.captionLabel, `${label} caption label`, 100) : '';
+  if (!!captionTrackUrl !== !!captionLanguage || !!captionTrackUrl !== !!captionLabel) invalid(`${label} caption URL, language, and label must be provided together.`);
+  return {
+    kind: 'video', source: 'direct', url, mimeType: raw.mimeType as 'video/mp4' | 'video/webm' | 'video/ogg',
+    ...common,
+    ...(captionTrackUrl ? { captionTrackUrl, captionLanguage, captionLabel } : {}),
+  };
+}
+
+function validateIOSTapbacksModel(value: unknown, label: string): IOSTapback[] {
+  if (!Array.isArray(value)) invalid(`${label} must be a list.`);
+  if (value.length > 3) invalid(`${label} can contain at most three entries.`);
+  const tapbacks = value.map((candidate, index) => {
+    const raw = object(candidate, `${label} ${index + 1}`);
+    const emoji = string(raw.emoji, `${label} ${index + 1} emoji`, 20, true);
+    const count = raw.count === undefined ? undefined : finite(raw.count, 1, 1, 9999);
+    if (count !== undefined && !Number.isInteger(raw.count)) invalid(`${label} ${index + 1} count must be an integer.`);
+    return { emoji, ...(count && count > 1 ? { count } : {}) };
+  });
+  const normalized = normalizeIOSTapbacks(tapbacks);
+  if (normalized.length !== tapbacks.length) invalid(`${label} must use distinct single-emoji entries.`);
+  return normalized;
+}
+
 function validateMessage(value: unknown, index: number): Message {
   const raw = object(value, `Message ${index + 1}`);
   const messageId = id(raw.id, `Message ${index + 1} ID`);
@@ -331,6 +525,32 @@ function validateMessage(value: unknown, index: number): Message {
   if (raw.twitterPoll !== undefined) result.twitterPoll = validateTwitterPollModel(raw.twitterPoll, `Message ${index + 1} poll`);
   if (raw.twitterTranslation !== undefined) result.twitterTranslation = validateTwitterTranslationModel(raw.twitterTranslation, `Message ${index + 1} translation`);
   if (raw.twitterActivity !== undefined) result.twitterActivity = validateTwitterActivityModel(raw.twitterActivity, `Message ${index + 1} activity`);
+  if (raw.whatsappReply !== undefined) {
+    const reply = object(raw.whatsappReply, `Message ${index + 1} WhatsApp reply`);
+    result.whatsappReply = { messageId: id(reply.messageId, `Message ${index + 1} WhatsApp reply ID`) };
+  }
+  if (raw.whatsappLinkPreview !== undefined) result.whatsappLinkPreview = validateWhatsAppLinkModel(raw.whatsappLinkPreview, `Message ${index + 1} WhatsApp link`);
+  if (raw.whatsappMedia !== undefined) result.whatsappMedia = validateWhatsAppMediaModel(raw.whatsappMedia, `Message ${index + 1} WhatsApp media`);
+  if (raw.whatsappReactions !== undefined) result.whatsappReactions = validateWhatsAppReactionsModel(raw.whatsappReactions, `Message ${index + 1} WhatsApp reactions`);
+  if (raw.whatsappEvent !== undefined) {
+    const event = object(raw.whatsappEvent, `Message ${index + 1} WhatsApp event`);
+    if (event.kind !== 'date' && event.kind !== 'system') invalid(`Message ${index + 1} WhatsApp event kind is invalid.`);
+    result.whatsappEvent = { kind: event.kind, text: string(event.text, `Message ${index + 1} WhatsApp event text`, 300, true) };
+  }
+  if (typeof raw.whatsappStartNewRun === 'boolean') result.whatsappStartNewRun = raw.whatsappStartNewRun;
+  if (raw.iosReply !== undefined) {
+    const reply = object(raw.iosReply, `Message ${index + 1} iOS reply`);
+    result.iosReply = { messageId: id(reply.messageId, `Message ${index + 1} iOS reply ID`) };
+  }
+  if (raw.iosLinkPreview !== undefined) result.iosLinkPreview = validateIOSLinkModel(raw.iosLinkPreview, `Message ${index + 1} iOS link`);
+  if (raw.iosMedia !== undefined) result.iosMedia = validateIOSMediaModel(raw.iosMedia, `Message ${index + 1} iOS media`);
+  if (raw.iosTapbacks !== undefined) result.iosTapbacks = validateIOSTapbacksModel(raw.iosTapbacks, `Message ${index + 1} iOS Tapbacks`);
+  if (raw.iosEvent !== undefined) {
+    const event = object(raw.iosEvent, `Message ${index + 1} iOS event`);
+    if (event.kind !== 'date' && event.kind !== 'system') invalid(`Message ${index + 1} iOS event kind is invalid.`);
+    result.iosEvent = { kind: event.kind, text: string(event.text, `Message ${index + 1} iOS event text`, 300, true) };
+  }
+  if (typeof raw.iosStartNewRun === 'boolean') result.iosStartNewRun = raw.iosStartNewRun;
   if (result.twitterVideo && result.attachments?.length) invalid(`Message ${index + 1} cannot contain both a video and an image grid.`);
   return result;
 }
@@ -343,6 +563,8 @@ function validateParticipant(value: unknown, index: number): GroupParticipant {
     ...(typeof raw.characterId === 'string' ? { characterId: id(raw.characterId, `Participant ${index + 1} character ID`) } : {}),
     name: string(raw.name, `Participant ${index + 1} name`, 200, true),
     color: HEX.test(color) ? color : '#777777',
+    ...(typeof raw.whatsappTone === 'string' && WHATSAPP_TONE_IDS.has(raw.whatsappTone as WhatsAppParticipantTone) ? { whatsappTone: raw.whatsappTone as WhatsAppParticipantTone } : {}),
+    ...(typeof raw.iosTone === 'string' && IOS_TONE_IDS.has(raw.iosTone as IOSParticipantTone) ? { iosTone: raw.iosTone as IOSParticipantTone } : {}),
     ...(safeUrl(raw.avatarUrl, `Participant ${index + 1} avatar`) ? { avatarUrl: safeUrl(raw.avatarUrl, `Participant ${index + 1} avatar`) } : {}),
     ...(string(raw.phoneNumber, `Participant ${index + 1} phone`, 100) ? { phoneNumber: string(raw.phoneNumber, `Participant ${index + 1} phone`, 100) } : {}),
   };
@@ -437,6 +659,9 @@ function validateSettings(value: unknown): SkinSettings {
     // masks the legacy twitterDarkMode flag in v1-v3 backups.
     delete result.twitterTheme;
   }
+  if (raw.androidFrameMode === 'bubbles' || raw.androidFrameMode === 'header' || raw.androidFrameMode === 'phone') result.androidFrameMode = raw.androidFrameMode;
+  if (raw.iosFrameMode === 'bubbles' || raw.iosFrameMode === 'header' || raw.iosFrameMode === 'phone') result.iosFrameMode = raw.iosFrameMode;
+  if (raw.androidGroupSubtitleMode === 'members' || raw.androidGroupSubtitleMode === 'count' || raw.androidGroupSubtitleMode === 'custom' || raw.androidGroupSubtitleMode === 'hidden') result.androidGroupSubtitleMode = raw.androidGroupSubtitleMode;
   if (Array.isArray(raw.googleSuggestions)) result.googleSuggestions = raw.googleSuggestions.slice(0, 20).map((item, i) => string(item, `Suggestion ${i + 1}`, 200, true));
   if (Array.isArray(raw.iosGroupParticipants)) result.iosGroupParticipants = raw.iosGroupParticipants.slice(0, 50).map(validateParticipant);
   if (Array.isArray(raw.androidGroupParticipants)) result.androidGroupParticipants = raw.androidGroupParticipants.slice(0, 50).map(validateParticipant);
@@ -451,6 +676,7 @@ function validateProject(value: unknown): SkinProject {
   if (raw.messages.length > 100) invalid('This backup contains more than 100 messages.');
   const cast = validateCast(raw.cast);
   const messages = raw.messages.map(validateMessage);
+  if (new Set(messages.map(message => message.id)).size !== messages.length) invalid('Project message IDs must be unique.');
   if (raw.template === 'twitter') {
     const castIds = new Set(cast?.characters.map(character => character.id) || []);
     const invalidIdentity = messages.find(message => message.characterId && !castIds.has(message.characterId));
@@ -469,6 +695,34 @@ function validateProject(value: unknown): SkinProject {
       const detail = issue.parentId ? ` and parent ${issue.parentId}` : '';
       invalid(`Twitter relationship ${issue.code} for message ${issue.messageId}${detail}.`);
     }
+  }
+  if (raw.template === 'android') {
+    const whatsappProject: SkinProject = {
+      id: typeof raw.id === 'string' ? raw.id : 'project',
+      template: 'android',
+      settings: validateSettings(raw.settings),
+      messages,
+      ...(cast ? { cast } : {}),
+    };
+    messages.forEach((message, index) => {
+      const issue = validateWhatsAppMessage(whatsappProject, message, index)[0];
+      if (issue) invalid(`WhatsApp message ${index + 1}: ${issue}`);
+    });
+  }
+  if (raw.template === 'ios') {
+    // The same shared validator the composer and timeline use (§0.2), so an
+    // imported scene cannot express anything the editor would have refused.
+    const iosProject: SkinProject = {
+      id: typeof raw.id === 'string' ? raw.id : 'project',
+      template: 'ios',
+      settings: validateSettings(raw.settings),
+      messages,
+      ...(cast ? { cast } : {}),
+    };
+    messages.forEach((message, index) => {
+      const issue = validateIOSMessage(iosProject, message, index)[0];
+      if (issue) invalid(`iMessage ${index + 1}: ${issue}`);
+    });
   }
   return {
     id: id(raw.id, 'Project ID'),
@@ -519,12 +773,26 @@ export const PROJECT_FILE_MIGRATIONS: Readonly<Record<number, (value: SkinProjec
   1: (project) => migrateTwitterProject(migrateProjectIdentities(project)),
   2: (project) => migrateTwitterProject(migrateProjectIdentities(project)),
   3: (project) => migrateTwitterProject(migrateProjectIdentities(project)),
+  4: (project) => migrateTwitterProject(migrateProjectIdentities(project)),
+  5: (project) => migrateTwitterProject(migrateProjectIdentities(project)),
+  /**
+   * v6 → v7 added the structured iOS content model.
+   *
+   * This entry exists because `parseProjectFile` indexes this table for *every*
+   * accepted older envelope — leaving `[6]` undefined would throw
+   * `is not a function` on a file the version check had just accepted. It is
+   * deliberately a no-op beyond the shared identity/Twitter normalization:
+   * §0.7 forbids guessing rich iOS content, and in particular forbids copying
+   * the old shared `reaction` string into `iosTapbacks`. The new editor owns
+   * `iosTapbacks` canonically; a v6 file simply arrives without any.
+   */
+  6: (project) => migrateTwitterProject(migrateProjectIdentities(project)),
 });
 
-export function createProjectFile(project: SkinProject, characterLibrary: UniversalCharacter[], now = new Date()): SceneProjectFileV4 {
+export function createProjectFile(project: SkinProject, characterLibrary: UniversalCharacter[], now = new Date()): SceneProjectFileV7 {
   return {
     format: 'ao3skingen-project',
-    schemaVersion: 4,
+    schemaVersion: 7,
     exportedAt: now.toISOString(),
     application: { name: 'AO3 SkinGen', version: APPLICATION_VERSION },
     project: validateProject(migrateTwitterProject(migrateProjectIdentities(project))),
@@ -536,7 +804,7 @@ export function serializeProjectFile(project: SkinProject, characterLibrary: Uni
   return JSON.stringify(createProjectFile(project, characterLibrary, now), null, 2);
 }
 
-export function parseProjectFile(text: string): SceneProjectFileV4 {
+export function parseProjectFile(text: string): SceneProjectFileV7 {
   const raw = parseJson(text);
   assertExactTopLevel(raw, TOP_SCENE_KEYS);
   const envelope = validateEnvelope(raw, 'ao3skingen-project', PROJECT_FILE_SCHEMA_VERSION);
@@ -546,7 +814,7 @@ export function parseProjectFile(text: string): SceneProjectFileV4 {
     : migrateTwitterProject(migrateProjectIdentities(validatedProject));
   return {
     format: 'ao3skingen-project',
-    schemaVersion: 4,
+    schemaVersion: 7,
     exportedAt: envelope.exportedAt,
     application: { name: 'AO3 SkinGen', version: string(object(raw.application, 'Application').version, 'Application version', 40, true) },
     project,
@@ -567,6 +835,16 @@ function projectUrls(project: SkinProject): string[] {
     if (message.twitterVideo?.url) urls.push(message.twitterVideo.url);
     if (message.twitterVideo?.posterUrl) urls.push(message.twitterVideo.posterUrl);
     if (message.twitterVideo?.captionTrackUrl) urls.push(message.twitterVideo.captionTrackUrl);
+    if (message.whatsappLinkPreview?.url) urls.push(message.whatsappLinkPreview.url);
+    if (message.whatsappLinkPreview?.image?.url) urls.push(message.whatsappLinkPreview.image.url);
+    if (message.whatsappMedia?.url) urls.push(message.whatsappMedia.url);
+    if (message.whatsappMedia?.kind === 'video' && message.whatsappMedia.posterUrl) urls.push(message.whatsappMedia.posterUrl);
+    if (message.whatsappMedia?.kind === 'video' && message.whatsappMedia.source === 'direct' && message.whatsappMedia.captionTrackUrl) urls.push(message.whatsappMedia.captionTrackUrl);
+    if (message.iosLinkPreview?.url) urls.push(message.iosLinkPreview.url);
+    if (message.iosLinkPreview?.image?.url) urls.push(message.iosLinkPreview.image.url);
+    if (message.iosMedia?.url) urls.push(message.iosMedia.url);
+    if (message.iosMedia?.kind === 'video' && message.iosMedia.posterUrl) urls.push(message.iosMedia.posterUrl);
+    if (message.iosMedia?.kind === 'video' && message.iosMedia.source === 'direct' && message.iosMedia.captionTrackUrl) urls.push(message.iosMedia.captionTrackUrl);
   }
   for (const participant of [...(project.settings.iosGroupParticipants || []), ...(project.settings.androidGroupParticipants || [])]) {
     if (participant.avatarUrl) urls.push(participant.avatarUrl);

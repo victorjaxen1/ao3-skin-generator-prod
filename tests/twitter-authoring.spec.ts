@@ -135,16 +135,17 @@ test('loads video preview only after consent and keeps static output in the scen
   await page.getByRole('button', { name: 'Message options' }).click();
   await page.getByRole('button', { name: 'Media' }).click();
   await page.getByRole('button', { name: 'Video' }).click();
-  await page.getByRole('textbox', { name: 'Video address' }).fill('https://youtu.be/bN8449nalT8');
+  await page.getByRole('textbox', { name: 'Video address' }).fill('https://www.youtube.com/watch?v=XlcK4VYSWZk');
   await page.getByRole('textbox', { name: 'Video title' }).fill('Fictional clip');
   await page.getByRole('textbox', { name: 'Video description or transcript' }).fill('A short transcript fallback.');
 
   await expect(page.locator('iframe[title^="Video preview"]')).toHaveCount(0);
   await page.getByRole('button', { name: 'Load video preview' }).click();
-  await expect(page.locator('iframe[title="Video preview: Fictional clip"]')).toHaveAttribute('src', /youtube-nocookie\.com/);
+  await expect(page.locator('iframe[title="Video preview: Fictional clip"]')).toHaveAttribute('src', 'https://www.youtube-nocookie.com/embed/XlcK4VYSWZk');
   await page.getByRole('button', { name: 'Send message' }).click();
   await expect(preview(page).locator('.twitter-video-card')).toHaveCount(1);
   await expect(preview(page).locator('iframe,video')).toHaveCount(0);
+  await expect(preview(page).locator('img[src="https://i.ytimg.com/vi/XlcK4VYSWZk/hqdefault.jpg"]')).toHaveCount(1);
   await expect(preview(page)).toContainText('A short transcript fallback.');
 });
 

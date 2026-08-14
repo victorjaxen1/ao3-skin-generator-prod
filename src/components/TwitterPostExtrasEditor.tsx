@@ -92,7 +92,7 @@ export default function TwitterPostExtrasEditor({ message, project, onChange }: 
     setVideoPreviewError('');
   }, [videoKey]);
 
-  const videoIssues = useMemo(() => validateTwitterVideo(message.twitterVideo), [videoKey]);
+  const videoIssues = useMemo(() => validateTwitterVideo(message.twitterVideo), [message.twitterVideo]);
   const pollError = getTwitterPollError(message.twitterPoll);
   const setVideo = (updates: Partial<TwitterVideo>) => onChange({
     twitterVideo: { source: 'youtube', url: '', title: '', ...message.twitterVideo, ...updates },
@@ -133,7 +133,16 @@ export default function TwitterPostExtrasEditor({ message, project, onChange }: 
               </>
             ) : (
               <div className="space-y-2">
-                <select value={message.twitterVideo.source} onChange={event => setVideo({ source: event.target.value as TwitterVideo['source'], mimeType: event.target.value === 'direct' ? 'video/mp4' : undefined })} className={`${selectClass} w-full`} aria-label="Video source type"><option value="youtube">YouTube</option><option value="direct">Direct HTTPS video</option></select>
+                <select value={message.twitterVideo.source} onChange={event => {
+                  const source = event.target.value as TwitterVideo['source'];
+                  const common = { title: message.twitterVideo!.title, duration: message.twitterVideo!.duration, description: message.twitterVideo!.description };
+                  onChange({
+                    twitterVideo: source === 'youtube'
+                      ? { source: 'youtube', url: '', ...common }
+                      : { source: 'direct', url: '', mimeType: 'video/mp4', ...common },
+                    attachments: [],
+                  });
+                }} className={`${selectClass} w-full`} aria-label="Video source type"><option value="youtube">YouTube</option><option value="direct">Direct HTTPS video</option></select>
                 <input value={message.twitterVideo.url} onChange={event => setVideo({ url: event.target.value })} aria-label="Video address" placeholder={message.twitterVideo.source === 'youtube' ? 'https://youtu.be/…' : 'https://example.com/video.mp4'} className={inputClass} />
                 <input value={message.twitterVideo.title} onChange={event => setVideo({ title: event.target.value })} aria-label="Video title" placeholder="Video title (optional)" maxLength={200} className={inputClass} />
                 <ImageUrlInput value={message.twitterVideo.posterUrl || ''} onChange={posterUrl => setVideo({ posterUrl })} ariaLabel="Video poster address" placeholder="Poster image address (recommended)" />

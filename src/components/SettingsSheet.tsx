@@ -1,6 +1,5 @@
 import React from 'react';
 import { SkinSettings } from '../lib/schema';
-import { AvatarSelector } from './AvatarSelector';
 import { ImageUrlInput } from './ImageUrlInput';
 import BottomSheet from './BottomSheet';
 import {
@@ -103,6 +102,21 @@ export const SettingsSheet: React.FC<Props> = ({
               checked={settings.iosDarkMode || false}
               onChange={(v) => onUpdateSettings('iosDarkMode', v)}
             />
+            {/* One choice, not three independent chrome toggles. The status bar
+                and typing bar used to be separate switches that could produce a
+                phone with a battery icon and no header — a partial device that
+                exists on no phone. They are still available under Advanced, but
+                only inside the frame that has somewhere to put them. */}
+            <SelectRow
+              label="Frame"
+              value={settings.iosFrameMode || 'header'}
+              options={[
+                { value: 'bubbles', label: 'Bubbles only' },
+                { value: 'header', label: 'Chat header' },
+                { value: 'phone', label: 'Phone frame' },
+              ]}
+              onChange={(v) => onUpdateSettings('iosFrameMode', v as SkinSettings['iosFrameMode'])}
+            />
             <ToggleRow
               label="Auto-alternate senders"
               sublabel="Automatically switch between You and Them"
@@ -122,10 +136,21 @@ export const SettingsSheet: React.FC<Props> = ({
         {/* Android / WhatsApp Settings */}
         {template === 'android' && (
           <>
-            <ToggleRow
-              label="Dark mode"
-              checked={settings.androidDarkMode || false}
-              onChange={(v) => onUpdateSettings('androidDarkMode', v)}
+            <SelectRow
+              label="Theme"
+              value={settings.androidDarkMode ? 'dark' : 'light'}
+              options={[{ value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }]}
+              onChange={(v) => onUpdateSettings('androidDarkMode', v === 'dark')}
+            />
+            <SelectRow
+              label="Frame"
+              value={settings.androidFrameMode || 'header'}
+              options={[
+                { value: 'bubbles', label: 'Bubbles only' },
+                { value: 'header', label: 'Chat header' },
+                { value: 'phone', label: 'Phone frame' },
+              ]}
+              onChange={(v) => onUpdateSettings('androidFrameMode', v as SkinSettings['androidFrameMode'])}
             />
             <ToggleRow
               label="Auto-alternate senders"
@@ -156,6 +181,24 @@ export const SettingsSheet: React.FC<Props> = ({
                     placeholder="online"
                     onChange={(v) => onUpdateSettings('androidStatusText', v)}
                   />
+                )}
+              </>
+            )}
+            {settings.androidGroupMode && settings.androidFrameMode !== 'bubbles' && (
+              <>
+                <SelectRow
+                  label="Group subtitle"
+                  value={settings.androidGroupSubtitleMode || 'members'}
+                  options={[
+                    { value: 'members', label: 'Member names' },
+                    { value: 'count', label: 'Participant count' },
+                    { value: 'custom', label: 'Custom' },
+                    { value: 'hidden', label: 'Hidden' },
+                  ]}
+                  onChange={(v) => onUpdateSettings('androidGroupSubtitleMode', v as SkinSettings['androidGroupSubtitleMode'])}
+                />
+                {settings.androidGroupSubtitleMode === 'custom' && (
+                  <TextRow label="Custom subtitle" value={settings.androidGroupSubtitleText || ''} placeholder="tap here for group info" onChange={(v) => onUpdateSettings('androidGroupSubtitleText', v)} />
                 )}
               </>
             )}
@@ -258,43 +301,79 @@ export const SettingsSheet: React.FC<Props> = ({
         <AdvancedSection>
           {template === 'ios' && (
             <>
-              <ToggleRow
-                label="Phone status bar"
-                sublabel="Time, signal and battery across the top"
-                checked={settings.iosShowStatusBar || false}
-                onChange={(v) => onUpdateSettings('iosShowStatusBar', v)}
-              />
-              <ToggleRow
-                label="Typing bar"
-                sublabel="The message box along the bottom"
-                checked={settings.iosShowInputBar || false}
-                onChange={(v) => onUpdateSettings('iosShowInputBar', v)}
-              />
-              <ImageUrlRow
-                label="Header background"
-                value={settings.iosHeaderImageUrl || ''}
-                onChange={(v) => onUpdateSettings('iosHeaderImageUrl', v)}
-              />
-              <ImageUrlRow
-                label="Footer background"
-                value={settings.iosFooterImageUrl || ''}
-                onChange={(v) => onUpdateSettings('iosFooterImageUrl', v)}
-              />
+              {settings.iosFrameMode === 'phone' && (
+                <ToggleRow
+                  label="Phone status bar"
+                  sublabel="Time, signal and battery across the top"
+                  checked={settings.iosShowStatusBar || false}
+                  onChange={(v) => onUpdateSettings('iosShowStatusBar', v)}
+                />
+              )}
+              {settings.iosFrameMode === 'phone' && (
+                <>
+                  <ToggleRow
+                    label="Fixed-height scroll window"
+                    sublabel="Preview and AO3 only; PNG export always expands to the full conversation"
+                    checked={settings.iosScrollable === true}
+                    onChange={(v) => onUpdateSettings('iosScrollable', v)}
+                  />
+                  {settings.iosScrollable && (
+                    <div className="px-4 py-2">
+                      <label htmlFor="ios-viewport-height" className="mb-1 block text-xs font-medium text-stone-600">Window height</label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          id="ios-viewport-height"
+                          type="range"
+                          min={20}
+                          max={60}
+                          value={settings.iosViewportHeightEm || 34}
+                          onChange={event => onUpdateSettings('iosViewportHeightEm', Number(event.target.value))}
+                          className="accent-violet-600"
+                        />
+                        <span className="w-12 text-right text-xs text-stone-500">{settings.iosViewportHeightEm || 34} em</span>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+              {/* Overrides, not defaults. The header and input bar are drawn in
+                  CSS now, so an ordinary work makes no request to a third-party
+                  host for its chrome — and AO3 keeps no copy of an image, so a
+                  host going down would otherwise take the header out of every
+                  chapter already posted. */}
+              {settings.iosFrameMode !== 'bubbles' && (
+                <ImageUrlRow
+                  label="Header background image"
+                  value={settings.iosHeaderImageUrl || ''}
+                  onChange={(v) => onUpdateSettings('iosHeaderImageUrl', v)}
+                />
+              )}
+              {settings.iosFrameMode === 'phone' && (
+                <ImageUrlRow
+                  label="Footer background image"
+                  value={settings.iosFooterImageUrl || ''}
+                  onChange={(v) => onUpdateSettings('iosFooterImageUrl', v)}
+                />
+              )}
             </>
           )}
 
           {template === 'android' && (
             <>
-              <ImageUrlRow
-                label="Header background"
-                value={settings.androidHeaderImageUrl || ''}
-                onChange={(v) => onUpdateSettings('androidHeaderImageUrl', v)}
-              />
-              <ImageUrlRow
-                label="Footer background"
-                value={settings.androidFooterImageUrl || ''}
-                onChange={(v) => onUpdateSettings('androidFooterImageUrl', v)}
-              />
+              {settings.androidFrameMode !== 'bubbles' && <ImageUrlRow label="Header background" value={settings.androidHeaderImageUrl || ''} onChange={(v) => onUpdateSettings('androidHeaderImageUrl', v)} />}
+              {settings.androidFrameMode === 'phone' && <ImageUrlRow label="Footer background" value={settings.androidFooterImageUrl || ''} onChange={(v) => onUpdateSettings('androidFooterImageUrl', v)} />}
+              <ImageUrlRow label="Chat wallpaper" value={settings.androidWallpaperUrl || ''} onChange={(v) => onUpdateSettings('androidWallpaperUrl', v)} />
+              {settings.androidFrameMode === 'phone' && (
+                <>
+                  <ToggleRow label="Fixed-height scroll window" sublabel="Preview and AO3 only; PNG export always expands" checked={settings.androidScrollable === true} onChange={(v) => onUpdateSettings('androidScrollable', v)} />
+                  {settings.androidScrollable && (
+                    <div className="flex items-center justify-between gap-3 py-3">
+                      <label htmlFor="android-viewport-height" className="text-sm font-medium text-stone-900">Window height</label>
+                      <div className="flex items-center gap-2"><input id="android-viewport-height" type="range" min={20} max={60} value={settings.androidViewportHeightEm || 30} onChange={event => onUpdateSettings('androidViewportHeightEm', Number(event.target.value))} className="accent-violet-600" /><span className="w-12 text-right text-xs text-stone-500">{settings.androidViewportHeightEm || 30} em</span></div>
+                    </div>
+                  )}
+                </>
+              )}
             </>
           )}
 

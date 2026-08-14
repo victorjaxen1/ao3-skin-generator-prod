@@ -1,13 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Message, SceneCast, SkinProject, SkinSettings, GroupParticipant, TwitterCharacter } from '../lib/schema';
-import { normalizeImageUrl } from '../lib/urlNormalize';
-import { ImageUrlInput } from './ImageUrlInput';
 import { MessageEmojiPicker, MessageEmojiTrigger } from './MessageEmojiPicker';
-import { ReactionPicker } from './ReactionPicker';
 import { nextChatTimestamp, nextChatTimestampFromHistory } from '../lib/messageMetadata';
 import { getTwitterSceneMode } from '../lib/twitter';
 import { resolveMessageIdentity } from '../lib/identity';
 import TwitterPostExtrasEditor from './TwitterPostExtrasEditor';
+import WhatsAppMessageExtrasEditor from './WhatsAppMessageExtrasEditor';
+import { validateWhatsAppMessage } from '../lib/whatsapp';
+import IOSMessageExtrasEditor from './IOSMessageExtrasEditor';
+import { validateIOSMessage } from '../lib/ios';
 
 interface Props {
   template: 'ios' | 'android' | 'twitter' | 'google';
@@ -52,11 +53,7 @@ export const ComposeBar: React.FC<Props> = ({
   const [showDetails, setShowDetails] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [timestamp, setTimestamp] = useState('');
-  const [reaction, setReaction] = useState('');
-  const [imageUrl, setImageUrl] = useState('');
-  const [imageAlt, setImageAlt] = useState('');
-  const [imageDecorative, setImageDecorative] = useState(false);
-  const [status, setStatus] = useState<'auto' | 'sent' | 'delivered' | 'read'>('auto');
+  const [status, setStatus] = useState<'auto' | 'sending' | 'sent' | 'delivered' | 'read'>('auto');
   const [participantId, setParticipantId] = useState('');
   // '' means "post as the account itself", i.e. follow the Twitter settings.
   const [twitterCharId, setTwitterCharId] = useState('');
@@ -64,6 +61,14 @@ export const ComposeBar: React.FC<Props> = ({
   const [twitterParentId, setTwitterParentId] = useState('');
   const [twitterDraftExtras, setTwitterDraftExtras] = useState<Partial<Message>>({});
   const twitterDraftExtrasRef = useRef<Partial<Message>>({});
+  const [whatsappDraftExtras, setWhatsAppDraftExtras] = useState<Partial<Message>>({});
+  const whatsappDraftExtrasRef = useRef<Partial<Message>>({});
+  // One transient iOS draft, shaped like a real Message. The old model kept
+  // `imageUrl`, `imageAlt`, `imageDecorative`, and `reaction` as four
+  // independent pieces of composer state, which meant the thing being validated
+  // was never quite the thing that got committed.
+  const [iosDraftExtras, setIOSDraftExtras] = useState<Partial<Message>>({});
+  const iosDraftExtrasRef = useRef<Partial<Message>>({});
 
   // Google-specific
   const [googleUrl, setGoogleUrl] = useState('');
@@ -126,9 +131,103 @@ export const ComposeBar: React.FC<Props> = ({
     }
   }, [messages, template, twitterParentId, twitterSceneMode]);
 
+  const whatsappDraftMessage = (): Message => {
+    const extras = whatsappDraftExtrasRef.current;
+    if (extras.whatsappEvent) {
+      return {
+        ...extras,
+        id: 'whatsapp-compose-draft',
+        sender: '',
+        content: '',
+        outgoing: false,
+        timestamp: undefined,
+        status: undefined,
+        statusMode: undefined,
+        participantId: undefined,
+        characterId: undefined,
+      };
+    }
+    return {
+      ...extras,
+      id: 'whatsapp-compose-draft',
+      sender: isOutgoing ? youLabel : themLabel,
+      content,
+      outgoing: isOutgoing,
+      timestamp: timestamp.trim() || automaticTimestamp,
+      status: isOutgoing ? (status === 'auto' ? 'delivered' : status) : undefined,
+      statusMode: isOutgoing ? (status === 'auto' ? 'auto' : 'manual') : undefined,
+      participantId: isGroupMode && !isOutgoing ? participantId || undefined : undefined,
+      characterId: isOutgoing
+        ? cast?.selfId
+        : isGroupMode
+          ? groupParticipants.find(participant => participant.id === participantId)?.characterId
+          : cast?.contactId,
+    };
+  };
+
+  const iosDraftMessage = (): Message => {
+    const extras = iosDraftExtrasRef.current;
+    if (extras.iosEvent) {
+      return {
+        ...extras,
+        id: 'ios-compose-draft',
+        sender: '',
+        content: '',
+        outgoing: false,
+        timestamp: undefined,
+        status: undefined,
+        statusMode: undefined,
+        participantId: undefined,
+        characterId: undefined,
+      };
+    }
+    let senderName = isOutgoing ? youLabel : themLabel;
+    if (isGroupMode && participantId && !isOutgoing) {
+      const participant = groupParticipants.find(entry => entry.id === participantId);
+      if (participant) senderName = participant.name;
+    }
+    return {
+      ...extras,
+      id: 'ios-compose-draft',
+      sender: senderName,
+      content,
+      outgoing: isOutgoing,
+      timestamp: timestamp.trim() || automaticTimestamp,
+      status: isOutgoing ? (status === 'auto' ? 'delivered' : status) : undefined,
+      statusMode: isOutgoing ? (status === 'auto' ? 'auto' : 'manual') : undefined,
+      participantId: isGroupMode && !isOutgoing ? participantId || undefined : undefined,
+      characterId: isOutgoing
+        ? cast?.selfId
+        : isGroupMode
+          ? groupParticipants.find(participant => participant.id === participantId)?.characterId
+          : cast?.contactId,
+    };
+  };
+
+  const updateIOSDraft = (updates: Partial<Message>) => {
+    if (updates.content !== undefined) setContent(updates.content);
+    const extras = { ...updates };
+    delete extras.content;
+    setIOSDraftExtras(previous => {
+      const next = { ...previous, ...extras };
+      iosDraftExtrasRef.current = next;
+      return next;
+    });
+  };
+
+  const updateWhatsAppDraft = (updates: Partial<Message>) => {
+    if (updates.content !== undefined) setContent(updates.content);
+    const extras = { ...updates };
+    delete extras.content;
+    setWhatsAppDraftExtras(previous => {
+      const next = { ...previous, ...extras };
+      whatsappDraftExtrasRef.current = next;
+      return next;
+    });
+  };
+
   const handleSend = () => {
     const trimmedContent = content.trim();
-    const normalizedImage = normalizeImageUrl(imageUrl.trim());
 
     if (template === 'google') {
       if (!trimmedContent) return;
@@ -168,56 +267,52 @@ export const ComposeBar: React.FC<Props> = ({
         setTwitterRelationship('reply');
         setTwitterParentId(msg.id);
       }
-    } else {
-      // iOS / Android
-      if (!trimmedContent && !normalizedImage) return;
-      const autoAlternate = template === 'ios'
-        ? settings.iosAutoAlternate !== false
-        : settings.androidAutoAlternate !== false;
-
-      let senderName = isOutgoing ? youLabel : themLabel;
-
-      if (isGroupMode && participantId && !isOutgoing) {
-        const participant = groupParticipants.find(p => p.id === participantId);
-        if (participant) senderName = participant.name;
-      }
-
+    } else if (template === 'android') {
+      const draft = whatsappDraftMessage();
+      if (validateWhatsAppMessage({ ...project, messages: [...messages, draft] }, draft, messages.length).length) return;
       const msg: Message = {
+        ...draft,
         id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        sender: senderName,
-        content: trimmedContent,
-        outgoing: isOutgoing,
-        timestamp: timestamp.trim() || nextChatTimestamp(messages),
-        reaction: reaction || undefined,
-        status: isOutgoing ? (status === 'auto' ? 'delivered' : status) : undefined,
-        statusMode: isOutgoing ? (status === 'auto' ? 'auto' : 'manual') : undefined,
-        participantId: isGroupMode && !isOutgoing ? participantId || undefined : undefined,
-        characterId: isOutgoing
-          ? cast?.selfId
-          : isGroupMode
-            ? groupParticipants.find(participant => participant.id === participantId)?.characterId
-            : cast?.contactId,
       };
-
-      if (normalizedImage) {
-        msg.attachments = [{ type: 'image', url: normalizedImage, alt: imageDecorative ? '' : imageAlt.trim(), decorative: imageDecorative }];
+      if (msg.whatsappEvent) {
+        msg.sender = '';
+        msg.outgoing = false;
+        msg.timestamp = undefined;
+        msg.characterId = undefined;
+        msg.participantId = undefined;
       }
-
       onAddMessage(msg);
-
-      // Auto-alternate for next message
-      if (autoAlternate) {
-        setIsOutgoing(!isOutgoing);
+      if (!msg.whatsappEvent && settings.androidAutoAlternate !== false) setIsOutgoing(!isOutgoing);
+    } else {
+      // iOS. The draft the validator saw is the draft that gets committed —
+      // only the id and the trimmed text differ, and both are derived here.
+      const draft = iosDraftMessage();
+      if (validateIOSMessage({ ...project, messages: [...messages, draft] }, draft, messages.length).length) return;
+      const msg: Message = {
+        ...draft,
+        id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        content: draft.iosEvent ? '' : trimmedContent,
+        timestamp: draft.iosEvent ? undefined : (timestamp.trim() || nextChatTimestamp(messages)),
+      };
+      if (msg.iosEvent) {
+        msg.sender = '';
+        msg.outgoing = false;
+        msg.characterId = undefined;
+        msg.participantId = undefined;
       }
+      onAddMessage(msg);
+      // An event is not a turn in the conversation, so it must not flip whose
+      // turn it is next.
+      if (!msg.iosEvent && settings.iosAutoAlternate !== false) setIsOutgoing(!isOutgoing);
     }
 
     setContent('');
     setTimestamp('');
     setStatus('auto');
-    setReaction('');
-    setImageUrl('');
-    setImageAlt('');
-    setImageDecorative(false);
+    whatsappDraftExtrasRef.current = {};
+    setWhatsAppDraftExtras({});
+    iosDraftExtrasRef.current = {};
+    setIOSDraftExtras({});
     twitterDraftExtrasRef.current = {};
     setTwitterDraftExtras({});
     setShowDetails(false);
@@ -259,8 +354,10 @@ export const ComposeBar: React.FC<Props> = ({
   // enabled for a click that silently does nothing. iOS/Android allow an
   // image with no text; the other two require text.
   const canSend =
-    template === 'ios' || template === 'android'
-      ? Boolean(content.trim() || imageUrl.trim())
+    template === 'android'
+      ? validateWhatsAppMessage({ ...project, messages: [...messages, whatsappDraftMessage()] }, whatsappDraftMessage(), messages.length).length === 0
+      : template === 'ios'
+      ? validateIOSMessage({ ...project, messages: [...messages, iosDraftMessage()] }, iosDraftMessage(), messages.length).length === 0
       : template === 'twitter'
       ? Boolean(content.trim() || hasMeaningfulTwitterExtras(twitterDraftExtras))
       : Boolean(content.trim());
@@ -289,11 +386,14 @@ export const ComposeBar: React.FC<Props> = ({
         // without a ceiling they push the send button behind the fixed export
         // bar on a phone.
         <div className="px-4 py-3 border-b border-stone-100 bg-stone-50/50 animate-fade-in space-y-3 max-h-[32vh] overflow-y-auto">
-          {(template === 'ios' || template === 'android') && (
+          {template === 'ios' && (
             <>
               {/* One row, not three. The tray sits above a fixed export bar
                   on a phone, and every extra row pushes the send button
-                  underneath it. */}
+                  underneath it. An event has no timestamp or delivery state, so
+                  the row goes away rather than offering fields that are cleared
+                  the moment the draft is committed. */}
+              {!iosDraftExtras.iosEvent && (
               <div className="flex gap-2">
                 <input
                   value={timestamp}
@@ -305,46 +405,38 @@ export const ComposeBar: React.FC<Props> = ({
                 {isOutgoing && (
                   <select
                     value={status}
-                    onChange={(e) => setStatus(e.target.value as 'auto' | 'sent' | 'delivered' | 'read')}
+                    onChange={(e) => setStatus(e.target.value as 'auto' | 'sending' | 'sent' | 'delivered' | 'read')}
                     aria-label="Delivery status"
                     className="flex-shrink-0 text-xs bg-white border border-stone-200 rounded-lg px-2 py-2 focus:ring-2 focus:ring-violet-500"
                   >
                     <option value="auto">Automatic</option>
+                    <option value="sending">Sending</option>
                     <option value="sent">Sent</option>
                     <option value="delivered">Delivered</option>
                     <option value="read">Read</option>
                   </select>
                 )}
               </div>
-              {/* iOS SMS mode still gets the picker. Classic SMS had no
-                  tapbacks, but RCS does, the CSS renders identically, and a fic
-                  author choosing green bubbles has not asked us to police their
-                  reactions. Decided, not overlooked. */}
-              <ReactionPicker template={template} value={reaction} onChange={setReaction} />
-              <ImageUrlInput
-                value={imageUrl}
-                onChange={setImageUrl}
-                ariaLabel="Image address for this message"
-                placeholder="Paste an image address (optional)"
-              />
-              {imageUrl.trim() && (
-                <div className="space-y-1.5">
-                  <input
-                    value={imageAlt}
-                    onChange={event => setImageAlt(event.target.value)}
-                    disabled={imageDecorative}
-                    maxLength={500}
-                    aria-label="Image description"
-                    placeholder="Describe the image for readers"
-                    className="w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-xs disabled:bg-stone-100 disabled:text-stone-400"
-                  />
-                  <label className="flex items-center gap-2 text-xs text-stone-600">
-                    <input type="checkbox" checked={imageDecorative} onChange={event => setImageDecorative(event.target.checked)} className="accent-violet-600" />
-                    Decorative image — use empty alt text
-                  </label>
+              )}
+              {/* The single-image field and the shared ReactionPicker are gone
+                  from this path on purpose. They were a second draft model
+                  competing with the extras editor below, and whichever wrote
+                  last won — an author could set a Tapback here and lose it by
+                  touching the editor. One editor, one draft. */}
+              <IOSMessageExtrasEditor message={iosDraftMessage()} project={project} index={messages.length} idPrefix="ios-compose" onChange={updateIOSDraft} />
+            </>
+          )}
+
+          {template === 'android' && (
+            <div className="space-y-3">
+              {!whatsappDraftExtras.whatsappEvent && (
+                <div className="flex gap-2">
+                  <input value={timestamp} onChange={event => setTimestamp(event.target.value)} placeholder={automaticTimestamp ? `Automatic: ${automaticTimestamp}` : 'Automatic: current time'} aria-label="Timestamp" className="min-w-0 flex-1 rounded-lg border border-stone-200 bg-white px-3 py-2 text-xs" />
+                  {isOutgoing && <select value={status} onChange={event => setStatus(event.target.value as typeof status)} aria-label="Delivery status" className="rounded-lg border border-stone-200 bg-white px-2 py-2 text-xs"><option value="auto">Automatic</option><option value="sending">Sending</option><option value="sent">Sent</option><option value="delivered">Delivered</option><option value="read">Read</option></select>}
                 </div>
               )}
-            </>
+              <WhatsAppMessageExtrasEditor message={whatsappDraftMessage()} project={project} index={messages.length} idPrefix="whatsapp-compose" onChange={updateWhatsAppDraft} />
+            </div>
           )}
 
           {template === 'twitter' && (
@@ -546,7 +638,8 @@ export const ComposeBar: React.FC<Props> = ({
             value={content}
             onChange={(e) => setContent(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={placeholders[template]}
+            placeholder={(template === 'android' && whatsappDraftExtras.whatsappEvent) || (template === 'ios' && iosDraftExtras.iosEvent) ? 'Edit the event in Message options' : placeholders[template]}
+            disabled={(template === 'android' && !!whatsappDraftExtras.whatsappEvent) || (template === 'ios' && !!iosDraftExtras.iosEvent)}
             rows={1}
             className={`block w-full max-h-[120px] resize-none rounded-2xl border-0 bg-stone-100 py-2 pl-4 text-sm transition-colors focus:bg-white focus:ring-2 focus:ring-violet-500 ${template === 'google' ? 'pr-4' : 'pr-10'}`}
           />

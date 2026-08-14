@@ -128,7 +128,7 @@ function absolutizeCssAssets(css: string): string {
  * here rather than in the shared builder keeps the preview and the image on the
  * SVG path, where they have to stay.
  */
-function useCssBubbleTails(html: string): string {
+function applyCssBubbleTails(html: string): string {
   const withoutSvg = html.replace(/<svg\b[^>]*class="[^"]*bubble-tail[^"]*"[\s\S]*?<\/svg>/g, '');
   if (withoutSvg === html) return html;
   // Appends to whatever the container already carries rather than matching the
@@ -279,6 +279,15 @@ export const CONTAINER_CLASSES: readonly string[] = [
   'theme-light',
   'theme-dim',
   'theme-dark',
+  'wa-frame-bubbles',
+  'wa-frame-header',
+  'wa-frame-phone',
+  'wa-scroll',
+  'wa-wallpaper',
+  'ios-frame-bubbles',
+  'ios-frame-header',
+  'ios-frame-phone',
+  'ios-scroll',
 ];
 
 function namespaceSelector(
@@ -329,7 +338,7 @@ function platformCss(project: SkinProject): string {
 
 /** One platform's markup, with the four export-only rewrites applied. */
 function platformHtml(project: SkinProject, options: WorkSkinOptions = {}): string {
-  const html = useCssBubbleTails(absolutizeAssets(stripEditorAttributes(buildHTML(project, 'ao3-work'))));
+  const html = applyCssBubbleTails(absolutizeAssets(stripEditorAttributes(buildHTML(project, 'ao3-work'))));
   return options.includeCredit ? appendCredit(html) : html;
 }
 
@@ -380,8 +389,15 @@ export const MASTER_TEMPLATES: readonly WorkSkinTemplate[] = [
  * produced one — so this bump is free; it is here because the rule is
  * mechanical, and reasoning about what is "really released" is how a version
  * stamp stops being trustworthy.
+ *
+ * **7** for the iOS class contract: `ios-reply`, `ios-images`,
+ * `ios-link-preview`, `ios-audio-card`, `ios-video-card`, `ios-tapbacks`,
+ * `ios-event`, `ios-tone-*`, and the `ios-frame-*` / `ios-scroll` container
+ * classes. A reader carrying a v6 skin gets a v7 work's markup with none of
+ * those rules — so the bump is what tells an author their saved skin is stale,
+ * which is the failure mode §10's traps call "a half-styled render".
  */
-export const MASTER_SKIN_VERSION = 4;
+export const MASTER_SKIN_VERSION = 7;
 
 function versionRule(): string {
   return `#workskin .ao3skingen-v${MASTER_SKIN_VERSION}::after{content:'${MASTER_SKIN_VERSION}';}`;

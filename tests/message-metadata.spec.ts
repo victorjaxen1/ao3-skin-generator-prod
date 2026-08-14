@@ -30,13 +30,14 @@ test('WhatsApp automatically advances delivered ticks to read ticks after a repl
 
   await composer(page).fill('Automatic outgoing');
   await page.getByRole('button', { name: 'Send message' }).click();
-  await expect(previewRows(page).last().getByText('11:39 AM', { exact: true })).toBeVisible();
-  await expect(previewRows(page).last().locator('img.check-icon')).toHaveAttribute('alt', 'delivered');
+  await expect(previewRows(page).last().getByText('11:38 AM', { exact: true })).toBeVisible();
+  await expect(previewRows(page).last().locator('.wa-ticks-delivered')).toHaveCount(1);
 
   await composer(page).fill('Incoming reply');
+  await page.getByRole('combobox', { name: 'Speaking as' }).selectOption({ index: 1 });
   await composer(page).press('Enter');
-  await expect(previewRows(page).nth(-2).locator('img.check-icon')).toHaveAttribute('alt', 'read');
-  await expect(previewRows(page).last().locator('img.check-icon')).toHaveCount(0);
+  await expect(previewRows(page).nth(-2).locator('.wa-ticks-read')).toHaveCount(1);
+  await expect(previewRows(page).last().locator('.wa-ticks')).toHaveCount(0);
 });
 
 test('manual timestamp and delivery choices remain editable and are not auto-promoted', async ({ page }) => {

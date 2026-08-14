@@ -115,7 +115,7 @@ export function formatMessageText(input: string): string {
   let inBlockquote = false;
   
   for (let i = 0; i < lines.length; i++) {
-    let line = lines[i];
+    const line = lines[i];
     
     // Check for block quote: > text
     const quoteMatch = line.match(/^>\s+(.*)$/);

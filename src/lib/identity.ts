@@ -263,6 +263,9 @@ export function syncChatGroupParticipants(project: SkinProject): SkinProject {
       name: character.name,
       avatarUrl: character.avatarUrl,
       color: GROUP_PARTICIPANT_COLORS[(existing.length + added) % GROUP_PARTICIPANT_COLORS.length],
+      ...(project.template === 'android'
+        ? { whatsappTone: (['green', 'blue', 'purple', 'orange', 'teal', 'pink'] as const)[(existing.length + added) % 6] }
+        : {}),
     };
     added += 1;
     return participant;

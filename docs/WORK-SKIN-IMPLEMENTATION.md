@@ -69,9 +69,10 @@ the archive rather than against otwarchive source. **It is all deployed** — se
 "Deployment" in §10.
 
 The product is now two exports rather than one: a **single-platform** skin
-(smaller, the default) and a **master** skin covering every platform in both
+(smaller, opt-in) and a **master** skin covering every platform in both
 themes, which exists because AO3 allows a work exactly one skin. The author
-chooses in the export modal (MASTER §6e).
+chooses in the export modal (MASTER §6e), which defaults to the master skin so
+a later chapter never requires a second skin or a manual merge.
 
 | Platform | Work skin | Saved on AO3 | Sized in `em` | Survives `<p>` injection |
 | --- | --- | --- | --- | --- |
@@ -140,9 +141,9 @@ unaided, and the *image* export got three bug fixes it badly needed:
   an iMessage conversation renders correctly from that one skin. No size cap, no
   editor mangling, and `display:flex` finally observed working on a real page.
 - **And an author can choose it** (BACKLOG 10, MASTER §6e). The work-skin modal
-  offers **Just \<platform\>** — still the default — against **All four
-  platforms**, because AO3 gives a work exactly one skin and that choice has to
-  be made at the moment they save, not discovered in chapter 4.
+  offers **Just \<platform\>** against **All four platforms** — now the default
+  — because AO3 gives a work exactly one skin and that choice has to be made at
+  the moment they save, not discovered in chapter 4.
 - **Both themes travel in one skin** (BACKLOG 8, MASTER §6b-i). The container
   carries `theme-light` / `theme-dark`, and the theme the author did not pick is
   carried as a second namespaced stylesheet. **The cheap version — diff the two
@@ -1077,7 +1078,7 @@ so **no markup change is needed at all**; `absolutizeCssAssets` and
 3. **Emit the version as a rule, not a comment.** AO3 deletes every comment on
    save (§13), so `/* Generated with … */` has never once reached the archive.
    Rosé Pine's trick survives because it is a real rule —
-   `#workskin .ao3skingen-v4::after{content:'4';}` — and it lets the app detect
+   `#workskin .ao3skingen-v6::after{content:'6';}` — and it lets the app detect
    a stale saved skin if the author pastes their CSS back in. Bump it whenever
    the class contract changes. Single quotes: that is the form we have watched
    survive the sanitizer (see the note in `buildIOSCSS`).
@@ -1672,3 +1673,152 @@ It compensates for nothing in html2canvas, so it does not qualify for the narrow
 exception in §10 rule 5. Move it into `buildIOSCSS`/`buildAndroidCSS` (legal, and
 the PNG stays byte-identical) or drop it from the clone. Unresolved because it is
 a design call, not a bug.
+
+## 17. WhatsApp structured scenes and native media — implemented 13 Aug 2026
+
+WhatsApp now has one canonical renderer shared by the main preview, real Save
+Image export, single-platform Work Skin export, and the master skin. Static
+rendering never instantiates audio or video: it emits a deterministic waveform
+or poster card plus an ordinary source link. Only the narrowly generated AO3
+work mode emits `<audio>`, `<video>`, `<source>`, and optional `<track>` markup,
+always with controls, never autoplay, and with readable fallback text.
+
+The AO3 paragraph-injection lessons above shaped the markup directly. Speaker
+identity lives in a semantic definition list; replies are blockquotes; reaction
+labels use clipped text that becomes ordinary prose when Creator's Style is
+off; and image, reply, link, media, timestamp, and reaction geometry is owned by
+one stylesheet. There are no inline styles, pasted embeds, scripts, CSS pseudo-
+content that carries story meaning, or remotely fetched chrome assets.
+
+Master Work Skin version 6 is the compatibility boundary for these frame,
+run, reply, card, media, event, reaction, tone, wallpaper, and scroll classes.
+The automated gate verifies AO3 CSS legality, comment stripping, static/native
+media divergence, source-scene reply resolution during chunked PNG export, and
+unstyled reading order. A fresh authenticated AO3 save/read-back remains the
+only external verification step; do not record that as passed until the saved
+HTML/CSS and Creator's Style-off page have actually been inspected.
+
+### 17a. The video incident, recorded exactly
+
+The original failure came from treating AO3's ordinary element allowlist as
+the entire Work Text pipeline. It is not. Work Text `content` first passes
+through AO3's field-specific embed/media cleaning, which recognizes approved
+provider embeds and native media, and then through the ordinary sanitizer. The
+fix was not to preserve pasted HTML. It was to introduce an explicit render
+boundary:
+
+```ts
+buildHTML(project, 'static')
+buildHTML(project, 'ao3-work')
+```
+
+`Preview`, Save PNG, and ImgBB scene export call `static`. Twitter produces a
+linked poster card there, and WhatsApp produces a poster/waveform card; those
+strings contain no `iframe`, `audio`, `video`, `source`, or `track`. Work Skin
+generation alone calls `ao3-work`. Twitter normalizes a structured YouTube URL
+to its 11-character ID and generates a titled
+`youtube-nocookie.com/embed/...` iframe, or generates a controlled direct-file
+`video`. WhatsApp generates the same approved YouTube iframe or controlled
+native `audio`/direct `video`. Direct players
+include typed `source`, controls, metadata-only preload, no autoplay, and an
+optional complete caption `track`. Native players explicitly carry
+`crossorigin="anonymous"`, matching AO3's sanitizer default.
+
+The first WhatsApp audio example used W3's direct `.oga` file. That host served
+the correct `audio/ogg` MIME type but no `Access-Control-Allow-Origin` header.
+It could therefore appear in the app while AO3's forced anonymous-CORS player
+stalled at `0:00`. The shipped example now uses a direct CORS-enabled MP3 from
+Internet Archive. This is a hosting correction, not an audio-element change:
+author-supplied audio still needs a direct HTTPS file, the matching MIME type,
+and a host that permits anonymous cross-origin media requests.
+Storage replaces only that exact historical W3 sample URL/MIME pair on load so
+the current saved example is repaired; it never rewrites an arbitrary
+author-supplied audio address.
+
+YouTube poster URLs remain optional overrides. A blank or unfinished override
+is treated as absent, so the renderer uses `i.ytimg.com/vi/VIDEO_ID/hqdefault.jpg`
+instead of emitting a broken empty-source image. Switching video providers also
+clears the old poster rather than carrying provider-specific state across.
+
+The editor player is a third surface, separate from both generated strings. It
+does not exist until **Load video/media preview** is pressed. Any change to the
+source object destroys that player and requires consent again. This prevents a
+saved project—or a changed URL after consent—from silently contacting a media
+host.
+
+Only URLs and metadata enter local storage and project backups. The application
+does not download, proxy, cache, transcode, upload, or rehost YouTube/direct
+media bytes. ImgBB receives only the final rasterized PNG; a poster address is
+still an ordinary external image. Blank optional titles remain valid in the
+model and backup validator and render with a readable fallback label, which is
+why project download no longer fails with “video title cannot be empty.”
+
+Regression tests pin all four facts together: static output has no player, AO3
+output has the exact player, blank titles round-trip, and hosted-image requests
+contain PNG bytes rather than media URLs.
+
+### 17b. Direct media follows Twitter's proven three-surface rule
+
+Treat `TwitterPostExtrasEditor` and `twitterVideoHTML` as the reference, not as
+unrelated platform code. The reusable contract is:
+
+- **Editor:** no player until explicit consent; after consent use controls,
+  `preload="metadata"`, a MIME-typed `<source>`, optional default caption
+  `<track>`, and an actionable HTTPS/CORS/MIME error. Never autoplay.
+- **Scene and raster:** no `<audio>`, `<video>`, `<source>`, or `<track>`. Render
+  a static waveform/poster card with duration, transcript/description, visible
+  caption link, and source link. ImgBB receives only the finished PNG.
+- **AO3 Work Text:** narrowly generate a titled controlled native player with
+  a typed source and optional `<track kind="captions" ... default="default">`.
+  Keep ordinary fallback/source links because a host can reject CORS, change
+  MIME data, expire, or disappear after the work is published.
+
+This is a security and ownership boundary, not merely a visual choice. The app
+does not fetch, proxy, cache, transform, upload, or preserve media bytes. A
+poster is an image resource and follows image-host policy; the audio/video file
+continues streaming from the author's external host on AO3.
+
+Pin the rule at both levels. Unit tests compare static and `ao3-work` HTML and
+assert exact source/track attributes. Browser tests prove that consent creates
+the only editor player and that sending the message returns to a static scene.
+If either platform changes this pattern, update both resource guides before
+changing the implementation so the behavior cannot drift silently again.
+
+### 17c. WhatsApp raster clones must inherit the canonical frame geometry
+
+The v6 WhatsApp renderer owns its header, body, composer, and provider-aware
+media geometry in
+`buildAndroidCSS`. Do not reintroduce the old screenshot renderer's absolute
+header coordinates in `ExportPanel`: those overrides can hide the group avatar,
+name, or subtitle even while the live preview looks correct. A raster clone may
+expand a fixed-height message viewport and add small capture-only separation to
+nested cards, but it must otherwise inherit the canonical renderer's flex
+layout.
+
+Hosted scene export has a similarly narrow boundary. The browser sends the
+finished canvas as a raw `image/png` body to the same-origin upload route. It
+does not send a multipart collection of scene resources, and audio/video source
+URLs must never appear in the request body. Pin both the PNG signature and the
+absence of direct-media URLs in a browser test.
+
+### 17d. Browser evidence has four levels; name the level you actually ran
+
+Follow §6 in order for every structural WhatsApp change:
+
+1. Run the unit/AO3 CSS lint gate. It proves generated syntax and semantic
+   fallbacks, but no geometry.
+2. Run the committed Edge/Playwright AO3 harness with archive core CSS and
+   measured paragraph injection. It proves local browser geometry, including
+   skin-off reading, single/master parity, and namespace isolation.
+3. Save and inspect real 1× and 2× PNGs. html2canvas is a second renderer; DOM
+   assertions cannot reveal its clipping or clone-only overrides.
+4. In a connected, signed-in browser, save the final skin on AO3, reopen its
+   editor, compare the cleaned CSS, paste the Work Text, reopen the work, and
+   inspect it with Creator's Style both on and off. This is the only level that
+   may be called an AO3 save/read-back.
+
+If no browser session is connected, complete levels 1–3 and record level 4 as
+externally pending. Do not turn a Playwright simulation, public work page, old
+read-back artifact, or source-code audit into a claimed archive pass. The
+browser session must already be available and authenticated; credentials do not
+belong in the repository, test fixtures, shell history, or project files.

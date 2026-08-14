@@ -75,7 +75,10 @@ export function normalizeYouTubeUrl(value: string): NormalizedYouTubeUrl | undef
   } catch {
     return undefined;
   }
-  if (url.protocol !== 'https:' && url.protocol !== 'http:') return undefined;
+  // Project files, editor validation, and generated embeds share one rule:
+  // provider URLs must be HTTPS. Accepting HTTP here made the editor appear
+  // valid only for project backup/export to reject the same post later.
+  if (url.protocol !== 'https:') return undefined;
   const host = url.hostname.toLowerCase().replace(/^www\./, '');
   let videoId = '';
   if (host === 'youtu.be') videoId = url.pathname.split('/').filter(Boolean)[0] || '';
@@ -109,7 +112,6 @@ export function validateTwitterVideo(video: TwitterVideo | undefined): string[] 
   if (!video) return [];
   const issues: string[] = [];
   if (video.title.length > 200) issues.push('Keep the video title under 200 characters.');
-  if (!isSafeHttpUrl(video.posterUrl)) issues.push('Poster must use a valid HTTPS address.');
   if (!isSafeHttpUrl(video.captionTrackUrl)) issues.push('Caption track must use a valid HTTPS address.');
   if (video.captionTrackUrl && (!video.captionLanguage?.trim() || !video.captionLabel?.trim())) {
     issues.push('Caption tracks need a language and label.');
@@ -117,6 +119,7 @@ export function validateTwitterVideo(video: TwitterVideo | undefined): string[] 
   if (video.source === 'youtube') {
     if (!normalizeYouTubeUrl(video.url)) issues.push('Use a supported YouTube watch, share, Shorts, live, or embed address.');
   } else {
+    if (!isSafeHttpUrl(video.posterUrl)) issues.push('Poster must use a valid HTTPS address.');
     if (!isSafeHttpUrl(video.url)) issues.push('Direct videos must use a valid HTTPS address.');
     if (!/^video\/(mp4|webm|ogg)$/i.test(video.mimeType || '')) {
       issues.push('Direct videos need a supported MIME type: video/mp4, video/webm, or video/ogg.');

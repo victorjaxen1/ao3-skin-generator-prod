@@ -12,7 +12,7 @@ import {
 import { cloneTheme, TEMPLATES } from '../src/lib/siteSkin/templates';
 
 test.describe('versioned project files', () => {
-  test('round-trips a scene cast and character library through schema v4', () => {
+  test('round-trips a scene cast and character library through schema v7', () => {
     const project = defaultProject();
     project.id = 'scene-1';
     project.messages[0].statusMode = 'auto';
@@ -31,7 +31,7 @@ test.describe('versioned project files', () => {
     }], new Date('2026-08-12T00:00:00.000Z'));
 
     const parsed = parseProjectFile(text);
-    expect(parsed.schemaVersion).toBe(4);
+    expect(parsed.schemaVersion).toBe(7);
     expect(parsed.project.cast?.selfId).toBeTruthy();
     expect(parsed.project.messages[0].attachments?.[0]).toEqual({
       type: 'image',
@@ -53,7 +53,7 @@ test.describe('versioned project files', () => {
 
   test('rejects future schemas, unknown top-level fields, invalid URLs, and oversized input', () => {
     const valid = createProjectFile(defaultProject(), []);
-    expect(() => parseProjectFile(JSON.stringify({ ...valid, schemaVersion: 5 }))).toThrow(ProjectFileError);
+    expect(() => parseProjectFile(JSON.stringify({ ...valid, schemaVersion: 8 }))).toThrow(ProjectFileError);
     expect(() => parseProjectFile(JSON.stringify({ ...valid, surprise: true }))).toThrow(/Unknown top-level field/);
 
     const badUrl = structuredClone(valid);
@@ -80,7 +80,7 @@ test.describe('versioned project files', () => {
     };
 
     const parsed = parseProjectFile(JSON.stringify(v1));
-    expect(parsed.schemaVersion).toBe(4);
+    expect(parsed.schemaVersion).toBe(7);
     expect(parsed.project.cast?.twitterPrimaryId).toBe('twitter-primary');
     expect(parsed.project.cast?.characters[0]).toMatchObject({
       name: 'Legacy User',

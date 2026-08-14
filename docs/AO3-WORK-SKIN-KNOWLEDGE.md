@@ -1073,3 +1073,39 @@ These are incorporated into
 5. **Correct documentation and tests that assume native media is always
    stripped** (§5). Native `audio`/`video` and approved player embeds are
    field-specific Work Text exceptions; arbitrary iframes remain disallowed.
+
+## 43. The implemented video contract — **SHIPPED 13 AUG 2026**
+
+The working solution is deliberately split at `buildHTML(project,
+renderMode)`. `static` is used by the scene preview, Save PNG, and ImgBB hosted
+scene export; it emits a poster/waveform, play symbol, accessible description,
+caption/source links, and no playable element. `ao3-work` is used only while
+building editable Work Text; it emits the exact structured player AO3's media
+pipeline accepts.
+
+For YouTube, the saved data is a supported HTTPS URL, never raw embed HTML. The
+renderer extracts the 11-character video ID, canonicalizes the source link,
+and constructs a titled privacy-enhanced `youtube-nocookie.com/embed/...`
+iframe. For direct Twitter/WhatsApp media, the saved data is an HTTPS URL plus
+an allowlisted MIME type and optional poster, duration, description/transcript,
+and complete caption metadata. The renderer constructs `audio`/`video`, typed
+`source`, and optional `track`; it never accepts arbitrary markup.
+
+The consent-gated React player inside the editor is not either export variant.
+It is mounted only after the author asks to load it, never autoplays, and is
+unmounted whenever any media field changes. Old consent for one host must not
+silently authorize a newly typed URL.
+
+Persistence and hosting retain URLs and metadata only. Neither the application,
+AO3 SkinGen's server, nor ImgBB receives or stores the YouTube/direct media
+file. ImgBB sees only a final `image/png` scene. Playback on AO3 remains subject
+to the original media host's availability, MIME response, embedding policy,
+and CORS behavior, so ordinary fallback links and readable text remain part of
+the canonical output.
+
+The WhatsApp audio `0:00` incident made the CORS condition concrete. AO3 forces
+`crossorigin="anonymous"`; W3's sample `.oga` returned the right MIME type but
+no `Access-Control-Allow-Origin`, so the saved player could not acquire media.
+Use a direct host that permits anonymous CORS (the built-in example now uses a
+CORS-enabled Internet Archive MP3), emit the attribute explicitly, and keep the
+ordinary source link for host failures.

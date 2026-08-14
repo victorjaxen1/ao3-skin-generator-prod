@@ -1,6 +1,7 @@
 import { Message, SkinProject } from './schema';
 import { resolveMessageIdentity } from './identity';
 import { calculateTwitterPollPercentages, deriveTwitterReplyHandles } from './twitter';
+import { iosMessageLabel } from './ios';
 
 const PLATFORM_LABEL: Record<SkinProject['template'], string> = {
   ios: 'iMessage conversation',
@@ -36,6 +37,93 @@ function twitterSpeaker(project: SkinProject, message: Message): string {
   return identity.twitterHandle ? `${identity.name} (@${identity.twitterHandle})` : identity.name;
 }
 
+function whatsappLines(project: SkinProject, message: Message): string[] {
+  if (message.whatsappEvent) return [`— ${message.whatsappEvent.text.trim()} —`];
+  const lines: string[] = [];
+  if (message.whatsappReply) {
+    const target = project.messages.find(candidate => candidate.id === message.whatsappReply!.messageId);
+    if (target) lines.push(`${chatSpeaker(project, message)} replied to ${chatSpeaker(project, target)}: ${plainMessageText(target.content) || (target.whatsappMedia?.kind === 'audio' ? 'Voice message' : target.whatsappMedia?.kind === 'video' ? 'Video' : target.attachments?.length ? 'Photo' : target.whatsappLinkPreview?.title || 'Message')}`);
+    else lines.push(`${chatSpeaker(project, message)} replied to an unavailable message.`);
+  }
+  const speaker = chatSpeaker(project, message);
+  const timestamp = message.timestamp?.trim() ? ` (${message.timestamp.trim()})` : '';
+  const content = plainMessageText(message.content);
+  lines.push(`${speaker}${timestamp}:${content ? ` ${content}` : ''}`);
+  lines.push(...attachmentLines(message));
+  if (message.whatsappLinkPreview) {
+    lines.push(`[Link: ${message.whatsappLinkPreview.title}]`);
+    if (message.whatsappLinkPreview.description?.trim()) lines.push(plainMessageText(message.whatsappLinkPreview.description));
+    lines.push(message.whatsappLinkPreview.url);
+  }
+  if (message.whatsappMedia?.kind === 'audio') {
+    lines.push(`[Voice message${message.whatsappMedia.duration ? `, ${message.whatsappMedia.duration}` : ''}]`);
+    if (message.whatsappMedia.transcript?.trim()) lines.push(`Transcript: ${plainMessageText(message.whatsappMedia.transcript)}`);
+    lines.push(`Source: ${message.whatsappMedia.url}`);
+  }
+  if (message.whatsappMedia?.kind === 'video') {
+    lines.push(`[Video${message.whatsappMedia.duration ? `, ${message.whatsappMedia.duration}` : ''}]`);
+    if (message.whatsappMedia.description?.trim()) lines.push(plainMessageText(message.whatsappMedia.description));
+    lines.push(`Source: ${message.whatsappMedia.url}`);
+    if (message.whatsappMedia.source === 'direct' && message.whatsappMedia.captionTrackUrl) lines.push(`Captions: ${message.whatsappMedia.captionLabel || message.whatsappMedia.captionLanguage || 'caption track'} — ${message.whatsappMedia.captionTrackUrl}`);
+  }
+  if (message.whatsappReactions?.length) lines.push(`Reactions: ${message.whatsappReactions.map(reaction => `${reaction.emoji}${(reaction.count || 1) > 1 ? ` ×${reaction.count}` : ''}`).join(', ')}`);
+  return lines;
+}
+
+/**
+ * The iOS reading order §11.1 specifies.
+ *
+ * Separate from `whatsappLines` on purpose: the two platforms label the same
+ * concepts differently — Apple's are Tapbacks, not reactions — and a shared
+ * function would settle that by picking one platform's vocabulary for both.
+ */
+function iosLines(project: SkinProject, message: Message): string[] {
+  if (message.iosEvent) return [`— ${message.iosEvent.text.trim()} —`];
+  const lines: string[] = [];
+  if (message.iosReply) {
+    const target = project.messages.find(candidate => candidate.id === message.iosReply!.messageId);
+    if (target) {
+      const excerpt = plainMessageText(target.content) || iosMessageLabel(target);
+      lines.push(`${chatSpeaker(project, message)} replied to ${chatSpeaker(project, target)}: ${excerpt}`);
+    } else {
+      lines.push(`${chatSpeaker(project, message)} replied to an unavailable message.`);
+    }
+  }
+  const timestamp = message.timestamp?.trim() ? ` (${message.timestamp.trim()})` : '';
+  const content = plainMessageText(message.content);
+  lines.push(`${chatSpeaker(project, message)}${timestamp}:${content ? ` ${content}` : ''}`);
+  lines.push(...attachmentLines(message));
+  if (message.iosLinkPreview) {
+    lines.push(`[Link: ${message.iosLinkPreview.title}]`);
+    if (message.iosLinkPreview.description?.trim()) lines.push(plainMessageText(message.iosLinkPreview.description));
+    lines.push(message.iosLinkPreview.url);
+  }
+  if (message.iosMedia?.kind === 'audio') {
+    lines.push(`[Voice message${message.iosMedia.duration ? `, ${message.iosMedia.duration}` : ''}]`);
+    if (message.iosMedia.transcript?.trim()) lines.push(`Transcript: ${plainMessageText(message.iosMedia.transcript)}`);
+    lines.push(`Source: ${message.iosMedia.url}`);
+  }
+  if (message.iosMedia?.kind === 'video') {
+    lines.push(`[Video${message.iosMedia.title ? `: ${message.iosMedia.title}` : ''}${message.iosMedia.duration ? `, ${message.iosMedia.duration}` : ''}]`);
+    if (message.iosMedia.description?.trim()) lines.push(plainMessageText(message.iosMedia.description));
+    lines.push(`Source: ${message.iosMedia.url}`);
+    if (message.iosMedia.source === 'direct' && message.iosMedia.captionTrackUrl) {
+      lines.push(`Captions: ${message.iosMedia.captionLabel || message.iosMedia.captionLanguage || 'caption track'} — ${message.iosMedia.captionTrackUrl}`);
+    }
+  }
+  if (message.iosTapbacks?.length) {
+    lines.push(`Tapbacks: ${message.iosTapbacks.map(tapback => `${tapback.emoji}${(tapback.count || 1) > 1 ? ` ×${tapback.count}` : ''}`).join(', ')}`);
+  } else if (message.reaction?.trim()) {
+    // The retired single-emoji field. §0.7 forbids *migrating* it into
+    // `iosTapbacks` — the new editor owns that field canonically — but a
+    // project saved before this release still carries one, and the renderer
+    // still draws it, so the transcript has to agree with what a reader sees.
+    lines.push(`[Reaction: ${message.reaction.trim()}]`);
+  }
+  if (message.outgoing && message.status) lines.push(`Status: ${message.status}`);
+  return lines;
+}
+
 export function buildSceneTranscript(project: SkinProject): string {
   const lines: string[] = [PLATFORM_LABEL[project.template]];
 
@@ -53,6 +141,18 @@ export function buildSceneTranscript(project: SkinProject): string {
 
   for (const message of project.messages) {
     lines.push('');
+    if (project.template === 'android' && !message.isTyping) {
+      lines.push(...whatsappLines(project, message));
+      continue;
+    }
+    if (project.template === 'ios' && !message.isTyping) {
+      // The time break belongs above its owning message, and an event replaces
+      // the message entirely, so the break is emitted here rather than inside
+      // iosLines where it would land after the reply relationship.
+      if (message.showTimeBreak && message.timeBreakText?.trim()) lines.push(`— ${message.timeBreakText.trim()} —`);
+      lines.push(...iosLines(project, message));
+      continue;
+    }
     if (message.showTimeBreak && message.timeBreakText?.trim()) lines.push(`— ${message.timeBreakText.trim()} —`);
     if (message.isTyping && (project.template === 'ios' || project.template === 'android')) {
       lines.push(`${chatSpeaker(project, message)} is typing…`);

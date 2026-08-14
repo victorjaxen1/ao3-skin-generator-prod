@@ -9,6 +9,18 @@ import {
   normalizeYouTubeUrl,
   resolveTwitterTheme,
 } from './twitter';
+import {
+  isSameWhatsAppRun,
+  WHATSAPP_PARTICIPANT_TONES,
+  whatsappMessageLabel,
+  whatsappToneForMessage,
+} from './whatsapp';
+import {
+  IOS_PARTICIPANT_TONES,
+  isSameIOSRun,
+  iosMessageLabel,
+  iosToneForMessage,
+} from './ios';
 
 export type HtmlRenderMode = 'static' | 'ao3-work';
 
@@ -257,8 +269,11 @@ function twitterVideoHTML(msg: Message, mode: HtmlRenderMode): string {
   const sourceUrl = normalized?.canonicalUrl || video.url;
   const safeSource = sanitizeUrl(sourceUrl);
   const title = sanitizeText(video.title || 'Video');
-  const poster = video.posterUrl
-    ? `<img src="${sanitizeUrl(video.posterUrl)}" alt="Poster for ${sanitizeAttribute(video.title || 'video')}" class="video-poster" width="600" height="338" />`
+  const safePoster = /^https:\/\//i.test(video.posterUrl || '') ? sanitizeUrl(video.posterUrl) : '';
+  const poster = safePoster
+    ? `<img src="${safePoster}" alt="Poster for ${sanitizeAttribute(video.title || 'video')}" class="video-poster" width="600" height="338" />`
+    : normalized
+      ? `<img src="${sanitizeUrl(`https://i.ytimg.com/vi/${normalized.videoId}/hqdefault.jpg`)}" alt="YouTube thumbnail for ${sanitizeAttribute(video.title || 'video')}" class="video-poster" width="480" height="360" />`
     : `<span class="video-poster-placeholder" aria-hidden="true">Video</span>`;
   const duration = video.duration ? `<span class="video-duration">${sanitizeText(video.duration)}</span>` : '';
   const description = video.description ? `<div class="video-description">${sanitizeText(video.description)}</div>` : '';
@@ -270,11 +285,11 @@ function twitterVideoHTML(msg: Message, mode: HtmlRenderMode): string {
       return `<div class="twitter-video-card twitter-video-player">${srOnly('Video: ')}<iframe src="${sanitizeUrl(normalized.embedUrl)}" title="${sanitizeAttribute(video.title || 'YouTube video')}" width="560" height="315" frameborder="0" allowfullscreen=""></iframe><b class="video-title">${title}</b>${description}${captions}<div class="video-fallback">Source: <a href="${safeSource}">${sanitizeText(sourceUrl)}</a></div></div>`;
     }
     if (video.source === 'direct' && sanitizeUrl(video.url) && /^video\/(mp4|webm|ogg)$/i.test(video.mimeType || '')) {
-      const posterAttribute = video.posterUrl ? ` poster="${sanitizeUrl(video.posterUrl)}"` : '';
+      const posterAttribute = safePoster ? ` poster="${safePoster}"` : '';
       const track = video.captionTrackUrl
         ? `<track src="${sanitizeUrl(video.captionTrackUrl)}" kind="captions" srclang="${sanitizeAttribute(video.captionLanguage)}" label="${sanitizeAttribute(video.captionLabel)}" default="default">`
         : '';
-      return `<div class="twitter-video-card twitter-video-player">${srOnly('Video: ')}<video class="twitter-native-video" title="${sanitizeAttribute(video.title || 'Video')}" width="560"${posterAttribute}><source src="${safeSource}" type="${sanitizeAttribute(video.mimeType)}">${track}Your browser cannot play this video. <a href="${safeSource}">Open the video source.</a></video><b class="video-title">${title}</b>${description}${captions}<div class="video-fallback">Source: <a href="${safeSource}">${sanitizeText(sourceUrl)}</a></div></div>`;
+      return `<div class="twitter-video-card twitter-video-player">${srOnly('Video: ')}<video class="twitter-native-video" title="${sanitizeAttribute(video.title || 'Video')}" width="560" controls="controls" crossorigin="anonymous" preload="metadata" playsinline="playsinline"${posterAttribute}><source src="${safeSource}" type="${sanitizeAttribute(video.mimeType)}">${track}Your browser cannot play this video. <a href="${safeSource}">Open the video source.</a></video><b class="video-title">${title}</b>${description}${captions}<div class="video-fallback">Source: <a href="${safeSource}">${sanitizeText(sourceUrl)}</a></div></div>`;
     }
   }
   return `<div class="twitter-video-card">${srOnly('Video: ')}<a href="${safeSource}" class="video-source"><span class="video-poster-wrap">${poster}<span class="video-play" aria-hidden="true">▶</span>${duration}</span><b class="video-title">${title}</b></a>${description}${captions}<div class="video-fallback">Source: <a href="${safeSource}">${sanitizeText(sourceUrl)}</a></div></div>`;
@@ -387,15 +402,416 @@ function attachmentAlt(attachment: { alt?: string; decorative?: boolean }): stri
   return attachment.decorative ? '' : sanitizeAttribute(attachment.alt || '');
 }
 
+function whatsappReplyHTML(message: Message, project: SkinProject, allMessages: Message[]): string {
+  if (!message.whatsappReply) return '';
+  const target = allMessages.find(candidate => candidate.id === message.whatsappReply!.messageId);
+  if (!target || target.whatsappEvent) {
+    return `<blockquote class="wa-reply wa-reply-missing"><b>Original message unavailable</b></blockquote>`;
+  }
+  const identity = resolveMessageIdentity(project, target);
+  const excerpt = target.content.trim().replace(/\s+/g, ' ').slice(0, 180) || whatsappMessageLabel(target);
+  const tone = whatsappToneForMessage(project, target);
+  return `<blockquote class="wa-reply wa-reply-${tone}"><b>Replying to ${sanitizeText(identity.name)}</b><span>${sanitizeText(excerpt)}</span></blockquote>`;
+}
+
+function whatsappImagesHTML(message: Message): string {
+  const attachments = (message.attachments || []).slice(0, 4);
+  if (!attachments.length) return '';
+  return `<span class="wa-images wa-images-${attachments.length}">${attachments.map((attachment, index) => `<img src="${sanitizeUrl(attachment.url)}" alt="${attachmentAlt(attachment)}" class="wa-image wa-image-${index + 1}" width="600" height="400" />`).join('')}</span>`;
+}
+
+function whatsappLinkPreviewHTML(message: Message): string {
+  const preview = message.whatsappLinkPreview;
+  if (!preview) return '';
+  const image = preview.image?.url
+    ? `<img src="${sanitizeUrl(preview.image.url)}" alt="${attachmentAlt(preview.image)}" class="wa-link-image" width="600" height="315" />`
+    : '';
+  return `<a class="wa-link-preview" href="${sanitizeAttribute(preview.url)}">${image}<b>${sanitizeText(preview.title)}</b>${preview.description ? `<span class="wa-link-description">${sanitizeText(preview.description)}</span>` : ''}${preview.siteName ? `<span class="wa-link-site">${sanitizeText(preview.siteName)}</span>` : ''}<span class="wa-link-url">${sanitizeText(preview.url)}</span></a>`;
+}
+
+function waveformBars(messageId: string): string {
+  let seed = [...messageId].reduce((total, char) => (total * 31 + char.charCodeAt(0)) >>> 0, 17);
+  return Array.from({ length: 24 }, () => {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    return `<span class="wa-wave-bar wa-wave-${(seed % 6) + 1}"></span>`;
+  }).join('');
+}
+
+function whatsappMediaHTML(message: Message, renderMode: HtmlRenderMode): string {
+  const media = message.whatsappMedia;
+  if (!media) return '';
+  const normalized = media.kind === 'video' && media.source === 'youtube'
+    ? normalizeYouTubeUrl(media.url)
+    : undefined;
+  const sourceUrl = normalized?.canonicalUrl || media.url;
+  const safeSource = sanitizeUrl(sourceUrl);
+  const playableSource = /^https:\/\//i.test(media.url) && !!safeSource;
+  const sourceFallback = safeSource
+    ? `<a class="wa-media-source" href="${safeSource}">${media.kind === 'audio' ? 'Audio' : 'Video'} source</a>`
+    : '';
+  if (media.kind === 'audio') {
+    const transcript = media.transcript ? `<span class="wa-transcript">Transcript: ${sanitizeText(media.transcript)}</span>` : '';
+    if (renderMode === 'ao3-work' && playableSource) {
+      return `<span class="wa-media wa-audio wa-media-player"><audio class="wa-native-audio" title="Voice message" controls="controls" crossorigin="anonymous" preload="metadata"><source src="${safeSource}" type="${sanitizeAttribute(media.mimeType)}">Voice message: <a href="${safeSource}">open the audio file</a>.</audio><span class="wa-duration">${sanitizeText(media.duration || 'Voice message')}</span>${transcript}${sourceFallback}</span>`;
+    }
+    return `<span class="wa-media wa-audio"><span class="wa-play">▶</span><span class="wa-waveform">${waveformBars(message.id)}</span><span class="wa-duration">${sanitizeText(media.duration || 'Voice message')}</span>${transcript}${sourceFallback}</span>`;
+  }
+  const safePoster = /^https:\/\//i.test(media.posterUrl || '') ? sanitizeUrl(media.posterUrl) : '';
+  const poster = safePoster
+    ? `<img src="${safePoster}" alt="Video poster" class="wa-video-poster" width="600" height="338" />`
+    : normalized
+      ? `<img src="${sanitizeUrl(`https://i.ytimg.com/vi/${normalized.videoId}/hqdefault.jpg`)}" alt="YouTube video thumbnail" class="wa-video-poster" width="480" height="360" />`
+      : `<span class="wa-video-placeholder">Video</span>`;
+  const track = media.source === 'direct' && media.captionTrackUrl
+    ? `<track src="${sanitizeUrl(media.captionTrackUrl)}" kind="captions" srclang="${sanitizeAttribute(media.captionLanguage || '')}" label="${sanitizeAttribute(media.captionLabel || '')}" default="default">`
+    : '';
+  const description = media.description ? `<span class="wa-media-description">${sanitizeText(media.description)}</span>` : '';
+  const captions = media.source === 'direct' && media.captionTrackUrl ? `<span class="wa-captions">Captions: <a href="${sanitizeUrl(media.captionTrackUrl)}">${sanitizeText(media.captionLabel || media.captionLanguage || 'caption track')}</a></span>` : '';
+  if (renderMode === 'ao3-work' && media.source === 'youtube' && normalized) {
+    return `<span class="wa-media wa-video wa-media-player wa-youtube-player"><iframe src="${sanitizeUrl(normalized.embedUrl)}" title="WhatsApp YouTube video" width="560" height="315" frameborder="0" allowfullscreen=""></iframe><span class="wa-duration">${sanitizeText(media.duration || 'YouTube video')}</span>${description}${sourceFallback}</span>`;
+  }
+  if (renderMode === 'ao3-work' && media.source === 'direct' && playableSource) {
+    return `<span class="wa-media wa-video wa-media-player"><video class="wa-native-video" title="WhatsApp video" controls="controls" crossorigin="anonymous" preload="metadata" playsinline="playsinline"${safePoster ? ` poster="${safePoster}"` : ''} width="600" height="338"><source src="${safeSource}" type="${sanitizeAttribute(media.mimeType)}">${track}Video: <a href="${safeSource}">open the video file</a>.</video><span class="wa-duration">${sanitizeText(media.duration || 'Video')}</span>${description}${captions}${sourceFallback}</span>`;
+  }
+  return `<span class="wa-media wa-video${normalized ? ' wa-video-youtube' : ''}">${poster}<span class="wa-video-play">▶</span><span class="wa-duration">${sanitizeText(media.duration || (normalized ? 'YouTube video' : 'Video'))}</span>${description}${captions}${sourceFallback}</span>`;
+}
+
+function whatsappReactionsHTML(message: Message): string {
+  const reactions = message.whatsappReactions || [];
+  if (!reactions.length) return '';
+  const text = reactions.map(reaction => `${reaction.emoji}${(reaction.count || 1) > 1 ? ` ×${reaction.count}` : ''}`).join(' ');
+  return `<span class="wa-reactions">${srOnly('Reactions: ')}${sanitizeText(text)}</span>`;
+}
+
+function whatsappEventHTML(message: Message): string {
+  const event = message.whatsappEvent;
+  if (!event) return '';
+  return `<div class="wa-event wa-event-${event.kind}" data-message-id="${sanitizeAttribute(message.id)}"><dl><dd>${sanitizeText(event.text)}</dd></dl></div>`;
+}
+
+function whatsappMessageHTML(message: Message, project: SkinProject, options: { index: number; allMessages: Message[]; sourceMessages?: Message[]; renderMode: HtmlRenderMode }): string {
+  if (message.whatsappEvent) return whatsappEventHTML(message);
+  if (message.isTyping) return typingRowHTML(message.sender);
+  const previous = options.index > 0 ? options.allMessages[options.index - 1] : undefined;
+  const next = options.index < options.allMessages.length - 1 ? options.allMessages[options.index + 1] : undefined;
+  const startsRun = !isSameWhatsAppRun(project, previous, message);
+  const endsRun = !isSameWhatsAppRun(project, message, next);
+  const groupClass = startsRun && endsRun ? 'single' : startsRun ? 'first' : endsRun ? 'last' : 'middle';
+  const identity = resolveMessageIdentity(project, message);
+  const groupSender = project.settings.androidGroupMode && !message.outgoing
+    // Keep a real separator in the source. With the skin enabled this element
+    // is block-level, while skin-off/downloaded HTML needs the space so the
+    // participant name cannot weld itself to the first word of the message.
+    ? `<b class="group-sender wa-tone-${whatsappToneForMessage(project, message)}">${sanitizeText(identity.name)}</b> `
+    : '';
+  const hiddenSpeaker = groupSender ? '' : `<dt class="visually-hidden">${sanitizeText(identity.name)}: </dt>`;
+  const reply = whatsappReplyHTML(message, project, options.sourceMessages || options.allMessages);
+  const images = whatsappImagesHTML(message);
+  const link = whatsappLinkPreviewHTML(message);
+  const media = whatsappMediaHTML(message, options.renderMode);
+  const emojiSize = emojiMessageSize(message.content, !!(images || link || media));
+  const text = message.content.trim()
+    ? emojiSize
+      ? `<span class="emoji-content ${emojiSize}">${formatMessageText(message.content)}</span>`
+      : `<span class="message-text">${formatMessageText(message.content)}</span>`
+    : '';
+  const time = message.timestamp ? `${srOnly(' ')}<span class="time">${sanitizeText(message.timestamp)}</span>` : '';
+  const tick = message.outgoing && project.settings.androidCheckmarks && message.status
+    ? `<span class="wa-ticks wa-ticks-${message.status}">${message.status === 'sending' ? '◷' : message.status === 'sent' ? '✓' : '✓✓'}</span>`
+    : '';
+  const reactions = whatsappReactionsHTML(message);
+  const classes = [
+    'bubble', message.outgoing ? 'out' : 'in', endsRun ? 'has-tail' : 'no-tail',
+    images ? 'image-bubble' : '', reply ? 'has-reply' : '', link ? 'has-link' : '',
+    media ? 'has-media' : '', reactions ? 'has-reaction' : '', emojiSize ? `emoji-only ${emojiSize}` : '',
+  ].filter(Boolean).join(' ');
+  return `<div class="row ${message.outgoing ? 'out' : 'in'} ${groupClass}" data-message-id="${sanitizeAttribute(message.id)}"><dl class="msg">${hiddenSpeaker}<dd class="${classes}">${groupSender}${reply}${text}${images}${link}${media}${time}${tick}${reactions}</dd></dl></div>`;
+}
+
+
+/* ==========================================================================
+   The iOS renderer.
+   --------------------------------------------------------------------------
+   Extracted from the shared `msgHTML` path, where iMessage markup sat beside
+   three other platforms and every new content block risked breaking the image,
+   timestamp, tail, and Tapback behaviour already working there (§2.2, P0).
+
+   Every new class is `ios-*` even though all of this already lives inside
+   `.chat.ios`. That is deliberate: the master skin puts four platforms in one
+   cascade, and a prefixed class makes a collision something you can grep for
+   rather than something you notice as a wrong-looking render.
+   ========================================================================== */
+
+/** Resolve a reply against the *whole scene*, not just the chunk being drawn. */
+function iosReplyHTML(message: Message, project: SkinProject, sourceMessages: Message[]): string {
+  if (!message.iosReply) return '';
+  const target = sourceMessages.find(candidate => candidate.id === message.iosReply!.messageId);
+  // A dangling pointer says so out loud rather than rendering an empty quote.
+  // Preflight blocks the export on the same condition, so this is what an
+  // author sees while they still have the chance to fix it.
+  if (!target || target.iosEvent) {
+    return `<blockquote class="ios-reply ios-reply-missing"><b>Original message unavailable</b></blockquote>`;
+  }
+  const identity = resolveMessageIdentity(project, target);
+  // Derived at render time, never copied into storage: editing the target or
+  // renaming its speaker updates every reply that points at it.
+  const excerpt = target.content.trim().replace(/\s+/g, ' ').slice(0, 180) || iosMessageLabel(target);
+  const tone = iosToneForMessage(project, target);
+  const thumbSource = target.attachments?.[0]?.url
+    || (target.iosMedia?.kind === 'video' ? target.iosMedia.posterUrl : undefined);
+  const thumb = thumbSource && sanitizeUrl(thumbSource)
+    ? `<img src="${sanitizeUrl(thumbSource)}" alt="" class="ios-reply-thumb" width="40" height="40" />`
+    : '';
+  // The literal spaces are the skin-off story (§4a). These children are
+  // block-level with the skin on, so the whitespace costs nothing there and is
+  // ignored between flex items — but in a download it is the only thing between
+  // "Replying to Alex" and the quoted text, which otherwise read as one word.
+  return `<blockquote class="ios-reply ios-reply-${tone}">${thumb}<b>Replying to ${sanitizeText(identity.name)}</b> <span>${sanitizeText(excerpt)}</span> </blockquote>`;
+}
+
+/**
+ * One to four images, every one of them a real `<img>` with its own alt text.
+ *
+ * Apple hides extras behind a stack you tap. A static work cannot be tapped, so
+ * a stack would discard story information and leave the skin-off reader with
+ * one description out of four (§3.4). The count class picks the collage.
+ */
+function iosImagesHTML(message: Message): string {
+  const attachments = (message.attachments || []).slice(0, 4);
+  if (!attachments.length) return '';
+  return `<span class="ios-images ios-images-${attachments.length}">${attachments.map((attachment, index) =>
+    `<img src="${sanitizeUrl(attachment.url)}" alt="${attachmentAlt(attachment)}" class="ios-image ios-image-${index + 1}" width="600" height="400" />`
+  ).join('')}</span>`;
+}
+
+function iosLinkPreviewHTML(message: Message): string {
+  const preview = message.iosLinkPreview;
+  if (!preview) return '';
+  const image = preview.image?.url
+    ? `<img src="${sanitizeUrl(preview.image.url)}" alt="${attachmentAlt(preview.image)}" class="ios-link-image" width="600" height="315" />`
+    : '';
+  // The whole card is the anchor, and the URL survives as visible text so the
+  // destination is still readable with the skin off.
+  return `<a class="ios-link-preview" href="${sanitizeAttribute(preview.url)}">${image}<b>${sanitizeText(preview.title)}</b> ${preview.description ? `<span class="ios-link-description">${sanitizeText(preview.description)}</span> ` : ''}${preview.siteName ? `<span class="ios-link-site">${sanitizeText(preview.siteName)}</span> ` : ''}<span class="ios-link-url">${sanitizeText(preview.url)}</span> </a>`;
+}
+
+/** A deterministic pseudo-waveform. Never probed from the audio file. */
+function iosWaveformBars(messageId: string): string {
+  let seed = [...messageId].reduce((total, char) => (total * 31 + char.charCodeAt(0)) >>> 0, 23);
+  return Array.from({ length: 26 }, () => {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    return `<span class="ios-wave-bar ios-wave-${(seed % 6) + 1}"></span>`;
+  }).join('');
+}
+
+/**
+ * The two-mode media boundary (§0.3).
+ *
+ * `static` — the live preview, Save PNG, and the ImgBB upload — gets a poster or
+ * waveform card and an ordinary link. It must instantiate no player: a preview
+ * that autoloads contacts a third-party host the author never agreed to, and
+ * html2canvas cannot rasterise native player chrome anyway.
+ *
+ * `ao3-work` gets the narrowly generated markup AO3 preserves. Neither mode
+ * downloads, proxies, transcodes, or rehosts a single byte of media.
+ */
+function iosMediaHTML(message: Message, renderMode: HtmlRenderMode): string {
+  const media = message.iosMedia;
+  if (!media) return '';
+  const normalized = media.kind === 'video' && media.source === 'youtube'
+    ? normalizeYouTubeUrl(media.url)
+    : undefined;
+  const sourceUrl = normalized?.canonicalUrl || media.url;
+  const safeSource = sanitizeUrl(sourceUrl);
+  const playableSource = /^https:\/\//i.test(media.url) && !!safeSource;
+  const sourceFallback = safeSource
+    ? `<a class="ios-media-source" href="${safeSource}">${media.kind === 'audio' ? 'Audio' : 'Video'} source</a>`
+    : '';
+
+  if (media.kind === 'audio') {
+    const transcript = media.transcript ? `<span class="ios-audio-transcript">Transcript: ${sanitizeText(media.transcript)}</span> ` : '';
+    const duration = `<span class="ios-audio-duration">${sanitizeText(media.duration || 'Voice message')}</span> `;
+    if (renderMode === 'ao3-work' && playableSource) {
+      // The native control is never made transparent or floated over a fake
+      // waveform: a reader has to be able to see what they are operating.
+      return `<span class="ios-audio-card ios-audio-player"><audio class="ios-native-audio" title="Voice message" controls="controls" crossorigin="anonymous" preload="metadata"><source src="${safeSource}" type="${sanitizeAttribute(media.mimeType)}">Voice message: <a href="${safeSource}">open the audio file</a>.</audio>${duration}${transcript}${sourceFallback}</span>`;
+    }
+    return `<span class="ios-audio-card"><span class="ios-audio-play">▶</span><span class="ios-waveform">${iosWaveformBars(message.id)}</span>${duration}${transcript}${sourceFallback}</span>`;
+  }
+
+  // A malformed optional poster is ignored, never promoted over the derived
+  // YouTube thumbnail. Half-typing a poster field must not blank the card.
+  const safePoster = /^https:\/\//i.test(media.posterUrl || '') ? sanitizeUrl(media.posterUrl) : '';
+  const poster = safePoster
+    ? `<img src="${safePoster}" alt="Video poster" class="ios-video-poster" width="600" height="338" />`
+    : normalized
+      ? `<img src="${sanitizeUrl(`https://i.ytimg.com/vi/${normalized.videoId}/hqdefault.jpg`)}" alt="YouTube video thumbnail" class="ios-video-poster" width="480" height="360" />`
+      : `<span class="ios-video-placeholder">Video</span>`;
+  const title = media.title?.trim() ? `<span class="ios-video-title">${sanitizeText(media.title)}</span> ` : '';
+  const duration = `<span class="ios-video-duration">${sanitizeText(media.duration || (normalized ? 'YouTube video' : 'Video'))}</span> `;
+  const description = media.description ? `<span class="ios-media-description">${sanitizeText(media.description)}</span> ` : '';
+  const captions = media.source === 'direct' && media.captionTrackUrl
+    ? `<span class="ios-captions">Captions: <a href="${sanitizeUrl(media.captionTrackUrl)}">${sanitizeText(media.captionLabel || media.captionLanguage || 'caption track')}</a></span> `
+    : '';
+  const track = media.source === 'direct' && media.captionTrackUrl
+    ? `<track src="${sanitizeUrl(media.captionTrackUrl)}" kind="captions" srclang="${sanitizeAttribute(media.captionLanguage || '')}" label="${sanitizeAttribute(media.captionLabel || '')}" default="default">`
+    : '';
+
+  if (renderMode === 'ao3-work' && media.source === 'youtube' && normalized) {
+    return `<span class="ios-video-card ios-video-player ios-youtube-player"><iframe src="${sanitizeUrl(normalized.embedUrl)}" title="iMessage YouTube video" width="560" height="315" frameborder="0" allowfullscreen=""></iframe>${title}${duration}${description}${sourceFallback}</span>`;
+  }
+  if (renderMode === 'ao3-work' && media.source === 'direct' && playableSource) {
+    return `<span class="ios-video-card ios-video-player"><video class="ios-native-video" title="iMessage video" controls="controls" crossorigin="anonymous" preload="metadata" playsinline="playsinline"${safePoster ? ` poster="${safePoster}"` : ''} width="600" height="338"><source src="${safeSource}" type="${sanitizeAttribute(media.mimeType)}">${track}Video: <a href="${safeSource}">open the video file</a>.</video>${title}${duration}${description}${captions}${sourceFallback}</span>`;
+  }
+  return `<span class="ios-video-card${normalized ? ' ios-video-youtube' : ''}">${poster}<span class="ios-video-play">▶</span>${title}${duration}${description}${captions}${sourceFallback}</span>`;
+}
+
+/**
+ * The Tapback stack, inside the bubble and on the corner away from the tail.
+ *
+ * Inside `dd.bubble` because the only rule that styles it is a descendant
+ * selector — a defect fixed on 8 Aug 2026 when the old single-emoji chip was
+ * emitted as a sibling and every tapback rendered as unstyled trailing text.
+ */
+function iosTapbacksHTML(message: Message): string {
+  const tapbacks = message.iosTapbacks || [];
+  if (!tapbacks.length) return '';
+  const text = tapbacks.map(tapback => `${tapback.emoji}${(tapback.count || 1) > 1 ? ` ${tapback.count}` : ''}`).join(' ');
+  return `${srOnly(' ')}<span class="ios-tapbacks">${srOnly('Tapbacks: ')}${sanitizeText(text)}</span>`;
+}
+
+/** Events sit outside `dl.msg`, so they can never be mistaken for speech. */
+function iosEventHTML(message: Message): string {
+  const event = message.iosEvent;
+  if (!event) return '';
+  return `<div class="ios-event ios-event-${event.kind}" data-message-id="${sanitizeAttribute(message.id)}"><dl><dd>${sanitizeText(event.text)}</dd></dl></div>`;
+}
+
+function iosMessageHTML(message: Message, project: SkinProject, options: { index: number; allMessages: Message[]; sourceMessages?: Message[]; renderMode: HtmlRenderMode }): string {
+  const timeBreak = message.showTimeBreak && message.timeBreakText
+    ? `<div class="time-break">${sanitizeText(message.timeBreakText)}</div>`
+    : '';
+  if (message.iosEvent) return timeBreak + iosEventHTML(message);
+  if (message.isTyping) return timeBreak + typingRowHTML(message.sender);
+
+  const previous = options.index > 0 ? options.allMessages[options.index - 1] : undefined;
+  const next = options.index < options.allMessages.length - 1 ? options.allMessages[options.index + 1] : undefined;
+  const startsRun = !isSameIOSRun(project, previous, message);
+  const endsRun = !isSameIOSRun(project, message, next);
+  const groupClass = startsRun && endsRun ? 'single' : startsRun ? 'first' : endsRun ? 'last' : 'middle';
+
+  const identity = resolveMessageIdentity(project, message);
+  const reply = iosReplyHTML(message, project, options.sourceMessages || options.allMessages);
+  const images = iosImagesHTML(message);
+  const link = iosLinkPreviewHTML(message);
+  const media = iosMediaHTML(message, options.renderMode);
+  const hasPrimary = !!(images || link || media);
+
+  // Group identity as a tone CLASS, never an inline style. AO3 strips `style`
+  // from every element, so the old inline colour reached the preview and the
+  // PNG and was deleted on the archive — the published work disagreed with what
+  // the author approved.
+  //
+  // The avatar/monogram beside the name stays. It resolves from the canonical
+  // scene character, so renaming or re-picturing someone in the People panel
+  // updates messages already written — that retroactivity is the point of
+  // `resolveMessageIdentity` and there is a test for it.
+  //
+  // The trailing space after </b> is a real separator in the source. With the
+  // skin on this element is block-level and the space costs nothing; with the
+  // skin off it is what stops the name welding itself to the first word.
+  const groupTone = iosToneForMessage(project, message);
+  const groupAvatar = project.settings.iosGroupMode && !message.outgoing
+    ? identity.avatarUrl
+      ? `<img src="${sanitizeUrl(identity.avatarUrl)}" alt="" class="group-avatar" width="20" height="20" />`
+      : `<span class="group-avatar-initials ios-tone-${groupTone}">${sanitizeText(identity.name.substring(0, 2).toUpperCase())}</span> `
+    : '';
+  const groupSender = project.settings.iosGroupMode && !message.outgoing
+    ? `${groupAvatar}<b class="ios-group-sender ios-tone-${groupTone}">${sanitizeText(identity.name)}</b> `
+    : '';
+  // With a visible name above the message, the hidden label would name the same
+  // speaker twice in a download. Measured on a real posted work; see the long
+  // note in msgHTML.
+  const hiddenSpeaker = groupSender ? '' : `<dt class="visually-hidden">${sanitizeText(identity.name)}: </dt>`;
+
+  const emojiSize = emojiMessageSize(message.content, hasPrimary);
+  const text = message.content.trim()
+    ? emojiSize
+      ? `<span class="emoji-content ${emojiSize}">${formatMessageText(message.content)}</span>`
+      : `<span class="message-text">${formatMessageText(message.content)}</span>`
+    : '';
+  // One timestamp per run, on the last bubble — which is what Messages does and
+  // what the shipped renderer did. WhatsApp stamps every bubble; copying that
+  // here would put a time under each line of a three-line burst.
+  // The hidden space stops "hey10:23" when no CSS puts the time on its own line.
+  const time = endsRun && message.timestamp
+    ? `${srOnly(' ')}<span class="time${images ? ' image-time' : ''}">${sanitizeText(message.timestamp)}</span>`
+    : '';
+
+  // The SVG tail exists only because html2canvas cannot rasterise ::after. AO3
+  // removes <svg> with its contents, so buildWorkSkin strips these and switches
+  // on the `.css-tails` pair instead — see §7 of WORK-SKIN-IMPLEMENTATION.md.
+  const tailSvg = endsRun && !emojiSize
+    ? message.outgoing
+      ? `<svg class="bubble-tail bubble-tail-out" width="12" height="16" viewBox="0 0 12 16" xmlns="http://www.w3.org/2000/svg"><path d="M0,0 Q0,16 12,16 L0,16 Z" fill="currentColor"/></svg>`
+      : `<svg class="bubble-tail bubble-tail-in" width="12" height="16" viewBox="0 0 12 16" xmlns="http://www.w3.org/2000/svg"><path d="M12,0 Q12,16 0,16 L12,16 Z" fill="currentColor"/></svg>`
+    : '';
+
+  const tapbacks = iosTapbacksHTML(message);
+  // The retired single-emoji field, still drawn for projects saved before the
+  // structured model. §0.7 forbids migrating it into `iosTapbacks`; it does not
+  // require deleting what an existing project already shows.
+  const legacyReaction = !tapbacks && message.reaction ? `<span class="reaction">${sanitizeText(message.reaction)}</span>` : '';
+
+  const classes = [
+    'bubble', message.outgoing ? 'out' : 'in', endsRun && !emojiSize ? 'has-tail' : 'no-tail',
+    images ? 'image-bubble' : '', reply ? 'has-reply' : '', link ? 'has-link' : '',
+    media ? 'has-media' : '', tapbacks ? 'has-tapbacks' : '', legacyReaction ? 'has-reaction' : '',
+    emojiSize ? `emoji-only ${emojiSize}` : '',
+  ].filter(Boolean).join(' ');
+
+  const deliveryLabel = iosDeliveryLabel(message.status);
+  const statusIndicator = message.outgoing && project.settings.iosShowReadReceipt && deliveryLabel && endsRun
+    ? `<dd class="status-indicator">${deliveryLabel}</dd>`
+    : '';
+
+  return `${timeBreak}<div class="row ${message.outgoing ? 'out' : 'in'} ${groupClass}" data-message-id="${sanitizeAttribute(message.id)}"><dl class="msg">${hiddenSpeaker}<dd class="${classes}">${groupSender}${reply}${text}${images}${link}${media}${time}${tailSvg}${tapbacks}${legacyReaction}</dd>${statusIndicator}</dl></div>`;
+}
+
 function safeCssColor(value: string | undefined, fallback: string): string {
   return value && /^#[0-9a-f]{6}$/i.test(value.trim()) ? value.trim() : fallback;
 }
 
-function msgHTML(msg: Message, template: string, project: SkinProject, options?: { index?: number; allMessages?: Message[]; isReply?: boolean; renderMode?: HtmlRenderMode }): string {
+function msgHTML(msg: Message, template: string, project: SkinProject, options?: { index?: number; allMessages?: Message[]; sourceMessages?: Message[]; isReply?: boolean; renderMode?: HtmlRenderMode }): string {
   // Time break (iOS/Android)
   const timeBreak = msg.showTimeBreak && msg.timeBreakText
     ? `<div class="time-break">${sanitizeText(msg.timeBreakText)}</div>`
     : '';
+
+  if (template === 'android') {
+    const allMessages = options?.allMessages || project.messages;
+    const index = options?.index ?? Math.max(0, allMessages.findIndex(candidate => candidate.id === msg.id));
+    return timeBreak + whatsappMessageHTML(msg, project, {
+      index,
+      allMessages,
+      sourceMessages: options?.sourceMessages,
+      renderMode: options?.renderMode || 'static',
+    });
+  }
+
+  // iOS owns its markup too, as of the platform improvement work. Everything
+  // below this point is Twitter, Google, and the shared scaffolding they use;
+  // the long iOS branch that used to live at the bottom is gone.
+  if (template === 'ios') {
+    const allMessages = options?.allMessages || project.messages;
+    const index = options?.index ?? Math.max(0, allMessages.findIndex(candidate => candidate.id === msg.id));
+    return iosMessageHTML(msg, project, {
+      index,
+      allMessages,
+      sourceMessages: options?.sourceMessages,
+      renderMode: options?.renderMode || 'static',
+    });
+  }
 
   // A message flagged as typing IS the indicator, not a message that happens to
   // say "...".
@@ -657,9 +1073,9 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
     
     // Enhanced metrics with icons - use per-tweet metrics if available, otherwise fall back to global
     // Only use global defaults if the property doesn't exist on the message object
-    const replies = msg.hasOwnProperty('twitterReplies') ? msg.twitterReplies : project.settings.twitterReplies;
-    const retweets = msg.hasOwnProperty('twitterRetweets') ? msg.twitterRetweets : project.settings.twitterRetweets;
-    const likes = msg.hasOwnProperty('twitterLikes') ? msg.twitterLikes : project.settings.twitterLikes;
+    const replies = Object.prototype.hasOwnProperty.call(msg, 'twitterReplies') ? msg.twitterReplies : project.settings.twitterReplies;
+    const retweets = Object.prototype.hasOwnProperty.call(msg, 'twitterRetweets') ? msg.twitterRetweets : project.settings.twitterRetweets;
+    const likes = Object.prototype.hasOwnProperty.call(msg, 'twitterLikes') ? msg.twitterLikes : project.settings.twitterLikes;
     const views = msg.twitterViews;
     const bookmarks = msg.twitterBookmarks;
     
@@ -781,91 +1197,6 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
   if (template === 'google') {
     // Google search: just display as search result (simplified)
     return `<div class="row"><span class="search-term">${sanitized}</span></div>`;
-  }
-  
-  // iOS: No avatars or names in 1-on-1 (authentic behavior)
-  if (template === 'ios') {
-    const rowClass = msg.outgoing ? 'row out' : 'row in';
-    const groupClass = isFirstInGroup && isLastInGroup ? 'single' : isFirstInGroup ? 'first' : isLastInGroup ? 'last' : 'middle';
-    const tailClass = isLastInGroup && !chatEmojiSize ? 'has-tail' : 'no-tail';
-    
-    // Check if this message has an image
-    const hasImage = msg.attachments && msg.attachments.length > 0 && msg.attachments[0].type === 'image';
-    
-    // Build bubble with text content (add group sender name if applicable)
-    let bubbleContent = senderNameHTML ? senderNameHTML + chatMessageContent : chatMessageContent;
-    
-    // Add image inline if present
-    if (hasImage) {
-      const imgUrl = sanitizeUrl(msg.attachments[0].url);
-      bubbleContent += `<img src="${imgUrl}" alt="${attachmentAlt(msg.attachments[0])}" class="message-image" />`;
-    }
-    
-    // Add timestamp. The hidden space is what stops "hey10:23" when no CSS
-    // applies — the time is styled onto its own line, so nothing separates it
-    // from the message text in the markup. See srOnly().
-    if (isLastInGroup && msg.timestamp) {
-      const timeClass = hasImage ? 'time image-time' : 'time';
-      bubbleContent += `${srOnly(' ')}<span class="${timeClass}">${sanitizeText(msg.timestamp)}</span>`;
-    }
-    
-    // Add inline SVG tail for html2canvas compatibility (::after doesn't render in canvas)
-    let tailSvg = '';
-    if (isLastInGroup && !chatEmojiSize) {
-      if (msg.outgoing) {
-        // Right-pointing tail for outgoing messages
-        tailSvg = `<svg class="bubble-tail bubble-tail-out" width="12" height="16" viewBox="0 0 12 16" xmlns="http://www.w3.org/2000/svg"><path d="M0,0 Q0,16 12,16 L0,16 Z" fill="currentColor"/></svg>`;
-      } else {
-        // Left-pointing tail for incoming messages  
-        tailSvg = `<svg class="bubble-tail bubble-tail-in" width="12" height="16" viewBox="0 0 12 16" xmlns="http://www.w3.org/2000/svg"><path d="M12,0 Q12,16 0,16 L12,16 Z" fill="currentColor"/></svg>`;
-      }
-    }
-    
-    /**
-     * The reaction goes INSIDE the bubble, not beside it.
-     *
-     * The only rule that styles this is `#workskin dd.bubble .reaction`, a
-     * **descendant** selector. This branch used to emit the span as a sibling of
-     * the bubble, inside `<dl class="msg">`, so that rule matched nothing and
-     * every iMessage tapback rendered as unstyled inline text trailing the
-     * bubble — in the preview, in the PNG and on AO3 alike. The feature looked
-     * implemented and was not.
-     *
-     * `dd.bubble` is already `position:relative` and `.image-bubble` is
-     * explicitly `overflow:visible`, so a chip hanging over the edge is what the
-     * stylesheet was always written for.
-     */
-    const reaction = msg.reaction ? `<span class="reaction">${sanitizeText(msg.reaction)}</span>` : '';
-
-    // `has-reaction` exists so the stylesheet can reserve the space the chip
-    // hangs into. The chip is absolutely positioned and therefore out of flow,
-    // so without a class on the bubble itself the only way to select "a bubble
-    // with a reaction" is :has(), which is not worth betting an AO3 skin on.
-    const reactionClass = msg.reaction ? ' has-reaction' : '';
-    const bubbleClass = hasImage
-      ? `bubble ${msg.outgoing?'out':'in'} ${tailClass} image-bubble${reactionClass}`
-      : `bubble ${msg.outgoing?'out':'in'} ${tailClass}${reactionClass}${chatEmojiSize ? ` emoji-only ${chatEmojiSize}` : ''}`;
-    const bubble = `<dd class="${bubbleClass}">${bubbleContent}${tailSvg}${reaction}</dd>`;
-
-
-    // Add status indicators
-    let statusIndicator = '';
-    const deliveryLabel = iosDeliveryLabel(msg.status);
-    if (msg.outgoing && project.settings.iosShowReadReceipt && deliveryLabel && isLastInGroup) {
-      statusIndicator = `<dd class="status-indicator">${deliveryLabel}</dd>`;
-    }
-
-    // Who is speaking, for when no CSS applies.
-    //
-    // A bubble carries its speaker entirely in colour and alignment, so with
-    // the skin off — a download, or Hide Creator's Style — the whole
-    // conversation collapses to unattributed lines: "hey / you free tonight?"
-    // with no way to tell who said which.
-    //
-    // <dt> is the right element rather than a span: this is already a <dl>,
-    // where the term is the speaker and the definition is what they said. AO3
-    // allows dt, and unstyled browsers indent dd under dt for free.
-    return `${timeBreak}<div class="${rowClass} ${groupClass}" data-message-id="${sanitizeAttribute(msg.id)}"><dl class="msg">${hiddenSpeaker}${bubble}${statusIndicator}</dl></div>`;
   }
   
   // Android and other templates: show avatar and sender name (with grouping for Android)
@@ -1078,116 +1409,117 @@ function chatClass(project: SkinProject, extra?: string): string {
   return `chat ${project.template}${theme ? ` theme-${theme}` : ''}${extra ? ` ${extra}` : ''}`;
 }
 
-export function buildHTML(project: SkinProject, renderMode: HtmlRenderMode = 'static'): string {
-  // iOS and Android templates with enhanced features
-  if (project.template === 'ios' || project.template === 'android') {
-    const s = project.settings;
-    const isIOS = project.template === 'ios';
-    
-    // Header.
-    //
-    // This used to be a five-way branch on (platform × has-background-image),
-    // duplicating the initials helper and diverging on which settings each
-    // branch honoured. Both platforms ship with a default header image, so the
-    // image branches were the live ones — and they were the branches missing
-    // group names and online status. The trailing `else` was unreachable
-    // outright, which is why the status bar never rendered at all.
-    //
-    // Same data in every case now; the background image only changes what sits
-    // behind it.
-    const getInitials = (name: string) => {
-      if (!name) return '?';
-      // Emoji in a name produce a garbled monogram
-      const cleanName = name.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '').trim();
-      const words = cleanName.split(/\s+/).filter(w => w.length > 0);
-      if (words.length === 0) return '?';
-      if (words.length === 1) return words[0].substring(0, 2).toUpperCase();
-      return (words[0][0] + words[words.length - 1][0]).toUpperCase();
-    };
+export interface HtmlRenderContext {
+  /** Original scene messages when a raster export is rendering one chunk. */
+  sourceMessages?: Message[];
+}
 
-    const statusBar = isIOS && s.iosShowStatusBar
-      ? `<div class="ios-status-bar"><span class="signal">📶</span><span class="time">${sanitizeText(s.iosStatusBarTime || '9:41')}</span><span class="status-icons">🔋</span></div>`
-      : '';
+function initialsForHeader(name: string): string {
+  const clean = name.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, '').trim();
+  const words = clean.split(/\s+/).filter(Boolean);
+  return words.length > 1
+    ? `${words[0][0]}${words[words.length - 1][0]}`.toUpperCase()
+    : (words[0]?.slice(0, 2).toUpperCase() || '?');
+}
 
-    let header = '';
-    if (isIOS) {
-      const contactName = s.iosGroupMode
-        ? (s.iosGroupName || 'Group Chat')
-        : (s.iosContactName || s.chatContactName || '');
-      const avatarUrl = s.iosAvatarUrl || '';
-
-      // A background image needs its container even with nothing to overlay.
-      if (s.iosHeaderImageUrl || contactName || avatarUrl) {
-        const avatarOverlay = avatarUrl
-          ? `<img src="${sanitizeUrl(avatarUrl)}" alt="avatar" class="ios-header-avatar" width="38" height="38" />`
-          : (contactName ? `<div class="ios-header-avatar-placeholder">${sanitizeText(getInitials(contactName))}</div>` : '');
-        const nameOverlay = contactName
-          ? `<div class="ios-header-name">${sanitizeText(contactName)}</div>`
-          : '';
-        header = `<div class="ios-header">${avatarOverlay}${nameOverlay}</div>`;
-      }
-    } else {
-      const isGroupMode = s.androidGroupMode;
-      const contactName = isGroupMode
-        ? (s.androidGroupName || 'Group Chat')
-        // androidContactName first, matching iOS above and ComposeBar. The old
-        // order was inverted relative to everything else in the app, so a
-        // legacy project carrying BOTH fields had a WhatsApp header and its own
-        // messages disagreeing about who you were talking to.
-        : (s.androidContactName || s.chatContactName || '');
-      const avatarUrl = s.androidAvatarUrl || '';
-
-      if (s.androidHeaderImageUrl || contactName || avatarUrl) {
-        const avatarOverlay = avatarUrl
-          ? `<img src="${sanitizeUrl(avatarUrl)}" alt="avatar" class="android-header-avatar" width="40" height="40" />`
-          : (contactName ? `<div class="android-header-avatar-placeholder">${sanitizeText(getInitials(contactName))}</div>` : '');
-
-        // Group chats show the member count where a 1-on-1 shows "online".
-        const participantCount = s.androidGroupParticipants?.length ?? 0;
-        const subtitleText = isGroupMode && participantCount
-          ? `${participantCount} participant${participantCount === 1 ? '' : 's'}`
-          : (s.androidShowStatus !== false ? (s.androidStatusText || 'online') : '');
-        const subtitle = subtitleText
-          ? `<div class="android-header-subtitle">${sanitizeText(subtitleText)}</div>`
-          : '';
-
-        const nameOverlay = contactName
-          ? `<div class="android-header-name-wrapper"><div class="android-header-name">${sanitizeText(contactName)}</div>${subtitle}</div>`
-          : '';
-        header = `<div class="android-header">${avatarOverlay}${nameOverlay}</div>`;
-      }
-    }
-    header = `${statusBar}${header}`;
-    
-    // Messages
-    const body = (isIOS || !isIOS) 
-      ? project.messages.map((m, i) => msgHTML(m, project.template, project, { index: i, allMessages: project.messages })).join('')
-      : project.messages.map(m => msgHTML(m, project.template, project)).join('');
-    
-    // Typing indicator
-    // The three dots are pure CSS shapes, so with no skin the indicator is
-    // either nothing at all or a bare name floating after the conversation.
-    // The iOS tutorial solves it with exactly this line — <span class="hide">Mom
-    // is typing...</span> — and it is the one piece of the fic that is
-    // otherwise invisible in a download rather than merely ugly.
-    const typing = s.chatShowTyping ? typingRowHTML(s.chatTypingName) : '';
-    
-    // iOS Footer with background image
-    let footer = '';
-    if (isIOS && s.iosFooterImageUrl) {
-      footer = `<div class="ios-footer"></div>`;
-    } else if (!isIOS && s.androidFooterImageUrl) {
-      footer = `<div class="android-footer"></div>`;
-    } else if (isIOS && s.iosShowInputBar) {
-      footer = `<div class="ios-input-bar"><span>📷</span><div class="input-placeholder">${sanitizeText(s.iosInputPlaceholder || 'iMessage')}</div><span>🎤</span></div>`;
-    }
-    
-    // Wrap messages in container for iOS and Android
-    const messagesContainer = (isIOS || !isIOS) ? `<div class="chat-messages">${body}${typing}</div>` : `${body}${typing}`;
-    
-    return `<div class="${chatClass(project)}">${header}${messagesContainer}${footer}</div>`;
+function buildWhatsAppHTML(project: SkinProject, renderMode: HtmlRenderMode, context: HtmlRenderContext): string {
+  const settings = project.settings;
+  const frame = settings.androidFrameMode || 'header';
+  const isGroup = !!settings.androidGroupMode;
+  const name = isGroup
+    ? settings.androidGroupName || 'Group Chat'
+    : settings.androidContactName || settings.chatContactName || 'Contact';
+  const participants = settings.androidGroupParticipants || [];
+  let subtitle = '';
+  if (isGroup) {
+    const mode = settings.androidGroupSubtitleMode || 'members';
+    if (mode === 'members') subtitle = participants.map(participant => participant.name).join(', ');
+    if (mode === 'count') subtitle = `${participants.length} participant${participants.length === 1 ? '' : 's'}`;
+    if (mode === 'custom') subtitle = settings.androidGroupSubtitleText?.trim() || '';
+  } else if (settings.androidShowStatus !== false) {
+    subtitle = settings.androidStatusText?.trim() || 'online';
   }
-  
+  const avatar = settings.androidAvatarUrl
+    ? `<img src="${sanitizeUrl(settings.androidAvatarUrl)}" alt="" class="android-header-avatar" width="40" height="40" />`
+    : `<div class="android-header-avatar-placeholder">${sanitizeText(initialsForHeader(name))}</div>`;
+  const header = frame === 'bubbles' ? '' : `<div class="android-header"><div class="wa-back">‹</div>${avatar}<div class="android-header-name-wrapper"><div class="android-header-name">${sanitizeText(name)}</div>${subtitle ? `<div class="android-header-subtitle">${sanitizeText(subtitle)}</div>` : ''}</div><div class="wa-header-actions">⌕ ⋮</div></div>`;
+  const body = project.messages.map((message, index) => {
+    return msgHTML(message, 'android', project, {
+      index,
+      allMessages: project.messages,
+      sourceMessages: context.sourceMessages,
+      renderMode,
+    });
+  }).join('');
+  const typing = settings.chatShowTyping ? typingRowHTML(settings.chatTypingName) : '';
+  const footer = frame === 'phone'
+    ? `<div class="android-footer"><div class="wa-footer-plus">＋</div><div class="wa-footer-input">Message</div><div class="wa-footer-mic">●</div></div>`
+    : '';
+  const extra = [
+    `wa-frame-${frame}`,
+    frame === 'phone' && settings.androidScrollable ? 'wa-scroll' : '',
+    settings.androidWallpaperUrl ? 'wa-wallpaper' : '',
+  ].filter(Boolean).join(' ');
+  return `<div class="${chatClass(project, extra)}">${header}<div class="chat-messages">${body}${typing}</div>${footer}</div>`;
+}
+
+
+/**
+ * The iOS scene: chrome, message list, and frame mode.
+ *
+ * `iosFrameMode` decides real markup rather than toggling three independent
+ * chrome switches that could disagree with each other (§7.9). The header and
+ * input bar are generated HTML and CSS, so an ordinary work makes no permanent
+ * request to a remote chrome strip; the old header/footer image settings remain
+ * as advanced overrides for authors who already relied on them.
+ */
+function buildIOSHTML(project: SkinProject, renderMode: HtmlRenderMode, context: HtmlRenderContext): string {
+  const settings = project.settings;
+  const frame = settings.iosFrameMode || 'header';
+  const isGroup = !!settings.iosGroupMode;
+  const name = isGroup
+    ? settings.iosGroupName || 'Group Chat'
+    : settings.iosContactName || settings.chatContactName || '';
+
+  const statusBar = frame === 'phone' && settings.iosShowStatusBar
+    ? `<div class="ios-status-bar"><span class="signal">📶</span><span class="time">${sanitizeText(settings.iosStatusBarTime || '9:41')}</span><span class="status-icons">🔋</span></div>`
+    : '';
+
+  let header = '';
+  if (frame !== 'bubbles') {
+    const avatar = settings.iosAvatarUrl
+      ? `<img src="${sanitizeUrl(settings.iosAvatarUrl)}" alt="" class="ios-header-avatar" width="38" height="38" />`
+      : `<div class="ios-header-avatar-placeholder">${sanitizeText(initialsForHeader(name || 'Chat'))}</div>`;
+    const participants = settings.iosGroupParticipants || [];
+    const subtitle = isGroup && participants.length
+      ? `<div class="ios-header-subtitle">${sanitizeText(participants.map(participant => participant.name).join(', '))}</div>`
+      : '';
+    header = `<div class="ios-header"><div class="ios-back">‹</div>${avatar}<div class="ios-header-name-wrapper"><div class="ios-header-name">${sanitizeText(name || 'Messages')}</div>${subtitle}</div><div class="ios-header-actions">ⓘ</div></div>`;
+  }
+
+  const body = project.messages.map((message, index) => iosMessageHTML(message, project, {
+    index,
+    allMessages: project.messages,
+    sourceMessages: context.sourceMessages,
+    renderMode,
+  })).join('');
+  const typing = settings.chatShowTyping ? typingRowHTML(settings.chatTypingName) : '';
+
+  const footer = frame === 'phone'
+    ? `<div class="ios-input-bar"><span class="ios-input-plus">＋</span><div class="input-placeholder">${sanitizeText(settings.iosInputPlaceholder || 'iMessage')}</div><span class="ios-input-mic">🎤</span></div>`
+    : '';
+
+  const extra = [
+    `ios-frame-${frame}`,
+    frame === 'phone' && settings.iosScrollable ? 'ios-scroll' : '',
+  ].filter(Boolean).join(' ');
+  return `<div class="${chatClass(project, extra)}">${statusBar}${header}<div class="chat-messages">${body}${typing}</div>${footer}</div>`;
+}
+
+export function buildHTML(project: SkinProject, renderMode: HtmlRenderMode = 'static', context: HtmlRenderContext = {}): string {
+  if (project.template === 'android') return buildWhatsAppHTML(project, renderMode, context);
+  if (project.template === 'ios') return buildIOSHTML(project, renderMode, context);
+
   if (project.template === 'google') {
     // Google search layout with dedicated query field
     const s = project.settings;
@@ -1365,6 +1697,19 @@ function iosColours(recvBg: string) {
       reactionChipBg: '#e9e9eb',
       reactionChipColor: '#000',
       reactionChipBorder: '#fff',
+      // Structured-content surfaces. A card inside a blue outgoing bubble and a
+      // card inside a grey incoming one need the same treatment to read as one
+      // component, so these are translucent overlays rather than flat colours.
+      cardBg: 'rgba(0,0,0,0.06)',
+      cardBorder: 'rgba(0,0,0,0.10)',
+      quoteBar: '#8e8e93',
+      waveBar: '#6e6e73',
+      eventColor: '#86868b',
+      placeholderBg: '#1c1c1e',
+      placeholderColor: '#aeaeb2',
+      chromeBg: '#f6f6f6',
+      chromeBorder: '#d1d1d6',
+      chromeColor: '#007aff',
     },
     dark: {
       chatBg: '#000000',
@@ -1392,6 +1737,16 @@ function iosColours(recvBg: string) {
       reactionChipBg: '#2c2c2e',
       reactionChipColor: '#fff',
       reactionChipBorder: '#000',
+      cardBg: 'rgba(255,255,255,0.12)',
+      cardBorder: 'rgba(255,255,255,0.18)',
+      quoteBar: '#8e8e93',
+      waveBar: '#aeaeb2',
+      eventColor: '#8e8e93',
+      placeholderBg: '#1c1c1e',
+      placeholderColor: '#aeaeb2',
+      chromeBg: '#1c1c1e',
+      chromeBorder: '#38383a',
+      chromeColor: '#0a84ff',
     },
   };
 }
@@ -1400,22 +1755,44 @@ function buildIOSCSS(s: SkinProject['settings'], senderBg: string, recvBg: strin
   const isDark = s.iosDarkMode;
   const colour = iosColours(recvBg)[isDark ? 'dark' : 'light'];
 
-  const headerBg = s.iosHeaderImageUrl ? `background:url('${s.iosHeaderImageUrl}') no-repeat top center;background-size:100% auto;` : 'background:#007aff;';
-  const footerBg = s.iosFooterImageUrl ? `background:url('${s.iosFooterImageUrl}') no-repeat bottom center;background-size:100% auto;` : `background:${colour.inputBarBg};`;
+  // An author-supplied strip only ever *decorates* the generated chrome now, and
+  // only when it is an absolute https URL a CSS url() can safely carry.
+  const cssUrl = (value: string | undefined) => value && /^https:\/\/[^'"()<>\s]+$/i.test(value) ? value : '';
+  const headerImage = cssUrl(s.iosHeaderImageUrl);
+  const footerImage = cssUrl(s.iosFooterImageUrl);
+  const headerBg = headerImage ? `background:url('${headerImage}') no-repeat top center;background-size:100% auto;` : `background:${colour.chromeBg};`;
+  const footerBg = footerImage ? `background:url('${footerImage}') no-repeat bottom center;background-size:100% auto;` : `background:${colour.inputBarBg};`;
+  const viewport = Math.max(20, Math.min(60, Math.round(s.iosViewportHeightEm || 34)));
+  // A finite tone palette compiled to classes, because AO3 strips inline style.
+  const tones = IOS_PARTICIPANT_TONES.map(tone => {
+    const value = isDark ? tone.dark : tone.light;
+    return `#workskin .ios-tone-${tone.id}{color:${value};}\n#workskin blockquote.ios-reply-${tone.id}{border-left-color:${value};}`;
+  }).join('\n');
 
     return `/* Generated with AO3 SkinGen */
 #workskin .chat{width:100%;max-width:${emFromPx(Math.min(maxWidth, 375))};min-width:20em;margin:0 auto;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;padding:0;background:${colour.chatBg};}
 ${PARAGRAPH_RESET_CSS}
-#workskin .ios-header{position:relative;${headerBg}height:4.063em;display:flex;align-items:center;padding:0;overflow:hidden;}
-#workskin .ios-header-avatar{position:absolute;left:4.063em;top:50%;transform:translateY(-50%);width:2.375em;height:2.375em;border-radius:50%;overflow:hidden;border:2px solid rgba(255,255,255,0.3);}
+#workskin .ios-header{position:relative;${headerBg}min-height:3.75em;display:flex;align-items:center;padding:0.5em 0.6em;border-bottom:1px solid ${colour.chromeBorder};color:${colour.contactNameColor};}
+#workskin .ios-back,#workskin .ios-header-actions{color:${colour.chromeColor};font-size:1.35em;line-height:1;flex-shrink:0;}
+#workskin .ios-back{margin-right:0.35em;}
+#workskin .ios-header-actions{margin-left:0.35em;}
+/* No overflow:hidden on the wrapper. It bought nothing — the name child already
+   ellipsises on its own — and it cost the group name and its participant list
+   in every PNG: html2canvas paints text a few px lower than the browser
+   measures it, so the second line fell outside the clip and the first lost its
+   descenders. Same class of defect as the Twitter name line, found the same
+   way, by exporting a picture and looking at it. */
+#workskin .ios-header-name-wrapper{min-width:0;flex:1;text-align:center;}
+#workskin .ios-header-subtitle{font-size:0.688em;line-height:1.2;opacity:0.7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+#workskin .ios-header-avatar,#workskin .ios-header-avatar-placeholder{width:2.375em;height:2.375em;border-radius:50%;overflow:hidden;flex-shrink:0;display:block;margin-right:0.5em;}
 #workskin .ios-header-avatar img{width:100%;height:100%;}
-#workskin .ios-header-avatar-placeholder{position:absolute;left:4.643em;top:50%;transform:translateY(-50%);width:2.714em;height:2.714em;border-radius:50%;background:rgba(255,255,255,0.25);color:#fff;display:flex;align-items:center;justify-content:center;font-size:0.875em;font-weight:700;border:2px solid rgba(255,255,255,0.3);}
+#workskin .ios-header-avatar-placeholder{background:${colour.cardBg};color:${colour.contactNameColor};text-align:center;line-height:2.375em;font-size:0.875em;font-weight:700;}
 /* No max-width here. It used to read calc(100% - 177px), where 177 is exactly
    left(112) + right(65) — so an absolutely positioned box that already spans
    between those two edges was being constrained to the width it already had.
    calc() is genuinely absent from AO3's value grammar, and this one bought
    nothing, so it goes rather than being approximated. */
-#workskin .ios-header-name{position:absolute;left:7.467em;right:4.333em;top:0;bottom:0;display:flex;align-items:center;font-size:0.938em;font-weight:600;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,0.4);line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+#workskin .ios-header-name{font-size:0.938em;font-weight:600;color:${colour.contactNameColor};line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 #workskin .ios-status-bar{background:${colour.statusBarBg};padding:0.429em 1.143em 0.286em 1.143em;display:flex;justify-content:space-between;align-items:center;font-size:0.875em;font-weight:600;color:${colour.statusBarColor};border-bottom:1px solid ${colour.statusBarBorder};}
 /* Same trick as the Twitter metrics row, and for the same reason: AO3 collapses
    signal / time / battery into one paragraph, which becomes the only flex item.
@@ -1453,6 +1830,80 @@ ${PARAGRAPH_RESET_CSS}
 #workskin dt.sender{font-size:0.688em;color:${colour.senderNameColor};margin:0.545em 0 0.182em 3.273em;font-weight:500;max-width:60%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 #workskin dd{margin:0;}
 #workskin dd.bubble{position:relative;display:inline-block;min-width:0;max-width:17.333em;padding:0.533em 0.8em;border-radius:1.2em;line-height:1.35;font-size:0.938em;white-space:normal;word-break:keep-all;overflow-wrap:anywhere;}
+${tones}
+#workskin .message-text{display:inline;}
+#workskin .chat.ios-scroll .chat-messages{height:${viewport}em;overflow-y:auto;overflow-x:hidden;}
+#workskin .ios-group-sender{display:inline-block;font-size:0.733em;font-weight:600;line-height:1.2;margin-bottom:0.35em;vertical-align:middle;}
+/* No object-fit: it is not on AO3's property list and has no legal equivalent,
+   so a non-square source letterboxes inside the box rather than cropping. */
+#workskin dd.bubble .group-avatar,#workskin dd.bubble .group-avatar-initials{display:inline-block;width:1.333em;height:1.333em;border-radius:50%;vertical-align:middle;margin-right:0.35em;margin-bottom:0.35em;flex-shrink:0;}
+#workskin dd.bubble .group-avatar-initials{background:${colour.cardBg};text-align:center;line-height:1.333em;font-size:0.6em;font-weight:700;}
+/* REPLY CONTEXT. A compact quote inside the new bubble, not a recreation of the
+   live app's blurred focus mode — there is nothing to tap in a static work. */
+#workskin blockquote.ios-reply{display:block;margin:0 0 0.45em 0;padding:0.35em 0.5em;border-left:0.25em solid ${colour.quoteBar};border-radius:0.3em;background:${colour.cardBg};font-style:normal;color:inherit;overflow:hidden;}
+/* font-style on the children too: a browser italicises blockquote content, and
+   resetting only the parent leaves the quoted line in italics. Colour is
+   inherited from the bubble on purpose — the tone tints the bar, not the text,
+   or a red quote lands inside a blue outgoing bubble. */
+#workskin blockquote.ios-reply b,#workskin blockquote.ios-reply span{display:block;font-style:normal;color:inherit;}
+#workskin blockquote.ios-reply b{font-size:0.75em;opacity:0.85;}
+/* No max-height. The excerpt is already capped at 180 characters where it is
+   built, and a height clamp on top of that clipped the last line — worse in the
+   PNG than in the browser, because html2canvas paints text lower. */
+#workskin blockquote.ios-reply span{font-size:0.8em;}
+#workskin .ios-reply-thumb{float:right;width:2.5em;height:2.5em;border-radius:0.25em;margin-left:0.4em;}
+#workskin blockquote.ios-reply-missing{border-left-color:#c8102e;}
+/* IMAGE COLLAGES. Flex plus child margins, never gap — AO3 keeps a property
+   only if it is on its list or contains a shorthand name, so column-gap passes
+   and bare gap does not. No object-fit either; it has no legal equivalent. */
+#workskin .ios-images{display:block;margin-top:0.4em;font-size:0;overflow:hidden;border-radius:0.7em;}
+#workskin .ios-image{display:inline-block;width:49.5%;height:auto;vertical-align:top;margin:0 1% 1% 0;}
+#workskin .ios-images-1 .ios-image{width:100%;margin-right:0;margin-bottom:0;}
+#workskin .ios-images-2 .ios-image{width:49.5%;margin-bottom:0;}
+#workskin .ios-images-2 .ios-image-2{margin-right:0;}
+/* Three images: one tall image beside a stack of two. */
+#workskin .ios-images-3 .ios-image-1{width:66%;margin-bottom:0;}
+#workskin .ios-images-3 .ios-image-2,#workskin .ios-images-3 .ios-image-3{width:32.5%;margin-right:0;}
+#workskin .ios-images-3 .ios-image-3{margin-bottom:0;}
+#workskin .ios-images-4 .ios-image-2,#workskin .ios-images-4 .ios-image-4{margin-right:0;}
+#workskin .ios-images-4 .ios-image-3,#workskin .ios-images-4 .ios-image-4{margin-bottom:0;}
+/* LINK CARD. The whole card is the anchor; the URL line keeps the destination
+   readable when the skin is off. */
+#workskin a.ios-link-preview{display:block;margin-top:0.4em;border-radius:0.7em;overflow:hidden;background:${colour.cardBg};color:inherit;text-decoration:none;padding-bottom:0.4em;}
+#workskin a.ios-link-preview b,#workskin a.ios-link-preview span{display:block;margin:0.25em 0.55em 0 0.55em;}
+#workskin .ios-link-image{display:block;width:100%;height:auto;margin:0;}
+#workskin .ios-link-description{font-size:0.85em;opacity:0.85;}
+#workskin .ios-link-site,#workskin .ios-link-url{font-size:0.75em;opacity:0.7;overflow-wrap:anywhere;}
+/* VOICE MESSAGE. The static card is honest about not playing: a glyph, a drawn
+   waveform, and a real link. The native control in Work Text is never made
+   transparent or floated over the fake waveform. */
+#workskin .ios-audio-card,#workskin .ios-video-card{display:block;position:relative;margin-top:0.4em;padding:0.5em;border-radius:0.7em;background:${colour.cardBg};overflow:hidden;}
+#workskin .ios-audio-play{display:inline-block;width:1.8em;vertical-align:middle;}
+#workskin .ios-waveform{display:inline-block;width:11em;height:2.2em;vertical-align:middle;white-space:nowrap;overflow:hidden;}
+#workskin .ios-wave-bar{display:inline-block;width:0.13em;margin-right:0.11em;vertical-align:middle;background:${colour.waveBar};border-radius:0.1em;}
+#workskin .ios-wave-1{height:0.4em;}#workskin .ios-wave-2{height:0.7em;}#workskin .ios-wave-3{height:1em;}#workskin .ios-wave-4{height:1.3em;}#workskin .ios-wave-5{height:1.6em;}#workskin .ios-wave-6{height:1.9em;}
+#workskin .ios-audio-duration,#workskin .ios-audio-transcript,#workskin .ios-video-title,#workskin .ios-video-duration,#workskin .ios-media-description,#workskin .ios-captions,#workskin .ios-media-source{display:block;font-size:0.75em;margin-top:0.25em;}
+#workskin .ios-video-title{font-weight:600;}
+#workskin .ios-media-source{color:inherit;text-decoration:underline;overflow-wrap:anywhere;}
+#workskin .ios-native-audio{display:block;width:100%;margin-top:0.45em;}
+#workskin .ios-video-poster,#workskin .ios-native-video,#workskin .ios-youtube-player iframe{display:block;width:100%;height:auto;border:0;border-radius:0.5em;background:#000;}
+#workskin .ios-youtube-player iframe{height:11.25em;max-width:100%;}
+#workskin .ios-video-placeholder{display:block;box-sizing:border-box;min-height:8em;padding:3.5em 1em;text-align:center;background:${colour.placeholderBg};color:${colour.placeholderColor};border-radius:0.5em;}
+#workskin .ios-video-play{position:absolute;left:45%;top:2.5em;font-size:2em;color:#fff;text-shadow:0 1px 3px #000;}
+/* TAPBACKS. Top corner, on the side away from the tail, so the stack clears the
+   tail in both directions by construction rather than by tuning offsets. The
+   space it hangs into is reserved with real padding and margin: the chip is out
+   of flow and the text is not, so a margin alone leaves it lying on the words —
+   invisible in the browser by a pixel, and plainly wrong in every PNG. */
+#workskin .ios-tapbacks{position:absolute;top:-0.75em;background:${colour.reactionChipBg};color:${colour.reactionChipColor};border:0.125em solid ${colour.reactionChipBorder};border-radius:0.875em;padding:0.063em 0.4em;font-size:0.813em;line-height:1.35;box-shadow:0 1px 3px rgba(0,0,0,0.2);white-space:nowrap;z-index:2;}
+#workskin dd.bubble.out .ios-tapbacks{left:-0.5em;}
+#workskin dd.bubble.in .ios-tapbacks{right:-0.5em;}
+#workskin dd.bubble.has-tapbacks{padding-top:0.95em;margin-top:1.2em;}
+/* EVENTS sit outside dl.msg and are centred plain text, never a bubble. */
+#workskin .ios-event{text-align:center;margin:0.9em 0;color:${colour.eventColor};}
+#workskin .ios-event dl{margin:0;}
+#workskin .ios-event dd{display:inline-block;font-size:0.688em;font-weight:600;padding:0.2em 0.5em;}
+#workskin .ios-event-system dd{max-width:82%;font-weight:400;}
 #workskin dd.bubble.image-bubble{padding:0.533em 0.8em;max-width:60%;overflow:visible;}
 #workskin dd.bubble.image-bubble img.message-image{width:100%;height:auto;display:block;border-radius:0.8em;margin-top:0.4em;}
 #workskin dd.bubble.image-bubble.out{border-bottom-right-radius:0.267em;}
@@ -1565,8 +2016,18 @@ ${PARAGRAPH_RESET_CSS}
 #workskin .typing-label{font-size:0.688em;color:${colour.typingLabelColor};font-weight:400;}
 #workskin .ios-footer{position:relative;${footerBg}height:2.938em;border-top:1px solid ${colour.inputBarBorder};}
 #workskin .ios-input-bar{background:${colour.inputBarBg};padding:0.5em 0.75em;border-top:1px solid ${colour.inputBarBorder};display:flex;align-items:center;}
-#workskin .ios-input-bar > *{margin-left:0.5em;}
-#workskin .ios-input-bar > *:first-child{margin-left:0;}
+/* Same fix as .ios-status-bar, and it was measured the same way. AO3 collapses
+   the plus / field / mic into one paragraph, which then becomes the ONLY flex
+   item — the field's flex:1 stops applying to the field and the placeholder
+   grew 9px under injection. display:contents makes the paragraph disappear from
+   the box tree so its children are the flex items again. We emit no paragraph
+   here, so the preview and the PNG never see this rule.
+   The margins are descendant selectors rather than a child combinator, for the
+   same reason: an injected paragraph intercepts a direct-child match. */
+#workskin .ios-input-bar p{display:contents;}
+#workskin .ios-input-bar .ios-input-plus,#workskin .ios-input-bar .input-placeholder,#workskin .ios-input-bar .ios-input-mic{margin-left:0.5em;}
+#workskin .ios-input-bar .ios-input-plus{margin-left:0;}
+#workskin .ios-input-plus,#workskin .ios-input-mic{color:${colour.chromeColor};font-size:1.2em;line-height:1;}
 #workskin .ios-input-bar .input-placeholder{flex:1;background:${colour.inputFieldBg};border:1px solid ${colour.inputFieldBorder};border-radius:1.286em;padding:0.571em 0.857em;font-size:0.875em;color:${colour.inputPlaceholderColor};}
 /* The gap property is spelled out as child margins: AO3 keeps a property only
    if it is on its list or CONTAINS a shorthand name, so column-gap passes and
@@ -1644,116 +2105,100 @@ function androidColours(senderBg: string, recvBg: string) {
 function buildAndroidCSS(s: SkinProject['settings'], senderBg: string, recvBg: string, neutralBg: string, maxWidth: number): string {
   const isDark = s.androidDarkMode;
   const colour = androidColours(senderBg, recvBg)[isDark ? 'dark' : 'light'];
+  const cssUrl = (value: string | undefined) => value && /^https:\/\/[^'"()<>\s]+$/i.test(value) ? value : '';
+  const headerImage = cssUrl(s.androidHeaderImageUrl);
+  const footerImage = cssUrl(s.androidFooterImageUrl);
+  const wallpaper = cssUrl(s.androidWallpaperUrl);
+  const headerBg = headerImage ? `background:url('${headerImage}') no-repeat center;background-size:100% auto;` : `background:${colour.headerBgColor};`;
+  const footerBg = footerImage ? `background:url('${footerImage}') no-repeat center;background-size:100% auto;` : `background:${colour.footerBgColor};`;
+  const messageBg = wallpaper ? `background-color:${colour.chatBg};background-image:url('${wallpaper}');background-position:center top;background-repeat:repeat;` : `background:${colour.chatBg};`;
+  const viewport = Math.max(20, Math.min(60, Math.round(s.androidViewportHeightEm || 30)));
+  const tones = WHATSAPP_PARTICIPANT_TONES.map(tone => {
+    const value = isDark ? tone.dark : tone.light;
+    return `#workskin .wa-tone-${tone.id}{color:${value};}\n#workskin .wa-reply-${tone.id}{border-left-color:${value};}`;
+  }).join('\n');
 
-  const headerBg = s.androidHeaderImageUrl ? `background:url('${s.androidHeaderImageUrl}') no-repeat top center;background-size:100% auto;` : `background:${colour.headerBgColor};`;
-  const footerBg = s.androidFooterImageUrl ? `background:url('${s.androidFooterImageUrl}') no-repeat bottom center;background-size:contain;` : `background:${colour.footerBgColor};`;
-
-    return `/* Generated with AO3 SkinGen */
-#workskin .chat{width:100%;max-width:${emFromPx(Math.min(maxWidth, 400))};min-width:20em;margin:0 auto;display:flex;flex-direction:column;font-family:${s.fontFamily};background:${colour.chatBg};padding:0;}
+  return `/* Generated with AO3 SkinGen */
+#workskin .chat{width:100%;max-width:${emFromPx(Math.min(maxWidth, 400))};min-width:20em;margin:0 auto;display:flex;flex-direction:column;font-family:${s.fontFamily};background:${colour.chatBg};padding:0;border-radius:1.25em;overflow:hidden;}
 ${PARAGRAPH_RESET_CSS}
-#workskin .android-header{position:relative;${headerBg}height:3.75em;display:flex;align-items:center;padding:0;overflow:visible;}
-#workskin .android-header-avatar{position:absolute;left:3.75em;top:0;bottom:0;margin:auto 0;width:2.5em;height:2.5em;border-radius:50%;overflow:hidden;border:2px solid rgba(255,255,255,0.2);}
-#workskin .android-header-avatar img{width:100%;height:100%;}
-#workskin .android-header-avatar-placeholder{position:absolute;left:3.75em;top:0;bottom:0;margin:auto 0;width:2.5em;height:2.5em;border-radius:50%;background:${colour.avatarPlaceholderBg};display:flex;align-items:center;justify-content:center;color:#fff;font-size:1em;font-weight:600;border:2px solid rgba(255,255,255,0.2);}
-/* max-width dropped for the same reason as .ios-header-name: 170 was
-   left(110) + right(60), constraining the box to the width it already had. */
-#workskin .android-header-name{position:absolute;left:6.875em;right:3.75em;top:0;bottom:0;display:flex;align-items:center;font-size:1em;font-weight:600;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,0.3);line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0.25em 0;}
-#workskin .android-header-name-wrapper{position:absolute;left:6.875em;right:3.75em;top:0;bottom:0;display:flex;flex-direction:column;justify-content:center;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,0.3);padding:0.25em 0;}
-#workskin .android-header-name-wrapper .android-header-name{position:static;font-size:1em;font-weight:600;line-height:1.4;padding:0;max-width:100%;overflow:visible;}
-#workskin .android-header-subtitle{font-size:0.75em;opacity:0.8;line-height:1.2;margin-top:0.167em;}
-#workskin .chat-header{padding:0.5em 0.75em;background:${colour.headerBgColor};color:#fff;margin-bottom:0.75em;}
-#workskin .chat-header .contact-name{font-size:1em;font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;}
-#workskin .chat-header .status{font-size:0.75em;opacity:0.8;display:block;margin-top:0.167em;}
-#workskin .chat-messages{padding:0.75em 0.5em;background:${colour.chatBg};}
-#workskin .time-break{text-align:center;font-size:0.688em;color:${colour.timeBreakColor};margin:1.091em 0 0.727em 0;font-weight:500;}
-#workskin .row{display:flex;margin:0 0 0 -0.375em;align-items:flex-end;flex-wrap:wrap;width:100%;}
-#workskin .row > *{margin-left:0.375em;}
-#workskin .row.single{margin:0.75em 0;}
-#workskin .row.first{margin:0.75em 0 0.125em 0;}
-#workskin .row.middle{margin:0.125em 0;}
-#workskin .row.last{margin:0.125em 0 0.75em 0;}
+#workskin .android-header{${headerBg}min-height:3.75em;display:flex;align-items:center;color:#fff;padding:0.35em 0.65em;overflow:hidden;}
+#workskin .wa-back{font-size:2em;line-height:1;margin-right:0.25em;}
+#workskin .android-header-avatar,#workskin .android-header-avatar-placeholder{width:2.5em;height:2.5em;border-radius:50%;display:block;flex-shrink:0;margin-right:0.65em;border:0.125em solid rgba(255,255,255,0.2);}
+#workskin .android-header-avatar-placeholder{background:${colour.avatarPlaceholderBg};color:#fff;text-align:center;line-height:2.5em;font-weight:600;}
+#workskin .android-header-name-wrapper{min-width:0;flex:1;color:#fff;overflow:hidden;}
+#workskin .android-header-name{font-size:1em;font-weight:600;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+#workskin .android-header-subtitle{font-size:0.75em;line-height:1.2;opacity:0.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+#workskin .wa-header-actions{font-size:1.3em;white-space:nowrap;margin-left:0.5em;}
+#workskin .chat-messages{padding:0.75em 0.5em;${messageBg}}
+#workskin .chat.wa-scroll .chat-messages{height:${viewport}em;overflow-y:auto;overflow-x:hidden;}
+#workskin .row{display:flex;width:100%;align-items:flex-end;}
+#workskin .row.single{margin:0.7em 0;}
+#workskin .row.first{margin:0.7em 0 0.12em 0;}
+#workskin .row.middle{margin:0.12em 0;}
+#workskin .row.last{margin:0.12em 0 0.7em 0;}
 #workskin .row.out{justify-content:flex-end;}
 #workskin .row.in{justify-content:flex-start;}
-#workskin img.avatar{width:2em;height:2em;border-radius:50%;overflow:hidden;flex-shrink:0;}
-#workskin dl.msg{margin:0;display:flex;flex-direction:column;margin-top:-0.063em;}
-#workskin dl.msg > *{margin-top:0.063em;}
+#workskin dl.msg{margin:0;display:flex;flex-direction:column;max-width:82%;}
 #workskin .row.out dl.msg{align-items:flex-end;}
 #workskin .row.in dl.msg{align-items:flex-start;}
-/* was calc(75% - 8px), which resolves to 73% at the 400px card. */
-#workskin dt.sender{font-size:0.75em;color:${colour.senderNameColor};margin:0 0 0.333em 0.667em;padding:0.333em 0;font-weight:600;max-width:73%;overflow:visible;white-space:nowrap;line-height:1.4;}
 #workskin dd{margin:0;}
-#workskin dd.bubble{position:relative;display:inline-block;min-width:0;max-width:20em;padding:0.5em 0.714em;border-radius:0.571em;line-height:1.4;font-size:0.875em;box-shadow:${colour.bubbleShadow};white-space:normal;word-break:keep-all;overflow-wrap:anywhere;}
-#workskin dd.bubble.image-bubble{padding:0.5em 0.714em;max-width:70%;overflow:visible;margin-top:0.286em;}
-#workskin dd.bubble.image-bubble img.message-image{width:100%;height:auto;display:block;border-radius:0.429em;margin-top:0.429em;}
-#workskin dd.bubble.image-bubble.out{border-bottom-right-radius:0.143em;}
-#workskin dd.bubble.image-bubble.out img.message-image{border-bottom-right-radius:0.143em;}
-#workskin dd.bubble.image-bubble.in{border-bottom-left-radius:0.143em;}
-#workskin dd.bubble.image-bubble.in img.message-image{border-bottom-left-radius:0.143em;}
-#workskin dd.bubble.out{background:${colour.senderBubbleBg};color:${colour.bubbleTextColor};border-top-right-radius:0.571em;border-bottom-right-radius:0.143em;border-bottom-left-radius:0.571em;border-top-left-radius:0.571em;}
-#workskin dd.bubble.in{background:${colour.receiverBubbleBg};color:${colour.bubbleTextColor};border-top-left-radius:0.571em;border-bottom-left-radius:0.143em;border-bottom-right-radius:0.571em;border-top-right-radius:0.571em;}
-/* WhatsApp, like iMessage, removes the bubble around one-to-four emoji. The
-   child span grows while the time and ticks keep their normal proportions. */
+#workskin dd.bubble{position:relative;display:inline-block;min-width:2.5em;max-width:20em;padding:0.5em 0.714em;border-radius:0.571em;line-height:1.4;font-size:0.875em;box-shadow:${colour.bubbleShadow};white-space:normal;word-break:keep-all;overflow-wrap:anywhere;}
+#workskin dd.bubble.out{background:${colour.senderBubbleBg};color:${colour.bubbleTextColor};}
+#workskin dd.bubble.in{background:${colour.receiverBubbleBg};color:${colour.bubbleTextColor};}
+#workskin .row.out.last dd.bubble,#workskin .row.out.single dd.bubble{border-bottom-right-radius:0.143em;}
+#workskin .row.in.last dd.bubble,#workskin .row.in.single dd.bubble{border-bottom-left-radius:0.143em;}
+#workskin .group-sender{display:block;font-size:0.8em;font-weight:700;line-height:1.2;margin-bottom:0.35em;}
+${tones}
+#workskin .message-text{display:inline;}
+#workskin .wa-reply{display:block;margin:0 0 0.45em 0;padding:0.4em 0.5em;border-left:0.25em solid #667781;border-radius:0.25em;background:rgba(0,0,0,0.06);font-style:normal;}
+#workskin .wa-reply b,#workskin .wa-reply span{display:block;}
+#workskin .wa-reply span{font-size:0.9em;max-height:3.8em;overflow:hidden;}
+#workskin .wa-reply-missing{border-left-color:#b3261e;}
+#workskin .wa-images{display:block;margin-top:0.4em;font-size:0;overflow:hidden;border-radius:0.45em;}
+#workskin .wa-image{display:inline-block;width:49%;height:auto;vertical-align:top;margin:0 1% 1% 0;}
+#workskin .wa-images-1 .wa-image{width:100%;margin-right:0;}
+#workskin .wa-link-preview{display:block;margin-top:0.4em;border-radius:0.4em;overflow:hidden;background:rgba(0,0,0,0.07);color:inherit;text-decoration:none;padding-bottom:0.4em;}
+#workskin .wa-link-preview b,#workskin .wa-link-preview span{display:block;margin:0.25em 0.5em 0 0.5em;}
+#workskin .wa-link-image{display:block;width:100%;height:auto;margin:0;}
+#workskin .wa-link-description{font-size:0.9em;opacity:0.85;}
+#workskin .wa-link-site,#workskin .wa-link-url{font-size:0.78em;opacity:0.7;overflow-wrap:anywhere;}
+#workskin .wa-media{display:block;position:relative;margin-top:0.4em;padding:0.5em;border-radius:0.45em;background:rgba(0,0,0,0.06);overflow:hidden;}
+#workskin .wa-play{display:inline-block;width:1.8em;vertical-align:middle;}
+#workskin .wa-waveform{display:inline-block;width:12em;height:2.2em;vertical-align:middle;white-space:nowrap;overflow:hidden;}
+#workskin .wa-wave-bar{display:inline-block;width:0.14em;margin-right:0.12em;vertical-align:middle;background:${isDark ? '#8696a0' : '#667781'};border-radius:0.1em;}
+#workskin .wa-wave-1{height:0.4em;}#workskin .wa-wave-2{height:0.7em;}#workskin .wa-wave-3{height:1em;}#workskin .wa-wave-4{height:1.3em;}#workskin .wa-wave-5{height:1.6em;}#workskin .wa-wave-6{height:1.9em;}
+#workskin .wa-duration,#workskin .wa-transcript,#workskin .wa-media-description,#workskin .wa-captions,#workskin .wa-media-source{display:block;font-size:0.78em;margin-top:0.25em;}
+#workskin .wa-media-source{color:inherit;text-decoration:underline;overflow-wrap:anywhere;}
+#workskin .wa-video-poster,#workskin .wa-native-video,#workskin .wa-youtube-player iframe{display:block;width:100%;height:auto;border:0;border-radius:0.35em;background:#000;}
+#workskin .wa-youtube-player iframe{height:11.25em;max-width:100%;}
+#workskin .wa-video-placeholder{display:block;box-sizing:border-box;min-height:8em;padding:3.5em 1em;text-align:center;background:#1f2c34;color:#aebac1;border-radius:0.35em;}
+#workskin .wa-video-play{position:absolute;left:46%;top:2.5em;font-size:2em;color:#fff;text-shadow:0 1px 3px #000;}
+#workskin .wa-native-audio{display:block;width:100%;margin-top:0.45em;}
+#workskin dd.bubble .time{display:block;font-size:0.714em;color:${colour.timeColor};margin-top:0.4em;text-align:right;padding-right:2.4em;}
+#workskin .wa-ticks{position:absolute;right:0.55em;bottom:0.45em;font-size:0.75em;color:${colour.timeColor};letter-spacing:-0.2em;}
+#workskin .wa-ticks-read{color:#53bdeb;}
+#workskin .wa-reactions{position:absolute;bottom:-1.65em;background:${colour.reactionChipBg};border:0.071em solid ${colour.reactionChipBorder};border-radius:0.857em;padding:0.1em 0.45em;font-size:0.857em;line-height:1.4;box-shadow:0 1px 2px rgba(0,0,0,0.15);white-space:nowrap;z-index:2;}
+#workskin dd.bubble.out .wa-reactions{right:0.75em;}
+#workskin dd.bubble.in .wa-reactions{left:0.75em;}
+#workskin dd.bubble.has-reaction{margin-bottom:2em;}
+#workskin .wa-event{text-align:center;margin:0.8em 0;color:${colour.timeBreakColor};}
+#workskin .wa-event dl{margin:0;}
+#workskin .wa-event dd{display:inline-block;background:${isDark ? '#182229' : '#fff5c4'};border-radius:0.5em;padding:0.4em 0.65em;font-size:0.75em;box-shadow:${colour.bubbleShadow};}
+#workskin .wa-event-system dd{max-width:82%;}
 #workskin dd.bubble.emoji-only{background:transparent;box-shadow:none;padding:0.143em 0.214em;border-radius:0;overflow:visible;}
 #workskin dd.bubble.emoji-only .emoji-content{display:block;line-height:1.05;white-space:nowrap;}
 #workskin dd.bubble.emoji1 .emoji-content{font-size:4.286em;}
 #workskin dd.bubble.emoji2 .emoji-content{font-size:2.571em;}
-/* The gap property is spelled out as child margins: AO3 keeps a property only
-   if it is on its list or CONTAINS a shorthand name, so column-gap passes and
-   bare gap does not. Same substitution as the Twitter stylesheet. */
-#workskin dd.bubble .group-sender-row{display:flex !important;align-items:center;margin-bottom:0.286em;visibility:visible !important;opacity:1 !important;}
-#workskin dd.bubble.image-bubble .group-sender-row{display:flex !important;align-items:center;margin-bottom:0.429em;visibility:visible !important;opacity:1 !important;}
-#workskin dd.bubble .group-sender-row > *{margin-right:0.429em;}
-#workskin dd.bubble .group-sender-row > *:last-child{margin-right:0;}
-/* No object-fit — it is not on AO3's list and has no legal equivalent. The
-   avatar is a fixed 20x20 square, so a non-square source letterboxes instead of
-   cropping. Visible only to authors who upload a non-square avatar. */
-#workskin dd.bubble .group-avatar{width:1.429em;height:1.429em;border-radius:50%;flex-shrink:0;display:block !important;}
-#workskin dd.bubble .group-avatar-initials{width:2.5em;height:2.5em;border-radius:50%;display:flex !important;align-items:center;justify-content:center;font-size:0.571em;font-weight:700;flex-shrink:0;}
-#workskin dd.bubble .group-sender{font-size:0.786em;font-weight:600;line-height:1.2;opacity:0.9;display:inline-block !important;}
-#workskin dd.bubble .time{display:block;font-size:0.714em;color:${colour.timeColor};margin-top:0.4em;text-align:right;font-weight:400;padding-right:2em;}
-#workskin dd.bubble.image-bubble .time.image-time{position:absolute;bottom:0.6em;right:0.8em;margin:0;background:rgba(0,0,0,0.5);padding:0.2em 0.6em;border-radius:0.8em;font-size:0.714em;color:#fff;padding-right:2.4em;}
-#workskin dd.bubble.out .check-icon{position:absolute;bottom:0.429em;right:0.429em;height:1em;width:auto;opacity:0.7;}
-#workskin dd.bubble.image-bubble.out .check-icon{bottom:0.571em;right:0.571em;z-index:1;}
-/* WhatsApp's reaction, measured off a real WhatsApp screenshot rather than
-   reasoned about -- two earlier attempts got it wrong from first principles.
-   Three things the real app does, all of which we had wrong:
-   1. The pill sits ENTIRELY BELOW the bubble, in the gap between rows. It does
-      not straddle the bubble's edge and it does not sit inside it.
-   2. Therefore the bubble's own layout is COMPLETELY UNCHANGED by a reaction.
-      No reserved strip, no extra padding, no taller bubble, and the time and
-      ticks stay exactly where they are. Reserving space inside the bubble --
-      which is what the first two attempts did -- is what made a group bubble
-      with no timestamp read as a hollow box with a chip lost in its corner.
-   3. It sits on the SENDER'S OWN side: bottom-right for an outgoing message,
-      bottom-left for an incoming one. The old comment here claimed WhatsApp
-      always attaches lower-left "regardless of who sent it". It does not.
-   Because the pill is outside the bubble entirely, it cannot land on the text,
-   which is the whole class of bug the previous two versions kept producing.
-   What it CAN land on is the next row, and the margin below is what stops it.
-   (No backticks in this comment: it lives inside a template literal.) */
-#workskin dd.bubble .reaction{position:absolute;bottom:-1.6em;background:${colour.reactionChipBg};border:0.071em solid ${colour.reactionChipBorder};border-radius:0.857em;padding:0.071em 0.286em;font-size:0.857em;line-height:1.4;box-shadow:0 1px 2px rgba(0,0,0,0.15);z-index:2;}
-#workskin dd.bubble.out .reaction{right:0.75em;}
-#workskin dd.bubble.in .reaction{left:0.75em;}
-/* The pill is ~1.43em tall and hangs 1.6em down, so it clears the bubble by a
-   little and needs ~1.6em of room beneath it. Margin is correct HERE, where
-   padding was not: the thing being pushed away really is the next row. */
-#workskin dd.bubble.has-reaction{margin-bottom:2em;}
-#workskin dd.status-indicator{font-size:0.625em;color:${colour.timeColor};text-align:right;margin:0.2em 1em 0 0;font-weight:400;}
-#workskin dd.attach{margin-top:0.25em;}
-#workskin img.attach-img{max-width:12.5em;border-radius:0.5em;display:block;}
-#workskin .row.typing{align-items:center;margin-left:-0.375em;}
-#workskin .row.typing > *{margin-left:0.375em;}
-/* inline-block, not flex — an injected <p> makes the dots stop being flex
-   items and an inline span ignores width/height, so the indicator renders 0x0.
-   See the longer note in buildIOSCSS. */
+#workskin .row.typing{align-items:center;}
 #workskin .typing-bubble{background:${colour.receiverBubbleBg};padding:0.625em 0.875em;border-radius:0.5em;display:inline-block;line-height:0;box-shadow:${colour.bubbleShadow};}
-/* Static dots at descending opacity — see the note in buildIOSCSS. */
 #workskin .typing-bubble .dot{display:inline-block;vertical-align:middle;width:0.5em;height:0.5em;margin-left:0.25em;background:${colour.typingDotBg};border-radius:50%;opacity:0.4;}
 #workskin .typing-bubble .dot:first-child{margin-left:0;}
 #workskin .typing-bubble .dot:nth-child(1){opacity:0.85;}
 #workskin .typing-bubble .dot:nth-child(2){opacity:0.65;}
-#workskin .typing-label{font-size:0.688em;color:${colour.typingLabelColor};}
-#workskin .android-footer{position:relative;${footerBg}height:3.75em;border-top:1px solid ${colour.footerBorderColor};overflow:visible;background-position:center;}
+#workskin .typing-label{font-size:0.688em;color:${colour.typingLabelColor};margin-left:0.4em;}
+#workskin .android-footer{${footerBg}min-height:3.75em;border-top:0.063em solid ${colour.footerBorderColor};display:flex;align-items:center;padding:0 0.6em;color:${isDark ? '#e9edef' : '#54656f'};}
+#workskin .wa-footer-plus,#workskin .wa-footer-mic{width:2em;text-align:center;font-size:1.35em;}
+#workskin .wa-footer-input{flex:1;background:${isDark ? '#2a3942' : '#fff'};border-radius:1.25em;padding:0.55em 0.9em;color:${isDark ? '#8696a0' : '#667781'};font-size:0.9em;}
 ${getTextFormattingCSS(isDark, 14)}
 #workskin .wm{margin-top:1.333em;font-size:0.563em;opacity:0.45;text-align:center;color:${colour.timeBreakColor};}
 ${VISUALLY_HIDDEN_CSS}`;

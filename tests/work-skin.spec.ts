@@ -71,7 +71,7 @@ test('the modal states the three things AO3 will not', async ({ page }) => {
 
   // Unique across the whole archive, not per account.
   await expect(dialog).toContainText('unique across the whole of AO3');
-  await expect(dialog).toContainText('yourname — Twitter');
+  await expect(dialog).toContainText('yourname — chat skins');
 
   // One skin per work: an author who has one already must merge, not create.
   await expect(dialog).toContainText('A work can only have one');
@@ -106,9 +106,8 @@ test('the exported CSS and HTML are what AO3 will accept', async ({ page }) => {
  *
  * An author whose chapter 4 is a different app cannot save a second skin: they
  * would have to merge two stylesheets by hand, or lose the first. So the wider
- * skin has to be offered at the moment they are about to save one. The default
- * stays "just this platform" — the smaller paste, and what this modal did
- * before the choice existed.
+ * skin has to be offered at the moment they are about to save one. The master
+ * skin is the default because it prevents a later manual merge.
  */
 test('the author can take one skin for everything, or just this platform', async ({ page }) => {
   await openTemplate(page, 'twitter-verified-account');
@@ -118,7 +117,12 @@ test('the author can take one skin for everything, or just this platform', async
   const justThis = dialog.getByRole('radio', { name: 'Just Twitter' });
   const allFour = dialog.getByRole('radio', { name: 'All four platforms' });
 
-  // The narrower skin is the default.
+  // The complete skin is the default, so later chapters never require a
+  // second skin or a manual merge.
+  await expect(allFour).toHaveAttribute('aria-checked', 'true');
+  const everythingByDefault = await page.getByLabel('Work skin CSS').inputValue();
+
+  await justThis.click();
   await expect(justThis).toHaveAttribute('aria-checked', 'true');
   const onePlatform = await page.getByLabel('Work skin CSS').inputValue();
   expect(onePlatform).toContain('#workskin');
@@ -129,6 +133,7 @@ test('the author can take one skin for everything, or just this platform', async
   await expect(allFour).toHaveAttribute('aria-checked', 'true');
 
   const everything = await page.getByLabel('Work skin CSS').inputValue();
+  expect(everything).toBe(everythingByDefault);
   // All four platforms, each scoped to its own container class, plus the
   // version stamp that a comment cannot carry because AO3 deletes comments.
   for (const scope of ['.twitter', '.google', '.ios', '.android']) {
@@ -155,6 +160,20 @@ test('the image export still works alongside it', async ({ page }) => {
   await openTemplate(page, 'twitter-verified-account');
   await expect(page.getByRole('button', { name: 'Save PNG' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Get AO3 image code' })).toBeVisible();
+});
+
+test('content preflight errors never disable the CSS or HTML copy actions', async ({ page }) => {
+  await page.addInitScript(project => localStorage.setItem('ao3SkinProject', JSON.stringify(project)), {
+    id: 'copy-despite-content-warning', template: 'android',
+    settings: { bubbleOpacity: 1, senderColor: '#dcf8c6', receiverColor: '#ffffff', fontFamily: 'Arial, Helvetica, sans-serif', maxWidthPx: 600, useDarkNeutral: false },
+    messages: [{ id: 'broken', sender: 'You', content: '', outgoing: true, whatsappMedia: { kind: 'audio', url: 'not-a-file', mimeType: 'audio/mpeg' } }],
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: /work skin/i }).click();
+  const dialog = page.getByRole('dialog', { name: 'Work skin' });
+  await expect(dialog).toContainText('blocking content issue');
+  await expect(dialog.getByRole('button', { name: 'Copy the CSS' })).toBeEnabled();
+  await expect(dialog.getByRole('button', { name: 'Copy the HTML' })).toBeEnabled();
 });
 
 test('Twitter video players exist only in copied work HTML, never the raster preview or ImgBB payload', async ({ page }) => {

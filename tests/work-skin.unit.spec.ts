@@ -1159,12 +1159,19 @@ test.describe('the master work skin', () => {
     }
   });
 
-  test('keeps Android\'s asset urls absolute, which is why order matters', () => {
-    // Namespacing runs last, after absolutizeCssAssets. Android reaches
-    // buildCSS with `url('/assets/…')`, which AO3 refuses outright — and in a
-    // master skin that one declaration loses all four platforms at once.
-    const { css } = master('android');
-    expect(css).not.toContain("url('/assets/");
-    expect(css).toMatch(/url\('https:\/\/media\.publit\.io/);
+  test('no platform ships a relative asset url, which AO3 refuses outright', () => {
+    // Namespacing runs last, after absolutizeCssAssets, because a relative
+    // `url('/assets/…')` is rewritten against AO3's own domain and 404s — and
+    // in a master skin one refused declaration loses all four platforms at once.
+    //
+    // This used to assert a publit.io url was *present*, which passed only
+    // because iOS defaulted its header to a remote chrome strip. That default
+    // is gone (the CSS draws the header itself), and every remaining image url
+    // is author-supplied and https-gated at the point it enters the sheet. So
+    // the surviving guarantee is the negative one, asserted for all four.
+    for (const template of MASTER_TEMPLATES) {
+      expect(master(template).css, template).not.toContain("url('/assets/");
+      expect(master(template).css, template).not.toContain('url(/assets/');
+    }
   });
 });

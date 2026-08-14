@@ -18,11 +18,11 @@
 | --- | --- |
 | Schema and defaults | `src/lib/schema.ts` |
 | Migration, relationship normalization, video/poll validation, export partitioning | `src/lib/twitter.ts` |
-| Strict backup schema v4 | `src/lib/projectFile.ts` and `docs/PROJECT-FILE-SCHEMA.md` |
+| Strict backup schema v6 | `src/lib/projectFile.ts` and `docs/PROJECT-FILE-SCHEMA.md` |
 | Shared Preview/PNG/work-skin renderer | `src/lib/generator.ts` |
 | Rich post authoring | `src/components/TwitterPostExtrasEditor.tsx`, used by both `ComposeBar.tsx` and `MessageTimeline.tsx` |
 | Relationship-safe hosted export and html2canvas compatibility fixes | `src/components/ExportPanel.tsx` |
-| Three-theme and playable-media master skin | `src/lib/workSkin.ts`, master version 4 |
+| Three-theme and playable-media master skin | `src/lib/workSkin.ts`, master version 6 |
 | Accessible fallback and warnings | `src/lib/transcript.ts` and `src/lib/preflight.ts` |
 | Regression evidence | `tests/twitter-model.unit.spec.ts`, `twitter-authoring.spec.ts`, `twitter-raster.spec.ts`, `twitter-hosted-export.spec.ts`, plus the AO3 injection/namespace/master-skin/skin-off suites |
 
@@ -30,7 +30,7 @@
 
 - TypeScript and optimized Next.js production build: pass.
 - AO3 CSS allowlist audit: 182 properties and 20 shorthands match the pinned upstream revision; no drift.
-- Unit suite: 304 passed; one user-supplied v2 AO3 readback fixture skipped because it cannot validate the new v4 master skin. This includes focused migration and AO3 structured-media regressions.
+- Unit suite includes focused migration, blank-title backup, static/player split, provider-aware WhatsApp video, and structured-media regressions against the v6 master-skin boundary.
 - Twitter authoring: all seven flows pass on desktop and mobile, including thread editing, four-image reorder/removal, rich narrative cards, consent-gated video, delete/reparent, and 360 px containment.
 - AO3 injection, namespace, skin-off, and master-skin computed-geometry suites: pass, including Dim. Structured-media tests separately pin the provider/native player markup because external players are not instantiated in geometry fixtures.
 - Real Save PNG at 1× and 2×: pass; downloaded rasters were visually inspected for rich-card overlap and grid geometry.
@@ -69,7 +69,7 @@ We should adapt those product ideas, not copy the reference's CSS, markup, wordi
 
 The reference intentionally omits some modern Twitter/X controls. AO3 SkinGen should likewise prioritize fiction-relevant information over reproducing every piece of live-site chrome. Bookmarks and views can remain optional metrics; there is no need to add live navigation, authentication, Grok, ads, or network-backed behavior.
 
-The supplied **Twitter Work Skin Template** is also a useful published-media reference. Its observed read-back contains three native video players and two native audio players backed by direct external files. That observation conflicts with this repository's previously verified Work Text allowlist, which excludes the relevant media elements. Phase 1 must reproduce the result in a new draft and reopen the stored HTML before treating it as a supported capability. We should copy the test method, not its markup or externally hosted assets.
+The supplied **Twitter Work Skin Template** was also a useful published-media reference. Its observed read-back contains native video and audio backed by external files. The apparent conflict with the ordinary Work Text element allowlist is now resolved: AO3 applies a field-specific embed/media sanitizer to Work Text `content` before the ordinary sanitizer. That dedicated path accepts approved provider iframes and narrowly formed native media. The implementation copies the test method, not the reference's markup or hosted assets.
 
 ## 3. Current-state audit
 
@@ -142,11 +142,11 @@ The exported work contains no JavaScript. Controls such as “Show replies” or
 
 ### 4.5 Playable HTML, honest static fallback
 
-Playable Work Text is a gated research item, not an implementation assumption. The repository's verified sanitizer contract in `docs/WORK-SKIN-IMPLEMENTATION.md` says `video`, `iframe`, `source`, and `track` are not in the Work Text allowlist, while the supplied posted-work readback appears to contain native players. Those claims must be reconciled on a current AO3 draft before Phase 1 promises playback.
+Playable Work Text is an implemented field-specific exception, not permission to emit arbitrary embeds. Source review and read-back evidence established that AO3's Work Text media pipeline accepts approved provider iframes and narrowly generated native media even though the ordinary element allowlist excludes those elements.
 
 Treat video as one structured media object with two deliberate render variants:
 
-- **interactive HTML, only after the gate passes:** a narrowly generated AO3-surviving player;
+- **interactive AO3 Work Text:** a narrowly generated AO3-surviving player;
 - **static raster:** poster image, play symbol, duration/title, and source text in Save PNG and hosted AO3 image-code output.
 
 The guaranteed fallback for every output is a linked poster card with title/description text. The app preview should show the poster first and load a third-party player only after explicit user action. Never autoplay, imply that a PNG is playable, or accept arbitrary iframe HTML.
@@ -366,18 +366,18 @@ Every phase must satisfy these constraints before it can ship:
 - CSS remains rooted under `#workskin` and compatible with platform namespacing.
 - No JavaScript is required in published work HTML.
 - Use AO3-accepted elements; do not emit `button`, `svg`, or unsupported form controls.
-- Do not emit iframe/native-media markup until a current posted-work readback proves the exact elements and attributes survive. If that gate passes, construct minimal markup from structured fields rather than preserving pasted HTML.
+- Emit iframe/native-media markup only from the implemented `ao3-work` renderer, using the exact minimal structured forms covered by sanitizer/read-back tests. Never preserve pasted HTML.
 - Do not add custom properties, `var()`, bare `gap`, or `@media` to work-skin CSS.
 - Keep layout dimensions in em except intentional hairlines and shadows.
 - Prefer float/inline-block where real AO3 injection has already shown Twitter flex layouts to be fragile.
 - All remote image sources are absolute HTTPS URLs.
-- All media sources are absolute HTTP(S) URLs; any gated YouTube embed uses the privacy-enhanced HTTPS host, while direct media must pass a CORS preflight.
+- All media sources are absolute HTTPS URLs; YouTube embeds use the privacy-enhanced HTTPS host, while direct media must pass a CORS preflight.
 - Every image has intrinsic width/height and meaningful alt text, or explicitly empty alt text when decorative.
 - Chronological reading order in the DOM must match the visual order.
 - Skin-off text must say who posted, who replied to whom, what an activity means, poll options/results, and which text is a translation.
 - Do not use color alone for verified state, poll winners, activity type, or selected options.
 - Decorative chrome should not be announced by screen readers.
-- Any gated iframe has a useful title; every video card has a nearby source link and description or transcript, plus caption-track support where the output supports it.
+- Every iframe has a useful title; every video card has a nearby source link and description or transcript, plus caption-track support where the output supports it.
 - Do not promise that media which survives Work Text will also survive summaries, notes, Preview, Creator's Style off, or downloaded works. Test each output explicitly.
 
 If new container theme classes are emitted, update `CONTAINER_CLASSES` in `src/lib/workSkin.ts`. If exported class contracts change, bump `MASTER_SKIN_VERSION` and update the master-skin compatibility tests and documentation.
@@ -424,7 +424,7 @@ For privacy and predictable authoring, the live editor/preview initially renders
 
 | Output | Video result |
 | --- | --- |
-| Editable AO3 work-skin HTML | Linked poster card by default; minimal player markup only if the current AO3 readback gate passes. |
+| Editable AO3 work-skin HTML | Minimal generated YouTube privacy-enhanced iframe or controlled native direct-video player, plus text/source fallback. |
 | App preview before consent | Static poster card; no third-party player request. |
 | App preview after consent | Playable preview when the source permits embedding/CORS. |
 | Save PNG / hosted AO3 image code | Static poster, play symbol, title/duration, and optional visible source domain. |
@@ -582,8 +582,8 @@ Acceptance:
 - Two posts can contain different quotes.
 - Adding a second image immediately changes both the preview and main editing section to a two-image layout.
 - All attachment alt text survives project export/import and work-skin generation.
-- A supported YouTube URL always produces a linked poster card; it produces a privacy-enhanced player in editable Work Text only if the AO3 readback gate passes.
-- A direct video always retains its source/description fallback; player output requires compatible HTTPS, MIME, CORS, and a successful AO3 readback gate.
+- A supported YouTube URL produces a linked poster card in static surfaces and a privacy-enhanced player in editable Work Text.
+- A direct video always retains its source/description fallback; player output requires compatible HTTPS, MIME, and host CORS behavior.
 - Arbitrary iframe hosts and raw embed HTML are rejected, and opening a project does not automatically contact the player host.
 - A reply does not vanish when a long thread is partitioned for hosted export.
 - PNG spacing and media borders match Preview at 1× and 2×.
@@ -681,7 +681,7 @@ Update `docs/PROJECT-FILE-SCHEMA.md` in the same phase as the schema change. Do 
 - 1–4 media layouts select the correct variant.
 - YouTube watch/share/short/embed URLs normalize to the same ID and privacy-enhanced embed URL.
 - Arbitrary iframe hosts, raw HTML, non-HTTP(S) sources, and invalid direct-video MIME types fail validation.
-- The same video model produces consent-gated editor preview data and a deterministic static poster variant; AO3/export markup contains no player elements.
+- The same video model produces consent-gated editor preview data, a deterministic static poster variant, and an AO3 Work Text player variant; PNG and ImgBB markup contain no player elements.
 - Poll totals and rounding are valid.
 - Thread-aware export partitions contain every original message once.
 
@@ -775,7 +775,7 @@ The Twitter improvement is complete when:
 - account edits update every old post and live-reference quote/activity occurrence;
 - all messages render exactly once even with malformed legacy relationships;
 - Preview, PNG, hosted AO3 images, and editable work-skin code agree materially, with documented interactive-player versus static-poster behavior;
-- video output has privacy-gated preview, description/transcript and source fallbacks, no autoplay, and no unsupported player markup; a future player may ship only after a fresh AO3 readback proves the exact markup survives;
+- video output has privacy-gated editor preview, description/transcript and source fallbacks, no autoplay, and narrowly generated player markup only in AO3 Work Text;
 - light, dim, and dark themes pass AO3 lint, injection, skin-off, mobile, and visual-export tests;
 - existing projects migrate without losing text, identity, media, timestamps, metrics, or relationships;
 - the implementation and project-file documentation describe the same schema.

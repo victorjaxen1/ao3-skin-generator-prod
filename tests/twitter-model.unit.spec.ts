@@ -172,6 +172,21 @@ test('normalizes supported YouTube URLs to one privacy-enhanced target', () => {
   }
   expect(normalizeYouTubeUrl('<iframe src="https://youtube.com/embed/bN8449nalT8">')).toBeUndefined();
   expect(normalizeYouTubeUrl('https://example.com/bN8449nalT8')).toBeUndefined();
+  expect(normalizeYouTubeUrl('http://youtu.be/bN8449nalT8')).toBeUndefined();
+});
+
+test('keeps scene output static while AO3 work output contains the real player', () => {
+  const project = twitterProject([{
+    ...post('video', 'Watch this'),
+    twitterVideo: { source: 'youtube', url: 'https://youtu.be/bN8449nalT8', title: '' },
+  }]);
+  const scene = buildHTML(project, 'static');
+  const ao3 = buildHTML(project, 'ao3-work');
+
+  expect(scene).toContain('https://i.ytimg.com/vi/bN8449nalT8/hqdefault.jpg');
+  expect(scene).not.toMatch(/<iframe\b/i);
+  expect(ao3).toContain('<iframe src="https://www.youtube-nocookie.com/embed/bN8449nalT8"');
+  expect(ao3).not.toContain('video-poster-placeholder');
 });
 
 test('rounds vote counts to 100 and rejects invalid manual closed percentages', () => {

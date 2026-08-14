@@ -48,6 +48,31 @@ function getDarkMode(project: SkinProject): boolean {
   }
 }
 
+/**
+ * Does every reply still sit after the message it answers?
+ *
+ * Parameterised over the reply pointer rather than copied per platform. iOS and
+ * WhatsApp keep separate reply fields on purpose (§0.1 of the iOS plan), but
+ * "a reply comes after its target" is one rule and two copies of it drift.
+ */
+function replyOrderIsValid(messages: Message[], replyTargetId: (message: Message) => string | undefined): boolean {
+  const positions = new Map(messages.map((message, index) => [message.id, index]));
+  return messages.every((message, index) => {
+    const pointer = replyTargetId(message);
+    return !pointer || (positions.get(pointer) ?? index) < index;
+  });
+}
+
+const whatsappReplyTarget = (message: Message) => message.whatsappReply?.messageId;
+const iosReplyTarget = (message: Message) => message.iosReply?.messageId;
+
+/** Would this reordering strand a reply ahead of its target, on any platform? */
+function moveKeepsRepliesValid(template: SkinProject['template'], messages: Message[]): boolean {
+  if (template === 'android') return replyOrderIsValid(messages, whatsappReplyTarget);
+  if (template === 'ios') return replyOrderIsValid(messages, iosReplyTarget);
+  return true;
+}
+
 export default function HomePage() {
   const router = useRouter();
 
@@ -64,6 +89,8 @@ export default function HomePage() {
   const [showMobilePreview, setShowMobilePreview] = useState(true);
   const [showBackup, setShowBackup] = useState(false);
   const [pendingTwitterDelete, setPendingTwitterDelete] = useState<string | null>(null);
+  const [pendingWhatsAppDelete, setPendingWhatsAppDelete] = useState<string | null>(null);
+  const [pendingIOSDelete, setPendingIOSDelete] = useState<string | null>(null);
   // True when the picker was reached from the workspace, i.e. there is work
   // a selection would discard. On a first visit there is nothing to lose.
   const [cameFromWorkspace, setCameFromWorkspace] = useState(false);
@@ -87,6 +114,12 @@ export default function HomePage() {
     : undefined;
   const pendingReplyCount = pendingTwitterDelete
     ? project.messages.filter(message => message.parentId === pendingTwitterDelete).length
+    : 0;
+  const pendingWhatsAppReplyCount = pendingWhatsAppDelete
+    ? project.messages.filter(message => message.whatsappReply?.messageId === pendingWhatsAppDelete).length
+    : 0;
+  const pendingIOSReplyCount = pendingIOSDelete
+    ? project.messages.filter(message => message.iosReply?.messageId === pendingIOSDelete).length
     : 0;
 
   // ── Mount: load characters ──────────────────────────────────────────────
@@ -301,15 +334,57 @@ export default function HomePage() {
       setPendingTwitterDelete(id);
       return;
     }
+    const whatsappReplyCount = project.messages.filter(message => message.whatsappReply?.messageId === id).length;
+    if (project.template === 'android' && whatsappReplyCount > 0) {
+      setPendingWhatsAppDelete(id);
+      return;
+    }
+    const iosReplyCount = project.messages.filter(message => message.iosReply?.messageId === id).length;
+    if (project.template === 'ios' && iosReplyCount > 0) {
+      setPendingIOSDelete(id);
+      return;
+    }
     deleteMessageWithReplyChoice(id, 'promote');
   }, [deleteMessageWithReplyChoice, project.messages, project.template]);
+
+  const deleteWhatsAppMessageAndReplies = useCallback((id: string) => {
+    setProject(previous => ({
+      ...previous,
+      messages: previous.messages
+        .filter(message => message.id !== id)
+        .map(message => message.whatsappReply?.messageId === id ? { ...message, whatsappReply: undefined } : message),
+    }));
+    setPendingWhatsAppDelete(null);
+  }, []);
+
+  const deleteIOSMessageAndReplies = useCallback((id: string) => {
+    setProject(previous => ({
+      ...previous,
+      messages: previous.messages
+        .filter(message => message.id !== id)
+        // Clearing the dependants in the SAME update is the point. Leaving them
+        // pointing at a deleted id renders "Original message unavailable" and
+        // fails preflight, so a delete would quietly break the export.
+        .map(message => message.iosReply?.messageId === id ? { ...message, iosReply: undefined } : message),
+    }));
+    setPendingIOSDelete(null);
+  }, []);
 
   const handleDuplicateMessage = useCallback((msg: Message) => {
     setProject(prev => {
       const idx = prev.messages.findIndex(m => m.id === msg.id);
-      const clone = { ...msg, id: crypto.randomUUID() };
+      // A duplicate is a new message, so it gets a new id — otherwise two
+      // messages share one, and a reply pointing at that id is ambiguous.
+      const clone: Message = { ...msg, id: crypto.randomUUID() };
       const msgs = [...prev.messages];
       msgs.splice(idx + 1, 0, clone);
+      // The copy sits directly after the original, so its own reply is still
+      // valid whenever the original's was — unless the original replied to
+      // something that is no longer earlier, which this re-checks rather than
+      // assumes.
+      if (!moveKeepsRepliesValid(prev.template, msgs)) {
+        msgs[idx + 1] = { ...clone, iosReply: undefined, whatsappReply: undefined };
+      }
       return { ...prev, messages: msgs };
     });
   }, []);
@@ -319,6 +394,7 @@ export default function HomePage() {
     setProject(prev => {
       const msgs = [...prev.messages];
       [msgs[index - 1], msgs[index]] = [msgs[index], msgs[index - 1]];
+      if (!moveKeepsRepliesValid(prev.template, msgs)) return prev;
       return { ...prev, messages: msgs };
     });
   }, []);
@@ -328,6 +404,7 @@ export default function HomePage() {
       if (index >= prev.messages.length - 1) return prev;
       const msgs = [...prev.messages];
       [msgs[index], msgs[index + 1]] = [msgs[index + 1], msgs[index]];
+      if (!moveKeepsRepliesValid(prev.template, msgs)) return prev;
       return { ...prev, messages: msgs };
     });
   }, []);
@@ -749,6 +826,28 @@ export default function HomePage() {
               </button>
             </div>
             <button type="button" autoFocus onClick={() => setPendingTwitterDelete(null)} className="mt-4 rounded-lg px-3 py-2 text-sm text-stone-600 hover:bg-stone-100">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {pendingWhatsAppDelete && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="delete-whatsapp-title">
+          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
+            <h2 id="delete-whatsapp-title" className="text-base font-semibold text-stone-900">Delete a replied-to message?</h2>
+            <p className="mt-2 text-sm text-stone-600">{pendingWhatsAppReplyCount} later {pendingWhatsAppReplyCount === 1 ? 'message replies' : 'messages reply'} to it. Deleting it will remove those reply previews, but keep the later messages.</p>
+            <button type="button" onClick={() => deleteWhatsAppMessageAndReplies(pendingWhatsAppDelete)} className="mt-4 w-full rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-left text-sm font-medium text-red-800">Delete and remove reply previews</button>
+            <button type="button" autoFocus onClick={() => setPendingWhatsAppDelete(null)} className="mt-3 rounded-lg px-3 py-2 text-sm text-stone-600 hover:bg-stone-100">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {pendingIOSDelete && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="delete-ios-title">
+          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
+            <h2 id="delete-ios-title" className="text-base font-semibold text-stone-900">Delete a replied-to message?</h2>
+            <p className="mt-2 text-sm text-stone-600">{pendingIOSReplyCount} later {pendingIOSReplyCount === 1 ? 'message replies' : 'messages reply'} to it. Deleting it will remove those reply previews, but keep the later messages.</p>
+            <button type="button" onClick={() => deleteIOSMessageAndReplies(pendingIOSDelete)} className="mt-4 w-full rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-left text-sm font-medium text-red-800">Delete and remove reply previews</button>
+            <button type="button" autoFocus onClick={() => setPendingIOSDelete(null)} className="mt-3 rounded-lg px-3 py-2 text-sm text-stone-600 hover:bg-stone-100">Cancel</button>
           </div>
         </div>
       )}

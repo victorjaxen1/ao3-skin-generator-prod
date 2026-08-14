@@ -157,6 +157,10 @@ async function geometryUnderInjection(
   // Optional chrome is off by default, and every one of these is a flex row of
   // inline children — exactly the shape injection breaks. Turned on so the
   // harness measures them instead of silently skipping them.
+  // The phone frame is what has somewhere to put a status bar and an input bar.
+  // Without it those two settings render nothing and the harness would quietly
+  // stop measuring the very rows injection is most likely to break.
+  p.settings.iosFrameMode = 'phone';
   p.settings.iosShowStatusBar = true;
   p.settings.iosShowInputBar = true;
   p.settings.twitterQuoteEnabled = true;
@@ -387,10 +391,9 @@ test('Twitter media grids, per-post quotes, polls, and video fallbacks survive i
 /**
  * Group chat, the last injection case, and the one the rule predicts is safe.
  *
- * `.group-sender-row` is a flex row of inline children — an avatar image beside
- * a name — which is precisely the shape that broke the status bar and the
- * metrics. It should nevertheless be untouched, because it lives inside a
- * `<dd>`, and the stored markup shows AO3 wrapping nothing inside `<dd>`.
+ * iOS still uses `.group-sender-row`, a flex row containing an avatar and name.
+ * WhatsApp v6 deliberately uses the simpler block `.group-sender`. Both live
+ * inside a `<dd>`, and the stored markup shows AO3 wrapping nothing there.
  *
  * That prediction is worth testing rather than trusting: it is the only thing
  * standing between this row and the same collapse, and one avatar sits in a
@@ -398,13 +401,20 @@ test('Twitter media grids, per-post quotes, polls, and video fallbacks survive i
  */
 test('group chat survives injection, as the dd rule predicts', async ({ page }) => {
   for (const template of ['ios', 'android'] as const) {
+    // iOS lost its `.group-sender-row` wrapper when the renderer was extracted.
+    // That div existed only to carry the inline flex styles AO3 strips from
+    // every element, so it was doing nothing on the archive; the avatar and the
+    // name are now inline-block siblings inside the bubble, which survives the
+    // paragraph injection this test measures.
+    const senderContainer = template === 'ios'
+      ? '#workskin dd.bubble .ios-group-sender'
+      : '#workskin dd.bubble .group-sender';
     const { before, after } = await geometryUnderInjection(
       page,
       template,
       [
-        '#workskin dd.bubble .group-sender-row',
-        '#workskin dd.bubble .group-avatar-initials',
-        '#workskin dd.bubble .group-sender',
+        senderContainer,
+        ...(template === 'ios' ? ['#workskin dd.bubble .group-avatar-initials'] : []),
         '#workskin dd.bubble.in',
       ],
       (p) => {
@@ -432,8 +442,8 @@ test('group chat survives injection, as the dd rule predicts', async ({ page }) 
     );
 
     expect(
-      before.filter((b) => b.sel === '#workskin dd.bubble .group-sender-row').length,
-      `${template}: fixture rendered no sender rows — the test would be vacuous`
+      before.filter((b) => b.sel === senderContainer).length,
+      `${template}: fixture rendered no sender identity — the test would be vacuous`
     ).toBeGreaterThan(0);
 
     const moved = before
@@ -445,6 +455,62 @@ test('group chat survives injection, as the dd rule predicts', async ({ page }) 
 
     expect(moved, `${template}: ${moved.length} moved:\n${moved.join('\n')}`).toEqual([]);
   }
+});
+
+/**
+ * The iOS structured blocks, under the same paragraph injection.
+ *
+ * The lint can see none of this: reply quotes, image collages, link cards and
+ * media cards are all legal CSS either way, and the failure is geometric. AO3
+ * wraps bare inline children in `<p>`, which does not strip layout — it *moves*
+ * it, so anything relying on a direct-child relationship silently stops
+ * matching. That is exactly the shape of a four-image collage.
+ */
+test('iOS reply, image collage, link card, and media cards survive injection', async ({ page }) => {
+  const selectors = [
+    '#workskin blockquote.ios-reply',
+    '#workskin .ios-images',
+    '#workskin .ios-image',
+    '#workskin a.ios-link-preview',
+    '#workskin .ios-audio-card',
+    '#workskin .ios-video-card',
+    '#workskin .ios-tapbacks',
+    '#workskin .ios-event',
+    '#workskin dd.bubble.in',
+    '#workskin dd.bubble.out',
+  ];
+  const { before, after } = await geometryUnderInjection(page, 'ios', selectors, (p) => {
+    p.messages = [
+      { id: 'date', sender: '', content: '', outgoing: false, iosEvent: { kind: 'date', text: 'Today' } },
+      { id: 'a', sender: 'Sam', content: 'The side door is open.', outgoing: false, timestamp: '22:14' },
+      { id: 'b', sender: 'You', content: 'Checking now.', outgoing: true, timestamp: '22:16', iosReply: { messageId: 'a' } },
+      { id: 'photos', sender: 'You', content: 'Four views.', outgoing: true, timestamp: '22:17',
+        attachments: [1, 2, 3, 4].map(i => ({ type: 'image' as const, url: `https://example.com/door-${i}.png`, alt: `Door view ${i}` })) },
+      { id: 'link', sender: 'Sam', content: 'Log here.', outgoing: false, timestamp: '22:18',
+        iosLinkPreview: { url: 'https://example.com/log', title: 'Access log', siteName: 'example.com', description: 'Recent entries.' } },
+      { id: 'voice', sender: 'Sam', content: '', outgoing: false, timestamp: '22:19',
+        iosMedia: { kind: 'audio', url: 'https://example.com/note.mp3', mimeType: 'audio/mpeg', duration: '0:08', transcript: 'The latch moved.' } },
+      { id: 'video', sender: 'You', content: '', outgoing: true, timestamp: '22:20',
+        iosTapbacks: [{ emoji: '😮', count: 2 }],
+        iosMedia: { kind: 'video', source: 'direct', url: 'https://example.com/door.mp4', mimeType: 'video/mp4', posterUrl: 'https://example.com/p.png', duration: '0:12', description: 'The door swings in.' } },
+    ] as typeof p.messages;
+  });
+
+  for (const selector of selectors) {
+    expect(
+      before.filter(b => b.sel === selector).length,
+      `${selector} rendered nothing — the test would be vacuous`
+    ).toBeGreaterThan(0);
+  }
+
+  expect(after.length, 'injection changed how many elements exist').toBe(before.length);
+
+  const moved = before
+    .map((b, i) => ({ b, a: after[i] }))
+    .filter(({ b, a }) => b.x !== a.x || b.y !== a.y || b.w !== a.w || b.h !== a.h)
+    .map(({ b, a }) => `${b.sel}[${b.i}]  ${b.x},${b.y} ${b.w}x${b.h}  ->  ${a.x},${a.y} ${a.w}x${a.h}`);
+
+  expect(moved, `${moved.length} moved:\n${moved.join('\n')}`).toEqual([]);
 });
 
 for (const template of ['google', 'twitter', 'ios', 'android'] as const) {

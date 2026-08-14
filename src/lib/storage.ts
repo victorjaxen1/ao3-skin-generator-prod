@@ -1,7 +1,8 @@
-import { SkinProject } from './schema';
-import { PLATFORM_ASSETS } from './platformAssets';
+import { IOSParticipantTone, SkinProject, WhatsAppParticipantTone } from './schema';
 import { migrateProjectIdentities } from './identity';
-import { migrateTwitterProject } from './twitter';
+import { migrateTwitterProject, normalizeYouTubeUrl } from './twitter';
+import { normalizeWhatsAppReactions, WHATSAPP_TONE_IDS } from './whatsapp';
+import { IOS_AUDIO_MIME_TYPES, IOS_TONE_IDS, IOS_VIDEO_MIME_TYPES, normalizeIOSTapbacks } from './ios';
 
 const KEY = 'ao3SkinProject';
 
@@ -11,6 +12,8 @@ const MAX_MESSAGES = 100; // Max messages per project
 const MAX_CONTENT_LENGTH = 10000; // Max characters per message
 const MAX_URL_LENGTH = 2048; // Standard URL length limit
 const MESSAGE_STATUSES = new Set(['sending', 'sent', 'delivered', 'read']);
+const LEGACY_W3_AUDIO_SAMPLE = 'https://media.w3.org/2010/07/bunny/04-Death_Becomes_Fur.oga';
+const CORS_AUDIO_SAMPLE = 'https://archive.org/download/testmp3testfile/mpthreetest.mp3';
 
 /**
  * Sanitize a string field with length limit
@@ -31,6 +34,16 @@ function sanitizeStoredUrl(value: unknown): string {
   return url;
 }
 
+function sanitizeStoredHttpsUrl(value: unknown): string {
+  const url = sanitizeStoredUrl(value);
+  if (!url) return '';
+  try {
+    return new URL(url).protocol === 'https:' ? url : '';
+  } catch {
+    return '';
+  }
+}
+
 /**
  * Validate and sanitize a message object from storage
  */
@@ -42,7 +55,7 @@ function sanitizeMessage(msg: unknown): { id: string; sender: string; content: s
   if (typeof m.id !== 'string' || !m.id) return null;
   if (typeof m.outgoing !== 'boolean') return null;
   
-  return {
+  const result = {
     ...m,
     id: sanitizeString(m.id, 100),
     sender: sanitizeString(m.sender, 200),
@@ -68,7 +81,179 @@ function sanitizeMessage(msg: unknown): { id: string; sender: string; content: s
     twitterTranslation: sanitizeStoredTranslation(m.twitterTranslation),
     twitterActivity: sanitizeStoredActivity(m.twitterActivity),
     twitterAccountLabel: typeof m.twitterAccountLabel === 'string' ? sanitizeString(m.twitterAccountLabel, 50) : undefined,
+    whatsappReply: sanitizeStoredWhatsAppReply(m.whatsappReply),
+    whatsappLinkPreview: sanitizeStoredWhatsAppLink(m.whatsappLinkPreview),
+    whatsappMedia: sanitizeStoredWhatsAppMedia(m.whatsappMedia),
+    whatsappReactions: normalizeWhatsAppReactions(Array.isArray(m.whatsappReactions) ? m.whatsappReactions.flatMap(candidate => {
+      if (!candidate || typeof candidate !== 'object') return [];
+      const raw = candidate as Record<string, unknown>;
+      return [{ emoji: sanitizeString(raw.emoji, 20), ...(typeof raw.count === 'number' ? { count: Math.floor(raw.count) } : {}) }];
+    }) : undefined),
+    whatsappEvent: sanitizeStoredWhatsAppEvent(m.whatsappEvent),
+    whatsappStartNewRun: typeof m.whatsappStartNewRun === 'boolean' ? m.whatsappStartNewRun : undefined,
+    iosReply: sanitizeStoredIOSReply(m.iosReply),
+    iosLinkPreview: sanitizeStoredIOSLink(m.iosLinkPreview),
+    iosMedia: sanitizeStoredIOSMedia(m.iosMedia),
+    iosTapbacks: normalizeIOSTapbacks(Array.isArray(m.iosTapbacks) ? m.iosTapbacks.flatMap(candidate => {
+      if (!candidate || typeof candidate !== 'object') return [];
+      const raw = candidate as Record<string, unknown>;
+      return [{ emoji: sanitizeString(raw.emoji, 20), ...(typeof raw.count === 'number' ? { count: Math.floor(raw.count) } : {}) }];
+    }) : undefined),
+    iosEvent: sanitizeStoredIOSEvent(m.iosEvent),
+    iosStartNewRun: typeof m.iosStartNewRun === 'boolean' ? m.iosStartNewRun : undefined,
   };
+  if (result.whatsappEvent) {
+    Object.assign(result, {
+      outgoing: false, sender: '', content: '', timestamp: undefined,
+      status: undefined, avatarUrl: undefined, characterId: undefined,
+      attachments: undefined, whatsappReply: undefined,
+      whatsappLinkPreview: undefined, whatsappMedia: undefined,
+      whatsappReactions: [],
+    });
+  } else if (result.attachments?.length) {
+    Object.assign(result, { whatsappLinkPreview: undefined, whatsappMedia: undefined });
+  } else if (result.whatsappLinkPreview) {
+    Object.assign(result, { whatsappMedia: undefined });
+  }
+  // The same exclusivity pass for iOS, on iOS fields only. Reading the WhatsApp
+  // block above to decide an iOS message's shape is exactly the cross-platform
+  // coupling §0.1 forbids, so this is a second pass rather than a shared one.
+  if (result.iosEvent) {
+    Object.assign(result, {
+      outgoing: false, sender: '', content: '', timestamp: undefined,
+      status: undefined, avatarUrl: undefined, characterId: undefined,
+      isTyping: undefined, attachments: undefined, iosReply: undefined,
+      iosLinkPreview: undefined, iosMedia: undefined, iosTapbacks: [],
+    });
+  } else if (result.attachments?.length) {
+    Object.assign(result, { iosLinkPreview: undefined, iosMedia: undefined });
+  } else if (result.iosLinkPreview) {
+    Object.assign(result, { iosMedia: undefined });
+  }
+  return result;
+}
+
+function sanitizeStoredIOSReply(value: unknown) {
+  if (!value || typeof value !== 'object') return undefined;
+  const messageId = sanitizeString((value as Record<string, unknown>).messageId, 100).trim();
+  return messageId ? { messageId } : undefined;
+}
+
+function sanitizeStoredIOSLink(value: unknown) {
+  if (!value || typeof value !== 'object') return undefined;
+  const raw = value as Record<string, unknown>;
+  const url = sanitizeStoredHttpsUrl(raw.url);
+  const title = sanitizeString(raw.title, 200);
+  if (!url && !title) return undefined;
+  const image = sanitizeStoredAttachments(raw.image ? [raw.image] : undefined)?.[0];
+  return {
+    url, title,
+    ...(typeof raw.siteName === 'string' ? { siteName: sanitizeString(raw.siteName, 100) } : {}),
+    ...(typeof raw.description === 'string' ? { description: sanitizeString(raw.description, 500) } : {}),
+    ...(image ? { image } : {}),
+  };
+}
+
+/**
+ * Recovery never guesses what a media block was meant to be.
+ *
+ * A missing or unrecognised `kind`/`source` discriminator drops the whole block
+ * rather than inventing one (§10). Guessing "this URL looks like YouTube"
+ * produces a card the author never authored; dropping it produces an empty
+ * message, which preflight then reports in plain words.
+ */
+function sanitizeStoredIOSMedia(value: unknown) {
+  if (!value || typeof value !== 'object') return undefined;
+  const raw = value as Record<string, unknown>;
+  const storedUrl = sanitizeStoredHttpsUrl(raw.url);
+  const url = storedUrl === LEGACY_W3_AUDIO_SAMPLE ? CORS_AUDIO_SAMPLE : storedUrl;
+  if (!url) return undefined;
+  const title = typeof raw.title === 'string' ? { title: sanitizeString(raw.title, 200) } : {};
+  if (raw.kind === 'audio' && IOS_AUDIO_MIME_TYPES.includes(String(raw.mimeType) as 'audio/mpeg')) {
+    const mimeType = storedUrl === LEGACY_W3_AUDIO_SAMPLE ? 'audio/mpeg' : raw.mimeType as 'audio/mpeg';
+    return { kind: 'audio' as const, url, mimeType, ...(typeof raw.duration === 'string' ? { duration: sanitizeString(raw.duration, 30) } : {}), ...(typeof raw.transcript === 'string' ? { transcript: sanitizeString(raw.transcript, 10_000) } : {}) };
+  }
+  const poster = sanitizeStoredHttpsUrl(raw.posterUrl);
+  const videoCommon = raw.kind === 'video'
+    ? { ...(poster ? { posterUrl: poster } : {}), ...title, ...(typeof raw.duration === 'string' ? { duration: sanitizeString(raw.duration, 30) } : {}), ...(typeof raw.description === 'string' ? { description: sanitizeString(raw.description, 2_000) } : {}) }
+    : {};
+  if (raw.kind === 'video' && raw.source === 'youtube' && normalizeYouTubeUrl(url)) {
+    return { kind: 'video' as const, source: 'youtube' as const, url, ...videoCommon };
+  }
+  if (raw.kind === 'video' && raw.source === 'direct' && IOS_VIDEO_MIME_TYPES.includes(String(raw.mimeType) as 'video/mp4')) {
+    const captionTrackUrl = sanitizeStoredHttpsUrl(raw.captionTrackUrl);
+    return { kind: 'video' as const, source: 'direct' as const, url, mimeType: raw.mimeType as 'video/mp4', ...videoCommon, ...(captionTrackUrl ? { captionTrackUrl } : {}), ...(typeof raw.captionLanguage === 'string' ? { captionLanguage: sanitizeString(raw.captionLanguage, 40) } : {}), ...(typeof raw.captionLabel === 'string' ? { captionLabel: sanitizeString(raw.captionLabel, 100) } : {}) };
+  }
+  return undefined;
+}
+
+function sanitizeStoredIOSEvent(value: unknown) {
+  if (!value || typeof value !== 'object') return undefined;
+  const raw = value as Record<string, unknown>;
+  if (raw.kind !== 'date' && raw.kind !== 'system') return undefined;
+  return { kind: raw.kind, text: sanitizeString(raw.text, 300) };
+}
+
+function sanitizeStoredWhatsAppReply(value: unknown) {
+  if (!value || typeof value !== 'object') return undefined;
+  const messageId = sanitizeString((value as Record<string, unknown>).messageId, 100).trim();
+  return messageId ? { messageId } : undefined;
+}
+
+function sanitizeStoredWhatsAppLink(value: unknown) {
+  if (!value || typeof value !== 'object') return undefined;
+  const raw = value as Record<string, unknown>;
+  const url = sanitizeStoredHttpsUrl(raw.url);
+  const title = sanitizeString(raw.title, 200);
+  if (!url && !title) return undefined;
+  const image = sanitizeStoredAttachments(raw.image ? [raw.image] : undefined)?.[0];
+  return {
+    url, title,
+    ...(typeof raw.siteName === 'string' ? { siteName: sanitizeString(raw.siteName, 100) } : {}),
+    ...(typeof raw.description === 'string' ? { description: sanitizeString(raw.description, 500) } : {}),
+    ...(image ? { image } : {}),
+  };
+}
+
+function sanitizeStoredWhatsAppMedia(value: unknown) {
+  if (!value || typeof value !== 'object') return undefined;
+  const raw = value as Record<string, unknown>;
+  const storedUrl = sanitizeStoredHttpsUrl(raw.url);
+  const url = storedUrl === LEGACY_W3_AUDIO_SAMPLE ? CORS_AUDIO_SAMPLE : storedUrl;
+  if (!url) return undefined;
+  if (raw.kind === 'audio' && ['audio/mpeg', 'audio/ogg', 'audio/wav', 'audio/mp4'].includes(String(raw.mimeType))) {
+    const mimeType = storedUrl === LEGACY_W3_AUDIO_SAMPLE ? 'audio/mpeg' : raw.mimeType as 'audio/mpeg';
+    return { kind: 'audio' as const, url, mimeType, ...(typeof raw.duration === 'string' ? { duration: sanitizeString(raw.duration, 30) } : {}), ...(typeof raw.transcript === 'string' ? { transcript: sanitizeString(raw.transcript, 10_000) } : {}) };
+  }
+  const videoCommon = raw.kind === 'video' ? { ...(sanitizeStoredHttpsUrl(raw.posterUrl) ? { posterUrl: sanitizeStoredHttpsUrl(raw.posterUrl) } : {}), ...(typeof raw.duration === 'string' ? { duration: sanitizeString(raw.duration, 30) } : {}), ...(typeof raw.description === 'string' ? { description: sanitizeString(raw.description, 2_000) } : {}) } : {};
+  if (raw.kind === 'video' && raw.source === 'youtube' && normalizeYouTubeUrl(url)) {
+    return { kind: 'video' as const, source: 'youtube' as const, url, ...videoCommon };
+  }
+  if (raw.kind === 'video' && raw.source === 'direct' && ['video/mp4', 'video/webm', 'video/ogg'].includes(String(raw.mimeType))) {
+    return { kind: 'video' as const, source: 'direct' as const, url, mimeType: raw.mimeType as 'video/mp4', ...videoCommon, ...(sanitizeStoredHttpsUrl(raw.captionTrackUrl) ? { captionTrackUrl: sanitizeStoredHttpsUrl(raw.captionTrackUrl) } : {}), ...(typeof raw.captionLanguage === 'string' ? { captionLanguage: sanitizeString(raw.captionLanguage, 40) } : {}), ...(typeof raw.captionLabel === 'string' ? { captionLabel: sanitizeString(raw.captionLabel, 100) } : {}) };
+  }
+  return undefined;
+}
+
+function sanitizeStoredWhatsAppEvent(value: unknown) {
+  if (!value || typeof value !== 'object') return undefined;
+  const raw = value as Record<string, unknown>;
+  if (raw.kind !== 'date' && raw.kind !== 'system') return undefined;
+  return { kind: raw.kind, text: sanitizeString(raw.text, 300) };
+}
+
+function sanitizeStoredParticipants(value: unknown) {
+  if (!Array.isArray(value)) return undefined;
+  return value.slice(0, 50).flatMap(candidate => {
+    if (!candidate || typeof candidate !== 'object') return [];
+    const raw = candidate as Record<string, unknown>;
+    const id = sanitizeString(raw.id, 100);
+    const name = sanitizeString(raw.name, 200);
+    if (!id || !name) return [];
+    const tone = typeof raw.whatsappTone === 'string' && WHATSAPP_TONE_IDS.has(raw.whatsappTone as WhatsAppParticipantTone) ? raw.whatsappTone as WhatsAppParticipantTone : undefined;
+    const iosTone = typeof raw.iosTone === 'string' && IOS_TONE_IDS.has(raw.iosTone as IOSParticipantTone) ? raw.iosTone as IOSParticipantTone : undefined;
+    return [{ ...raw, id, name, color: /^#[0-9a-f]{6}$/i.test(String(raw.color)) ? String(raw.color) : '#777777', ...(tone ? { whatsappTone: tone } : {}), ...(iosTone ? { iosTone } : {}) }];
+  });
 }
 
 function sanitizeStoredAttachments(value: unknown) {
@@ -239,24 +424,27 @@ export function loadStoredProject<T extends SkinProject>(fallback: () => T): T {
       .slice(0, MAX_MESSAGES)
       .map(sanitizeMessage)
       .filter((m): m is NonNullable<typeof m> => m !== null);
+    const seenMessageIds = new Set<string>();
+    const recoveredMessages = sanitizedMessages.flatMap(message => {
+      if (seenMessageIds.has(message.id)) return [];
+      const reply = message.whatsappReply as { messageId?: unknown } | undefined;
+      if (reply && (typeof reply.messageId !== 'string' || !seenMessageIds.has(reply.messageId))) {
+        message.whatsappReply = undefined;
+      }
+      // A reply may only point *backwards*, so "already seen" is the whole test.
+      // A pointer at a message that was dropped, deduplicated, or comes later is
+      // dangling, and a dangling reply renders as "Original message unavailable"
+      // and blocks export — worse than no reply at all.
+      const iosReply = message.iosReply as { messageId?: unknown } | undefined;
+      if (iosReply && (typeof iosReply.messageId !== 'string' || !seenMessageIds.has(iosReply.messageId))) {
+        message.iosReply = undefined;
+      }
+      seenMessageIds.add(message.id);
+      return [message];
+    });
     
     // Merge with defaults to ensure new fields are present (like header/footer URLs)
     const defaults = fallback();
-    
-    // Fix broken URLs from old versions - ALWAYS use CDN URL if it's not already correct
-    const fixAndroidHeaderUrl = (url: string | undefined) => {
-      // Always return correct CDN URL (whatapp-header.png - note the typo is intentional, that's the actual filename)
-      if (url === PLATFORM_ASSETS.whatsapp.headerImage) return url;
-      // Force correct URL for any other value (including broken URLs, undefined, etc.)
-      return PLATFORM_ASSETS.whatsapp.headerImage;
-    };
-    
-    const fixAndroidFooterUrl = (url: string | undefined) => {
-      // Always return correct CDN URL unless the URL is already the correct one
-      if (url === PLATFORM_ASSETS.whatsapp.footerImage) return url;
-      // Force correct URL for any other value
-      return PLATFORM_ASSETS.whatsapp.footerImage;
-    };
     
     // Sanitize URL fields in settings
     const importedSettings = { ...parsed.settings };
@@ -269,8 +457,8 @@ export function loadStoredProject<T extends SkinProject>(fallback: () => T): T {
       // Ensure header/footer image URLs exist and are sanitized, fixing old broken URLs
       iosHeaderImageUrl: sanitizeStoredUrl(parsed.settings.iosHeaderImageUrl) || defaults.settings.iosHeaderImageUrl,
       iosFooterImageUrl: sanitizeStoredUrl(parsed.settings.iosFooterImageUrl) || defaults.settings.iosFooterImageUrl,
-      androidHeaderImageUrl: fixAndroidHeaderUrl(parsed.settings.androidHeaderImageUrl),
-      androidFooterImageUrl: fixAndroidFooterUrl(parsed.settings.androidFooterImageUrl),
+      androidHeaderImageUrl: sanitizeStoredUrl(parsed.settings.androidHeaderImageUrl),
+      androidFooterImageUrl: sanitizeStoredUrl(parsed.settings.androidFooterImageUrl),
       iosAvatarUrl: sanitizeStoredUrl(parsed.settings.iosAvatarUrl),
       androidAvatarUrl: sanitizeStoredUrl(parsed.settings.androidAvatarUrl),
       twitterAvatarUrl: sanitizeStoredUrl(parsed.settings.twitterAvatarUrl),
@@ -286,6 +474,17 @@ export function loadStoredProject<T extends SkinProject>(fallback: () => T): T {
         || parsed.settings.twitterTheme === 'dark'
         ? parsed.settings.twitterTheme
         : undefined,
+      androidFrameMode: ['bubbles', 'header', 'phone'].includes(parsed.settings.androidFrameMode) ? parsed.settings.androidFrameMode : defaults.settings.androidFrameMode,
+      androidGroupSubtitleMode: ['members', 'count', 'custom', 'hidden'].includes(parsed.settings.androidGroupSubtitleMode) ? parsed.settings.androidGroupSubtitleMode : defaults.settings.androidGroupSubtitleMode,
+      androidGroupSubtitleText: sanitizeString(parsed.settings.androidGroupSubtitleText, 200),
+      androidWallpaperUrl: sanitizeStoredUrl(parsed.settings.androidWallpaperUrl),
+      androidScrollable: parsed.settings.androidScrollable === true,
+      androidViewportHeightEm: typeof parsed.settings.androidViewportHeightEm === 'number' ? Math.max(20, Math.min(60, Math.round(parsed.settings.androidViewportHeightEm))) : 30,
+      iosFrameMode: ['bubbles', 'header', 'phone'].includes(parsed.settings.iosFrameMode) ? parsed.settings.iosFrameMode : defaults.settings.iosFrameMode,
+      iosScrollable: parsed.settings.iosScrollable === true,
+      iosViewportHeightEm: typeof parsed.settings.iosViewportHeightEm === 'number' ? Math.max(20, Math.min(60, Math.round(parsed.settings.iosViewportHeightEm))) : 34,
+      iosGroupParticipants: sanitizeStoredParticipants(parsed.settings.iosGroupParticipants),
+      androidGroupParticipants: sanitizeStoredParticipants(parsed.settings.androidGroupParticipants),
     };
     
     const sanitizedProject = {
@@ -295,7 +494,7 @@ export function loadStoredProject<T extends SkinProject>(fallback: () => T): T {
           ? sanitizeString(parsed.id, 100)
           : defaults.id,
       settings: sanitizedSettings,
-      messages: sanitizedMessages,
+      messages: recoveredMessages,
       cast: sanitizeStoredCast(parsed.cast),
     } as T;
     return migrateTwitterProject(migrateProjectIdentities(sanitizedProject)) as T;

@@ -458,7 +458,7 @@ regression. `render()` in `tests/_ao3-render.ts` awaits `document.fonts.ready`
 and two animation frames before snapshotting; three consecutive full runs are
 clean.
 
-### 6e. The choice, and why the default is the narrow one (8 Aug 2026)
+### 6e. The choice, and why the master became the default (8–14 Aug 2026)
 
 The master skin is only worth building if an author can take it, and the reason
 they have to *choose* is AO3's: **a work gets exactly one skin.** An author whose
@@ -473,12 +473,11 @@ four platforms should not be named after one), and a line in step 2 telling the
 author to come back and copy the HTML for the next conversation, whatever app
 and theme it is.
 
-- **The default is the narrow one.** It is the smaller paste, it is what this
-  modal did before the choice existed, and it is right for the common case of a
-  fic that stays on one platform. The wider skin is the one you need *later*,
-  which is exactly why the copy for the narrow option names the situation that
-  sends you back: "if a later chapter uses a different app you will need the
-  other option, since a fic can only have one work skin."
+- **The master is the default as of 14 Aug.** The narrow skin remains available
+  for an author who deliberately wants the smallest paste, but starting narrow
+  creates a trap: a later platform cannot use a second work skin and forces a
+  manual merge. Opening on the complete CSS prevents that failure and matches
+  the modal's own one-skin guidance.
 - **The master skin is built lazily.** `buildWorkSkin` is one stylesheet and
   runs on every `project` change like everything else in that component;
   `buildMasterWorkSkin` is eleven, and `project` changes on every keystroke in
@@ -549,7 +548,7 @@ further "defects" turned out to be the measurement, not the export (§16c).
 | 3 | ✅ **done, 8 Aug 2026.** `buildMasterWorkSkin(project)` — a version rule, then four namespaced blocks. §6d records what it took and what it did not need |
 | 3b | ✅ **done, 8 Aug 2026.** Both themes in one skin — the theme class, `namespaceCss`'s theme argument, and a variant block per themed platform. §6b-i is the one to read: the *derived diff* this was scoped as is unsound, and the render diff is what caught it |
 | 4 | Dedupe the rules that are byte-identical across platforms (`.visually-hidden`, the paragraph reset, the `dd.bubble` text formatting). Measured at **26 distinct rules, 3.4 KB** when the skin was 34.5 KB over 293 rules; the variant blocks of 3b doubled the structural rules, so **re-measure against 537 before starting**. Worth more than it was, and still not worth blocking 5 on |
-| 5 | ✅ **done, 8 Aug 2026.** The work-skin modal offers **Just \<platform\>** (default) against **All four platforms**, with the title example and the follow-up guidance following the choice. The §9f copy fixes shipped earlier, in item 5 of `BACKLOG.md`. §6e records what the choice had to say and why the default is the narrow one |
+| 5 | ✅ **done, 8 Aug 2026; default reversed 14 Aug 2026.** The work-skin modal offers **Just \<platform\>** against **All four platforms** (default), with the title example and follow-up guidance following the choice. The complete skin now opens first because AO3 gives a work one skin slot and later platform changes should not require a manual merge. The §9f copy fixes shipped earlier, in item 5 of `BACKLOG.md` |
 | 6 | ✅ **done, 8 Aug 2026 — §6f.** Saved on real AO3 (537/537 rules stored), a four-platform work posted and read with the skin on and off, and §5 settled: `display:flex` lays out correctly on a real page. **All six phases complete, and deployed.** What the render found is WORK-SKIN §16 |
 
 Phases 0 and 1 were worth doing regardless of whether the master skin shipped.

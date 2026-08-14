@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Message, SkinProject, SkinSettings } from '../lib/schema';
 import { IdentityTarget, resolveMessageIdentity } from '../lib/identity';
-import { ImageUrlInput } from './ImageUrlInput';
 import { MessageEmojiPicker, MessageEmojiTrigger } from './MessageEmojiPicker';
-import { ReactionPicker } from './ReactionPicker';
 import { automaticDeliveryStatus, nextChatTimestamp } from '../lib/messageMetadata';
 import { deriveTwitterReplyHandles, getTwitterDescendantIds, getTwitterSceneMode } from '../lib/twitter';
 import TwitterPostExtrasEditor from './TwitterPostExtrasEditor';
+import WhatsAppMessageExtrasEditor from './WhatsAppMessageExtrasEditor';
+import IOSMessageExtrasEditor from './IOSMessageExtrasEditor';
+import { whatsappMessageLabel } from '../lib/whatsapp';
 
 interface Props {
   messages: Message[];
@@ -76,6 +77,37 @@ const MessageMenu: React.FC<{
   );
 };
 
+/**
+ * Would this move leave a reply sitting before the message it answers?
+ *
+ * Generalized over the reply pointer rather than duplicated per platform: iOS
+ * and WhatsApp have separate reply fields by design (§0.1), but "a reply must
+ * come after its target" is one rule, and two copies of it would drift.
+ */
+function canMoveReplyAwareMessage(
+  messages: Message[],
+  index: number,
+  offset: -1 | 1,
+  replyTargetId: (message: Message) => string | undefined
+): boolean {
+  const target = index + offset;
+  if (target < 0 || target >= messages.length) return false;
+  const next = [...messages];
+  [next[index], next[target]] = [next[target], next[index]];
+  const positions = new Map(next.map((message, position) => [message.id, position]));
+  return next.every((message, position) => {
+    const pointer = replyTargetId(message);
+    return !pointer || (positions.get(pointer) ?? position) < position;
+  });
+}
+
+function canMoveMessage(template: string, messages: Message[], index: number, offset: -1 | 1): boolean {
+  if (template === 'android') return canMoveReplyAwareMessage(messages, index, offset, message => message.whatsappReply?.messageId);
+  if (template === 'ios') return canMoveReplyAwareMessage(messages, index, offset, message => message.iosReply?.messageId);
+  const target = index + offset;
+  return target >= 0 && target < messages.length;
+}
+
 export const MessageTimeline: React.FC<Props> = ({
   messages,
   template,
@@ -138,6 +170,7 @@ export const MessageTimeline: React.FC<Props> = ({
   const youLabel = settings.chatYourName?.trim() || 'You';
 
   const getSenderLabel = (msg: Message) => {
+    if (template === 'android' && msg.whatsappEvent) return msg.whatsappEvent.kind === 'date' ? 'Date' : 'System';
     const identity = resolveMessageIdentity(project, msg);
     if (template === 'twitter') {
       return identity.twitterHandle ? `@${identity.twitterHandle}` : identity.name;
@@ -163,6 +196,10 @@ export const MessageTimeline: React.FC<Props> = ({
 
   const twitterSceneMode = template === 'twitter' ? getTwitterSceneMode(project) : 'timeline';
   const twitterAccounts = project.cast?.characters || [];
+  const groupParticipants = template === 'android'
+    ? settings.androidGroupParticipants || []
+    : settings.iosGroupParticipants || [];
+  const groupMode = template === 'android' ? settings.androidGroupMode : settings.iosGroupMode;
 
   const insertMessageEmoji = (msg: Message, emoji: string) => {
     const input = messageInputRefs.current.get(msg.id);
@@ -188,6 +225,8 @@ export const MessageTimeline: React.FC<Props> = ({
         const isMenuOpen = menuOpenId === msg.id;
         const twitterDescendants = template === 'twitter' ? getTwitterDescendantIds(messages, msg.id) : new Set<string>();
         const hasMissingParent = !!msg.parentId && !messages.some(candidate => candidate.id === msg.parentId);
+        const canMoveUp = index > 0 && canMoveMessage(template, messages, index, -1);
+        const canMoveDown = index < messages.length - 1 && canMoveMessage(template, messages, index, 1);
 
         return (
           <div
@@ -208,7 +247,7 @@ export const MessageTimeline: React.FC<Props> = ({
               }}
             >
               {/* Direction indicator */}
-              {(template === 'ios' || template === 'android') && (
+              {(template === 'ios' || template === 'android') && !msg.whatsappEvent && !msg.iosEvent && (
                 <span
                   className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
                     msg.outgoing ? 'bg-violet-500' : 'bg-stone-300'
@@ -219,7 +258,7 @@ export const MessageTimeline: React.FC<Props> = ({
               {/* Sender */}
               <button
                 type="button"
-                disabled={template === 'google'}
+                disabled={template === 'google' || !!msg.whatsappEvent || !!msg.iosEvent}
                 onClick={(event) => {
                   event.stopPropagation();
                   const target = identityTarget(msg);
@@ -233,11 +272,11 @@ export const MessageTimeline: React.FC<Props> = ({
 
               {/* Content preview */}
               <span className="text-sm text-stone-700 truncate flex-1">
-                {msg.isTyping ? '...' : msg.content}
+                {template === 'android' ? whatsappMessageLabel(msg) : msg.isTyping ? '...' : msg.content}
               </span>
 
               {/* Timestamp */}
-              {msg.timestamp && (
+                {msg.timestamp && !msg.whatsappEvent && (
                 <span className="text-[10px] text-stone-400 flex-shrink-0">{msg.timestamp}</span>
               )}
 
@@ -263,8 +302,8 @@ export const MessageTimeline: React.FC<Props> = ({
                   onDuplicate={onDuplicateMessage ? () => { onDuplicateMessage(msg); setMenuOpenId(null); } : undefined}
                   onMoveUp={onMoveUp ? () => { onMoveUp(index); setMenuOpenId(null); } : undefined}
                   onMoveDown={onMoveDown ? () => { onMoveDown(index); setMenuOpenId(null); } : undefined}
-                  canMoveUp={index > 0}
-                  canMoveDown={index < messages.length - 1}
+                  canMoveUp={canMoveUp}
+                  canMoveDown={canMoveDown}
                   onClose={() => setMenuOpenId(null)}
                 />
               )}
@@ -273,7 +312,7 @@ export const MessageTimeline: React.FC<Props> = ({
             {/* Expanded edit panel */}
             {isExpanded && (
               <div className="px-3 pb-3 space-y-2 animate-fade-in">
-                <div className="relative">
+                {!msg.whatsappEvent && <div className="relative">
                   <textarea
                     ref={element => {
                       if (element) messageInputRefs.current.set(msg.id, element);
@@ -297,8 +336,8 @@ export const MessageTimeline: React.FC<Props> = ({
                       onToggle={() => setEmojiOpenId(openId => openId === msg.id ? null : msg.id)}
                     />
                   )}
-                </div>
-                {template !== 'google' && emojiOpenId === msg.id && (
+                </div>}
+                {!msg.whatsappEvent && template !== 'google' && emojiOpenId === msg.id && (
                   <div className="rounded-lg border border-stone-200 bg-stone-50/70 p-2">
                     <MessageEmojiPicker
                       id={`timeline-${msg.id}-emoji-options`}
@@ -307,7 +346,7 @@ export const MessageTimeline: React.FC<Props> = ({
                   </div>
                 )}
                 <div className="grid grid-cols-2 gap-2">
-                  {(template === 'ios' || template === 'android') && (
+                  {(template === 'ios' || template === 'android') && !msg.whatsappEvent && !msg.iosEvent && (
                     <>
                       <input
                         value={msg.timestamp || ''}
@@ -322,13 +361,18 @@ export const MessageTimeline: React.FC<Props> = ({
                           sit alone. */}
                       <select
                         value={msg.outgoing ? 'outgoing' : 'incoming'}
-                        onChange={(e) => onUpdateMessage(msg.id, {
-                          outgoing: e.target.value === 'outgoing',
-                          sender: e.target.value === 'outgoing' ? youLabel : msg.sender,
-                          characterId: e.target.value === 'outgoing' ? project.cast?.selfId : project.cast?.contactId,
-                          status: e.target.value === 'outgoing' ? 'delivered' : undefined,
-                          statusMode: e.target.value === 'outgoing' ? 'auto' : undefined,
-                        })}
+                        onChange={(e) => {
+                          const outgoing = e.target.value === 'outgoing';
+                          const participant = !outgoing && groupMode ? groupParticipants[0] : undefined;
+                          onUpdateMessage(msg.id, {
+                            outgoing,
+                            sender: outgoing ? youLabel : participant?.name || msg.sender,
+                            participantId: participant?.id,
+                            characterId: outgoing ? project.cast?.selfId : participant?.characterId || project.cast?.contactId,
+                            status: outgoing ? 'delivered' : undefined,
+                            statusMode: outgoing ? 'auto' : undefined,
+                          });
+                        }}
                         className="text-xs bg-white border border-stone-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-violet-500"
                       >
                         <option value="outgoing">{youLabel} (outgoing)</option>
@@ -391,6 +435,24 @@ export const MessageTimeline: React.FC<Props> = ({
                           <option key={account.id} value={account.id}>{account.name}{account.archived ? ' (archived)' : ''}</option>
                         ))}
                       </select>
+                      {groupMode && !msg.outgoing && groupParticipants.length > 0 && (
+                        <select
+                          value={msg.participantId || ''}
+                          onChange={event => {
+                            const participant = groupParticipants.find(candidate => candidate.id === event.target.value);
+                            onUpdateMessage(msg.id, {
+                              participantId: participant?.id,
+                              characterId: participant?.characterId,
+                              sender: participant?.name || msg.sender,
+                            });
+                          }}
+                          aria-label="Speaking as"
+                          className="text-xs bg-white border border-stone-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-violet-500"
+                        >
+                          <option value="">Select person</option>
+                          {groupParticipants.map(participant => <option key={participant.id} value={participant.id}>{participant.name}</option>)}
+                        </select>
+                      )}
                       <select
                         value={msg.twitterLayout || (msg.expandedView ? 'expanded' : 'auto')}
                         onChange={event => onUpdateMessage(msg.id, {
@@ -559,64 +621,29 @@ export const MessageTimeline: React.FC<Props> = ({
                   />
                 )}
 
-                {/* Outside the grid: six chips plus a custom field need the
-                    full width. Narrowed to the two platforms with a reaction
-                    rendering path — TypeScript enforces it rather than a
-                    comment (see ReactionPicker's Props). */}
-                {(template === 'ios' || template === 'android') && (
-                  <ReactionPicker
-                    template={template}
-                    value={msg.reaction || ''}
-                    onChange={(v) => onUpdateMessage(msg.id, { reaction: v })}
+                {template === 'android' && (
+                  <WhatsAppMessageExtrasEditor
+                    message={msg}
+                    project={project}
+                    index={index}
                     idPrefix={msg.id}
+                    onChange={updates => onUpdateMessage(msg.id, updates)}
                   />
                 )}
 
-                {/* Image attachment — iOS / Android / Twitter */}
-                {template !== 'google' && template !== 'twitter' && (
-                  <ImageUrlInput
-                    value={msg.attachments?.[0]?.url || ''}
-                    onChange={(url) =>
-                      onUpdateMessage(msg.id, {
-                        attachments: url
-                          ? [{
-                              type: 'image',
-                              url,
-                              alt: msg.attachments?.[0]?.alt || '',
-                              decorative: msg.attachments?.[0]?.decorative || false,
-                            }]
-                          : [],
-                      })
-                    }
-                    ariaLabel="Image address for this message"
-                    placeholder="Paste an image address (optional)"
+                {/* One editor, the same one the composer uses. The old path
+                    here was a single-image field plus the shared ReactionPicker,
+                    which between them could only express one image and one
+                    emoji — and, worse, wrote to `attachments[0]` and `reaction`
+                    directly, so either could overwrite what the other had set. */}
+                {template === 'ios' && (
+                  <IOSMessageExtrasEditor
+                    message={msg}
+                    project={project}
+                    index={index}
+                    idPrefix={msg.id}
+                    onChange={updates => onUpdateMessage(msg.id, updates)}
                   />
-                )}
-                {template !== 'google' && template !== 'twitter' && msg.attachments?.[0]?.url && (
-                  <div className="space-y-1.5">
-                    <input
-                      value={msg.attachments[0].alt || ''}
-                      onChange={event => onUpdateMessage(msg.id, {
-                        attachments: [{ ...msg.attachments![0], alt: event.target.value }],
-                      })}
-                      disabled={msg.attachments[0].decorative === true}
-                      maxLength={500}
-                      aria-label="Image description"
-                      placeholder="Describe the image for readers"
-                      className="w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-xs disabled:bg-stone-100 disabled:text-stone-400"
-                    />
-                    <label className="flex items-center gap-2 text-xs text-stone-600">
-                      <input
-                        type="checkbox"
-                        checked={msg.attachments[0].decorative === true}
-                        onChange={event => onUpdateMessage(msg.id, {
-                          attachments: [{ ...msg.attachments![0], decorative: event.target.checked, ...(event.target.checked ? { alt: '' } : {}) }],
-                        })}
-                        className="accent-violet-600"
-                      />
-                      Decorative image — use empty alt text
-                    </label>
-                  </div>
                 )}
               </div>
             )}

@@ -313,6 +313,16 @@ export function richProject(template: string) {
     p.settings.chatShowTyping = true;
     p.settings.chatTypingName = 'Sam';
   }
+  if (template === 'android') {
+    p.settings.androidFrameMode = 'phone';
+    p.messages = [
+      { id: 'wa-date', sender: '', content: '', outgoing: false, whatsappEvent: { kind: 'date', text: 'Today' } },
+      { id: '1', sender: 'Sam', content: 'hey', outgoing: false, timestamp: '10:23', whatsappReactions: [{ emoji: '👍', count: 2 }] },
+      { id: '2', sender: 'You', content: 'you free **tonight**?', outgoing: true, timestamp: '10:24', status: 'read', whatsappReply: { messageId: '1' } },
+      { id: '3', sender: 'You', content: 'or `tomorrow`', outgoing: true, timestamp: '10:25', whatsappLinkPreview: { url: 'https://example.com/clue', title: 'Story clue', description: 'A readable link fallback.' } },
+      { id: '4', sender: 'Sam', content: '', outgoing: false, timestamp: '10:26', whatsappMedia: { kind: 'audio', url: 'https://example.com/clue.mp3', mimeType: 'audio/mpeg', duration: '0:08', transcript: 'A readable transcript.' } },
+    ] as typeof p.messages;
+  }
   return p;
 }
 

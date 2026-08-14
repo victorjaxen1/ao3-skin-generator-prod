@@ -1,5 +1,3 @@
-import { PLATFORM_ASSETS } from './platformAssets';
-
 export type Attachment = {
   type: 'image';
   url: string;
@@ -13,6 +11,132 @@ export type TwitterTheme = 'light' | 'dim' | 'dark';
 export type TwitterPostLayout = 'auto' | 'expanded' | 'compact';
 export type TwitterReplyHandlesMode = 'auto' | 'manual';
 export type TwitterMediaCrop = 'auto' | 'fill-width' | 'fill-height';
+
+export type WhatsAppParticipantTone =
+  | 'green' | 'teal' | 'lime' | 'yellow'
+  | 'orange' | 'red' | 'pink' | 'magenta'
+  | 'purple' | 'violet' | 'blue' | 'cyan';
+
+export interface WhatsAppReply {
+  messageId: string;
+}
+
+export interface WhatsAppLinkPreview {
+  url: string;
+  title: string;
+  siteName?: string;
+  description?: string;
+  image?: Attachment;
+}
+
+export type WhatsAppMedia =
+  | {
+      kind: 'audio';
+      url: string;
+      mimeType: 'audio/mpeg' | 'audio/ogg' | 'audio/wav' | 'audio/mp4';
+      duration?: string;
+      transcript?: string;
+    }
+  | {
+      kind: 'video';
+      source: 'youtube';
+      url: string;
+      posterUrl?: string;
+      duration?: string;
+      description?: string;
+    }
+  | {
+      kind: 'video';
+      source: 'direct';
+      url: string;
+      mimeType: 'video/mp4' | 'video/webm' | 'video/ogg';
+      posterUrl?: string;
+      duration?: string;
+      description?: string;
+      captionTrackUrl?: string;
+      captionLanguage?: string;
+      captionLabel?: string;
+    };
+
+export interface WhatsAppReaction {
+  emoji: string;
+  count?: number;
+}
+
+export interface WhatsAppEvent {
+  kind: 'date' | 'system';
+  text: string;
+}
+
+/**
+ * iOS structured content.
+ *
+ * Deliberately separate from the WhatsApp types above even where the fields
+ * match, per §0.1 of the iOS improvement plan. The two renderers must not read
+ * each other's fields: a shared type is one refactor away from a shared
+ * *renderer*, and iMessage and WhatsApp disagree about almost everything except
+ * the shape of a URL. The shared `attachments` array is the one exception, and
+ * only because it already carries the right image, alt-text, persistence, and
+ * export semantics.
+ */
+export type IOSParticipantTone =
+  | 'red' | 'orange' | 'yellow' | 'green'
+  | 'mint' | 'teal' | 'cyan' | 'blue'
+  | 'indigo' | 'purple' | 'pink' | 'brown';
+
+export interface IOSReply {
+  messageId: string;
+}
+
+export interface IOSLinkPreview {
+  url: string;
+  title: string;
+  siteName?: string;
+  description?: string;
+  image?: Attachment;
+}
+
+export type IOSMedia =
+  | {
+      kind: 'audio';
+      url: string;
+      mimeType: 'audio/mpeg' | 'audio/ogg' | 'audio/wav' | 'audio/mp4';
+      duration?: string;
+      transcript?: string;
+    }
+  | {
+      kind: 'video';
+      source: 'youtube';
+      url: string;
+      posterUrl?: string;
+      title?: string;
+      duration?: string;
+      description?: string;
+    }
+  | {
+      kind: 'video';
+      source: 'direct';
+      url: string;
+      mimeType: 'video/mp4' | 'video/webm' | 'video/ogg';
+      posterUrl?: string;
+      title?: string;
+      duration?: string;
+      description?: string;
+      captionTrackUrl?: string;
+      captionLanguage?: string;
+      captionLabel?: string;
+    };
+
+/** Apple attaches Tapbacks to a specific message and stacks repeats. */
+export interface IOSTapback {
+  emoji: string;
+  count?: number;
+}
+
+export interface IOSEvent {
+  kind: 'date' | 'system';
+  text: string;
+}
 
 export interface TwitterQuotePost {
   characterId?: string;
@@ -110,6 +234,15 @@ export interface GroupParticipant {
   name: string;                 // Participant display name
   avatarUrl?: string;           // Optional profile picture
   color: string;                // Hex color for name display (#FF5733)
+  whatsappTone?: WhatsAppParticipantTone; // Fixed AO3-safe sender-name palette
+  /**
+   * Fixed AO3-safe sender-name palette for iOS group chats.
+   *
+   * `color` above is a free hex value emitted as an inline `style`, which AO3
+   * strips outright — so group identity in the app disagreed with group
+   * identity on the archive. A finite tone maps to a class instead.
+   */
+  iosTone?: IOSParticipantTone;
   phoneNumber?: string;         // Optional phone number
 }
 
@@ -130,6 +263,18 @@ export interface Message {
   status?: 'sending' | 'sent' | 'delivered' | 'read'; // message delivery status
   statusMode?: 'auto' | 'manual'; // auto may advance to read when a reply is added
   reaction?: string; // emoji reaction to this message
+  whatsappReply?: WhatsAppReply;
+  whatsappLinkPreview?: WhatsAppLinkPreview;
+  whatsappMedia?: WhatsAppMedia;
+  whatsappReactions?: WhatsAppReaction[];
+  whatsappEvent?: WhatsAppEvent;
+  whatsappStartNewRun?: boolean;
+  iosReply?: IOSReply;
+  iosLinkPreview?: IOSLinkPreview;
+  iosMedia?: IOSMedia;
+  iosTapbacks?: IOSTapback[];
+  iosEvent?: IOSEvent;
+  iosStartNewRun?: boolean;
   useCustomIdentity?: boolean; // For Twitter: override main account identity
   // Twitter-specific per-tweet metrics
   twitterLikes?: number;
@@ -263,9 +408,16 @@ export interface SkinSettings {
   iosStatusBarTime?: string; // Status bar time (default: "9:41")
   iosShowInputBar?: boolean; // Show input bar at bottom
   iosInputPlaceholder?: string; // Input bar placeholder text (default: "iMessage")
+  /**
+   * Advanced overrides. The generated header and input bar are the default, so
+   * an ordinary work makes no permanent request to a remote chrome strip.
+   */
   iosHeaderImageUrl?: string; // Header background image URL
   iosFooterImageUrl?: string; // Footer background image URL
   iosAvatarUrl?: string; // User's avatar image to overlay on header
+  iosFrameMode?: 'bubbles' | 'header' | 'phone';
+  iosScrollable?: boolean;
+  iosViewportHeightEm?: number;
   androidShowStatus?: boolean; // "Online" / "Last seen"
   androidStatusText?: string; // custom status text
   androidCheckmarks?: boolean; // show ✓✓ checkmarks
@@ -279,6 +431,12 @@ export interface SkinSettings {
   androidGroupMode?: boolean; // Enable group chat (shows sender names)
   androidGroupName?: string; // Group chat name (e.g., "Work Team")
   androidGroupParticipants?: GroupParticipant[]; // Group members
+  androidFrameMode?: 'bubbles' | 'header' | 'phone';
+  androidGroupSubtitleMode?: 'members' | 'count' | 'custom' | 'hidden';
+  androidGroupSubtitleText?: string;
+  androidWallpaperUrl?: string;
+  androidScrollable?: boolean;
+  androidViewportHeightEm?: number;
 }
 export interface SkinProject {
   id: string;
@@ -347,18 +505,33 @@ export const defaultProject = (): SkinProject => ({
     iosStatusBarTime: '9:41',
     iosShowInputBar: false,
     iosInputPlaceholder: 'iMessage',
-    iosHeaderImageUrl: 'https://media.publit.io/file/AO3-Skins-App/imessage-header.png',
-    iosFooterImageUrl: 'https://media.publit.io/file/AO3-Skins-App/imessage-footer.jpg',
+    // Empty by default, and that is the fix rather than an omission. These two
+    // shipped pointing at remote chrome strips, so every published work made
+    // two permanent requests to a third-party host for decoration the CSS can
+    // draw itself — and AO3 never keeps a copy, so the host going away takes the
+    // header out of every chapter already posted. They remain as advanced
+    // overrides for an author who wants a specific image.
+    iosHeaderImageUrl: '',
+    iosFooterImageUrl: '',
     iosAvatarUrl: '',
+    iosFrameMode: 'header',
+    iosScrollable: false,
+    iosViewportHeightEm: 34,
     androidShowStatus: true,
     androidStatusText: 'online',
     androidCheckmarks: true,
     androidDarkMode: false,
-    androidHeaderImageUrl: PLATFORM_ASSETS.whatsapp.headerImage,
-    androidFooterImageUrl: PLATFORM_ASSETS.whatsapp.footerImage,
+    androidHeaderImageUrl: '',
+    androidFooterImageUrl: '',
     androidAvatarUrl: '',
     androidContactName: '',
     androidAutoAlternate: true,
+    androidFrameMode: 'header',
+    androidGroupSubtitleMode: 'members',
+    androidGroupSubtitleText: '',
+    androidWallpaperUrl: '',
+    androidScrollable: false,
+    androidViewportHeightEm: 30,
     twitterDisplayName: '',
     twitterAvatarUrl: '',
   },

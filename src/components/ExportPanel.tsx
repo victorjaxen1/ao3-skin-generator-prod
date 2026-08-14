@@ -138,14 +138,15 @@ const HOSTED_SCENE_ACK = 'ao3skin_imgbb_scene_ack';
 async function renderChunk(
   project: SkinProject,
   scale: number,
-  onImageWarning?: (failed: FailedImage[]) => void
+  onImageWarning?: (failed: FailedImage[]) => void,
+  sourceMessages?: SkinProject['messages']
 ): Promise<HTMLCanvasElement> {
   if (typeof window === 'undefined') throw new Error('Cannot render on server side');
 
   const html2canvas = (await import('html2canvas')).default;
 
   const css = buildCSS(project);
-  const html = buildHTML(project);
+  const html = buildHTML(project, 'static', { sourceMessages });
 
   const templateDefaults: Record<SkinProject['template'], number> = {
     ios: 375,
@@ -377,6 +378,12 @@ async function renderChunk(
         ';font-size:14px;line-height:20px;position:relative;top:-6px';
     });
   }
+  const chatMessages = clone.querySelector('.chat-messages') as HTMLElement | null;
+  if (chatMessages) {
+    chatMessages.style.height = 'auto';
+    chatMessages.style.maxHeight = 'none';
+    chatMessages.style.overflow = 'visible';
+  }
 
   // html2canvas paints native colour emoji lower than Chromium's measured line
   // box. Give emoji-only chat content a real layout reserve so its timestamp
@@ -390,6 +397,46 @@ async function renderChunk(
     clone.querySelectorAll('dd.bubble.emoji2 .emoji-content').forEach(el => {
       (el as HTMLElement).style.cssText += ';margin-bottom:14px';
     });
+  }
+
+  // The iMessage header name, which no test in this repo could see.
+  //
+  // The live preview and the AO3 render both centre it correctly. html2canvas
+  // does not: with `align-items:center` the avatar and the info glyph land in
+  // the right place and only the two-line name block is pushed down, so a group
+  // name sat on the bottom border with its participant list falling outside the
+  // band. Found by exporting a PNG and looking at it, which is the only thing
+  // that finds this class of defect.
+  //
+  // Two compensations, neither of them a tuned constant:
+  //
+  //  1. top-align the block, because `align-items:center` is the specific thing
+  //     being mishandled;
+  //  2. give the band extra bottom padding, because html2canvas still paints
+  //     text a little below where Chromium measured it — the same offset that
+  //     makes emoji sit low a few blocks above. Room cannot clip, whatever that
+  //     distance turns out to be on a given font or zoom, and a marginally
+  //     taller header in a raster costs nothing.
+  //
+  // Export-only, deliberately: changing the stylesheet would move the preview
+  // and the archive, neither of which is wrong.
+  if (project.template === 'ios') {
+    const header = clone.querySelector('.ios-header') as HTMLElement | null;
+    const wrapper = clone.querySelector('.ios-header-name-wrapper') as HTMLElement | null;
+    if (header && wrapper) {
+      header.style.overflow = 'visible';
+      header.style.alignItems = 'flex-start';
+      header.style.paddingBottom = '10px';
+      wrapper.style.marginTop = '0';
+      wrapper.style.overflow = 'visible';
+      wrapper.style.height = 'auto';
+      // Roomier line boxes, which is where the clipping actually happens: the
+      // glyphs are painted low *within their own line*, so widening the band
+      // alone moved the border and left the text cut in the same place.
+      clone.querySelectorAll('.ios-header-name, .ios-header-subtitle').forEach(el => {
+        (el as HTMLElement).style.cssText += ';line-height:2;overflow:visible';
+      });
+    }
   }
 
   // Google html2canvas layout fixes
@@ -413,23 +460,12 @@ async function renderChunk(
 
   // Android html2canvas layout fixes
   if (project.template === 'android') {
-    clone.querySelectorAll('.android-header-avatar').forEach(el => {
-      (el as HTMLElement).style.cssText +=
-        ';position:absolute;left:60px;top:50%;transform:translateY(-50%);margin:0;width:40px;height:40px;min-width:40px;min-height:40px;max-width:40px;max-height:40px;border-radius:50%;object-fit:cover';
-    });
-    clone.querySelectorAll('.android-header-avatar-placeholder').forEach(el => {
-      (el as HTMLElement).style.cssText +=
-        ';position:absolute;left:60px;top:50%;transform:translateY(-50%);margin:0;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;padding-bottom:11px';
-    });
-    // The name now always sits inside a wrapper alongside a subtitle ("online"
-    // or the participant count), so the wrapper is what needs positioning —
-    // pinning the name itself would stack it on top of the subtitle.
-    clone.querySelectorAll('.android-header-name-wrapper').forEach(el => {
-      (el as HTMLElement).style.cssText +=
-        ';position:absolute;left:110px;top:50%;transform:translateY(-50%);margin:0;display:flex;flex-direction:column;justify-content:center;line-height:1.2';
-    });
-    clone.querySelectorAll('.android-header-name-wrapper .android-header-name').forEach(el => {
-      (el as HTMLElement).style.cssText += ';position:static;margin:0;line-height:1.3';
+    // The old renderer positioned header identity overlays absolutely against
+    // a background screenshot. WhatsApp v6 draws the entire header with flex;
+    // carrying those raster-only coordinates forward removed the avatar/name
+    // from the PNG. Leave the shared stylesheet in charge of header geometry.
+    clone.querySelectorAll('.android-header').forEach(el => {
+      (el as HTMLElement).style.cssText += ';position:relative';
     });
     clone.querySelectorAll('dd.bubble.out,dd.bubble.in').forEach(el => {
       (el as HTMLElement).style.cssText +=
@@ -458,6 +494,12 @@ async function renderChunk(
     });
     clone.querySelectorAll('.row.in').forEach(el => {
       (el as HTMLElement).style.cssText += ';display:flex;justify-content:flex-start';
+    });
+    // html2canvas paints the last text line lower than Chromium measures it.
+    // Give nested cards a few extra pixels before their first painted row so
+    // captions never collide with an image/link/media card in the real PNG.
+    clone.querySelectorAll('.wa-images,.wa-link-preview,.wa-media').forEach(el => {
+      (el as HTMLElement).style.cssText += ';margin-top:12px';
     });
   }
 
@@ -561,7 +603,7 @@ async function renderAllChunks(
   const canvases: HTMLCanvasElement[] = [];
   for (let i = 0; i < chunks.length; i++) {
     const chunkProject: SkinProject = { ...project, messages: chunks[i] };
-    const canvas = await renderChunk(chunkProject, scale, onImageWarning);
+    const canvas = await renderChunk(chunkProject, scale, onImageWarning, project.messages);
     canvases.push(canvas);
     onProgress?.(i + 1, chunks.length);
   }
@@ -692,10 +734,11 @@ export const ExportPanel: React.FC<Props> = ({
    * smallest thing that works for a fic that stays on one app, and "all four"
    * is what an author needs the moment chapter 4 is a different one.
    *
-   * Defaults to the platform they are looking at — the smaller paste, and the
-   * behaviour this modal had before the choice existed.
+   * Defaults to the master skin because AO3 gives each work only one skin
+   * slot. That prevents a later chapter on another platform from forcing a
+   * manual CSS merge.
    */
-  const [skinScope, setSkinScope] = useState<'platform' | 'all'>('platform');
+  const [skinScope, setSkinScope] = useState<'platform' | 'all'>('all');
   const { toasts, removeToast, success, error: showError } = useToast();
   const transcript = useMemo(() => buildSceneTranscript(project), [project]);
 
@@ -729,10 +772,22 @@ export const ExportPanel: React.FC<Props> = ({
   // `tests/master-skin.spec.ts` pins that the markup does not move.
   const skin = masterSkin ?? workSkin;
   const preflight = useMemo(
-    () => skin ? buildWorkSkinPreflight(project, skin.html, skin.violations, hasProjectBackup(project)) : [],
+    () => {
+      // `backupRevision` intentionally invalidates this derived result when a
+      // backup is created without otherwise mutating the project value.
+      void backupRevision;
+      return skin ? buildWorkSkinPreflight(project, skin.html, skin.violations, hasProjectBackup(project)) : [];
+    },
     [project, skin, backupRevision]
   );
-  const workSkinBlocked = preflight.some(item => item.severity === 'block' && item.status === 'fail');
+  // Content issues remain visible in preflight, but they do not trap the
+  // author in this dialog. Only an internal CSS/HTML contract failure means
+  // the generated paste itself is unsafe to copy.
+  const workSkinBlocked = preflight.some(item =>
+    (item.id === 'ao3-css' || item.id === 'html-contract')
+    && item.severity === 'block'
+    && item.status === 'fail'
+  );
 
   useEffect(() => {
     // Getting output into an AO3 work is the genuinely confusing part of this
@@ -892,6 +947,7 @@ export const ExportPanel: React.FC<Props> = ({
     workSkinHandoffTrackedRef.current = false;
     trackAnalytics({ name: 'export_started', outputType: 'work_skin', templateId: project.template });
     trackAnalytics({ name: 'export_ready', outputType: 'work_skin', templateId: project.template });
+    setSkinScope('all');
     setShowWorkSkin(true);
   };
 
@@ -1155,7 +1211,7 @@ export const ExportPanel: React.FC<Props> = ({
               <div>
                 <h3 className="text-sm font-semibold">Your AO3 code</h3>
                 <p className="text-xs text-stone-400 mt-0.5">
-                  Paste into your chapter's HTML editor on AO3
+                  Paste into your chapter&apos;s HTML editor on AO3
                 </p>
               </div>
               <button
@@ -1397,8 +1453,8 @@ export const ExportPanel: React.FC<Props> = ({
                     skin has to be offered here, at the moment they are about to
                     save one, rather than discovered later.
 
-                    Defaults to this platform: it is the smaller paste and the
-                    behaviour this modal had before the choice existed. */}
+                    Defaults to all four platforms so a later chapter never
+                    requires a second skin or a manual merge. */}
                 <div className="ml-7 mb-2.5">
                   <div
                     role="radiogroup"

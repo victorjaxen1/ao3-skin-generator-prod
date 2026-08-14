@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { CHARACTER_BANK } from '../lib/characterBank';
 import {
   IdentityTarget,
@@ -11,7 +11,9 @@ import {
   syncChatGroupParticipants,
   updateSceneCharacter,
 } from '../lib/identity';
-import { SceneCharacter, SkinProject, UniversalCharacter } from '../lib/schema';
+import { IOSParticipantTone, SceneCharacter, SkinProject, UniversalCharacter, WhatsAppParticipantTone } from '../lib/schema';
+import { WHATSAPP_PARTICIPANT_TONES } from '../lib/whatsapp';
+import { IOS_PARTICIPANT_TONES } from '../lib/ios';
 import BottomSheet from './BottomSheet';
 import { ImageUrlInput } from './ImageUrlInput';
 import { ToggleRow } from './SettingsRows';
@@ -42,6 +44,8 @@ interface FormState {
   twitterHandle: string;
   verified: boolean;
   color: string;
+  whatsappTone: WhatsAppParticipantTone;
+  iosTone: IOSParticipantTone;
   alsoSave: boolean;
 }
 
@@ -51,6 +55,8 @@ const EMPTY_FORM: FormState = {
   twitterHandle: '',
   verified: false,
   color: '#33A1FF',
+  whatsappTone: 'teal',
+  iosTone: 'blue',
   alsoSave: false,
 };
 
@@ -125,7 +131,15 @@ export const CastPanel: React.FC<Props> = ({
       const key = `create:${mode.suggestedRole || ''}`;
       if (loadedFormKey.current === key) return;
       loadedFormKey.current = key;
-      setForm({ ...EMPTY_FORM, color: COLORS[(project.settings[participantField(project)] || []).length % COLORS.length] });
+      const participantCount = (project.settings[participantField(project)] || []).length;
+      setForm({
+        ...EMPTY_FORM,
+        color: COLORS[participantCount % COLORS.length],
+        whatsappTone: WHATSAPP_PARTICIPANT_TONES[participantCount % WHATSAPP_PARTICIPANT_TONES.length].id,
+        // Cycle rather than default, so two people added in a row are legible
+        // apart before anyone touches the picker.
+        iosTone: IOS_PARTICIPANT_TONES[participantCount % IOS_PARTICIPANT_TONES.length].id,
+      });
       setDirty(false);
       setReplacementId('');
     }
@@ -144,6 +158,8 @@ export const CastPanel: React.FC<Props> = ({
         twitterHandle: identity.twitterHandle || '',
         verified: identity.verified,
         color: participant?.color || '#33A1FF',
+        whatsappTone: participant?.whatsappTone || 'teal',
+        iosTone: participant?.iosTone || 'blue',
       });
       setDirty(false);
       setReplacementId('');
@@ -167,7 +183,7 @@ export const CastPanel: React.FC<Props> = ({
     onClose();
   };
 
-  const addParticipantBinding = (next: SkinProject, character: SceneCharacter, color: string): SkinProject => {
+  const addParticipantBinding = (next: SkinProject, character: SceneCharacter, color: string, whatsappTone: WhatsAppParticipantTone = form.whatsappTone, iosTone: IOSParticipantTone = form.iosTone): SkinProject => {
     const field = participantField(next);
     const existing = next.settings[field] || [];
     return {
@@ -179,7 +195,9 @@ export const CastPanel: React.FC<Props> = ({
           characterId: character.id,
           name: character.name,
           avatarUrl: character.avatarUrl,
-          color,
+           color,
+           ...(next.template === 'android' ? { whatsappTone } : {}),
+           ...(next.template === 'ios' ? { iosTone } : {}),
         }],
       },
     };
@@ -228,7 +246,7 @@ export const CastPanel: React.FC<Props> = ({
           settings: {
             ...updated.settings,
             [field]: (updated.settings[field] || []).map(participant =>
-              participant.characterId === id ? { ...participant, color: form.color } : participant
+              participant.characterId === id ? { ...participant, color: form.color, ...(updated.template === 'android' ? { whatsappTone: form.whatsappTone } : {}), ...(updated.template === 'ios' ? { iosTone: form.iosTone } : {}) } : participant
             ),
           },
         };
@@ -265,7 +283,8 @@ export const CastPanel: React.FC<Props> = ({
       }
       const withCharacter = copyLibraryCharacterToScene(previous, source, 'participant');
       const character = withCharacter.cast?.characters[withCharacter.cast.characters.length - 1];
-      return character ? addParticipantBinding(withCharacter, character, COLORS[(withCharacter.settings[participantField(withCharacter)] || []).length % COLORS.length]) : withCharacter;
+      const participantCount = (withCharacter.settings[participantField(withCharacter)] || []).length;
+      return character ? addParticipantBinding(withCharacter, character, COLORS[participantCount % COLORS.length], WHATSAPP_PARTICIPANT_TONES[participantCount % WHATSAPP_PARTICIPANT_TONES.length].id, IOS_PARTICIPANT_TONES[participantCount % IOS_PARTICIPANT_TONES.length].id) : withCharacter;
     });
     onUpdateLibraryCharacter(source.id, {
       usageCount: (source.usageCount || 0) + 1,
@@ -418,7 +437,11 @@ export const CastPanel: React.FC<Props> = ({
               <section className="space-y-2">
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-stone-400">People in the group</h3>
                 {participants.filter(({ character }) => !character.archived).map(({ character, participant }) =>
-                  row(character, { kind: 'participant', id: participant.id }, undefined, participant.color)
+                  row(character, { kind: 'participant', id: participant.id }, undefined, project.template === 'android'
+                    ? WHATSAPP_PARTICIPANT_TONES.find(tone => tone.id === participant.whatsappTone)?.light || '#00796b'
+                    : project.template === 'ios'
+                      ? IOS_PARTICIPANT_TONES.find(tone => tone.id === participant.iosTone)?.light || '#0a58ca'
+                      : participant.color)
                 )}
                 {participants.every(({ character }) => character.archived) && <p className="text-sm text-stone-500">No group members yet.</p>}
               </section>
@@ -485,11 +508,36 @@ export const CastPanel: React.FC<Props> = ({
             </label>
           </div>
         )}
-        {participant && (
-          <label className="block text-xs font-medium text-stone-600">
-            Group name colour
-            <input type="color" value={form.color} onChange={event => changeForm('color', event.target.value)} className="ml-3 h-8 w-12 align-middle" />
-          </label>
+        {participant && project.template === 'ios' && (
+          <fieldset>
+            {/* A palette, not a colour well. The free hex value this replaces
+                was emitted as inline `style`, which AO3 strips from every
+                element — so the colour an author picked here reached the
+                preview and the PNG and was silently dropped on the archive. A
+                fixed list compiles to a class the stylesheet can carry. */}
+            <legend className="mb-2 text-xs font-medium text-stone-600">Sender name colour</legend>
+            <div className="grid grid-cols-4 gap-2">
+              {IOS_PARTICIPANT_TONES.map(tone => (
+                <button key={tone.id} type="button" onClick={() => changeForm('iosTone', tone.id)} aria-pressed={form.iosTone === tone.id} className={`rounded-lg border px-2 py-2 text-[11px] ${form.iosTone === tone.id ? 'border-violet-500 ring-2 ring-violet-100' : 'border-stone-200'}`}>
+                  <span className="mx-auto mb-1 block h-3 w-3 rounded-full" style={{ backgroundColor: tone.light }} />{tone.label}
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-[11px] text-stone-500">This styles the speaker name and monogram in group bubbles, and survives on AO3 because it is a class rather than an inline colour.</p>
+          </fieldset>
+        )}
+        {isGroup && project.template === 'android' && (
+          <fieldset>
+            <legend className="mb-2 text-xs font-medium text-stone-600">Sender name colour</legend>
+            <div className="grid grid-cols-4 gap-2">
+              {WHATSAPP_PARTICIPANT_TONES.map(tone => (
+                <button key={tone.id} type="button" onClick={() => changeForm('whatsappTone', tone.id)} aria-pressed={form.whatsappTone === tone.id} className={`rounded-lg border px-2 py-2 text-[11px] ${form.whatsappTone === tone.id ? 'border-violet-500 ring-2 ring-violet-100' : 'border-stone-200'}`}>
+                  <span className="mx-auto mb-1 block h-3 w-3 rounded-full" style={{ backgroundColor: tone.light }} />{tone.label}
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-[11px] text-stone-500">This styles the speaker name in group bubbles; the group avatar appears only in the header.</p>
+          </fieldset>
         )}
         {!editing && (
           <label className="flex items-center gap-2 text-sm text-stone-700">

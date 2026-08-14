@@ -123,8 +123,8 @@ export function loadAnalytics(): boolean {
 
   try {
     analyticsWindow.dataLayer = analyticsWindow.dataLayer || [];
-    analyticsWindow.gtag = function (..._args: unknown[]) {
-      analyticsWindow.dataLayer!.push(arguments);
+    analyticsWindow.gtag = function (...args: unknown[]) {
+      analyticsWindow.dataLayer!.push(args);
     };
     analyticsWindow.gtag('consent', 'default', {
       analytics_storage: 'granted',
