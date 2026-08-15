@@ -5,8 +5,8 @@
 **Audience:** the next developer
 **Companion:** `ao3skingen-growth-benefit-implementation-doc.md` §11.6 and Learnings 11–21
 
-Four issues were reported against the live app after the August 15 deploy. This
-document root-causes all four, separates the ones that are regressions from the
+Six issues were reported against the live app after the August 15 deploy. This
+document root-causes all six, separates the ones that are regressions from the
 ones that are not, and specifies each fix precisely enough to implement without
 re-deriving the analysis. It ends with the capture playbook, which is what makes
 this class of defect findable at all — and which the examples-gallery work will
@@ -22,6 +22,8 @@ need on day one.
 | 2 | Twitter logo missing on some examples and every new project | Expanded tweet template omits the logo `<img>` | `06519ef` (Twitter overhaul, 13 Aug) | Open — §2 |
 | 3 | iMessage header background image gone, setting empty | Deliberate: defaults emptied for permanence | `c733066` (14 Aug), **by design** | **Not a bug** — §3 |
 | 4 | WhatsApp PNG has text cut off at the bottom | Two separate export clipping defects | Pre-existing, never fixed for WhatsApp | Open — §4 |
+| 5 | Landing hero renders as alt text, no image | `hero-scene-video.png` was never deployed — 404 | **This session** (`e5777e9`, undeployed) | Open — §8, one push |
+| 6 | WhatsApp group messages show no participant avatars | Avatar sizing lives entirely in inline `style`, which AO3 strips; sender row is gated on `participantId` | Pre-existing | Open — §9 |
 
 **The renderers were not touched this session.** `git diff c733066..4c0c4e0 -- src/lib/generator.ts src/lib/twitter.ts src/lib/ios.ts src/lib/whatsapp.ts src/lib/workSkin.ts` is empty. Only `ExportPanel.tsx` changed near the raster path, by +28 lines, and what it added is described in §4.3. Establish this before blaming the deploy — it was the first thing checked here, and it redirected the investigation away from three wrong suspects.
 
@@ -265,10 +267,11 @@ None of those seven selectors is a header or a reply card, so it cannot produce 
 
 ## 5. Suggested order
 
-1. **§1 re-paste** — already fixed in the repo, live page still wrong, costs one paste.
+1. **§8 push, then §1 re-paste** — the hero is a 404, not a layout problem. Pushing `main` serves the asset; the markup in the repository already points at it.
 2. **§4a + §4b** — one file, one platform, mirrors a fix that already exists a few lines above. Highest ratio of user-visible improvement to risk.
 3. **§2** — needs the placement decision first, then a stylesheet rule and a test.
-4. **§3** — no code beyond the optional help text.
+4. **§9 WhatsApp avatars** — confirmed broken on AO3 whatever the preview turns out to be, and it is the same inline-style-versus-enum lesson as Learning 11. Reproduce the preview branch first.
+5. **§3** — no code beyond the optional help text.
 
 Do not batch these into one commit. §2 changes generated markup that reaches AO3; §4 changes only the raster path. They have different blast radii and want different review.
 
@@ -337,3 +340,96 @@ It is the only surface that can rank for "ao3 work skin examples" and its neighb
 ### Known trap
 
 The gallery is a hand-maintained HTML file listing examples that live in `examples.ts`. That is a fourth place the example catalogue is duplicated. Either generate the gallery from `examples.ts` — there is precedent in `scripts/generate-ao3-css-article-table.mjs` and `scripts/generate-twitter-work-skin-article.mjs` — or extend `examples-catalog.unit.spec.ts` to parse the HTML and assert it matches. Do not add a fourth hand-maintained list and hope.
+
+---
+
+## 8. Landing hero shows alt text instead of an image — open, one push
+
+**Symptom.** The SwipePages preview renders the hero's alt text as a paragraph in an empty box. The image does not load.
+
+**Cause — not a design problem.** The hero points at
+`https://app.ao3skingen.wordfokus.com/hero-scene-video.png`, and that URL **returns 404**.
+
+```
+hero-scene-video.png -> 404
+hero-scene-crop.png  -> 200
+```
+
+The image was generated and committed in `e5777e9`. The **deployed** commit is `4c0c4e0`. `hero-scene-crop.png` and `hero-scene-social.png` were in that deploy and answer 200; `hero-scene-video.png` came after it and has never been served. The page markup was re-pasted before the asset existed.
+
+Three iterations were spent on the hero's *framing* while the actual failure was a missing file. Recording that plainly, because the screenshot looked like a layout bug and was not one.
+
+**Fix.** Push `main`. Netlify builds from it, `public/` is served statically, and the URL becomes live with no code change. Then re-paste the page **or** confirm the existing paste already points at `hero-scene-video.png` — the file in the repository does.
+
+**Standing rule this earns:** the landing page is pasted by hand into a system that cannot see the repository, and it references assets served by a separate deploy. **Deploy the asset before pasting the markup**, or the page ships pointing at a 404. Verify with a plain `curl -o /dev/null -w "%{http_code}"` against every image URL the page names, before pasting.
+
+---
+
+## 9. WhatsApp group messages show no participant avatars — open
+
+**Symptom.** In a WhatsApp group chat, each message shows its sender's name in the participant's colour, but **no avatar circle**. iMessage group chats in the same scene render their initials circles correctly, which is what makes the absence obvious.
+
+### What is confirmed
+
+**The whole avatar is sized, shaped and coloured by an inline `style` attribute.** [`generator.ts:882`](src/lib/generator.ts#L882) and [`:887`](src/lib/generator.ts#L887):
+
+```ts
+avatarHTML = `<img ... class="group-avatar" width="20" height="20"
+  style="width:20px;height:20px;border-radius:50%;object-fit:cover;flex-shrink:0;display:block !important;" />`;
+// ...or, with no avatar URL, the initials branch:
+avatarHTML = `<div class="group-avatar-initials"
+  style="width:20px;height:20px;border-radius:50%;display:flex !important;...
+         background-color:${participantColor}20;color:${participantColor};">${initials}</div>`;
+```
+
+and the row that holds it is inline-styled too:
+
+```ts
+senderNameHTML = `<div class="group-sender-row"
+  style="display:flex !important;align-items:center;gap:6px;...">${avatarHTML}...`;
+```
+
+**AO3 strips every inline `style`** — Learning 11, and the code comment directly above line 882 already says so about the `<img>`. So on the archive these avatars have *no* size, *no* border radius, *no* flex row and, for the initials branch, *no* background or text colour. **This is a confirmed defect on the published work regardless of what the preview does**, and it is the same class as the iOS group-colour bug that was already fixed by replacing a free hex with `iosTone`.
+
+**The sender row is gated on `participantId`, not on the canonical identity.** Line 866:
+
+```ts
+const showSenderName = isGroupMode && !msg.outgoing && participantId;
+```
+
+Since `5e8d9bc` made `characterId` canonical, a message can carry a valid identity and still produce no sender row — and therefore no avatar — if its legacy `participantId` binding is missing or stale. `syncChatGroupParticipants` in `identity.ts` exists to keep those in step, so a scene where it has not run is a scene with silently missing avatars.
+
+**Which branch this example takes.** The `whatsapp-group-chat` example carries `participantId` on its messages and an `androidGroupParticipants` roster, and its participants have no `avatarUrl` — so it renders the **initials `<div>`**, not the `<img>`. Any fix must be verified against the initials branch specifically, since that is the default for a scene built from the picker.
+
+**Competing stylesheet rules.** iOS styles both classes at `generator.ts:1839` as `display:inline-block` at `1.333em`. The WhatsApp block at `:2042`–`:2043` re-declares them as `display:block !important` / `display:flex !important` at `2.5em`, while the inline style asserts `20px` and its own `display`. Three sources disagree about the size and the display mode of one element. Whatever the preview symptom turns out to be, this is the mess to clean up.
+
+### What still needs establishing before coding
+
+**Reproduce the preview symptom and identify which of the three it is.** The analysis above proves the AO3 case is broken; it does **not** yet prove why the *preview* shows nothing. Run the §6 loop against `"Group Chat — WhatsApp"`, then in devtools on the live preview:
+
+1. Is `.group-sender-row` present in the DOM at all? If not, the `participantId` gate is the cause and the fix is at line 866.
+2. Is it present but zero-height or `display:none`? Then a stylesheet rule is beating the inline one — check `dd.bubble` flow context, since a `display:flex` `<div>` inside an inline bubble is the obvious suspect.
+3. Is it present and sized but invisible? Then it is colour: the initials branch builds `background-color:${participantColor}20` — an 8-digit hex — and paints the text `${participantColor}` at full opacity on it. Confirm `participant.color` is not resolving to something near-transparent or identical to the bubble.
+
+Do this first. Do not write a fix against a guess about which of the three it is.
+
+### The fix, once the branch is known
+
+**Move the avatar out of inline styles and into the stylesheet**, which fixes the archive case and almost certainly the preview case at the same time:
+
+1. **Delete the inline `style` from all three elements** — `.group-avatar`, `.group-avatar-initials`, `.group-sender-row` — keeping the `width`/`height` **attributes** on the `<img>`, which are on AO3's allowed-attribute list and are the only sizing that currently survives.
+2. **Give WhatsApp one authoritative rule per class** in the android CSS block, and reconcile the 1.333em/2.5em/20px disagreement to a single value. The iOS rules at `:1839` are the working reference — they render correctly today.
+3. **Replace the free participant hex with a finite tone**, exactly as iOS did. `whatsappTone` already exists on `GroupParticipant` and is already a finite `WhatsAppParticipantTone` enum compiled to a class. The avatar should use it rather than `participant.color`, which is a free hex that AO3 discards. **This is the same fix that Learning 11 records for iOS group colour** — the value reached the preview and the PNG and was silently dropped on the archive.
+4. **Keep `participantId` working, but do not depend on it alone.** Prefer the resolved identity, falling back to the participant binding, so a correctly-identified message cannot lose its sender row.
+
+### Verification
+
+- Unit: assert the WhatsApp group markup contains **no `style=` attribute at all** — the strongest form, and it prevents regression by construction. A narrower assertion on `.group-avatar` alone would have missed `.group-sender-row`.
+- Unit: assert an avatar class is emitted for a group message on both branches, with and without `avatarUrl`.
+- Raster: export a real PNG and **look at it**, per Learning 15 — and export the iOS group scene too, because these classes are shared and the iOS side currently works.
+- Skin-off: confirm the sender name still reads correctly with the skin disabled; the avatar is decoration, the name is not.
+- **This one deserves a real AO3 save/read-back**, since the entire point is behaviour the archive controls. It is the same category of bug that only the archive could reveal in `5c47eda`.
+
+### Note on ordering
+
+This change touches generated markup that reaches AO3, so it wants its own commit and its own review — separate from §4, which only touches the raster path.
