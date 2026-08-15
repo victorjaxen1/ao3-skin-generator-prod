@@ -46,8 +46,9 @@ const ImageUrlRow: React.FC<{
   label: string;
   value: string;
   placeholder?: string;
+  help?: string;
   onChange: (v: string) => void;
-}> = ({ label, value, placeholder, onChange }) => (
+}> = ({ label, value, placeholder, help, onChange }) => (
   <div className="py-3">
     <span className="text-sm font-medium text-stone-900 block mb-2">{label}</span>
     <ImageUrlInput
@@ -56,6 +57,7 @@ const ImageUrlRow: React.FC<{
       ariaLabel={label}
       placeholder={placeholder || 'Paste an image address'}
     />
+    {help && <p className="text-xs text-stone-500 mt-1.5">{help}</p>}
   </div>
 );
 
@@ -345,6 +347,7 @@ export const SettingsSheet: React.FC<Props> = ({
                 <ImageUrlRow
                   label="Header background image"
                   value={settings.iosHeaderImageUrl || ''}
+                  help="Optional. The header already draws itself, so leave this empty unless you want a picture behind it — and if you set one, that image has to stay online for as long as your work is posted."
                   onChange={(v) => onUpdateSettings('iosHeaderImageUrl', v)}
                 />
               )}
