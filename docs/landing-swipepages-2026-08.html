@@ -142,10 +142,18 @@ nav a:hover { color: var(--primary); }
 .hero-image:hover { transform: perspective(1000px) rotateY(0deg) translateY(-8px); box-shadow: 0 20px 40px rgba(0,0,0,0.15); }
 
 /* The hero shot is a phone-shaped conversation, so it is portrait. Left to
-   itself at 600px wide it would be ~1120px tall and own the whole fold. Cap the
-   height and anchor to the top: the header, sender colours and reply card are
-   the part that has to be visible, and the crop falls off the bottom. */
-.hero-image img { width: 100%; height: auto; display: block; max-height: 620px; object-fit: cover; object-position: top; }
+   itself at 600px wide it would be ~1120px tall and own the whole fold.
+   Cap the height and anchor to the top, so the header, sender colours and
+   reply card are what stays visible.
+
+   The mask is the part that matters: a bare `max-height` crop sliced a bubble
+   in half at the bottom edge and read as a broken image rather than a design
+   choice. Fading the last fifth out makes the cut deliberate, and implies the
+   conversation continues — which it does. -webkit- prefix included for Safari,
+   which still needs it. */
+.hero-image img { width: 100%; height: auto; display: block; max-height: 620px; object-fit: cover; object-position: top;
+  -webkit-mask-image: linear-gradient(to bottom, #000 78%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 78%, transparent 100%); }
 
 .hero-buttons { display: flex; gap: 1rem; margin-top: 2rem; flex-wrap: wrap; }
 
