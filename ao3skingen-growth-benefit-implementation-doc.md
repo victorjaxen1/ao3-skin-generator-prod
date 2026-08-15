@@ -406,12 +406,45 @@ Added by the August 15 strategy review:
     writing and is solving a presentation problem. Both propositions can be true
     about the same human and still make the offer irrelevant, because they
     describe different weeks. Stage, not persona.
+22. **Prove the code you are blaming can execute.** The WhatsApp missing-avatar
+    defect was diagnosed in writing, in detail, against markup that builds a
+    `.group-sender-row` with inline styles — and that code is unreachable.
+    `msgHTML` returns to `whatsappMessageHTML` for `android` and to
+    `iosMessageHTML` for `ios` long before it, so its `isGroupMode` is false for
+    everything that reaches it. The written analysis was internally coherent,
+    named real line numbers, and identified a real AO3 behaviour (inline styles
+    are stripped). It was still wrong, because it never asked whether the branch
+    runs. One `querySelectorAll('.group-sender-row')` against the live preview
+    settled it in seconds. **Read the dispatch, not just the function**, and when
+    a document tells you to reproduce before fixing — as that one did, in bold —
+    the instruction is load-bearing.
+23. **A branch whose arms resolve to the same value is invisible to every test
+    that asserts on markup.** `PLATFORM_ASSETS.twitter.logoGrey` pointed at the
+    same black PNG as `logo`, so the dark-mode X was drawn black on a black card.
+    The renderer branched correctly, the markup was correct, and every assertion
+    passed; the file was simply the wrong picture. This is Learning 15's point
+    arriving without html2canvas anywhere in it — the defect is in an *asset*,
+    and only looking at the render finds it. When a theme, locale, or mode
+    branch exists, check that the two arms actually differ.
+24. **An inline style in the export clone outranks the stylesheet, so scope it
+    as narrowly as the thing it compensates for.** `ExportPanel` forced
+    `position:relative` on every `.tweet .twitter-logo` to seat the compact
+    logo on its name line. When the expanded tweet gained a logo positioned in
+    the card corner, that blanket rule would have knocked it back into flow **in
+    the PNG only** — preview and archive correct, exported image wrong. The
+    export clone is a third renderer with the highest specificity in the system;
+    every selector added to it should name the case it fixes.
 
 ### Clean handoff for the next developer
 
-Start from `main` at or after `c733066`. Do not reset or clean the workspace;
-the untracked screenshots, reference exports, article drafts, implementation
-blueprints, and image-handling examples belong to the owner.
+Start from `main` at or after `6364508`, which is deployed. Do not reset or
+clean the workspace; the untracked screenshots, reference exports, article
+drafts, implementation blueprints, and image-handling examples belong to the
+owner. There were 23 untracked entries at the close of the August 15 render
+pass and none of them were committed — that is deliberate, not an oversight.
+Some are clearly owner material (`docs/AO3-CONTENT-PLAN.md`, `docs/articles/`,
+the two article generator scripts under `scripts/`) and may be worth committing
+once the owner says so; the rest are screenshots and drafts.
 
 Environment and boundaries:
 
@@ -439,6 +472,8 @@ Section 3 table can no longer give:
 | Identity resolution and migration | [`src/lib/identity.ts`](src/lib/identity.ts) | The one resolver every output reads through |
 | Per-platform models | [`ios.ts`](src/lib/ios.ts), [`twitter.ts`](src/lib/twitter.ts), [`whatsapp.ts`](src/lib/whatsapp.ts) | Deliberately separate; they must not read each other's fields |
 | Markup and stylesheets | [`src/lib/generator.ts`](src/lib/generator.ts) | One stylesheet drives preview, PNG, and both skins |
+| The export clone — effectively a third renderer | [`src/components/ExportPanel.tsx`](src/components/ExportPanel.tsx) | Inline styles applied to a detached clone before html2canvas. They **outrank the stylesheet**, apply to the PNG only, and are where every html2canvas compensation lives. Scope each selector to the case it fixes (Learning 24) |
+| Bundled platform chrome | [`src/lib/platformAssets.ts`](src/lib/platformAssets.ts) | Paths plus `LOCAL_ASSETS_MAP`, which is what the work-skin path treats as chrome to absolutise. A "grey variant" here may be a literal duplicate of the light one — check before trusting a theme branch (Learning 23) |
 | Single and master work skins | [`src/lib/workSkin.ts`](src/lib/workSkin.ts) | `MASTER_SKIN_VERSION` is stamped as a CSS rule, because AO3 deletes comments |
 | Strict file boundary | [`src/lib/projectFile.ts`](src/lib/projectFile.ts) | v1–v7, pure migrations |
 | Tolerant local recovery | [`src/lib/storage.ts`](src/lib/storage.ts) | A different trust boundary; never merge the two |
@@ -467,12 +502,25 @@ For production verification, replace `UX_BASE_URL` with
 `https://app.ao3skingen.wordfokus.com`. **Browser projects default to the live
 app**, so an unset `UX_BASE_URL` silently tests production.
 
-Evidence re-gathered for this revision on August 15, 2026:
+Evidence re-gathered for this revision on August 15, 2026, and again after the
+render-defect pass later the same day:
 
-- TypeScript check: **passed**;
-- deterministic unit suite: **362 passed, 1 skipped** (up from 249). The single
-  skip is the AO3 read-back gate described above, and it is skipping for a
-  correct reason: no human has saved the v7 skin on the archive yet;
+- TypeScript check: **passed**; production build: **passed**;
+- deterministic unit suite: **395 passed, 1 skipped** (362 earlier in the day,
+  249 at the original audit). The single skip is the AO3 read-back gate
+  described above, and it is skipping for a correct reason: no human has saved
+  the v7 skin on the archive yet. **Both `ao3 master workskin*.txt` files in
+  the repository root are `v2`** — five versions stale — so the gate cannot be
+  closed by anything in the working tree;
+- browser suites re-run serially against a local production build after the
+  render pass: `ao3-injection`, `whatsapp-raster`, `ios-raster`,
+  `twitter-raster`, `skin-off` — **21 passed**. `work-skin` and
+  `whatsapp-authoring` each failed once under two workers and passed alone;
+  treat a single failure in a combined run as a flake until it repeats;
+- **`tests/settings-render.spec.ts` fails six tests on `main`, and did so
+  before this pass.** Confirmed by running it against the deployed site, which
+  carried none of the new work. One expects a `2 participants` subtitle where
+  the renderer emits the members list. Open, unowned, and not a regression;
 - AO3 CSS ruleset audit: **182 properties and 20 shorthands, no drift** in either
   direction, against pinned upstream commit
   `cf1d7f997047eaca14370985dafd156a91696313`. The `aspect-ratio` gap recorded in
@@ -482,25 +530,101 @@ Evidence re-gathered for this revision on August 15, 2026:
   bundle, and the live iOS bundle carries the v7 markers (`ios-tone-`,
   `Tapback`), so `c733066` is deployed.
 
-Not re-run for this revision, and therefore not claimed: the desktop and mobile
-browser suites, the production build, and live upload checks. The platform plans
-record their own passing runs from 13–14 August; treat those as current unless
-you change a renderer.
+Not re-run, and therefore not claimed: the **mobile** browser project, and live
+upload checks. The platform plans record their own passing runs from 13–14
+August; treat those as current unless you change a renderer.
+
+#### The render-defect pass, August 15 2026 — what shipped
+
+Six defects were reported against the live app; five are closed and the sixth
+was not a bug. Full analysis, including two corrections to its own earlier
+diagnosis, is in
+[`docs/RENDER-DEFECTS-AND-GALLERY-HANDOFF.md`](docs/RENDER-DEFECTS-AND-GALLERY-HANDOFF.md).
+
+| Commit | What | Reaches AO3? |
+| --- | --- | --- |
+| `ecb5aa9` | WhatsApp header and reply card no longer clip their text in exported PNGs | No — export clone only |
+| `f3bc60e` | The expanded tweet template gained the X logo it never had, positioned in the card corner | **Yes** |
+| `e78dcc6` | WhatsApp group messages draw a participant avatar; the unreachable inline-styled avatar path and seven dead iOS rules deleted | **Yes** |
+| `845933f` | A real light-on-dark X logo asset, so dark tweets stop drawing it black on black | **Yes** |
+| `dc30b8a` | Help text under the iOS header-image field explaining the empty default | No |
+| `6364508` | Documentation corrections | — |
+
+One commit per blast radius, deliberately: the export-clone changes and the
+generated-markup changes have different review needs and different failure
+modes on the archive.
+
+Three things worth carrying forward:
+
+1. **The default path was the broken one.** A blank Twitter project defaults to
+   scene mode `single`, and `resolveTwitterLayout` sends a single scene's first
+   post to the expanded template — the one with no logo. Four of the seven
+   Twitter examples are compact, so every developer check hit a working path
+   while every new visitor hit the broken one. When a defect "only affects some
+   examples", find out which path a *blank project* takes before believing it is
+   an edge case.
+2. **The documented diagnosis was wrong twice**, and both corrections came from
+   measurement rather than re-reading: the missing avatar was unreachable code,
+   not stripped inline styles (Learning 22), and the clipped reply quote was
+   `overflow:hidden` on a one-line box, not a `max-height` clamp the arithmetic
+   shows is never reached. A prose analysis with real line numbers can be
+   entirely self-consistent and still describe code that does not run.
+3. **AO3 injection breaks child combinators, and it bit again.** A logo placed
+   with `.tweet.expanded > .twitter-logo` lost 31px of card width under
+   `ao3-injection.spec.ts`, because AO3 wraps a bare `<img>` child in its own
+   paragraph and that paragraph becomes a flex item. The remedy — descendant
+   selector plus `display:contents` on the wrapper — was already written down in
+   `generator.ts` at `.quote-head`, along with the sentence explaining that the
+   two fixes are complementary. It was found by the test rather than by reading
+   the comment. Read that comment before adding any positioned rule inside a
+   flex row.
+
+**Deploy verification.** `main` was fast-forwarded and pushed, and the result
+checked on production rather than assumed: `hero-scene-video.png` now answers
+200, closing the hero 404 that made the landing image render as alt text. A 200
+on that file alone would not have proved the new build was live — it could have
+been cached — so `assets/twitter-logoGrey.png`, which exists in no earlier
+deploy, was probed as well, and the WhatsApp and Twitter exports were captured
+from production and inspected.
 
 The next work should proceed in this order:
 
+0. **Re-paste the landing page into SwipePages.** Newly the cheapest item on the
+   list, and the only one left from the render pass. `hero-scene-video.png` now
+   serves 200, so the hero will load — but `docs/landing-swipepages-2026-08.html`
+   is pasted by hand into a system that cannot see this repository, and the
+   bottom-fade fix and the corrected image URL are not live until a human pastes
+   it. **Deploy the asset before pasting the markup, and `curl` every image URL
+   the page names first.** That ordering is what the hero 404 cost three
+   iterations to learn: the page looked like a layout bug and was a missing file.
 1. **Close the two archive gates.** Both need an AO3 account and roughly an hour
    between them. They outrank every code task on this list, because the master
    skin v7 and all sixteen site-skin templates are currently *predictions* about
    what the archive stores. Do the master-skin read-back first; it has a history
-   of finding bugs nothing else can see.
+   of finding bugs nothing else can see. Two changes landed on August 15 that
+   reach the archive — the expanded tweet's corner logo and the WhatsApp group
+   avatar — and neither has been seen by AO3. Both were built to the rules
+   (finite tone classes, no inline styles, descendant selectors, only allowlisted
+   properties) but that is a prediction too. Neither required a
+   `MASTER_SKIN_VERSION` bump, because no new class is emitted and a v7 skin
+   already carries rules for every class involved; **do not bump to v8 before
+   this gate closes**, or the repository owes two read-backs instead of one.
 2. **Close the copy gap — this is now the highest-value non-blocked work.**
    Section 1 already identified it as the cheapest remaining growth lever, and
    Section 11.6 promotes it to the main one: the product does considerably more
    than any public page says, and the same pass can place the owner's other
    products properly. It is content work on owned surfaces, with no application
    code and no risk to the shipped renderers. Covers the stale hub links at the
-   same time.
+   same time. **`public/examples-gallery.html` is the concrete first piece**, and
+   it has a written brief in §7 of the render-defects handoff: regenerate its
+   imagery with `scripts/capture-hero.mjs` before any redesign, decide which of
+   the two hosts owns the page and 301 the other, audit its copy against the
+   real feature set, and make every card deep-link with `?template=`. Note the
+   trap recorded there — the gallery is a **fourth** hand-maintained copy of the
+   example catalogue, so either generate it from `examples.ts` (there is
+   precedent in `scripts/generate-*.mjs`) or extend
+   `tests/examples-catalog.unit.spec.ts` to parse the HTML and assert it agrees.
+   Do not add a fifth list and hope.
 3. **Finish Release 0's audit.** The licence and the content-policy language
    closed on August 15. What is left is re-reading the privacy policy and Terms
    against the current product — neither has been checked since structured media
