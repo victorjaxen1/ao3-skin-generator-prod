@@ -14,6 +14,7 @@ import {
 } from '../lib/identity';
 import { parseBlankPlatform } from '../lib/deepLinks';
 import { trackAnalytics } from '../lib/analytics';
+import { ActivationBaseline, activationBaseline, isProjectActivated, markActivatedOnce } from '../lib/activation';
 import { loadCharacterLibrary, persistCharacterLibrary } from '../lib/characterStorage';
 import { serializeProjectFile, PROJECT_FILE_SCHEMA_VERSION } from '../lib/projectFile';
 import { downloadTextFile, safeFilenamePart } from '../lib/download';
@@ -107,6 +108,11 @@ export default function HomePage() {
   const [historyIndex, setHistoryIndex] = useState(-1);
   const maxHistory = 50;
 
+  // What this project contained when it was handed over, so seeded example
+  // content is never counted as the author's work (§5.2). A ref rather than
+  // state: it must not trigger a render, and it is read inside the debounce.
+  const activationRef = useRef<ActivationBaseline | null>(null);
+
   // Derived
   const dark = getDarkMode(project);
   const pendingDeletedPost = pendingTwitterDelete
@@ -189,6 +195,10 @@ export default function HomePage() {
     }
 
     initial = migrateTwitterProject(migrateProjectIdentities(initial));
+    // Taken after migration, or the stamped characterIds read as authorship.
+    // For a *returning* visitor this baseline is their own saved work, which is
+    // correct: activation already happened, and `markActivatedOnce` remembers it.
+    activationRef.current = activationBaseline(initial);
     setProject(initial);
     setHistory([initial]);
     setHistoryIndex(0);
@@ -212,6 +222,13 @@ export default function HomePage() {
       const result = persistProject(project);
       setSaveStatus(result.ok ? 'saved' : 'failed');
       setSaveError(result.ok ? '' : result.message || '');
+      // Activation rides the debounce that already runs on every project
+      // change, so there is no second listener to keep in step. Only the
+      // platform id is sent; the local UUID never leaves the browser.
+      const baseline = activationRef.current;
+      if (baseline && isProjectActivated(project, baseline) && markActivatedOnce(project.id)) {
+        trackAnalytics({ name: 'project_activated', templateId: project.template });
+      }
       if (historyIndex === -1 || JSON.stringify(project) !== JSON.stringify(history[historyIndex])) {
         const next = history.slice(0, historyIndex + 1);
         next.push(project);
@@ -261,6 +278,7 @@ export default function HomePage() {
     if (template === 'twitter') p.messages = [];
     Object.assign(p.settings, PLATFORM_LOOK[template]);
     p = migrateTwitterProject(migrateProjectIdentities(p));
+    activationRef.current = activationBaseline(p);
     setProject(p);
     setHistory([p]);
     setHistoryIndex(0);
@@ -271,6 +289,8 @@ export default function HomePage() {
 
   const handleLoadExample = useCallback((example: SkinProject) => {
     const instantiated = migrateTwitterProject(migrateProjectIdentities(instantiateTemplate(example)));
+    // Everything this example ships with is seeded, so none of it is activation.
+    activationRef.current = activationBaseline(instantiated);
     setProject(instantiated);
     setHistory([instantiated]);
     setHistoryIndex(0);
@@ -495,6 +515,9 @@ export default function HomePage() {
   }, [project, universalCharacters]);
 
   const handleReplaceFromBackup = useCallback((nextProject: SkinProject, characters: UniversalCharacter[]) => {
+    // An imported backup is finished work, not a seed. Baselining it means the
+    // import alone does not fire activation; the next real edit does.
+    activationRef.current = activationBaseline(nextProject);
     setProject(nextProject);
     setHistory([nextProject]);
     setHistoryIndex(0);

@@ -1,11 +1,14 @@
 import { expect, test } from '@playwright/test';
 import {
   ANALYTICS_CONSENT_KEY,
+  ANALYTICS_TEMPLATE_IDS,
   analyticsPayload,
   mapUploadErrorCode,
   trackAnalytics,
   validMeasurementId,
 } from '../src/lib/analytics';
+import { TEMPLATE_EXAMPLES } from '../src/lib/examples';
+import { TEMPLATES as SITE_SKIN_TEMPLATES } from '../src/lib/siteSkin/templates';
 
 test.describe('content-free analytics boundary', () => {
   test('accepts only a valid GA4 measurement id', () => {
@@ -26,6 +29,24 @@ test.describe('content-free analytics boundary', () => {
       name: 'template_selected',
       templateId: 'a user-controlled value',
     })).toBeNull();
+  });
+
+  /**
+   * The gap this closes: five examples shipped without their ids in the
+   * allowlist, so `analyticsPayload` rejected the entire `template_selected`
+   * event and choosing the newest, richest starters recorded nothing at all.
+   * A missing id is silent in production, so it has to be loud here.
+   */
+  test('every selectable template id survives the analytics boundary', () => {
+    const selectable = [
+      ...Object.values(TEMPLATE_EXAMPLES).flat().map(example => example.id),
+      ...SITE_SKIN_TEMPLATES.map(template => template.meta.id),
+    ];
+    const rejected = selectable.filter(
+      templateId => analyticsPayload({ name: 'template_selected', templateId }) === null
+    );
+    expect(rejected, 'add these ids to TEMPLATE_IDS in analytics.ts').toEqual([]);
+    expect(selectable.every(id => ANALYTICS_TEMPLATE_IDS.has(id))).toBe(true);
   });
 
   test('maps raw upload boundary codes to the safe error union', () => {

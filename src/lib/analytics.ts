@@ -49,15 +49,32 @@ export function openPrivacyChoices(): void {
   window.dispatchEvent(new Event(OPEN_PRIVACY_CHOICES_EVENT));
 }
 
+/**
+ * Every id that may reach `template_selected`, and nothing else.
+ *
+ * `analyticsPayload` rejects the *whole event* on an unknown value, which is
+ * correct at a content boundary and is also why a missing id erases the event
+ * silently rather than loudly. Five examples shipped without their ids here and
+ * recorded nothing for two days.
+ *
+ * **Adding a starter example means adding its id to this set in the same
+ * change.** `analytics.unit.spec.ts` asserts that every example in
+ * `examples.ts` and every site-skin template appears below, so the omission now
+ * fails a test instead of going quiet in production.
+ */
 const TEMPLATE_IDS = new Set([
   'ios', 'android', 'twitter', 'google',
   'twitter-character-thread', 'twitter-verified-account', 'twitter-media-image',
-  'ios-two-person-chat', 'ios-contact-avatar', 'ios-typing-indicators',
+  'twitter-quote-post', 'twitter-four-image-post', 'twitter-video-post', 'twitter-long-thread',
+  'ios-two-person-chat', 'ios-contact-avatar', 'ios-typing-indicators', 'ios-rich-group-scene',
   'whatsapp-chat', 'whatsapp-profile-picture', 'whatsapp-timestamps-receipts', 'whatsapp-group-chat',
   'google-search-history', 'google-research-montage', 'google-news-articles',
   'moonlit', 'paper', 'lavender', 'crimson', 'forest', 'ocean', 'rose', 'contrast',
   'terminal', 'golden', 'gothic', 'clean', 'academia', 'shoujo', 'neon', 'western',
 ]);
+
+/** Exported for the drift test only; never widen this at a call site. */
+export const ANALYTICS_TEMPLATE_IDS: ReadonlySet<string> = TEMPLATE_IDS;
 const OUTPUT_TYPES = new Set<OutputType>(['png', 'hosted_image', 'work_skin', 'site_skin']);
 const ERROR_CODES = new Set<ExportErrorCode>([
   'IMAGE_UPLOAD_TIMEOUT', 'IMAGE_UPLOAD_PROVIDER_ERROR', 'IMAGE_UPLOAD_RATE_LIMITED',
@@ -67,7 +84,18 @@ const ERROR_CODES = new Set<ExportErrorCode>([
   'PROJECT_IMPORT_INVALID', 'PROJECT_SCHEMA_UNSUPPORTED', 'PROJECT_IMPORT_TOO_LARGE',
   'LOCAL_STORAGE_UNAVAILABLE',
 ]);
-const PLACEMENTS = new Set(['completion', 'export_dialog', 'help', 'settings', 'site_skin_export']);
+/**
+ * Where a product or donation link may legitimately sit.
+ *
+ * `platform_picker` and `site_skin_gallery` are the Section 11.6 Tier 2
+ * surfaces: permanent, non-interrupting entry screens, never the editor. Note
+ * that `completion` remains enumerated but should no longer be used for a
+ * product link — Section 11.6 withdrew completion-timed commercial cards.
+ */
+const PLACEMENTS = new Set([
+  'completion', 'export_dialog', 'help', 'settings', 'site_skin_export',
+  'platform_picker', 'site_skin_gallery',
+]);
 
 type Gtag = (...args: unknown[]) => void;
 type AnalyticsWindow = Window & {

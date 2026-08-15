@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { SkinProject } from '../lib/schema';
 import { TEMPLATE_EXAMPLES } from '../lib/examples';
 import { openPrivacyChoices } from '../lib/analytics';
+import { MoreTools } from './MoreTools';
 
 interface Props {
   onSelectPlatform: (template: 'ios' | 'android' | 'twitter' | 'google') => void;
@@ -208,6 +209,10 @@ export const PlatformPicker: React.FC<Props> = ({
           </div>
         </div>
       )}
+
+      {/* Section 11.6 Tier 2. Placed above the legal footer and below every
+          tool choice, so it is findable and never in the way. */}
+      <MoreTools placement="platform_picker" />
 
       {/* Footer */}
       <div className="mt-12 text-center space-y-1">

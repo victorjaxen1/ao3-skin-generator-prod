@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { SiteSkinTheme, Mood, MOODS } from '../../lib/siteSkin/theme';
 import { TEMPLATES, TEMPLATE_DESCRIPTIONS } from '../../lib/siteSkin/templates';
 import { derive } from '../../lib/siteSkin/compile';
+import { MoreTools } from '../MoreTools';
 
 interface Props {
   onSelect: (theme: SiteSkinTheme) => void;
@@ -181,6 +182,8 @@ export const TemplateGallery: React.FC<Props> = ({ onSelect, onResume, resumeNam
           Site skins change how AO3 looks for you, in your browser. They don&apos;t
           change what anyone else sees.
         </p>
+
+        <MoreTools placement="site_skin_gallery" />
       </div>
     </div>
   );

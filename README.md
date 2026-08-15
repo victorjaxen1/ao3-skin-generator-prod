@@ -90,9 +90,21 @@ src/pages/api/image-proxy.ts         Export-time remote-image proxy
 tests/                               Unit and browser regression coverage
 ```
 
-## Source license status
+## Source license
 
-The repository is publicly readable, but it currently has no tracked `LICENSE` file. The project owner must explicitly choose and add the intended source license before the repository describes itself as MIT or open source. Generated user output remains the user’s content under the published Terms.
+**Source-available, not open source.** See [`LICENSE`](LICENSE).
+
+The code is readable so that anyone can check what the application does with
+their work — in particular the claim that editable story text and settings stay
+in your own browser. That is the purpose of the access, and reading is the right
+it grants. Copying, modifying, forking, redistributing, or reusing any part of
+the source is not permitted without asking first at `hello@wordfokus.com`.
+
+**Anything you make with the tool is yours.** The licence covers this source code
+and makes no claim over your scenes, dialogue, characters, images, or the
+generated HTML, CSS, work skins and site skins you export. Publish them anywhere,
+including on AO3, freely and without attribution. Your content is governed by the
+published Terms of Service, not by the source licence.
 
 ## Security
 

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AO3_RULESET } from '../lib/ao3Compatibility';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
@@ -20,6 +20,7 @@ import { SkinPreview } from '../components/siteSkin/SkinPreview';
 import { ExportSkinDialog } from '../components/siteSkin/ExportSkinDialog';
 import { ProductHead } from '../components/ProductHead';
 import { openPrivacyChoices, trackAnalytics } from '../lib/analytics';
+import { isSiteSkinActivated, markActivatedOnce, siteSkinBaseline } from '../lib/activation';
 
 const MAX_HISTORY = 50;
 
@@ -45,6 +46,10 @@ export default function SiteSkinPage() {
   const [history, setHistory] = useState<SiteSkinTheme[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
 
+  // The template as it was chosen, so a value the author never touched is never
+  // counted as their work (§5.2).
+  const activationRef = useRef<string | null>(null);
+
   // ── Mount ───────────────────────────────────────────────────────────────
   // `?template=<id>` opens the editor straight onto that template, matching
   // how the conversation generator handles the same parameter. It is what the
@@ -66,6 +71,7 @@ export default function SiteSkinPage() {
       ? loadStoredTheme()
       : cloneTheme(DEFAULT_TEMPLATE);
 
+    activationRef.current = siteSkinBaseline(initial);
     setTheme(initial);
     setHistory([initial]);
     setHistoryIndex(0);
@@ -88,6 +94,14 @@ export default function SiteSkinPage() {
       setSaveStatus(result.ok ? 'saved' : 'failed');
       setSaveError(result.ok ? '' : result.message || '');
       if (result.ok) setHasSaved(true);
+
+      // A changed value has already been previewed by the time it exists —
+      // ThemeEditor and SkinPreview are the same screen — so the changed test
+      // is the whole of §5.2's site-skin definition.
+      const baseline = activationRef.current;
+      if (baseline && isSiteSkinActivated(theme, baseline) && markActivatedOnce(`site-skin:${theme.meta.id}`)) {
+        trackAnalytics({ name: 'project_activated', templateId: theme.meta.id });
+      }
 
       setHistory(prev => {
         if (prev.length && JSON.stringify(prev[prev.length - 1]) === JSON.stringify(theme)) {
@@ -119,6 +133,7 @@ export default function SiteSkinPage() {
 
   const handleSelectTemplate = useCallback((template: SiteSkinTheme) => {
     const fresh = cloneTheme(template);
+    activationRef.current = siteSkinBaseline(fresh);
     setTheme(fresh);
     setHistory([fresh]);
     setHistoryIndex(0);

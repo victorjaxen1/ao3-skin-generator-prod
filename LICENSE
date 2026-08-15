@@ -1,0 +1,46 @@
+Copyright (c) 2026 Victor Jaxen. All rights reserved.
+
+AO3 SkinGen — source-available, not open source.
+
+This source code is made readable so that anyone can verify what the
+application does with their work, in particular the claim that editable story
+text and settings stay in the visitor's own browser. Readability is the whole
+purpose of that access, and it is the only right granted here.
+
+No permission is granted to copy, modify, merge, publish, distribute,
+sublicense, sell, or create derivative works from this source code, in whole or
+in part, whether or not for commercial purposes. No trademark or brand licence
+is granted. Making the code visible is not a grant of any of these rights, and
+nothing here places this software in the public domain.
+
+WHAT YOU MAKE WITH THE APPLICATION IS YOURS
+
+This licence covers the source code of the tool and nothing else. It makes no
+claim over anything you create with it. Your scenes, dialogue, characters,
+images, generated HTML, generated CSS, work skins, and site skins are your own
+content, governed by the published Terms of Service and by nothing in this file.
+You may publish that output anywhere, including on Archive of Our Own, freely
+and without attribution.
+
+PERMITTED WITHOUT ASKING
+
+- Reading this source code.
+- Quoting short excerpts for review, teaching, security research, journalism, or
+  interoperability discussion, with attribution.
+- Reporting bugs or vulnerabilities. Please send security reports privately to
+  hello@wordfokus.com rather than opening a public issue.
+
+For any other use, including forking or reuse of any part of this code, ask
+first at hello@wordfokus.com. Reasonable requests are welcome.
+
+NO WARRANTY
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHOR OR
+COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN
+AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+AO3 SkinGen is an unofficial fan tool. It is not affiliated with, endorsed by, or
+connected to Archive of Our Own or the Organization for Transformative Works.

@@ -4,10 +4,15 @@
 
 - **Owner:** Project owner
 - **Audience:** A developer who is new to this codebase
-- **Revised:** August 12, 2026
-- **Repository baseline:** `main` at `b3c4545`
-- **Status:** Active implementation handoff; Releases 0–3 are substantially
-  shipped and Release 4 has not started
+- **Revised:** August 15, 2026 — twice. The second revision is the **strategy
+  correction** in Section 11.6; read it before planning any commercial work
+  (previous revision: August 12, 2026)
+- **Repository baseline:** `main` at `c733066`, plus uncommitted activation work
+  described under "Closed later on August 15"
+- **Status:** Active implementation handoff. Releases 0–3 are substantially
+  shipped, **Release 4's bridge is withdrawn on audience grounds rather than
+  merely blocked** (Section 11.6), and a large unplanned **platform authoring
+  program** has landed on top of all of them
 - **Application today:** `https://app.ao3skingen.wordfokus.com/`
 - **Public landing page:** `https://ao3skingen.wordfokus.com/`
 - **Additional crawlable product/guide hub:** `https://www.wordfokus.com/ao3skingen/`
@@ -23,27 +28,192 @@ WorldKonstruct card, a ZIP generator, a project library, more templates, or an
 email form. First make the current product honest, secure, recoverable, and
 measurable. Then add the workflow bridge.
 
-### Implementation progress — August 12, 2026
+### What changed since the August 12 revision — read this first
 
-**Core engineering program: 72% complete.** This is a planning estimate, not a
-product metric. It is the equal-weight average of the five numbered releases:
+Fifteen commits landed between `b3c4545` and `c733066`: **95 files and 17,169
+added lines**, excluding this document. Releases 0–3 together changed 75 files
+and added 3,583 lines. This baseline therefore carries roughly **five times the
+code volume of the entire plan that precedes it**, and almost none of it was work
+this document asked for. A developer who reads the previous revision's file
+references literally will be wrong about the data model, the project file format,
+and where identity lives.
+
+The four things that invalidate old assumptions:
+
+1. **Identity is now canonical, not scattered.** `SceneCharacter`/`SceneCast` in
+   [`src/lib/schema.ts`](src/lib/schema.ts) and the resolver in the new
+   [`src/lib/identity.ts`](src/lib/identity.ts) replaced the five competing
+   identity sources that Section 11.1 was written to untangle. Messages and
+   group participants reference a stable `characterId`. **Section 11.1's premise
+   is obsolete — read the rewritten section before planning any cast work.**
+2. **The project file is schema v7, not v1.** Six pure migrations (`v1→v7`) are
+   dispatched from `PROJECT_FILE_MIGRATIONS` in
+   [`src/lib/projectFile.ts`](src/lib/projectFile.ts). The instruction "when
+   adding schema v2, write pure migrations and fixtures first" was followed six
+   times; it is established practice now, not future advice.
+3. **Three of the four platforms were rebuilt as fiction-authoring tools.**
+   WhatsApp, Twitter, and iOS/iMessage each gained a validator module
+   ([`whatsapp.ts`](src/lib/whatsapp.ts), [`twitter.ts`](src/lib/twitter.ts),
+   [`ios.ts`](src/lib/ios.ts)), a shared extras editor used by both the composer
+   and the timeline, structured replies/media/link cards/reactions, and frame
+   modes. Google was not touched. The master work skin is at version 7.
+4. **AO3 Work Text now emits playable media.** Narrowly generated `<audio>`,
+   `<video>`, and privacy-enhanced YouTube embeds reach the archive; static
+   output (preview, Save PNG, ImgBB) deliberately keeps a linked poster card
+   instead. **No media byte is ever downloaded, proxied, or uploaded by this
+   app** — but a published work now makes third-party requests the reader's
+   browser performs, which is a permanence and public-copy question the privacy
+   disclosure in Section 7.4 does not yet cover.
+
+### Implementation progress — August 15, 2026
+
+**Core engineering program: 74% complete.** This is a planning estimate, not a
+product metric. It is the equal-weight average of the five numbered releases,
+rescored against repository and production evidence gathered on August 15, 2026:
 
 | Release | Completion | Evidence shipped | Remaining work |
 | --- | ---: | --- | --- |
-| Release 0 — trust and baseline | **86%** | Pro and fake activation removed; generic donation/success path removed; fiction label and neutral attribution separated; README, Terms, validation copy, scripts, and pinned AO3 ruleset updated | Choose/add a source license or explicitly keep the repository unlicensed; correct the stale watermark language in `public/content-policy.html`; finish a cross-domain public-copy audit |
-| Release 1 — secure images | **95%** | Server-only `/api/image-upload`; explicit file and rendered-scene consent; byte/type/magic-byte limits; provider timeout; origin checks; hardened DNS/redirect/streaming proxy; narrowed CSP; security tests; production PNG/JPEG/WebP uploads verified | Replace warm-instance rate/daily counters with a durable shared budget store if traffic or abuse warrants it; periodically verify the old browser-exposed credential cannot be found in live bundles |
-| Release 2 — identity, domains, analytics | **79%** | Shared product config; SSR metadata; PWA/deep-link fixes; branded app domain; Netlify fallback redirect; server-only upload environment; typed content-free analytics with explicit opt-in and changeable privacy choices | Recheck WordPress sitemap/Search Console state; add/verify the branded app link on the WordPress hub; operationalize the weekly dashboard instead of merely defining events; finish the remaining public-link audit |
-| Release 3 — backup and publishing handoff | **100%** | Strict versioned scene and site-theme files; safe replace with automatic backup; validated character storage; fallback preview; deterministic transcript; attachment/scene alt; composed preflight; coordinated output-specific AO3 handoffs | Maintain migration fixtures when schema v2 is introduced; do not add a ZIP unless evidence shows demand |
-| Release 4 — cast portability | **0%** | Analytics event types were reserved, but no cast interchange or commercial bridge was shipped | Obtain the WorldKonstruct repository, destination, import/export contract, and shared-fixture agreement before implementing any bridge |
+| Release 0 — trust and baseline | **95%** (was 86%) | Pro and fake activation removed; generic donation/success path removed; fiction label and neutral attribution separated; the hardcoded commercial credit is gone from generated output, and a unit test pins that master-skin credit stays off by default and is added at most once; README, Terms, validation copy, scripts, and pinned AO3 ruleset updated. **Both remaining items closed later on August 15:** a tracked `LICENSE` now exists (source-available, all rights reserved) with the README agreeing, and every watermark reference is gone from `content-policy.html` — replaced by an accurate description of the default fiction label and the separate opt-in credit. The unsupported "1,200+ writers" claim was removed from both hub files in the same pass | Two content items, neither engineering: the SwipePages landing still has to be updated by hand from [`docs/LANDING-COPY-2026-08.md`](docs/LANDING-COPY-2026-08.md), and the privacy policy and Terms have not been re-read against the current product |
+| Release 1 — secure images | **95%** (unchanged) | Server-only `/api/image-upload`; explicit file and rendered-scene consent; byte/type/magic-byte limits; provider timeout; origin checks; hardened DNS/redirect/streaming proxy; narrowed CSP; security tests. **Re-verified August 15:** no live application bundle contains `api.imgbb.com`, so the browser no longer reaches the provider at all | Replace the warm-instance rate/daily counters with a durable shared budget store only if traffic or abuse warrants it. One new surface to keep honest: structured media means published works reference third-party media hosts, which preflight warns about but the privacy copy does not yet describe |
+| Release 2 — identity, domains, analytics | **85%** (was 76%) | Shared product config; SSR metadata (**verified live**: the app root serves `robots: noindex,follow` and its own canonical before hydration); PWA/deep-link fixes; branded app domain; Netlify 301 to the branded app (**verified live**); the SwipePages landing links the branded app (**verified live**); typed content-free analytics with explicit opt-in and reopenable privacy choices. **Both code-side gaps closed later on August 15**: `project_activated` now fires from a pure predicate, and the five missing example ids are in the allowlist behind a drift test | Raised because the two code gaps closed; the external items did not move. The WordPress hub still links the old Netlify host, and the sitemap/Search Console recheck and the weekly dashboard remain. All three are owner/content work, not engineering |
+| Release 3 — backup and publishing handoff | **100%** (held) | Strict versioned scene and site-theme files; safe replace with automatic backup; validated character storage; fallback preview; deterministic transcript; attachment/scene alt; composed preflight; coordinated output-specific AO3 handoffs. **The release held through six schema migrations** — the strongest evidence in this document that the boundary was built correctly | Keep writing pure `vN→vN+1` migrations with fixtures. Preflight has grown to 24 composed checks; keep composing existing validators rather than writing a second one. Still no evidence justifying a ZIP |
+| Release 4 — cast portability | **15%, and now on hold** (was 0%) | **The data prerequisite shipped.** Section 11.1 asked for one canonical answer to "what is the cast"; `SceneCast` plus `identity.ts` is that answer, with archive-or-reassign instead of silent deletion, and library entries copied into a scene rather than linked live. `cast_exported`/`cast_imported` remain reserved-only event types | **The remaining 85% should not be built as specified.** Section 11.6 withdraws the WorldKonstruct bridge on audience grounds — the owner inputs are no longer the binding constraint, the audience mismatch is. The percentage is retained so the number stays comparable, not as a plan to finish it |
 
-Calculation: `(86 + 95 + 79 + 100 + 0) / 5 = 72`.
+Calculation: `(95 + 95 + 85 + 100 + 15) / 5 = 78`, reported as 78%.
+
+Releases 0 and 2 were rescored against work that landed on the afternoon of
+August 15. Releases 1, 3, and 4 carry their morning scores unchanged, because
+nothing in that work touched them and no fresh evidence was gathered for them.
+Release 4 keeps 15% even though its plan changed, so that the figure keeps
+meaning "how much of the original scope exists" rather than silently absorbing a
+strategy decision.
 
 Sections 12–15 contain ongoing compatibility, accessibility, measurement, and
-distribution work. They are not counted as a finite sixth release. Track their
-individual deliverables, but do not change the 72% figure without rescoring all
-five releases against repository and production evidence.
+distribution work. They are not counted as a finite sixth release, and neither
+is the platform program below. Track their individual deliverables, but do not
+change the 74% figure without rescoring all five releases against repository and
+production evidence.
+
+### The unscored sixth program — platform authoring depth
+
+The largest body of work in this baseline belongs to none of the five releases.
+It is recorded here so that it is visible, and it is deliberately **not** folded
+into the 74% figure, for the same reason Sections 12–15 are not: the five
+releases score the growth-and-publishing plan, and rescoring them against work
+they never scoped would make the number mean nothing.
+
+| Platform | Status | Model module | Open |
+| --- | --- | --- | --- |
+| WhatsApp (`template: 'android'`) | Shipped 13 Aug; schema v5–v6 | [`src/lib/whatsapp.ts`](src/lib/whatsapp.ts) | AO3 save/read-back |
+| Twitter / X | Shipped 13 Aug; schema v6, master skin v6 | [`src/lib/twitter.ts`](src/lib/twitter.ts) | AO3 save/read-back |
+| iOS / iMessage | Shipped 14 Aug; schema v7, master skin v7 | [`src/lib/ios.ts`](src/lib/ios.ts) | AO3 save/read-back — **this is the open release gate** |
+| Google Search | Not rebuilt | none | Nothing scheduled. Do not start one speculatively |
+| Site skin | Phase 9 shipped, plus the §14 author-wins defect fix | `src/lib/siteSkin/*` | Phase 7: never once saved on real AO3 |
+| Identity / cast | Shipped 13 Aug (`5e8d9bc`) | [`src/lib/identity.ts`](src/lib/identity.ts) | One product decision, recorded in that plan's §11.7 |
+
+Each platform has its own implementation plan in `docs/`, and each is written as
+a handoff rather than a task list. Read the relevant one before touching a
+renderer; they carry defect histories this document does not repeat.
+
+### Two open archive gates
+
+Both are external, both need a human with an AO3 account, and **neither can be
+closed by any test in this repository.** They are the highest-value work
+outstanding on the whole project — higher than anything in Section 14's backlog.
+
+1. **Master work skin v7 read-back.** `tests/ao3-readback.unit.spec.ts` currently
+   **skips**, printing `The newest AO3 readback predates master-skin v7`, because
+   the two readback files in the repository root are from v6. A skipping test is
+   not a passing one. The exact procedure is in
+   [`docs/IOS-IMESSAGE-PLATFORM-IMPROVEMENT-IMPLEMENTATION-PLAN.md`](docs/IOS-IMESSAGE-PLATFORM-IMPROVEMENT-IMPLEMENTATION-PLAN.md)
+   under "The one thing still open". Save the stored CSS back into the repository
+   root as `ao3 master workskin <date>.txt` and the test picks it up
+   automatically.
+2. **Site-skin Phase 7.** No template in the 16-template catalog has ever been
+   pasted into AO3 and submitted. Until
+   [`docs/SITE-SKIN-AO3-CHECKLIST.md`](docs/SITE-SKIN-AO3-CHECKLIST.md) is filled
+   in, every "AO3-safe" claim in the site-skin UI is a well-tested prediction. Do
+   probe P10 first — read a work that has its own work skin with a site skin on.
+   That is the class of bug that already escaped once, in `5c47eda`.
+
+### Release 2 gaps found on August 15
+
+These are small, specific, and cheap. They are named here because "typed
+analytics shipped" has been read as "measurement works", and it does not yet.
+
+1. **The WordPress hub still points at the old Netlify host.**
+   `https://www.wordfokus.com/ao3skingen/` returned 200 and links
+   `https://ao3skingen.netlify.app` and `https://ao3skingen.netlify.app/site-skin`.
+   The 301 to the branded app works, so no user is stranded, but the hub's own
+   links have not been updated. This was listed as open on August 12 and is still
+   open.
+2. **`project_activated` is declared but never fired.** ~~It is a member of the
+   `AnalyticsEvent` union in [`src/lib/analytics.ts`](src/lib/analytics.ts) and
+   appears at no call site anywhere in `src/`.~~ **Closed later on August 15 —
+   see below.**
+3. **Five starter examples are silently invisible to analytics.**
+   `analyticsPayload` rejects the *entire event* when `templateId` is not in
+   `TEMPLATE_IDS`, and `index.tsx` fires `template_selected` with the example's
+   own id. `ios-rich-group-scene`, `twitter-quote-post`,
+   `twitter-four-image-post`, `twitter-video-post`, and `twitter-long-thread`
+   existed in [`src/lib/examples.ts`](src/lib/examples.ts) but not in that
+   allowlist, so choosing the newest and richest examples recorded nothing.
+   Export events were unaffected: they send `project.template`, which is always
+   one of the four platform ids. **Closed later on August 15 — see below.**
+
+### Closed later on August 15, 2026 — the two Release 2 code gaps
+
+Both are in the working tree and not yet committed at the time of writing.
+Verified together: typecheck passed, `npm run test:unit` reported **381 passed,
+1 skipped** (up from 362; the single skip is still the AO3 read-back gate), and
+`npm run build` succeeded. No renderer, schema, or export path was touched.
+
+**Gap 3 — the allowlist.** The five ids are now in `TEMPLATE_IDS`, and the class
+of bug is closed rather than the instance: `analytics.unit.spec.ts` now walks
+every example in `examples.ts` and every site-skin template and asserts each one
+survives `analyticsPayload`. A future example that forgets its id fails a test
+instead of going quiet in production. `ANALYTICS_TEMPLATE_IDS` is exported for
+that test only.
+
+**Gap 2 — activation.** [`src/lib/activation.ts`](src/lib/activation.ts) is a new
+pure module holding both halves of Section 5.2: the per-platform thresholds, and
+the rule that outranks them — seeded example content does not count until the
+author edits it. It works by fingerprinting each message at the moment the
+project is handed over and comparing later. Four decisions worth knowing:
+
+1. **The signature covers every structured field**, not `content` alone. Section
+   5.2's "materially edits two messages" predates the platform rebuilds; an
+   author who adds a voice message or a Tapback to a seeded example has plainly
+   done real work.
+2. **`status`/`statusMode` are excluded from the signature.**
+   `appendChatMessage` advances an automatic status to `read` on every earlier
+   outgoing message when a reply arrives. Counting those would score one new
+   message as several and clear the two-message chat threshold on its own. A
+   test pins this.
+3. **Keys are sorted before hashing.** `{ ...message, content }` preserves key
+   order and appends, so two structurally identical messages could otherwise
+   serialize differently and read as an edit.
+4. **The baseline is taken *after* `migrateProjectIdentities`**, or the stamped
+   `characterId`s read as authorship.
+
+Firing rides the existing debounced persist effect in both pages, so there is no
+second listener to keep in step. Only `project.template` (or the site-skin
+template id) is sent; the local project UUID is used to deduplicate and never
+leaves the browser, exactly as Section 5.2 requires. `markActivatedOnce` falls
+back to an in-memory set when localStorage is refused, so a private-browsing
+visitor produces one event per session rather than none.
+
+One finding worth recording: an early test asserted that setting
+`twitterDisplayName` alone should activate a Twitter project. It failed, and the
+**test** was wrong. The predicate reads the primary account through
+`resolveIdentityTarget`, which is canonical; `settings.twitterDisplayName` is a
+legacy fallback that the identity panel keeps in sync via `updateSceneCharacter`.
+Reading the resolver is correct, and Learning 19 applies — decide which side is
+wrong before editing either.
 
 ### Shipped commit trail
+
+Releases 0–3, as recorded in the previous revision:
 
 - `f20d0bd` — secure image handling and trust baseline
 - `7dc4178` — branded application domain, metadata, PWA, and deep links
@@ -52,11 +222,35 @@ five releases against repository and production evidence.
 - `b3c4545` — moved privacy choices into real layouts so the control cannot
   cover the composer; added desktop/mobile collision coverage
 
+Since that revision:
+
+- `03ecd10` — recorded the previous implementation progress and brought this
+  document into the repository
+- `f2bc76c` — site-skin Phase 9: tag colours by type, themed scrollbars, and
+  banner hosting in the export dialog
+- `5e8d9bc` — **made character identity one coherent feature**; introduced
+  `SceneCast`, `identity.ts`, and project schema v2
+- `5c47eda` — **fixed a shipped defect in which a reader's site skin vandalised
+  an author's work skin**; the preview mock now carries an author's work skin
+  permanently, and loads three stylesheets in AO3's real order
+- `11cd532`, `53a560c` — rewrote the site-skin and identity plans as handoffs
+- `027bf91` — kept group identities in sync
+- `98e51ac`, `be0960c` — message emoji picker
+- `1f2c612`, `36e8eb5` — native emoji-only chat messages, and emoji spacing
+  preserved in PNG exports
+- `4db9c21` — automated editable message metadata
+- `0064e6c`, `06519ef` — planned and shipped the Twitter platform overhaul
+  (schema v6, master skin v6)
+- `c733066` — **rebuilt the iMessage platform as a fiction-authoring tool**
+  (schema v7, master skin v7); fixed two P0 defects, one of which was group
+  colour emitted as an inline `style` that AO3 strips outright, so the colour
+  reached the preview and the PNG and was silently dropped on the archive
+
 The tracked implementation is clean at this baseline. The working directory
 still contains owner-created, untracked documents, screenshots, article drafts,
 and image-reference material. Preserve them. This document was one of those
-files before this handoff and is now intentionally part of the implementation
-record.
+files before the previous handoff and is now intentionally part of the
+implementation record.
 
 ### Current production architecture
 
@@ -75,16 +269,25 @@ landing page and app onto one host unless the owner deliberately reverses this
 decision. The old `ao3skingen.netlify.app` address redirects to the branded app
 and is not the public application identity.
 
-Live domain verification on August 12, 2026:
+Live domain verification, re-run on August 15, 2026:
 
-- the branded app returned 200 and canonically identified
-  `https://app.ao3skingen.wordfokus.com/`;
-- the SwipePages landing returned 200, self-canonicalized, and contained the
-  branded application URL;
-- the WordPress hub returned 200 and self-canonicalized, but its returned HTML
-  did not contain the exact branded application URL; and
-- `https://ao3skingen.netlify.app/` returned a permanent redirect to the
-  branded application URL.
+- the branded app returned 200, and its **server-rendered** HTML carried
+  `<meta name="robots" content="noindex,follow">` and
+  `<link rel="canonical" href="https://app.ao3skingen.wordfokus.com/">` — the
+  Section 9.2 requirement is genuinely satisfied, not client-only;
+- the SwipePages landing returned 200 and contained the branded application URL;
+- the WordPress hub returned 200 but **still links `https://ao3skingen.netlify.app`
+  and `https://ao3skingen.netlify.app/site-skin`**, not the branded app. This is
+  unchanged from August 12 and is the oldest open external item;
+- `https://ao3skingen.netlify.app/` returned `301` to
+  `https://app.ao3skingen.wordfokus.com/`, so hub visitors still arrive correctly;
+- the live `content-policy.html` still contains three "watermark" references,
+  confirming the Release 0 copy debt is deployed and not merely local; and
+- no live application JavaScript bundle contained `api.imgbb.com`, which is the
+  standing Release 1 check.
+
+Every one of these is mutable external state. Re-run them before domain or
+content work rather than trusting this list.
 
 ### Implementation learnings
 
@@ -133,9 +336,80 @@ Live domain verification on August 12, 2026:
     can drift independently. A code deploy does not prove all public claims are
     aligned.
 
+Added by the August 13–14 platform, identity, and site-skin work. Each cost real
+time, and each generalizes beyond the feature that taught it:
+
+11. **AO3 strips every inline `style`, so a colour that must survive has to be a
+    class.** iOS group colour was a free hex value emitted inline. It reached the
+    preview and the PNG and was silently dropped on the archive — the app and the
+    published work disagreed, and only the archive could show it. It is now a
+    finite `iosTone` palette compiled to classes the stylesheet carries. Any new
+    author-chosen value that has to survive AO3 needs the same treatment: a
+    finite enum, not a free value.
+12. **Our CSS is a guest twice over — on AO3's page, and inside an author's
+    work.** AO3 renders a work skin in the page body, *after* our site-skin
+    stylesheet in `<head>`, and prefixes every selector with `#workskin`. The
+    author therefore beats us on both source order and specificity unless we use
+    `!important`, and then we beat them on nothing but volume. A shipped site
+    skin put a floated 4em drop capital on every chat bubble in a real work.
+    `Rule.authorWins` now marks the six selectors that can land inside a work.
+    Colour reaching inside a work is what the reader asked for; layout is not.
+13. **A preview that contains no work skin is a model of the wrong page.** 273
+    green tests and a preview that matched the export byte for byte did not catch
+    the defect above; a reader opening a real work saw it in minutes. The mock
+    page now carries an author's work skin permanently. When you build a preview,
+    ask what it structurally cannot contain — that is where the next defect is.
+14. **Take the characterization golden before the refactor, not after.** Pulling
+    the iOS renderer out of the shared `msgHTML` path turned "did the extraction
+    change anything?" into a diff, and it proved both P0 defects on the first
+    run. Refresh a golden only while reading its diff — that diff is the review.
+15. **html2canvas is not the browser, and only a picture catches the
+    difference.** Two shipped-quality defects were invisible to the lint, the
+    injection harness, and 362 unit tests: a reply card rendered red-on-blue, and
+    a mis-centred two-line header painted its text low. Export a real PNG and
+    look at it, at zoom, whenever chat layout changes.
+16. **Literal whitespace between inline children is load-bearing.** With the skin
+    on, the elements are block-level and the space costs nothing; with the skin
+    off it is the only thing separating two readings. One run of the skin-off
+    harness caught four welded readings — `ALAlex`, `Replying to AlexThe side
+    door…`. Add a span, add the space with it.
+17. **Never guess a discriminator during storage recovery.** A missing or
+    unrecognised media `kind`/`source` drops the whole block rather than
+    inferring "this URL looks like YouTube". A wrong guess produces a card the
+    author never wrote, which is worse than an empty message — preflight reports
+    the empty message in plain words.
+18. **A default that points at a third-party host is a permanence bug in every
+    work already published.** The iOS header and footer defaults fetched remote
+    chrome strips, so each published work made permanent requests to a host that
+    AO3 keeps no copy of; that host going away would take the header out of every
+    chapter already posted. They now default to empty, and remain as advanced
+    overrides. Apply the same test to any new default that carries a URL.
+19. **A feature-local suite passing is not evidence the app works.** The identity
+    work's own 20 scenarios passed while three real accessibility defects sat in
+    surfaces the wider suite touched. When a rename breaks an unrelated test,
+    decide which side is wrong before editing either.
+
+Added by the August 15 strategy review:
+
+20. **A schema that will not fill itself is telling you the products do not
+    fit.** Two fields in the neutral cast schema — `aliases` and `notes` — have
+    no source anywhere in this application, and never acquired one across six
+    migrations. Meanwhile the field the app is richest in, a Twitter handle, is
+    the least story-bible-like thing in the file: it is a rendering choice made
+    for one screenshot, not a fact about a character. The mapping gap was visible
+    for months and was read as "fields to fill in later" rather than as evidence.
+    When an interchange schema needs data your product has no reason to collect,
+    check the audience before writing the exporter.
+21. **Ask who the user is at the moment you interrupt them, not who they are in
+    general.** Release 4 was planned around an author keeping a cast consistent
+    across a fic. The person exporting from this app has almost always finished
+    writing and is solving a presentation problem. Both propositions can be true
+    about the same human and still make the offer irrelevant, because they
+    describe different weeks. Stage, not persona.
+
 ### Clean handoff for the next developer
 
-Start from `main` at or after `b3c4545`. Do not reset or clean the workspace;
+Start from `main` at or after `c733066`. Do not reset or clean the workspace;
 the untracked screenshots, reference exports, article drafts, implementation
 blueprints, and image-handling examples belong to the owner.
 
@@ -149,14 +423,35 @@ Environment and boundaries:
   and imported-file contents must never enter analytics.
 - The app stores one scene project, one separate site theme, and a validated
   character library locally. There is no cloud account or project library.
-- Project file schema v1 is documented in `docs/PROJECT-FILE-SCHEMA.md`.
+- **Project file schema v7** is documented in
+  [`docs/PROJECT-FILE-SCHEMA.md`](docs/PROJECT-FILE-SCHEMA.md), together with the
+  v1–v6 import rules and the reasoning for each migration step.
+- Media URLs are validated and stored; **media bytes are never downloaded,
+  proxied, or uploaded.** Keep it that way — it is what makes structured media a
+  schema question rather than a hosting one.
+
+Where the code now lives. This is the orientation the previous revision's
+Section 3 table can no longer give:
+
+| Concern | Module | Note |
+| --- | --- | --- |
+| Scene and settings types | [`src/lib/schema.ts`](src/lib/schema.ts) | Also `SceneCharacter`/`SceneCast` |
+| Identity resolution and migration | [`src/lib/identity.ts`](src/lib/identity.ts) | The one resolver every output reads through |
+| Per-platform models | [`ios.ts`](src/lib/ios.ts), [`twitter.ts`](src/lib/twitter.ts), [`whatsapp.ts`](src/lib/whatsapp.ts) | Deliberately separate; they must not read each other's fields |
+| Markup and stylesheets | [`src/lib/generator.ts`](src/lib/generator.ts) | One stylesheet drives preview, PNG, and both skins |
+| Single and master work skins | [`src/lib/workSkin.ts`](src/lib/workSkin.ts) | `MASTER_SKIN_VERSION` is stamped as a CSS rule, because AO3 deletes comments |
+| Strict file boundary | [`src/lib/projectFile.ts`](src/lib/projectFile.ts) | v1–v7, pure migrations |
+| Tolerant local recovery | [`src/lib/storage.ts`](src/lib/storage.ts) | A different trust boundary; never merge the two |
+| Composed blockers and warnings | [`src/lib/preflight.ts`](src/lib/preflight.ts) | 24 checks, all composed from existing validators |
+| Site skin | `src/lib/siteSkin/*` | `compile.ts` feeds preview and export from one call |
 
 Verification commands on Windows PowerShell:
 
 ```powershell
 npm run typecheck
 npm run build
-npm run test:unit
+npm run test:unit          # --project=unit: pure logic, no browser, no server
+npm run audit:ao3-css      # explicit, developer-invoked; never runs in a build
 # In a separate terminal after the build:
 npm run start -- -p 3000
 # Back in the test terminal:
@@ -164,43 +459,82 @@ $env:UX_BASE_URL='http://127.0.0.1:3000'
 npx playwright test tests/project-backup.spec.ts tests/analytics-consent.spec.ts --project=desktop --project=mobile --workers=1
 ```
 
-For production verification, replace `UX_BASE_URL` with
-`https://app.ao3skingen.wordfokus.com`. The latest verified evidence is:
+Note that `npm run test:unit` is now `playwright test --project=unit`, not a
+`tests/*.unit.spec.ts` glob — the previous revision's Section 7.1 script list is
+superseded by what is actually in `package.json`.
 
-- TypeScript check: passed;
-- optimized production build: passed;
-- deterministic unit suite: **249 passed**;
-- Release 3 backup/handoff browser suite: **6 passed** locally across desktop
-  and mobile;
-- broader Release 3 desktop regression run: **25 passed**;
-- Privacy/composer collision test: **2 passed locally** and **2 passed against
-  production**, desktop and mobile;
-- live PNG/JPEG/WebP upload and rendered-image checks: passed.
+For production verification, replace `UX_BASE_URL` with
+`https://app.ao3skingen.wordfokus.com`. **Browser projects default to the live
+app**, so an unset `UX_BASE_URL` silently tests production.
+
+Evidence re-gathered for this revision on August 15, 2026:
+
+- TypeScript check: **passed**;
+- deterministic unit suite: **362 passed, 1 skipped** (up from 249). The single
+  skip is the AO3 read-back gate described above, and it is skipping for a
+  correct reason: no human has saved the v7 skin on the archive yet;
+- AO3 CSS ruleset audit: **182 properties and 20 shorthands, no drift** in either
+  direction, against pinned upstream commit
+  `cf1d7f997047eaca14370985dafd156a91696313`. The `aspect-ratio` gap recorded in
+  Section 3.3 is closed;
+- live production probes: app 200 with SSR robots/canonical, landing 200 with the
+  branded app URL, Netlify 301 to the branded app, no `api.imgbb.com` in any live
+  bundle, and the live iOS bundle carries the v7 markers (`ios-tone-`,
+  `Tapback`), so `c733066` is deployed.
+
+Not re-run for this revision, and therefore not claimed: the desktop and mobile
+browser suites, the production build, and live upload checks. The platform plans
+record their own passing runs from 13–14 August; treat those as current unless
+you change a renderer.
 
 The next work should proceed in this order:
 
-1. **Close Release 0 honestly:** obtain the owner's license choice; add the
-   license or retain explicit unlicensed wording; update
-   `public/content-policy.html` so it describes the default fiction label and
-   optional neutral attribution accurately; audit the live landing, privacy,
-   Terms, content policy, README, and generated output together.
-2. **Close Release 2 external work:** recheck WordPress sitemap/Search Console,
-   add/verify the branded application link on the WordPress hub, finish the
-   remaining public-link audit, and build the weekly content-free dashboard
-   from the already typed events.
-3. **Continue compatibility work:** add the Markdown compatibility ledger and
+1. **Close the two archive gates.** Both need an AO3 account and roughly an hour
+   between them. They outrank every code task on this list, because the master
+   skin v7 and all sixteen site-skin templates are currently *predictions* about
+   what the archive stores. Do the master-skin read-back first; it has a history
+   of finding bugs nothing else can see.
+2. **Close the copy gap — this is now the highest-value non-blocked work.**
+   Section 1 already identified it as the cheapest remaining growth lever, and
+   Section 11.6 promotes it to the main one: the product does considerably more
+   than any public page says, and the same pass can place the owner's other
+   products properly. It is content work on owned surfaces, with no application
+   code and no risk to the shipped renderers. Covers the stale hub links at the
+   same time.
+3. **Finish Release 0's audit.** The licence and the content-policy language
+   closed on August 15. What is left is re-reading the privacy policy and Terms
+   against the current product — neither has been checked since structured media
+   and the Section 11.6 product surface shipped.
+4. **Finish Release 2's external half.** The two code gaps closed on August 15.
+   What remains is owner/operations work: recheck WordPress sitemap and Search
+   Console, and build the weekly content-free dashboard from the events that now
+   exist — `project_activated` among them.
+5. **Extend the privacy disclosure to structured media.** Section 7.4's text
+   predates playable media. A reader's browser now fetches third-party audio,
+   video, and YouTube embeds from a published work. Say so.
+6. **Build product visibility per Section 11.6, in its stated tiers.** Tiers 1
+   and 2 first; Tier 3 only when there is traffic worth measuring; Tier 4 only
+   after Tier 3 can judge it.
+7. **Continue compatibility work:** add the Markdown compatibility ledger and
    dated AO3 Default/Reversi/Low Vision checks before expanding public
    compatibility claims.
-4. **Do not start Release 4 speculatively:** request the WorldKonstruct
-   repository, owned destination, import/export constraints, and a consumer-
-   approved neutral fixture. Then implement `collectCastCandidates` as a pure
-   function before any promotional card.
+8. **Do not build Release 4's bridge at all.** This is a change from the previous
+   revision, which said "not speculatively" and listed the owner inputs as the
+   blocker. Those inputs are no longer the binding constraint. **Section 11.6 is
+   the reasoning; read it before reopening the question.**
 
-When adding schema v2, write pure `v1 -> v2` migrations and fixtures before
-changing the importer. When changing the export bar, consent UI, composer, or
-mobile preview, rerun occlusion/collision checks at both desktop and narrow
-mobile widths. When changing AO3 CSS, record the exact upstream commit, run
-`npm run audit:ao3-css`, and keep builds/tests independent of live GitHub.
+When adding schema v8, write the pure `v7 -> v8` migration and its fixtures
+before changing the importer, and add an explicit dispatch entry even when the
+step adds no data — `v6 -> v7` does exactly that, and says why in the schema doc.
+A migration must never invent content the author did not write: the retired
+single `reaction` string is deliberately *not* copied into `iosTapbacks`.
+
+When changing the export bar, consent UI, composer, or mobile preview, rerun
+occlusion/collision checks at both desktop and narrow mobile widths. When
+changing AO3 CSS, record the exact upstream commit, run `npm run audit:ao3-css`,
+and keep builds and tests independent of live GitHub. When changing a chat
+renderer, export a real PNG and look at it — learning 15 above is there because
+two shipped-quality defects survived 362 unit tests and every lint.
 
 ### Audit scope and external evidence
 
@@ -222,6 +556,34 @@ This revision did not treat the workspace as the whole product. It also checked:
 External state can change after this date. Re-run the specific checks named in
 the relevant release instead of copying these findings indefinitely.
 
+**What the August 15, 2026 revision checked, and what it did not.** This revision
+was primarily a repository reconciliation — fifteen commits had landed and the
+document described a codebase that no longer existed. Against the repository it
+read the full diff `b3c4545..c733066`, the platform, identity, and site-skin
+implementation plans in `docs/`, the schema, identity, analytics, preflight,
+project-file, and work-skin modules, and `package.json`/`playwright.config.ts`.
+It ran typecheck, the unit suite, and the AO3 CSS audit. Against production it
+re-probed the app, landing, hub, and Netlify redirect, read the app's
+server-rendered metadata, scanned the live JavaScript bundles for the ImgBB host
+and for iOS v7 markers, and checked the live legal and content-policy pages.
+
+**The second August 15 revision** was a strategy review, not an audit. It gathered
+no new external evidence and re-ran no probes. It closed the two Release 2 code
+gaps — verified by typecheck, the unit suite at 381 passed / 1 skipped, and a
+successful production build — and it withdrew Release 4's bridge on the reasoning
+in Section 11.6. Where it changed a claim about the world rather than about the
+code, it is reasoning from evidence already recorded here, chiefly the schema gap
+in Learning 20. **Its central claim — that this app's users have finished writing
+— is an argument, not a measurement.** Section 11.6 Tier 3 is what would test it.
+
+Neither revision re-ran the desktop or mobile browser suites or live upload
+checks, and neither re-audited the Marketplace listing, the otwarchive
+configuration beyond the pinned-commit comparison, or OTW policy
+guidance. Those were verified on 12–14 August by the work that shipped; treat
+them as current unless a renderer changes. Where this document states a test
+result, it states which run produced it — do not promote an inherited number into
+a fresh claim.
+
 ## 1. Executive decision
 
 AO3 SkinGen should become the **AO3 publishing utility for social-media scenes**,
@@ -232,10 +594,23 @@ Its defensible promise is:
 > Build a social-media scene visually, then publish it as a PNG or as accessible
 > real text with AO3-compatible CSS and a readable no-skin/download fallback.
 
-The app already earns this position. It has four scene types, image export,
-hosted AO3 image code, single-platform and all-platform work skins, meaningful
-skin-off output, a site-skin maker, an AO3 CSS allowlist/linter, local auto-save,
-characters, group participants, and extensive AO3 regression tests.
+The app already earns this position, and earns it more strongly than when this
+document was written. It has four scene types — three of which are now real
+authoring tools rather than bubble mockups, with structured replies, image
+collages, link cards, voice and video, reaction stacks, and date/system events —
+plus image export, hosted AO3 image code, single-platform and all-platform work
+skins, meaningful skin-off output, a site-skin maker, an AO3 CSS
+allowlist/linter, local auto-save, a canonical project-scoped cast, group
+participants, and extensive AO3 regression tests.
+
+The strategic risk has changed shape accordingly. In August 12's baseline the
+risk was that the product promised more than it did. At this baseline the risk is
+the reverse: **the product does considerably more than any of its public copy
+says.** The landing page, the WordPress hub, and the guides describe a screenshot
+generator with a site-skin maker. None of them mention that three platforms
+author rich scenes, or that the work-skin export now carries playable media. That
+gap is a marketing problem, not an engineering one, and it is the cheapest
+remaining growth lever in this document.
 
 The next product work should therefore do five things:
 
@@ -243,10 +618,15 @@ The next product work should therefore do five things:
 2. measure actual completed handoffs instead of button clicks;
 3. make backup, fallback text, and accessibility visible in the export flow;
 4. consolidate the existing character concepts before adding cast portability;
-5. offer WorldKonstruct only at a genuinely relevant cast-success moment.
+5. ~~offer WorldKonstruct only at a genuinely relevant cast-success moment.~~
+   **Superseded August 15, 2026:** close the copy gap so the product's public
+   promise matches what it does, and make the owner's other products *findable*
+   rather than *pitched*. The cast-success moment is not relevant to this
+   audience — Section 11.6.
 
-WordFokus remains a secondary drafting companion. Neither paid products nor
-Ko-fi belong in generated AO3 content.
+WordFokus remains a secondary drafting companion, relevant at the start of the
+work rather than at the end of it. Neither paid products nor Ko-fi belong in
+generated AO3 content.
 
 ## 2. Non-negotiable AO3 and product boundary
 
@@ -309,8 +689,15 @@ credit option.
 
 This section records `3990fba`, the baseline from which Releases 0–3 were
 implemented. It explains why each requirement exists, but its “Current
-implementation” column is historical. Use the progress table and clean handoff
-above for the state at `b3c4545`.
+implementation” column is **historical and now substantially wrong**. Two
+revisions of work have landed on top of it.
+
+Use the progress table, the "What changed" summary, and the module map in the
+clean handoff above for the state at `c733066`. In particular, this table's rows
+on scene state, character state, scene UX, image output, image upload, analytics,
+monetization, and metadata all describe conditions that no longer hold. It is
+kept because the *implication* column is still the reasoning behind the current
+design, and deleting it would lose why the boundaries are where they are.
 
 | Area | Current implementation | Implication |
 | --- | --- | --- |
@@ -371,9 +758,20 @@ As checked on 2026-08-12:
   base and paid features. It is a commercial destination, not neutral tool help.
 - No public indexed WorldKonstruct destination or interchange schema was found.
   Do not invent either in product copy; require the owner inputs in Section 6.
+  **Half closed on August 15, 2026:** the destination exists and was supplied —
+  a live Marketplace add-on at `https://app.wordfokus.com/worldkonstruct`. The
+  audit simply had not found it. No interchange schema exists, and per Section
+  11.6 none is now planned.
 
 Recheck all six observations immediately before domain or content work. Search
 indexes, sitemaps, redirects, and Marketplace listings are mutable external state.
+
+Status of these six on August 15, 2026: the fourth is **closed** — both app
+routes now serve title, canonical, and `robots` in the initial HTML, confirmed
+against production. The third is closed in substance: the legacy landing is the
+deliberate SwipePages surface now, and the "never leaves your browser" claim was
+removed from every page checked. The rest were not re-audited except the hub
+link, which is still stale.
 
 ### 3.3 Original AO3 compatibility snapshot
 
@@ -393,6 +791,17 @@ property through a reviewed change, record upstream commit
 Never download an allowlist dynamically at runtime or silently update it during
 a production build.
 
+**Closed.** `npm run audit:ao3-css` re-run on August 15, 2026 reports
+`properties: local=182 upstream=182` and `shorthands: local=20 upstream=20`, with
+nothing missing and nothing extra in either direction, against the same pinned
+commit. `aspect-ratio` was synced, the review date and upstream commit live in
+[`src/lib/ao3Compatibility.ts`](src/lib/ao3Compatibility.ts), and the audit is a
+developer-invoked script that no build or test depends on. The remaining known
+divergence is the opposite kind and is deliberate: our lint refuses 8-digit hex
+where AO3 accepts it by accident, which violates the site skin's "never be
+stricter than AO3" invariant but cannot bite while no template emits alpha
+colours.
+
 ### 3.4 Existing behavior that must be preserved
 
 - The platform picker is the first-visit experience.
@@ -410,6 +819,40 @@ a production build.
 - Clipboard failure always leaves selectable text and a manual-copy instruction.
 - A failed local save is visible to the user.
 
+Added since, and each pinned by a test that exists because breaking it produced a
+real defect:
+
+- **Scene identities are canonical, and names are never identity keys.** Two
+  characters may share a display name and stay distinct. A rename or avatar
+  change must reach every message that identity already speaks in. Preview, AO3
+  HTML, work skin, skin-off, and transcript all resolve through the one resolver
+  in `identity.ts`, so every output agrees by construction.
+- **A referenced identity is archived or explicitly reassigned, never silently
+  deleted.**
+- **Library entries are copied into a scene, not linked.** Scene edits never
+  write back to the library, and two projects seeded from one library entry stay
+  independent.
+- **iOS and WhatsApp fields stay separate even where their shapes match.** A
+  shared type is one refactor away from a shared renderer, and the platforms
+  agree on almost nothing except what a URL looks like. Tests assert neither
+  platform's markup can contain the other's class prefix.
+- **Run grouping compares a resolved speaker key, not message direction.**
+  Comparing direction alone merged two different group speakers into one visual
+  run.
+- **Any value that must survive AO3 is a finite enum compiled to a class**, never
+  a free value emitted as an inline `style`.
+- **Static output carries no native players.** Preview, Save PNG, and the ImgBB
+  upload keep a linked poster card; only AO3 Work Text gets `<audio>`, `<video>`,
+  and the privacy-enhanced YouTube embed.
+- **Media discriminators are never guessed** on import or on local recovery.
+- **`!important` never lands on a site-skin selector that can appear inside an
+  author's work.** Six selectors are enumerated in a test.
+- **One committed message model, one transient editor draft.** The extras editor
+  is the only UI that edits structured content, and it is shared by the composer
+  and the timeline. A second draft model competing with the editor is exactly
+  what the iOS rebuild removed.
+- **A reply always comes after its target**, enforced on add, move, and delete.
+
 ### 3.5 Incorrect or incomplete assumptions in the previous plan
 
 - Work-skin generation, CSS validation, an all-platform master skin, meaningful
@@ -425,8 +868,10 @@ a production build.
 - Fixing the donation counter is insufficient. The current success modal fires
   before some actions are complete, makes unsupported time-saved claims, and
   presents two unrelated promotions together.
-- A generic post-export WorldKonstruct card is less relevant than a cast-export
-  success card.
+- ~~A generic post-export WorldKonstruct card is less relevant than a cast-export
+  success card.~~ True, and beside the point: Section 11.6 finds that *neither*
+  is relevant to an author who has finished writing. This bullet corrected the
+  placement of an offer whose audience was never checked.
 - Site skins do not need an ebook preview. Ebook/no-skin fallback belongs to work
   content, not a personal AO3 interface theme.
 
@@ -477,6 +922,21 @@ actions:
 Do not add four more header icons. Implement a controlled `ProjectMenu` and test
 it at mobile widths.
 
+**What shipped instead, and why it is acceptable.** There is no `ProjectMenu`.
+[`WorkspaceHeader`](src/components/WorkspaceHeader.tsx) takes four explicit
+callbacks — `onSettingsOpen`, `onCastOpen`, `onIdentityOpen`, `onBackupOpen` —
+so the header carries direct controls rather than one overflow. The identity work
+made that a deliberate choice: its central finding was that a person should be
+editable *from wherever that person is visible*, and burying identity one level
+down inside an overflow menu works against that. Backup and import live behind
+`onBackupOpen`; privacy choices are reached through the application event from
+the export bar rather than the header.
+
+The constraint the original wording was protecting still holds and is still
+enforced: the header must not grow further, and every control must remain
+reachable and non-occluding at narrow mobile widths. If a fifth project-level
+action is ever needed, build the overflow menu then — not before.
+
 ### 4.3 Export choices
 
 Keep the current three-path model, but make every label state what happens:
@@ -490,6 +950,14 @@ Keep the current three-path model, but make every label state what happens:
 The quality chip may remain in the fixed bar after Pro is removed. Offer only
 the resolutions that are reliable on low-memory mobile devices. Do not show a
 locked choice for a product that cannot be purchased.
+
+**Shipped.** All three revised labels are live in
+[`ExportPanel.tsx`](src/components/ExportPanel.tsx), including the accessible
+names, and the help text beside them states the network behaviour of each path in
+one line — "Nothing is uploaded", "Visible story text is included in that
+upload", "Two pastes, one on your AO3 preferences page". Preserve that pairing:
+the label says what the button does, and the line under it says what leaves the
+device.
 
 ### 4.4 Completion moments
 
@@ -521,10 +989,19 @@ Priority:
 1. finish the current AO3 handoff;
 2. fix a validation/accessibility problem;
 3. back up the project;
-4. cast portability/WorldKonstruct, but only after cast export;
-5. WordFokus, but only in a drafting context;
+4. ~~cast portability/WorldKonstruct, but only after cast export;~~ **removed
+   August 15, 2026 — Section 11.6.** No commercial step belongs in a
+   completion-triggered card at all; product visibility is permanent and quiet
+   instead;
+5. ~~WordFokus, but only in a drafting context;~~ **survives, but not here.** It
+   belongs on a *return* visit or "start another scene", which is Section 11.6
+   Tier 4 and not a post-completion next step;
 6. compatibility-alert signup;
-7. Ko-fi.
+7. ~~Ko-fi.~~ **Deferred indefinitely**, per Section 11.6's "what stays dead".
+
+The surviving priority is therefore steps 1, 2, 3, and 6 — which is close to the
+product-neutral `NextStep` union that actually shipped, and is the second time
+that union has turned out to be right where this section was wrong.
 
 Recommended implementation:
 
@@ -544,6 +1021,28 @@ function chooseNextStep(context: NextStepContext): NextStep;
 
 Unit-test every priority collision. A card being eligible does not mean it must
 be shown.
+
+**Status: not built, and the reserved type does not match this design.** There is
+no `chooseNextStep` and no arbiter module. The `NextStep` union that actually
+exists in [`src/lib/analytics.ts`](src/lib/analytics.ts) is:
+
+```ts
+type NextStep = 'make_another' | 'build_site_skin' | 'read_guide' | 'back_up_project';
+```
+
+Four product-neutral steps, with no `worldkonstruct`, `wordfokus`, `kofi`,
+`finish_handoff`, or `fix_preflight` member — and `next_step_shown` is fired
+nowhere. That is a defensible position rather than an oversight: it reserves
+measurement for the steps that help the writer and declines to reserve any for
+the commercial ones. Two consequences for whoever builds this:
+
+1. **The union above is the contract to extend, not the one in the code block
+   further up this section.** Adding a member is a deliberate product decision,
+   and adding `kofi` or `worldkonstruct` re-opens every Section 2 question.
+2. **Build the arbiter before the second card, not before the first.** With no
+   card shown anywhere today, a pure priority function has nothing to arbitrate.
+   The rule it protects — at most one next-step surface after a completion — is
+   currently satisfied by there being none.
 
 ## 5. Measurement model
 
@@ -580,7 +1079,53 @@ currently shares it. Generate a local project UUID with `crypto.randomUUID()`
 and never send that UUID to analytics. The UUID exists only to deduplicate local
 activation and migrations.
 
+**Shipped on August 15, 2026.** The UUID half was already done: `defaultProject()`
+in [`src/lib/schema.ts`](src/lib/schema.ts) calls `localProjectId()`, which uses
+`crypto.randomUUID()` with a non-crypto local fallback, and the shared
+`default-project` string is gone. The event half now exists in
+[`src/lib/activation.ts`](src/lib/activation.ts), as this section asked: a pure
+function beside the platform models, so all four platforms answer the question
+the same way, with the seeded-example case unit-tested explicitly for each of the
+four platforms.
+
+The one decision the platform rebuilds forced was taken as anticipated — the
+definitions above predate structured content, so a message that gains a reply, an
+image collage, a link card, media, or a reaction counts as material work. See
+"Closed later on August 15" near the top of this document for the four
+implementation decisions worth knowing, including the one that is not obvious:
+automatic delivery-status changes are excluded from the fingerprint, because
+`appendChatMessage` advances earlier messages to `read` and would otherwise let a
+single new message clear the two-message threshold by itself.
+
 ### 5.3 Typed content-free analytics
+
+**Shipped.** [`src/lib/analytics.ts`](src/lib/analytics.ts) exists, is the only
+module that calls `gtag`, and implements every rule in this section: SSR/test/
+opt-out short-circuits, per-event key allowlists, enumerated template ids, output
+types, error codes and placements, referrer reduced to an origin, and consent
+that defaults to off and can be revoked. The union below is accurate as shipped
+except for the `NextStep` member, which is narrower than Section 4.5 proposed —
+see that section.
+
+Three things to know before extending it, all learned the hard way:
+
+- **`analyticsPayload` rejects the whole event on any unknown value.** That is
+  correct behaviour at a content boundary and it is also why the five missing
+  example ids silently erased `template_selected` for the newest examples. Adding
+  an enumerated value is part of adding the feature, not follow-up work — and
+  since August 15 a test enforces it, so the omission fails loudly instead of
+  going quiet in production.
+- **Declaring a union member is not instrumentation.** Five of the sixteen
+  members — `next_step_shown`, `product_cta_clicked`, `donation_clicked`,
+  `cast_exported`, `cast_imported` — are still fired nowhere. Do not read the
+  union as a description of what is measured. `project_activated` left this list
+  on August 15; `cast_exported`/`cast_imported` are unlikely to leave it, given
+  Section 11.6.
+- **Export events send `project.template`, not the example id.** So the funnel
+  from `export_started` onward is platform-level and complete; only the
+  starter-example entry point has the gap.
+
+The original specification follows, and remains the contract:
 
 Create `src/lib/analytics.ts`. It is the only module
 allowed to call `gtag`.
@@ -658,30 +1203,68 @@ These are product or external-system decisions. A developer must not guess.
 
 | Decision | Current owner/product decision | Status / blocks |
 | --- | --- | --- |
-| Canonical domains | SwipePages landing at `ao3skingen.wordfokus.com`; app at `app.ao3skingen.wordfokus.com`; WordPress remains an additional product/guide hub | **Decided and deployed.** App/landing/WordPress canonicals and the Netlify-to-app redirect were verified on August 12, 2026. The WordPress hub still needs the exact branded app link plus sitemap/Search Console verification. |
-| Source license | The public README now states that no tracked license exists and does not claim MIT/open-source rights | **Open owner decision.** Add the intended license or keep the explicit unlicensed status; do not reintroduce MIT claims without a `LICENSE` file. |
+| Canonical domains | SwipePages landing at `ao3skingen.wordfokus.com`; app at `app.ao3skingen.wordfokus.com`; WordPress remains an additional product/guide hub | **Decided and deployed.** Re-verified August 15, 2026: app SSR canonical/robots, landing, and the Netlify 301 are all correct. **The WordPress hub still links `ao3skingen.netlify.app`**, not the branded app, and sitemap/Search Console verification is still outstanding. |
+| Source license | **Source-available, all rights reserved.** The code stays publicly readable so visitors can verify the privacy claim; no copying, forking, or reuse is granted | **Decided August 15, 2026.** A tracked `LICENSE` now exists and the README agrees with it — which was the original defect: the two disagreed, and the README claimed MIT rights that no licence granted. The file is explicit that it covers the source only and makes no claim over anything an author creates with the tool. Do not reintroduce an MIT claim. |
 | AO3SkinGen Pro | Keep the core publishing utility free; remove the unfinished local activation path | **Decided and complete.** The Pro components and local license helper are deleted. |
-| Attribution | Separate default-on editable fiction label from optional neutral, unlinked tool credit | **Decided and complete in code.** Finish aligning stale public content-policy wording. |
-| Hosted image provider | Keep ImgBB behind the same-origin server route | **Decided and deployed.** The owner rotated/configured the server key and production upload checks passed. Durable shared abuse/budget storage remains optional follow-up. |
+| Attribution | Separate default-on editable fiction label from optional neutral, unlinked tool credit | **Decided and complete in code**, and now pinned by a master-skin unit test that credit stays off by default and is added at most once. **Still open:** `public/content-policy.html` describes a watermark in three places, confirmed live on August 15. |
+| Hosted image provider | Keep ImgBB behind the same-origin server route | **Decided and deployed.** Re-verified August 15: no live bundle contains `api.imgbb.com`. Durable shared abuse/budget storage remains optional follow-up. |
 | Analytics consent/opt-out | Analytics remains off until explicit opt-in; the visitor can reopen Privacy choices and deny later | **Implemented.** Qualified legal review remains an owner responsibility. |
-| WorldKonstruct contract | No bridge until both products agree and test the neutral schema | **Undecided and blocks Release 4.** The receiving repository, destination, current product state, and import constraints are still required. |
+| WorldKonstruct contract | **Withdrawn August 15, 2026.** No cast bridge; product visibility is handled by the Section 11.6 tiers instead | **No longer an open decision, and no longer a blocker.** The four inputs previously requested are moot because the bridge is not being built — the constraint was never the contract, it was the audience. Reopening this needs a counter-argument to Section 11.6, not the missing repository details. |
+| Product visibility | Discovery on owned surfaces and a permanent quiet in-app presence; no completion-timed commercial card | **Decided August 15, 2026 (Section 11.6).** Tiers 1 and 2 are unblocked and need no owner input beyond the copy itself. **Tier 3 is now unblocked too** — the owner supplied `https://app.wordfokus.com/worldkonstruct`, so the redirect has a destination. Tier 4 still needs Tier 3's data first. |
+| WorldKonstruct destination | `https://app.wordfokus.com/worldkonstruct` — a live Google Docs add-on, freemium with paid features | **Supplied August 15, 2026.** Verified against its Marketplace listing the same day. Treat as a commercial destination under Section 2: owner surfaces and in-app only, never in AO3-bound output. |
+| Structured media in AO3 output | Work Text emits narrowly generated `<audio>`, `<video>`, and privacy-enhanced YouTube embeds; static output keeps a linked poster card; the app never touches media bytes | **Decided and shipped**, across three platforms. What is *not* decided is how the privacy copy describes it. A reader of a published work now makes third-party requests the author chose; Section 7.4's disclosure predates this and must be extended. |
+| Google Search platform | Left as a mockup while the other three became authoring tools | **Open, and deliberately unhurried.** Google is the least like the others — no identities, no cast, no reply model — so parity is not automatically the goal. Decide from demand, not symmetry. |
+| Blank Twitter project | Whether a blank Twitter project should prompt for primary-account creation instead of synthesizing a default `User` | **Open, polish only.** Migration always supplies a primary account, so nothing is incorrect today. Recorded in the identity plan §11.7 item 4. |
 
 Record these answers in this document or an ADR before the relevant PR.
 
 At the audit date, WordFokus has a live Marketplace listing with free and paid
-features, so it is unquestionably a commercial destination. No public indexed
-WorldKonstruct product destination or interchange schema was found. The owner
-must provide the WorldKonstruct repository, destination URL, current product
-status, and import constraints before the developer treats that bridge as real.
+features, so it is unquestionably a commercial destination. That remains true and
+still governs where it may appear. **WorldKonstruct is the same kind of
+destination**, confirmed on August 15, 2026 against its Marketplace listing:
+a freemium Google Docs add-on with paid features and optional AI. Both are
+commercial, both are welcome on owner surfaces and inside the application, and
+neither may reach AO3-bound output.
+
+~~The owner must provide the WorldKonstruct repository, destination URL, current
+product status, and import constraints before the developer treats that bridge as
+real.~~ **Superseded August 15, 2026:** those four inputs are no longer requested,
+because the bridge is not being built. An owned redirect destination is still
+needed for Section 11.6 Tier 3, but that is a URL, not a contract.
 
 ## 7. Release 0 — trust and baseline cleanup
 
 This is the first code release. Keep it small enough to review.
 
-**Implementation status: 86% — substantially shipped.** The deleted Pro and
-generic-success paths must stay deleted. Remaining closure work is owner license
-choice, stale content-policy language, and a final audit of every public copy
-surface. Commit evidence: `f20d0bd`.
+**Implementation status: 95% — substantially shipped.** The deleted Pro and
+generic-success paths must stay deleted. Commit evidence: `f20d0bd`.
+
+Both items that were open on the morning of August 15 closed the same afternoon:
+
+- **Source licence.** A tracked `LICENSE` exists: source-available, all rights
+  reserved. The code stays publicly readable because that readability is what
+  backs the "editable project stays in this browser" claim; nothing else is
+  granted. It states explicitly that it covers the source only and makes no claim
+  over an author's scenes, dialogue, images, or generated output. The README's
+  "Source license status" section was rewritten to agree, which was the actual
+  original defect — the README claimed MIT rights that no licence file granted.
+- **Content-policy language.** Every watermark reference is gone. The page now
+  describes what the product does: an editable "Fictional scene" label on by
+  default, and credit to AO3 SkinGen as a **separate** opt-in that is off unless
+  the author turns it on — the two-control separation Section 2.1 requires. The
+  unsupported "1,200+ AO3 writers" claim was removed from both hub files in the
+  same pass, and no `never leaves your browser` variant survives anywhere.
+
+One trap worth recording, because it was nearly shipped. The first replacement
+for the user-count claim read "Your Work Stays In Your Browser" — which is the
+same overbroad claim Section 3.2 had already stripped once, and it is false: the
+hosted-image path uploads a rendered scene by design. The wording that is both
+true and already live on the SwipePages landing is **"Your editable project stays
+in this browser"**. All surfaces now say that. Do not shorten it.
+
+What remains is content, not engineering: the SwipePages landing must be updated
+by hand from [`docs/LANDING-COPY-2026-08.md`](docs/LANDING-COPY-2026-08.md), and
+the privacy policy and Terms have not been re-read against the current product.
 
 ### 7.1 Preserve the working tree
 
@@ -711,6 +1294,13 @@ commands:
 ```
 
 Adjust the unit glob for Windows if Playwright does not expand it consistently.
+
+**Shipped, and the glob problem was solved better than proposed.** `package.json`
+now defines `test:unit` as `playwright test --project=unit`, backed by a real
+`unit` project in `playwright.config.ts` with `testMatch: '**/*.unit.spec.ts'`.
+That removes the shell-expansion question entirely and runs the suite with no
+browser and no server. `lint` and `audit:ao3-css` were added alongside. Use the
+`package.json` in the repository as the source of truth, not the block above.
 
 ### 7.2 Remove the unfinished Pro path
 
@@ -777,6 +1367,23 @@ Use this technical disclosure as the source of truth:
 
 Do not say “your data never leaves your browser.” Do not describe the finished
 rendered scene as though it contains no creative content.
+
+**This disclosure is now incomplete, and updating it is item 4 on the next-work
+list.** It was written before structured media existed. Three sentences are
+missing, and all three describe the reader's browser rather than the author's:
+
+> Link cards, voice messages, and videos are stored as web addresses. AO3 SkinGen
+> never downloads, copies, or re-hosts those files. When someone reads your
+> posted work, their browser requests them directly from whoever hosts them — so
+> if that host removes the file or goes away, the work loses it, and AO3 keeps no
+> copy.
+
+The same paragraph should say plainly that a YouTube embed uses the
+privacy-enhanced domain, and that preflight warns before export when a scene
+depends on a host that is likely to expire. The good news is that the *behaviour*
+already satisfies the strictest reading of Section 2: the app touches no media
+byte, so there is nothing here to disclose except what the author chose. Say it
+before an author discovers it from a broken chapter.
 
 Resolve the current conflict between a public repository whose README says MIT
 and Terms that forbid reverse engineering, code extraction, redistribution, and
@@ -846,6 +1453,23 @@ proxy is hardened, CSP is narrowed, and production uploads have been exercised.
 The per-IP and daily counters are intentionally warm-instance memory, so they
 reset on cold starts. Add a shared durable limiter only when traffic, cost, or
 abuse evidence justifies the dependency. Commit evidence: `f20d0bd`.
+
+Re-verified August 15, 2026: no live application bundle contains
+`api.imgbb.com`, which is the standing check this release asked for. Keep running
+it after any deploy that touches upload code.
+
+The platform work added a second class of remote reference that this release's
+threat model did not anticipate, and it is worth being precise about why it needs
+no new server code. Structured media stores **addresses only**. Nothing fetches
+them: not the browser during authoring, not the proxy, not the upload route. They
+are validated as absolute HTTPS URLs with known hosts and MIME types, then
+emitted into AO3 Work Text for the *reader's* browser to resolve. The relevant
+defect risk is therefore permanence and privacy in the published work, not SSRF
+or credential exposure here — which is why the mitigation lives in preflight
+warnings and public copy rather than in `/api/*`. Two related hardening changes
+already shipped in the same spirit: `iosHeaderImageUrl` and `iosFooterImageUrl`
+default to empty, so an ordinary work makes no third-party request for decoration
+the CSS can draw itself.
 
 ### 8.1 Server-side upload route
 
@@ -965,13 +1589,28 @@ route tests for:
 
 ## 9. Release 2 — metadata, domains, and content-safe analytics
 
-**Implementation status: 79% — core code shipped; external closure remains.**
-The deployed domain split is the one recorded at the top of this document, not
-the original target shown in Section 9.4. Metadata, product config, PWA links,
-typed analytics, explicit consent, and privacy-choice reopening are live.
-WordPress sitemap/Search Console checks, the WordPress-to-app link, remaining
-public-link audit, and an operational dashboard remain. Commit evidence:
-`7dc4178`, `4701bb7`, `695a37e`, and `b3c4545`.
+**Implementation status: 76% — core code shipped; external closure remains, and
+two code gaps were found on August 15.** The deployed domain split is the one
+recorded at the top of this document, not the original target shown in Section
+9.4. Metadata, product config, PWA links, typed analytics, explicit consent, and
+privacy-choice reopening are live, and the SSR metadata requirement was confirmed
+against the production HTML rather than assumed. WordPress sitemap/Search Console
+checks, the WordPress-to-app link, the remaining public-link audit, and an
+operational dashboard remain. Commit evidence: `7dc4178`, `4701bb7`, `695a37e`,
+and `b3c4545`.
+
+Lowered to 76% on the morning of August 15 because "the analytics code shipped"
+turned out not to mean "the funnel is measurable": `project_activated` had no
+call site, and the five newest starter examples were rejected by the template
+allowlist, so the entry point of the funnel was partly blind.
+
+**Raised to 85% the same afternoon**, when both were closed — see "Closed later
+on August 15" near the top of this document. The funnel now has its activation
+step, and every selectable template id survives the analytics boundary behind a
+drift test. What keeps this release below 100% is entirely external and
+non-engineering: the WordPress sitemap and Search Console recheck, the hub's
+stale links to the old Netlify host, and the weekly dashboard that Section 15
+specifies but nobody has built.
 
 ### 9.1 One runtime config
 
@@ -994,6 +1633,22 @@ export const PRODUCT = {
 Do not use this client module for secrets. Product URLs, version, PWA metadata,
 export credit, and analytics placements should stop having separate hard-coded
 opinions.
+
+**Shipped, with values that differ from the sketch above.** The real
+[`src/lib/brand.ts`](src/lib/brand.ts) reflects the owner-approved domain split
+that was decided after this section was drafted: `appUrl` is
+`https://app.ao3skingen.wordfokus.com` and `hubUrl` is
+`https://ao3skingen.wordfokus.com` — the reverse of the block above. It also
+carries `backgroundColor`, a real `supportEmail`, and
+`compatibilityReviewedAt: '2026-08-12'`. Read the module, not this block.
+
+**`compatibilityReviewedAt` is a dated claim and it is now three days stale.** It
+must only move when the comparison actually ran. `npm run audit:ao3-css` was
+re-run on August 15 with no drift, so advancing it to `2026-08-15` is justified
+and would keep the user-visible "rules reviewed" string honest — but note that
+[`src/lib/ao3Compatibility.ts`](src/lib/ao3Compatibility.ts) carries its own
+`reviewedOn` for the same purpose. **Two dates for one fact is a bug waiting to
+happen.** Collapse them into one before the next review.
 
 ### 9.2 SSR-visible metadata
 
@@ -1019,6 +1674,14 @@ Recommended indexing split:
 
 If the owner chooses to index app routes instead, render useful crawlable
 content server-side. Do not index an empty client shell.
+
+**Shipped and independently verified.** A production fetch of the app root on
+August 15, 2026 returned `<meta name="robots" content="noindex,follow">` and
+`<link rel="canonical" href="https://app.ao3skingen.wordfokus.com/">` in the
+server-rendered HTML, before any hydration. The recommended indexing split is the
+one in force. This is the check to repeat after any change to `ProductHead` or
+the route return branches — a regression here is invisible in a browser, because
+the client would render the tags anyway.
 
 ### 9.3 Fix PWA contract and deep links
 
@@ -1112,21 +1775,49 @@ After the trust/security copy is live:
 Do not add product CTAs until their impressions and clicks can be measured
 without content.
 
+**Status against that seven-item list.** Items 1, 2, 4, and 7 are done. Item 3 is
+done for starts, ready states, copies, completions, and fixed failures — but
+**not for activation**, which is item 5's neighbour and the one gap that matters
+most; see Section 5.2. Item 5 is done for project backup export/import and
+unstartable for cast files, which do not exist. Item 6 has not been needed. The
+allowlist maintenance duty this section did not anticipate is now the live
+defect: adding a starter example without adding its id to `TEMPLATE_IDS` silently
+erases its `template_selected` event.
+
 ## 10. Release 3 — backup and an honest publishing handoff
 
 This release adds the highest-value missing capability without changing the
 proven renderers.
 
-**Implementation status: 100% — shipped and verified.** Scene and theme
-backups, strict import boundaries, automatic pre-replacement backup, character
-storage cleanup, fallback preview, transcript, alt workflow, preflight, and the
-coordinated publishing handoff are implemented without adding a parallel
-renderer. Commit evidence: `5d6478a`.
+**Implementation status: 100% — shipped, verified, and since stress-tested.**
+Scene and theme backups, strict import boundaries, automatic pre-replacement
+backup, character storage cleanup, fallback preview, transcript, alt workflow,
+preflight, and the coordinated publishing handoff are implemented without adding
+a parallel renderer. Commit evidence: `5d6478a`.
+
+**This is the release that earned its score.** Since it shipped, the project file
+has gone from schema v1 to v7 through six migrations, three platforms have added
+structured content, and the identity model was replaced wholesale — and the
+boundary held through all of it without a rewrite. Every migration is a pure
+`vN→vN+1` function with fixtures; imports still never reach React state through
+the tolerant recovery loader; preflight grew from its original checks to 24 by
+composing existing validators rather than by growing a second one. When a future
+change makes one of these boundaries inconvenient, that history is the argument
+for moving the change rather than the boundary.
 
 ### 10.1 Versioned project backup
 
 Add `src/lib/projectFile.ts` with a pure serializer,
 validator, and migration table.
+
+**Shipped, and now at schema v7.** The two examples below are the original v1
+shapes and are kept because they show the envelope contract, which has not
+changed: exact top-level keys, an integer version, and a future version rejected
+rather than guessed at. For the current field-by-field format — scene cast,
+Twitter relationships, and the separate WhatsApp and iOS structured-content
+models — read [`docs/PROJECT-FILE-SCHEMA.md`](docs/PROJECT-FILE-SCHEMA.md), which
+is maintained alongside the code and explains the reasoning for each migration
+step, including why `v6 → v7` deliberately adds no data.
 
 Scene file:
 
@@ -1198,6 +1889,19 @@ Before including the library in backup:
 
 This cleanup is a prerequisite for cast interchange.
 
+**Done, and then superseded by something stronger.** The storage helper, caps,
+and validation shipped in Release 3; `characterCache.ts` is gone. The identity
+work of `5e8d9bc` then went further than this section asked, replacing the
+consolidation goal with a canonical project-scoped `SceneCast`. The duplicate
+`UniversalCharacter` interface question is moot in the direction that matters:
+`UniversalCharacter` remains the *library* type in
+[`schema.ts`](src/lib/schema.ts), while scenes hold `SceneCharacter` copies, and
+the two are deliberately different types because they have different lifetimes.
+Legacy per-message and settings identity fields still exist and are still read as
+migration fallback. **Do not delete them yet** — the identity plan §11.7 defers
+that until old files have been exercised in production, and the v1 backup
+fixtures depend on those branches.
+
 ### 10.3 Fallback preview
 
 The fallback content exists; expose it.
@@ -1267,6 +1971,21 @@ Site-skin keeps its existing CSS blocks and contrast warnings. Hosted image
 keeps remote-host permanence and transcript warnings. A warning must not be
 silently promoted to “AO3 rejected this.”
 
+**Shipped and grown to 24 checks**, all composed from validators that already
+existed — which is exactly what this section asked for and is why it scaled. The
+blocks are still the three named above plus each platform's model validity
+(`whatsapp-model`, `ios-model`); the warnings now also cover video fallback,
+media posters, media hosts, host dependence, and flattened scrolling. Two rules
+have held throughout and should keep holding:
+
+- **Content problems warn; they do not trap the author.** `ExportPanel` blocks
+  the work-skin export only on generator-level failures, so an empty alt or a
+  risky host never prevents an export the author has chosen to make.
+- **Every check delegates.** A new check must call an existing validator or model
+  function. If you find yourself writing validation logic inside `preflight.ts`,
+  it belongs in the platform model instead, where the composer and the importer
+  can share it.
+
 ### 10.6 Publishing Kit scope
 
 In this release, “Publishing Kit” means a coordinated handoff UI, not a ZIP.
@@ -1285,15 +2004,50 @@ No Publishing Kit artifact may contain commercial or donation content.
 
 ## 11. Release 4 — neutral cast portability and WorldKonstruct
 
-This is the primary commercial bridge, but it starts with data cleanup and a
-neutral useful file.
+> **Withdrawn on August 15, 2026.** This section described the primary commercial
+> bridge. **Section 11.6 replaces it**, on the grounds that the bridge is aimed at
+> the wrong stage of the author's work. Sections 11.1–11.5 are kept because their
+> engineering reasoning is sound and because the cast *file* may still ship later
+> as a plain convenience feature — but the WorldKonstruct card, the two-way gate,
+> and the framing of this as "the primary commercial bridge" are superseded. Do
+> not implement 11.4 as written.
 
-**Implementation status: 0% — intentionally not started.** Reserved analytics
-event types do not count as a cast implementation. Do not write the schema UI,
-redirect, or commercial card until the two-way acceptance gate has real input
-from WorldKonstruct.
+**Implementation status: 15%, on hold — the data prerequisite shipped; the bridge
+is now deliberately abandoned rather than merely deferred.** Reserved analytics
+event types still do not count as a cast implementation.
 
 ### 11.1 Define what “the cast” means in this app
+
+**This section is now history, and its problem is solved.** It is preserved
+because the matching rules below are still the right rules for *import*, and
+because the reasoning explains why the identity work was worth doing before any
+bridge.
+
+The five scattered sources it described are gone. `5e8d9bc` made project-scoped
+`SceneCharacter` identities canonical: messages and group participants reference
+a stable `characterId`, `SceneCast` names the self, contact, and Twitter primary,
+library entries are copied rather than linked, and a referenced identity is
+archived or explicitly reassigned instead of silently deleted. Legacy fields
+survive only as migration fallback.
+
+Three consequences for whoever eventually builds the bridge:
+
+1. **`collectCastCandidates` is no longer needed as specified.** There is nothing
+   to collect from five places. `project.cast.characters` *is* the candidate
+   list, already deduplicated, already stably identified, and already normalized
+   through `identity.ts`. Filter out `archived` entries and you have the export
+   set. Writing the original function now would add a layer over a model that
+   already answers the question.
+2. **The matching order below still applies, but only on import.** Export needs
+   no matching at all, because ids are stable. Import from a foreign product does
+   — and rule 4 is the one that matters most: two different characters can share
+   a display name, and `identity.ts` was built on exactly that premise. Do not
+   let an importer reintroduce name-keyed merging that the app itself abandoned.
+3. **The user-facing selection step is still required.** An export must still
+   show the cast with checkboxes and let the author correct names and handles
+   first. Stable ids make that screen simpler; they do not make it optional.
+
+The historical description follows.
 
 Potential character sources today:
 
@@ -1364,6 +2118,15 @@ JSON is the v1 interchange. Defer CSV until a real consumer asks for it; CSV
 cannot round-trip aliases, nested handles, and optional metadata without another
 contract.
 
+The shipped `SceneCharacter` maps onto this almost directly — `id`, `name`,
+`twitterHandle` → `handles.twitter`, `avatarUrl` — which is a good sign for the
+schema and a bad reason to build it early. Two fields need a deliberate decision
+rather than a mechanical copy: `sourceLibraryId` is a local provenance pointer
+and must **not** be exported, and `archived` is a local lifecycle state that a
+consumer has no way to interpret, so archived identities should simply be
+excluded. Neither decision is difficult; both are the kind of thing that gets
+wrong silently if the exporter is written by spreading an internal type.
+
 ### 11.3 Two-way acceptance gate
 
 Do not show “See WorldKonstruct” merely because AO3 SkinGen can export JSON.
@@ -1411,13 +2174,205 @@ Ko-fi may return later after repeated completed handoffs, never in the same
 completion panel as WorldKonstruct, WordFokus, an email signup, or a backup
 warning.
 
+### 11.6 Why the bridge is withdrawn, and what replaces it
+
+This section supersedes 11.3 and 11.4, and demotes 11.2 from "commercial
+contract" to "possible convenience feature". It was written on August 15, 2026
+after the owner asked a question this document had never asked: what is the user
+actually doing at the moment the cast card would appear?
+
+#### The finding
+
+**AO3 SkinGen's users have finished writing. Both adjacent products serve people
+who have not.**
+
+The realistic path into this app is: an author finished a fic weeks ago, one
+chapter contains a text-message scene, they are now fighting AO3's editor, they
+search for a way to make that scene look right, they build it, they copy the work
+skin, and they leave. At the moment 11.4 would offer a cast file, they have three
+or four characters whose names they typed minutes earlier, in a story that is
+already finished. The consistency problem the card offers to solve was solved by
+the author, elsewhere, months ago.
+
+Three consequences:
+
+1. **WorldKonstruct is a story-bible tool, and fanfiction's defining property is
+   that someone else already built the world.** An author writing two canon
+   characters does not need a character database for them; the fandom wiki is the
+   story bible, and it is free and exhaustive. The overlap between "needs a fake
+   iMessage screenshot" and "needs a story bible" is far thinner than Release 4
+   assumed. It is not empty — original fiction posted to AO3, and long AUs with
+   large original-character ensembles, are real — but that is a minority of a
+   minority, and this document called the bridge *primary*.
+2. **WordFokus is a drafting tool, offered to someone who has finished
+   drafting.** Section 11.5 already kept it out of the cast flow for the right
+   reason; the same reasoning applied one step further removes the cast flow's
+   own justification.
+3. **At the point of maximum goodwill, there is nothing relevant to sell.** That
+   is a stage mismatch, not a placement problem, and no amount of card copy,
+   timing, or prominence fixes it.
+
+The corroborating evidence was already in this document and was misread. See
+Learning 20: the two story-bible fields in the 11.2 schema, `aliases` and
+`notes`, have no source anywhere in this application and never acquired one
+across six migrations, while the field the app is richest in — a Twitter handle —
+is a rendering choice, not a character fact. The schema could not fill itself
+because the two products model different things.
+
+Note also that Section 15's interpretation rule 7 ("cast card impressions but few
+clicks: improve the workflow benefit and interchange, not banner prominence")
+assumes there is a workflow benefit to improve. For this audience there may not
+be, in which case the metric would eventually have said *stop*, after Release 4
+had been paid for.
+
+#### What the WorldKonstruct listing added, later on August 15
+
+The owner supplied the destination after this section was first written. It is a
+live Google Workspace Marketplace product — **WorldKonstruct — World Builder &
+Story Bible**, by 3LB Fire, a Google Docs add-on, freemium with paid features and
+optional AI, around 164 reviews, owned destination
+`https://app.wordfokus.com/worldkonstruct`. Six entry types (characters,
+locations, objects, factions, worldbuilding, events), self-updating `@mentions`
+with backlinks, series bibles, co-author collaboration, and **optional manuscript
+scanning that detects story elements in an existing draft**.
+
+This is real evidence and it cuts both ways. Recorded honestly:
+
+**It weakens one leg of the argument above.** The finding said WorldKonstruct
+serves people who have not finished writing. Manuscript scanning means it also
+serves people who *have* — point it at a finished draft and it extracts the
+elements. So "the product is irrelevant to this audience" was too strong, and is
+withdrawn. WorldKonstruct is a plausible thing to *show* a SkinGen user. That is
+Tier 1 and Tier 2, and the listing makes their copy better and more specific.
+
+**It strengthens the case against the cast file.** If the add-on can read a whole
+manuscript and find every character in it, then a JSON file carrying three or
+four names out of one chat scene is not a useful import — it is a strictly worse
+version of something the destination already does better, from a source that has
+far more context. The bridge was already unnecessary; this makes it close to
+pointless. Sections 11.2–11.4 stay withdrawn, and the reasoning is now stronger
+rather than weaker.
+
+**It unblocks Tier 3.** An owned redirect destination exists, which was the last
+thing that tier needed.
+
+**It confirms the Section 2 handling.** Freemium with paid features and AI makes
+this unambiguously a commercial destination, exactly like WordFokus. It may
+appear on owner surfaces and inside the application, and never in AO3-bound
+output.
+
+One copy note that follows from the six entry types: they are oriented to
+*original* worldbuilding. Generic "organise your worldbuilding" copy will not
+land on an audience whose world was built by canon. The two specifics that do
+land are manuscript scanning and series bibles — see
+[`docs/LANDING-COPY-2026-08.md`](docs/LANDING-COPY-2026-08.md).
+
+#### What replaces it
+
+Not "no promotion". The distinction is between a **conversion funnel timed to a
+moment**, which is withdrawn, and **discovery**, which is mostly unbuilt and
+should be built. Users knowing who made this tool and what else that person makes
+is legitimate, useful to them, and currently close to absent.
+
+Expect low single-digit cross-sell at best, and treat that as success rather than
+as a reason to escalate. The real return is name recognition landing months later
+when the author starts their next project, which is the stage where either
+product becomes relevant. Section 15's rule 9 stands and now carries more weight:
+do not argue users into accepting a funnel — this audience talks to each other.
+
+Build in tiers, and do not skip ahead:
+
+**Tier 1 — owned surfaces. No application code. Do this first.** The SwipePages
+landing page and the WordPress hub are the owner's own property and AO3's rules
+do not reach them. Describe what the application actually became — three
+platforms rebuilt as fiction-authoring tools, structured media, playable AO3
+output — and place the product lineup around that story. This is the same work
+item as "close the copy gap", so it is one job and not two, and it subsumes the
+stale `ao3skingen.netlify.app` links recorded in Section 9.5.
+
+**Tier 2 — a permanent, quiet presence inside the application. Shipped August 15,
+2026.** [`src/components/MoreTools.tsx`](src/components/MoreTools.tsx) renders on
+the two entry screens only — the platform picker and the site-skin gallery — both
+full-page surfaces with no composer to occlude. It is not a card, not a modal and
+not timed to any completion event. Clicks fire `product_cta_clicked` with two new
+enumerated placements, `platform_picker` and `site_skin_gallery`, so Tier 3's
+question is already partly answered by the time Tier 3 arrives. Outbound links
+carry `rel="noopener noreferrer"`, because Section 11.4's rule that the
+destination must never receive a complete referrer applies to a plain link too.
+
+[`tests/more-tools.unit.spec.ts`](tests/more-tools.unit.spec.ts) holds the
+Section 2 boundary that this tier is the first thing to test rather than assume:
+generated markup, stylesheet, single and master work skins (including with
+optional attribution switched on), and all sixteen compiled site skins must
+contain no commercial reference, and `MoreTools.tsx` must be the only module in
+`src/` holding a commercial destination URL. Two lessons from writing it, both
+worth keeping — a word-level match fails on correct code, because `analytics.ts`
+must enumerate `'worldkonstruct'` as an event *value* and `urlNormalize.ts`
+credits a reference document in a comment; and a naive host match also fails,
+because the product's own domains live under `wordfokus.com` too. The assertion
+is on a *linkable commercial destination*, which is the thing Section 2 actually
+forbids.
+
+The original specification follows, and still describes the intent:
+
+Not a card, not
+a modal, not timed to any completion event: a persistent "more tools by the same
+developer" entry in the application footer or an About panel, always present and
+free to ignore. Someone who likes this tool will go looking for who made it, and
+today they largely cannot find out. This closes the leak permanently instead of
+interrupting anyone, and it does not touch Section 4.5's at-most-one-card rule,
+because it is not a next-step card. It must remain outside every AO3-bound
+output, which Section 2 already requires.
+
+**Tier 3 — make it measurable, cheaply.** `product_cta_clicked` is already a
+declared member of the analytics union and fires nowhere. Add the owned
+`/go/worldkonstruct` and `/go/wordfokus` redirects — the shape and the privacy
+constraints in 11.4 are still correct even though its card is not — and wire that
+event. Until this exists, every question about placement is a matter of opinion.
+Do it when there is enough traffic for the answer to mean something.
+
+**Tier 4 — one honest in-app moment, later.** There is exactly one, and it is not
+cast export: the author returning to start the *next* scene or the next fic.
+Section 11.5 already named it ("Start another scene"). A returning author on
+their third or fifth local project is the closest signal this app has to
+"maintains an ongoing universe", and that is a person for whom a story-bible tool
+is genuinely relevant. Build it only after Tier 3 can judge whether it works.
+
+#### What stays dead
+
+- The WorldKonstruct card on cast export (11.4 as written).
+- Any commercial content in AO3-bound output. Unchanged, non-negotiable, and an
+  archive-policy risk rather than a matter of taste — see Section 2.
+- Ko-fi in the same surface as a product promotion, per Section 4.5.
+
+#### If the cast file ships anyway
+
+It may, and there is a decent case for it — multi-chapter and series authors do
+re-enter the same six characters, and that friction is real. If it ships, it
+ships as a **convenience and backup feature with no card attached**, judged on
+whether authors use it, and the 11.2 schema rules still apply in full. Note that
+the local character library already covers most of this need; the file's genuine
+addition is portability off the device.
+
 ## 12. Compatibility and accessibility program
 
-**Program status: active and partially covered, not separately percentage-
-scored.** The existing deterministic AO3, readback, skin-off, mobile, alt, and
-layout suites are strong. A maintained compatibility ledger, representative
-AO3 Default/Reversi/Low Vision record, broader RTL/enlarged-text fixtures, and
-automated axe coverage remain.
+**Program status: active, materially stronger, and still not separately
+percentage-scored.** The deterministic suite grew from 249 unit tests to **362
+passing plus one correctly-skipping gate**, and gained whole classes of coverage
+this section asked for: per-platform model suites, renderer contracts, a
+characterization golden of emitted HTML and CSS, raster checks that assert what a
+real PNG contains, hosted-export chunking, and identity flows run on desktop and
+mobile. A maintained compatibility ledger, a representative AO3
+Default/Reversi/Low Vision record, broader RTL and enlarged-text fixtures, and
+automated axe coverage all still remain.
+
+**The two archive gates named at the top of this document belong to this
+program**, and they are its most important open items. Everything below describes
+how to model AO3; those gates are the only things that ask AO3 directly. A
+skipping read-back test and an unfilled site-skin checklist are the honest
+statement of what is unverified — do not let either quietly become "covered"
+because the surrounding suite is green. Both have already found defects that no
+amount of local testing could see.
 
 ### 12.1 Regression matrix
 
@@ -1573,9 +2528,13 @@ Do not import the old dark-mode-confused list.
 
 ### P0 — trust and security
 
-**Progress:** Mostly shipped. Items 1, 5, and 6 retain owner/external closure;
-the durable shared limiter is a documented Release 1 follow-up. All other items
-have repository implementations and tests.
+**Progress:** Mostly shipped. Items 1, 5, and 6 retain owner/external closure —
+item 5's `LICENSE` and item 6's content-policy watermark language were both
+re-confirmed open on August 15. Item 8 is closed and stays closed: the August 15
+audit reports 182/182 properties and 20/20 shorthands with no drift in either
+direction. Item 9 is re-verified against live bundles. The durable shared limiter
+remains a documented Release 1 follow-up. All other items have repository
+implementations and tests.
 
 1. Record owner decisions from Section 6.
 2. Add typecheck/test scripts and capture a green baseline.
@@ -1603,10 +2562,13 @@ Done when:
 
 ### P1 — identity, metadata, and measurement
 
-**Progress:** Core application work shipped. External sitemap/Search Console
-verification, the exact branded app link on the WordPress hub, and an
-operational weekly dashboard remain; finish the remaining public-link audit
-against the deployed three-surface architecture.
+**Progress:** Core application work shipped, with two code gaps found on August
+15. Items 1–4 are done and re-verified live. Item 5 is unchanged and still open.
+Item 6 shipped as a module but is **incompletely wired**: `project_activated`
+fires nowhere, and five starter-example ids are missing from the analytics
+template allowlist, so `template_selected` is dropped for the newest examples.
+Item 7 remains a definition rather than an operational dashboard. The WordPress
+hub still links the old Netlify host.
 
 1. Add one product config.
 2. Add SSR-visible route metadata and chosen robots policy.
@@ -1626,8 +2588,10 @@ Done when:
 
 ### P2 — recoverable and accessible handoff
 
-**Progress:** Complete at `5d6478a`; maintain it through schema migrations and
-regression tests.
+**Progress:** Complete at `5d6478a`, and maintained through six schema migrations
+since. Item 2 was superseded by the canonical `SceneCast` in `5e8d9bc`, which
+went further than this item asked. Items 3–6 are unchanged and intact; preflight
+has grown to 24 composed checks without a second validator appearing.
 
 1. Add versioned scene and site-theme backup/import.
 2. Consolidate character types and validate library storage.
@@ -1644,25 +2608,38 @@ Done when:
 - hosted image output has useful alt/transcript support;
 - no parallel renderer was introduced.
 
-### P3 — cast bridge
+### P3 — product visibility (replaces the cast bridge)
 
-**Progress:** Not started and blocked by the WorldKonstruct contract. Reserved
-analytics union members are not implementation progress.
+**Progress:** The bridge is withdrawn — see Section 11.6. What replaces it is
+discovery work, most of which needs no application code. The shipped canonical
+`SceneCast` remains real progress and is not wasted: it is what would make a
+convenience cast file cheap, if authors ever ask for one.
 
-1. Implement and test `collectCastCandidates`.
-2. Agree the neutral schema with WorldKonstruct.
-3. Add AO3 SkinGen export/import with conflict UI.
-4. Pass shared fixtures in both products.
-5. Add the cast-export-success WorldKonstruct card.
-6. Add owned redirects and content-free attribution events.
+Withdrawn from this priority, and moved to Section 16:
+
+- ~~Agree the neutral schema with WorldKonstruct.~~
+- ~~Pass shared fixtures in both products.~~
+- ~~Add the cast-export-success WorldKonstruct card.~~
+
+The work now is, in order:
+
+1. **Tier 1** — rewrite the landing page and WordPress hub so the public promise
+   matches the product, and place the owner's product lineup around it. Fixes the
+   stale `ao3skingen.netlify.app` links in the same pass.
+2. **Tier 2** — add a permanent, non-interrupting "more tools" entry in the
+   application footer or an About panel. Never in AO3-bound output.
+3. **Tier 3** — add owned `/go/*` redirects and fire `product_cta_clicked`, when
+   there is enough traffic for the answer to mean anything.
+4. **Tier 4** — one WordFokus surface on a *return* visit or "start another
+   scene", only after Tier 3 can judge it.
 
 Done when:
 
-- the cast file is useful without buying anything;
-- dialogue is impossible to include through the schema;
-- avatar URLs are opt-in;
-- both products round-trip the same fixtures;
-- no character data enters redirects or analytics.
+- a visitor can tell what this application does before using it;
+- a visitor who wants to know who made it can find out without being sold to;
+- no completion event is followed by a commercial card;
+- no commercial string can reach AO3-bound output;
+- `product_cta_clicked` carries a placement and nothing else.
 
 ### P4 — compound learning and distribution
 
@@ -1690,10 +2667,13 @@ Weekly dashboard:
 - top fixed error codes;
 - fallback-preview usage;
 - backup export/import rate;
-- cast export/import rate;
-- WorldKonstruct eligible impression and click rate;
-- WordFokus eligible impression and click rate;
-- seven- and thirty-day return rate using privacy-approved aggregation.
+- ~~cast export/import rate;~~ no cast file ships, per Section 11.6;
+- ~~WorldKonstruct eligible impression and click rate;~~ withdrawn with the card;
+- product-link click rate by placement, once Section 11.6 Tier 3 exists;
+- seven- and thirty-day return rate using privacy-approved aggregation. **This is
+  now a primary metric rather than a secondary one** — Section 11.6 Tier 4 makes
+  the returning author the only in-app moment where an adjacent product is
+  genuinely relevant, so return rate is what identifies that audience.
 
 Interpret in this order:
 
@@ -1705,10 +2685,15 @@ Interpret in this order:
 5. Ready but low copy completion: fix modal instructions and clipboard fallback.
 6. Completion but low return: improve backup and resume before building cloud
    accounts.
-7. Cast card impressions but few clicks: improve the workflow benefit and
-   interchange, not banner prominence.
-8. Clicks but no WorldKonstruct activation: fix its landing/import experience
-   before increasing promotion.
+7. ~~Cast card impressions but few clicks: improve the workflow benefit and
+   interchange, not banner prominence.~~ **Retired.** This rule assumed there was
+   a workflow benefit to improve; Section 11.6 concludes there probably was not,
+   which is the failure mode it would eventually have diagnosed at much greater
+   cost. Its replacement: **product-link impressions but few clicks means the
+   offer is aimed at the wrong stage of the author's work — check that before
+   changing the copy.**
+8. Clicks but no activation in the destination product: fix that product's
+   landing and onboarding before increasing promotion here.
 9. Community resistance: reduce branding and commercial adjacency; do not argue
    users into accepting a funnel.
 
@@ -1724,6 +2709,11 @@ Defer:
 - paid template packs;
 - watermark-removal paywalls;
 - a ZIP dependency before handoff demand is measured;
+- **the WorldKonstruct cast bridge, the two-way acceptance gate, and the
+  post-cast-export card** — withdrawn on audience grounds, not deferred on
+  scheduling grounds; read Section 11.6 before reopening;
+- **any commercial card timed to a completion event**; product visibility is
+  permanent and quiet, per Section 11.6 Tier 2;
 - CSV cast exchange before a real consumer defines it;
 - a multi-project IndexedDB library before local backup ships;
 - community submissions before moderation capacity;
@@ -1776,19 +2766,67 @@ The growth implementation is complete when:
 - projects and site themes can be backed up and restored locally;
 - image output includes an alt/transcript workflow;
 - character data has one validated local model;
-- AO3 SkinGen and WorldKonstruct round-trip a neutral cast file before any bridge
-  is promoted;
-- one contextually relevant next step appears at most once after completion;
+- ~~AO3 SkinGen and WorldKonstruct round-trip a neutral cast file before any
+  bridge is promoted;~~ **replaced August 15, 2026:** the public copy describes
+  what the product actually does, and a user who wants to know who built it can
+  find out without being sold to (Section 11.6, Tiers 1 and 2);
+- one contextually relevant next step appears at most once after completion, and
+  it is never a commercial one;
 - no commercial or donation content travels into AO3-bound output;
 - compatibility claims are versioned and dated;
 - the vendored AO3 CSS ruleset has a recorded upstream commit and visible drift
   check;
 - the existing AO3 regression suite remains green.
 
-At `b3c4545`, the implementation is 72% complete by the release scoring defined
-at the top of this document. Releases 0–3 delivered the trust cleanup, secure
-image boundary, branded/consented measurement foundation, and recoverable
-publishing handoff. The immediate engineering work is the small Release 0 and
-Release 2 closure list plus the compatibility ledger—not a speculative cast
-bridge. Release 4 begins only after WorldKonstruct can participate in the shared
-contract and two-way fixture gate.
+Two criteria should be added to that list, because the work since August 12 made
+them real rather than hypothetical:
+
+- generated work that carries media degrades honestly — the reader is never shown
+  a player for something the app cannot guarantee, and the author is warned
+  before publishing a dependence on a host that can disappear; and
+- every output that names a person resolves that name through one identity model,
+  so the preview, the PNG, the work skin, the skin-off reading, and the
+  transcript cannot disagree.
+
+At `c733066`, the implementation is **74% complete** by the release scoring
+defined at the top of this document, up from 72%. That movement is deliberately
+much smaller than the volume of work would suggest: Release 2 was rescored
+*downward* after two measurement gaps were found, Release 4 was credited only for
+its shipped data prerequisite, and the platform program that dominates this
+baseline is not scored at all. A number that rises because unrelated work shipped
+would stop being useful. Releases 0–3
+delivered the trust cleanup, secure image boundary, branded and consented
+measurement foundation, and recoverable publishing handoff. On top of them, an
+unplanned platform program turned three of the four scene types into real
+authoring tools and gave the app one canonical cast.
+
+The immediate work is not a cast bridge, and it is no longer primarily code:
+
+1. **the two archive gates** — master skin v7 read-back, and site-skin Phase 7;
+2. **the copy gap** — Section 11.6 Tier 1, which is now the top of the growth
+   work and not a footnote to it;
+3. **Release 0's two open items** — the license decision and the content-policy
+   watermark language;
+4. **Release 2's remaining gap** — the hub's stale links and the dashboard. Its
+   two code gaps closed on August 15;
+5. **the privacy copy for structured media**; and
+6. **the compatibility ledger.**
+
+~~Release 4 begins only after WorldKonstruct can participate in the shared
+contract and the two-way fixture gate.~~ **Release 4's bridge does not begin.**
+Section 11.6 withdraws it: the constraint was never the contract, it was that the
+people using this app have finished writing, and both adjacent products serve
+people who have not. Product visibility replaces it, in tiers, starting with work
+that touches no application code.
+
+One closing observation, because it is the largest strategic gap this revision
+found — and the second revision only sharpened it. Every number in this document
+measures whether the product is honest, secure, recoverable, and measurable, and
+by those measures it is in good shape. None of them measures whether anyone knows
+what it does. The app authors rich, accessible, AO3-ready social-media fiction
+across three platforms; the public copy still describes a screenshot generator.
+
+That gap was the cheapest growth lever in the August 15 morning revision. By the
+afternoon it was the *main* one, because the alternative — a commercial bridge
+timed to an export — turned out to be aimed at a person who had already left the
+stage of work where it would have helped.
