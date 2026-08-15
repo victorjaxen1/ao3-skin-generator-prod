@@ -19,11 +19,12 @@ need on day one.
 | # | Symptom | Root cause | Introduced by | Status |
 | --- | --- | --- | --- | --- |
 | 1 | Hero card clipped at the bottom of the SwipePages landing | `max-height` crop cut a bubble in half | **This session** (`731ec4d`) | **Fixed**, needs re-paste |
-| 2 | Twitter logo missing on some examples and every new project | Expanded tweet template omits the logo `<img>` | `06519ef` (Twitter overhaul, 13 Aug) | Open — §2 |
-| 3 | iMessage header background image gone, setting empty | Deliberate: defaults emptied for permanence | `c733066` (14 Aug), **by design** | **Not a bug** — §3 |
-| 4 | WhatsApp PNG has text cut off at the bottom | Two separate export clipping defects | Pre-existing, never fixed for WhatsApp | Open — §4 |
+| 2 | Twitter logo missing on some examples and every new project | Expanded tweet template omits the logo `<img>` | `06519ef` (Twitter overhaul, 13 Aug) | **Fixed** (`f3bc60e`) — §2 |
+| 3 | iMessage header background image gone, setting empty | Deliberate: defaults emptied for permanence | `c733066` (14 Aug), **by design** | **Not a bug** — §3; help text added (`dc30b8a`) |
+| 4 | WhatsApp PNG has text cut off at the bottom | Two separate export clipping defects | Pre-existing, never fixed for WhatsApp | **Fixed** (`ecb5aa9`) — §4 |
 | 5 | Landing hero renders as alt text, no image | `hero-scene-video.png` was never deployed — 404 | **This session** (`e5777e9`, undeployed) | Open — §8, one push |
-| 6 | WhatsApp group messages show no participant avatars | Avatar sizing lives entirely in inline `style`, which AO3 strips; sender row is gated on `participantId` | Pre-existing | Open — §9 |
+| 6 | WhatsApp group messages show no participant avatars | **Not what §9 said.** They were never rendered at all; the inline-styled avatar code is unreachable | Pre-existing | **Fixed** (`e78dcc6`) — §9 |
+| 7 | X logo invisible on dark tweet cards | `logoGrey` resolved to the same black PNG as `logo` | Pre-existing | **Fixed** (`845933f`) — §2.1 |
 
 **The renderers were not touched this session.** `git diff c733066..4c0c4e0 -- src/lib/generator.ts src/lib/twitter.ts src/lib/ios.ts src/lib/whatsapp.ts src/lib/workSkin.ts` is empty. Only `ExportPanel.tsx` changed near the raster path, by +28 lines, and what it added is described in §4.3. Establish this before blaming the deploy — it was the first thing checked here, and it redirected the investigation away from three wrong suspects.
 
@@ -111,6 +112,21 @@ Two options, and this is a visual decision rather than a technical one:
 2. **Absolutely positioned in the card corner** — correct to the real product, needs a `position:relative` on `.tweet.expanded` and a rule for `.tweet.expanded .twitter-logo`. **AO3 allows `position`**, so this is safe for the archive, but it must be added to the stylesheet in `generator.ts`, not as an inline `style` — see Learning 11, AO3 strips inline styles outright.
 
 Recommend option 2, and verify against a real X detail page before committing to placement.
+
+**Done in `f3bc60e`, option 2**, with two traps worth recording:
+
+- **A child combinator does not survive AO3 injection.** The first attempt used `.tweet.expanded > .twitter-logo`. AO3 wraps a bare `<img>` child in its own paragraph, which then becomes a real flex item; the selector stopped matching, the logo fell back into flow inside the wrapper, and `.expanded-content` lost 31px. `ao3-injection.spec.ts` caught it. The fix is the descendant-selector + `display:contents` pair already documented at `.quote-head` — and the comment there says exactly this, which is worth reading *before* writing a positioned rule rather than after.
+- **The export clone forced `position:relative` on every `.tweet .twitter-logo`** to sit the compact logo on its name line. As an inline style that beats the stylesheet, so it would have knocked the expanded logo out of its corner **in the PNG only**. Now scoped `:not(.expanded)`.
+
+No `MASTER_SKIN_VERSION` bump: the rule is to bump when the *classes* `buildHTML` emits change, and `twitter-logo` was already in the v7 contract. Worth stating because the v7 read-back is still outstanding — **both readback files in the repo root are `v2`**, five versions stale, so the gate cannot be closed without a human pasting a fresh skin into AO3.
+
+### 2.1 The X logo was invisible in dark mode — separate, pre-existing, fixed
+
+Checking both themes, as the verification step above says to, turned up a defect that had nothing to do with the expanded template. `PLATFORM_ASSETS.twitter.logoGrey` pointed at `/assets/twitter-logo.png` — **the same black file as the light variant** — under a comment saying the grey variants fall back to the light ones when no grey copy exists. For the reply/retweet/like icons that fallback is inert, since all three are text characters now. For the logo it meant a black mark on a black card.
+
+So the dark-mode branch in the renderer ran correctly and resolved to a file that could not be seen, on the compact template too. Fixed in `845933f` with a real light-on-dark asset at `/assets/twitter-logoGrey.png`, registered in `LOCAL_ASSETS_MAP` so the work-skin path absolutises it as chrome rather than treating it as an unknown remote URL.
+
+**The general lesson:** a branch whose two arms resolve to the same asset is invisible to every test that asserts on markup, because the markup is correct. Only looking at the picture finds it — Learning 15 again, in a form that does not involve html2canvas at all.
 
 ### Verification required
 
@@ -238,11 +254,13 @@ Inside the green "Replying to Alex" card, the quoted line "Anyone free for coffe
 #workskin .wa-reply span{font-size:0.9em;max-height:3.8em;overflow:hidden;}
 ```
 
-A fixed `max-height` with `overflow:hidden` is a deliberate clamp — it stops a long quoted message from filling the bubble, and it is correct in the browser, where the clamp lands between lines. In html2canvas the text sits a few pixels lower, so the band cuts through the last line instead of after it.
+**Corrected mechanism.** It is tempting to blame the `max-height` clamp, and this document originally did. The arithmetic rules it out: the span's `line-height` is 1.4 and the reproduction's quote is **one line**, so it occupies ~1.4em against a 3.8em cap and never reaches it.
 
-**Fix.** In the clone only, relax the clamp for the raster: `max-height:none` (the quoted text in a scene is short) or add ~6px of headroom. `max-height:none` is preferred — it removes the interaction entirely rather than tuning a constant against a renderer quirk.
+The clipper is `overflow:hidden` **on its own**. The span's height is auto — exactly one line box, with no padding — and html2canvas paints glyphs slightly below the line box Chromium measured, so their bottoms fall outside and are cut. That is the *same* mechanism as the header in 4a, and it bites a short quote as readily as a long one.
 
-**Check the iOS equivalent while you are there.** `.ios-reply` should be inspected for the same `max-height` pattern; if it has one, it has the same latent bug and simply has not been hit yet by a quote long enough to reach the clamp.
+**Fixed** in `ecb5aa9`, in the clone only: `overflow:visible` is the actual fix, with `max-height:none` alongside it because a clamp with visible overflow would spill rather than clip, and because the clamp is redundant anyway — the excerpt is already capped at 180 characters where it is built.
+
+**The iOS equivalent was checked, and is clean.** `.ios-reply span` sets no `overflow` at all, and the blockquote's own `0.35em` of padding absorbs the offset. iMessage had already hit this and dropped its `max-height` in the stylesheet — the note above `blockquote.ios-reply span` records it. Verified by exporting the iOS group scene.
 
 ### 4c. What this session actually changed, and why it is not the cause
 
@@ -264,6 +282,36 @@ None of those seven selectors is a header or a reply card, so it cannot produce 
 **One honest gap in how it shipped, worth not repeating.** The WhatsApp half of that selector list was written by analogy with the iOS half and **only the iOS export was inspected before commit.** The raster suite passed, which proves nothing about visual clipping — that is the entire point of Learning 15. It happened to be correct. It could as easily not have been. When a fix names a second platform, export that platform too.
 
 ---
+
+## 4d. What was actually fixed, and what is left
+
+Implemented August 15 2026, on `growth/tier1-tier2-trust-copy`, one commit per
+blast radius as §5 asks:
+
+| Commit | Section | Reaches AO3? |
+| --- | --- | --- |
+| `ecb5aa9` | §4a + §4b, WhatsApp header and reply clipping | No — export clone only |
+| `f3bc60e` | §2, expanded tweet X logo | **Yes** — generated markup and CSS |
+| `e78dcc6` | §9, WhatsApp group avatar + dead code removal | **Yes** — generated markup and CSS |
+| `845933f` | §2.1, dark-mode X logo asset | **Yes** — asset referenced by the skin |
+| `dc30b8a` | §3, header-image help text | No — app UI only |
+
+Every one was verified by exporting a real PNG and looking at it, and each
+before/after pair is in `tmp/`. Unit suite: 395 passing, 1 skipped (the v7
+read-back gate, which needs a human).
+
+**Left open, deliberately:**
+
+- **§8 and §1** — the hero 404 needs `main` pushed and the landing page
+  re-pasted. Both are deploy actions, not code.
+- **§3.3, the header tint** — a schema change (`v7 -> v8`) whose own notes say
+  to close the outstanding v7 read-back first, or the repository owes two.
+- **§7, the examples gallery** — untouched.
+- **`tests/settings-render.spec.ts` fails on `main` already.** Six tests, and
+  they fail identically against the deployed site, so they predate this work —
+  e.g. one expects a `2 participants` subtitle where the renderer emits the
+  members list. Worth a look, but not caused here. See §6 rule 7 for how that
+  was established.
 
 ## 5. Suggested order
 
@@ -307,6 +355,11 @@ The third argument matches the picker button by accessible name. Since the label
 4. **`clip` is ignored on an element screenshot.** Crops must come from `page.screenshot({ clip })`.
 5. **There are two `#workskin` nodes.** One is the off-screen capture target used by Save PNG; the visible one is the preview. Select on visibility, not order.
 6. **A passing raster test is not a passing look.** `ios-raster` and `whatsapp-raster` were green throughout every defect in §4.
+7. **The test suite points at production by default, not at your build.**
+   `playwright.config.ts:13` reads `baseURL: process.env.UX_BASE_URL || 'https://app.ao3skingen.wordfokus.com'`. So a bare `npx playwright test tests/whatsapp-raster.spec.ts` exercises the **deployed site** and says nothing whatever about the working tree. This is not hypothetical: it produced two "failures" here that were network timeouts against the live host, and re-running them against a local server passed in 21s what had taken 1.3m. Always
+   `UX_BASE_URL=http://127.0.0.1:PORT npx playwright test …` when testing a change. It cuts both ways and is the cheap way to establish a baseline: running a suspicious test against the default URL asks "does this fail on production too?", which is how `settings-render.spec.ts` was confirmed to be failing for reasons that predate this work.
+8. **`--project=unit` needs no server; everything else does.** The unit project is pure and fast (~25s for 395). The `desktop`/`mobile` projects drive a browser against `baseURL`.
+9. **Suites run 2 workers by default and some tests flake under that load.** `work-skin.spec.ts` and `whatsapp-authoring.spec.ts` each failed once in a combined run and passed cleanly in isolation. Re-run a single failure alone before believing it.
 
 ---
 
@@ -365,9 +418,58 @@ Three iterations were spent on the hero's *framing* while the actual failure was
 
 ---
 
-## 9. WhatsApp group messages show no participant avatars — open
+## 9. WhatsApp group messages show no participant avatars — fixed, and the analysis below was wrong
 
 **Symptom.** In a WhatsApp group chat, each message shows its sender's name in the participant's colour, but **no avatar circle**. iMessage group chats in the same scene render their initials circles correctly, which is what makes the absence obvious.
+
+> ### Correction, August 15 2026 — read this before the analysis under it
+>
+> **The diagnosis in the rest of this section is wrong, and it is left in place
+> because the way it was wrong is the useful part.**
+>
+> It attributes the missing avatar to AO3 stripping inline `style` attributes
+> off avatar markup, and quotes that markup at `generator.ts:882`/`:887`/`:892`.
+> That code is **unreachable**. `msgHTML` returns to `whatsappMessageHTML` for
+> `android` and to `iosMessageHTML` for `ios` before it ever reaches the group
+> block, so `isGroupMode` is false for anything that gets that far — only
+> `twitter` and `google` arrive at all.
+>
+> What WhatsApp actually emitted was `<b class="group-sender wa-tone-teal">`:
+> a finite tone class, **no inline style, and no avatar element of any kind**.
+> So there was no AO3 defect. WhatsApp group chats had simply never drawn an
+> avatar, in the preview, the PNG or the archive, and the four prescribed fix
+> steps — de-inline the styles, reconcile the CSS, replace the free hex with a
+> tone, stop depending on `participantId` — were all either moot or already true.
+>
+> **How the error happened, since it is a repeatable one:** the section reasons
+> from the renderer source outward and never runs the three-way DOM check it
+> itself prescribes. Its own instruction — *"Do this first. Do not write a fix
+> against a guess about which of the three it is"* — was the right instruction,
+> and following it is what produced the correction. The answer was cause 1
+> ("is `.group-sender-row` present in the DOM at all?"), but for a reason not on
+> the list of three: not a stale `participantId` gate, but a code path that
+> cannot execute.
+>
+> **What was done** (`e78dcc6`): WhatsApp now draws the avatar, mirroring the
+> iOS renderer — canonical identity so renames apply retroactively, an `<img>`
+> when the character has one, a monogram when it does not, colour from the
+> existing `wa-tone` enum. It nests inside `.group-sender` rather than sitting
+> beside it, because `.group-sender` is `display:block` here and a sibling
+> would be pushed onto a line of its own; that is the one place WhatsApp's
+> layout genuinely differs from iMessage's. The unreachable block was deleted
+> along with `safeCssColor`, and with seven dead rules in the **iOS**
+> stylesheet — four for the `.group-sender-row` that is never emitted, two
+> restating the avatar rules already set above them, and one naming
+> `.group-sender`, which iMessage does not use (its sender is
+> `.ios-group-sender`). The iOS golden diff is seven removals per scene and no
+> markup change.
+>
+> **Still true and still worth keeping** from the analysis below: the principle
+> that a value which must survive AO3 is an enum compiled to a class and never
+> a free hex in a `style` attribute. That is why the new avatar takes its
+> colour from `wa-tone`. There is now a unit assertion that WhatsApp group
+> markup contains **no `style=` at all**, which is the strongest form and
+> prevents the reintroduction the section feared.
 
 ### What is confirmed
 
