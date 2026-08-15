@@ -1,0 +1,1007 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" >
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" >
+    <meta name="description" content="Three free tools for Archive of Our Own. Fake screenshots — iMessage, WhatsApp, Twitter, Google — to paste into a chapter. Work skins that give readers real text instead of a picture. And site skins that restyle AO3 for you. No coding, no account." >
+    <title>AO3 SkinGen — Social-Media Scenes for Archive of Our Own</title>
+    <link rel="canonical" href="https://ao3skingen.wordfokus.com/" >
+
+    <meta property="og:type" content="website" >
+    <meta property="og:url" content="https://ao3skingen.wordfokus.com/" >
+    <meta property="og:title" content="AO3 SkinGen — Social-Media Scenes for AO3" >
+    <meta property="og:description" content="Build a text conversation, tweet thread or search page and drop it straight into your fic. Free, no signup, checked against AO3's own rules." >
+    <meta property="og:image" content="https://media.publit.io/file/AO3-Skins-App/AO3-Skin-Generator-Preview.png" >
+    <meta name="twitter:card" content="summary_large_image" >
+    <meta name="twitter:title" content="AO3 SkinGen — Social-Media Scenes for AO3" >
+    <meta name="twitter:description" content="Fake screenshots, work skins and site skins for Archive of Our Own. Free, no signup." >
+    <meta name="twitter:image" content="https://media.publit.io/file/AO3-Skins-App/AO3-Skin-Generator-Preview.png" >
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" >
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin >
+    <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Roboto:wght@300;400;500&display=swap" rel="stylesheet" >
+
+    <style>
+:root {
+--primary: #1a73e8;
+--primary-dark: #0d47a1;
+--primary-light: #8ab4f8;
+--primary-bg: #e8f0fe;
+--secondary: #34a853;
+--accent: #fbbc05;
+--danger: #ea4335;
+--text-dark: #202124;
+--text-gray: #5f6368;
+--text-light: #e8eaed;
+--bg-light: #f8f9fa;
+--border-light: #dadce0;
+--shadow-sm: 0 1px 2px rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15);
+--shadow-md: 0 2px 6px rgba(60,64,67,0.3), 0 1px 8px 1px rgba(60,64,67,0.15);
+--shadow-lg: 0 4px 12px rgba(60,64,67,0.3), 0 1px 16px 2px rgba(60,64,67,0.15);
+--radius-sm: 4px;
+--radius-md: 8px;
+--radius-lg: 16px;
+--transition-fast: 0.15s ease;
+--transition-normal: 0.25s ease;
+--content-max-width: 1200px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Roboto', Arial, sans-serif; }
+
+body { color: var(--text-dark); line-height: 1.6; overflow-x: hidden; background: white; }
+
+h1, h2, h3, h4, h5, h6 { font-family: 'Google Sans', 'Roboto', Arial, sans-serif; font-weight: 500; margin-bottom: 0.5em; line-height: 1.3; }
+
+h1 { font-size: clamp(2.2rem, 5vw, 3.2rem); font-weight: 700; margin-bottom: 1rem; }
+
+h2 { font-size: clamp(1.75rem, 4vw, 2.25rem); margin-top: 1rem; margin-bottom: 2rem; }
+
+h3 { font-size: clamp(1.25rem, 3vw, 1.5rem); }
+
+p { margin-bottom: 1.25em; font-size: clamp(1rem, 2.5vw, 1.1rem); }
+
+.container { width: 100%; max-width: var(--content-max-width); margin: 0 auto; padding: 0 clamp(1rem, 5vw, 2rem); }
+
+.btn { display: inline-block; padding: 14px 32px; border-radius: var(--radius-sm); font-family: 'Google Sans'; font-weight: 500; font-size: 16px; text-decoration: none; cursor: pointer; transition: all var(--transition-normal); box-shadow: var(--shadow-sm); border: none; }
+
+.btn-primary { background-color: var(--primary); color: white; border: 1px solid var(--primary); }
+
+.btn-primary:hover { background-color: var(--primary-dark); box-shadow: var(--shadow-md); transform: translateY(-2px); }
+
+.btn-secondary { background-color: white; color: var(--primary); border: 1px solid var(--border-light); }
+
+.btn-secondary:hover { background-color: var(--bg-light); border-color: var(--primary-light); box-shadow: var(--shadow-md); transform: translateY(-2px); }
+
+.btn-large { padding: 18px 42px; font-size: 18px; font-weight: 600; box-shadow: var(--shadow-md); }
+
+.trust-bar { background: var(--primary-dark); color: white; text-align: center; padding: 10px 0; font-weight: 500; font-size: 14px; position: sticky; top: 0; z-index: 1001; }
+
+header { background-color: rgba(255, 255, 255, 0.98); position: sticky; top: 42px; z-index: 1000; box-shadow: var(--shadow-sm); backdrop-filter: blur(10px); }
+
+.header-container { display: flex; justify-content: space-between; align-items: center; padding: 1rem clamp(1rem, 5vw, 2rem); }
+
+.logo { display: flex; align-items: center; text-decoration: none; color: var(--text-dark); }
+
+.logo svg { height: 36px; width: 36px; margin-right: 12px; }
+
+.logo-text { font-family: 'Google Sans'; font-size: 1.5rem; font-weight: 700; }
+
+.logo-text .highlight { color: var(--primary); }
+
+nav ul { display: flex; list-style: none; gap: 2rem; align-items: center; }
+
+nav a { text-decoration: none; color: var(--text-dark); font-family: 'Google Sans'; font-weight: 500; transition: color var(--transition-normal); }
+
+nav a:hover { color: var(--primary); }
+
+.nav-kofi { background: #FF5E5B; color: white !important; padding: 8px 16px; border-radius: 20px; font-size: 14px; display: inline-flex; align-items: center; gap: 6px; transition: all var(--transition-normal); }
+.nav-kofi:hover { background: #e54542; color: white !important; transform: translateY(-2px); box-shadow: var(--shadow-md); }
+
+.menu-toggle { display: none; background: none; border: none; font-size: 1.8rem; cursor: pointer; color: var(--text-dark); padding: 8px; border-radius: 50%; }
+
+.menu-toggle:hover { background-color: rgba(0,0,0,0.05); }
+
+/* HERO SECTION */
+.hero { background: linear-gradient(135deg, var(--primary-bg) 0%, #f8f9fa 100%); padding: clamp(3rem, 10vw, 6rem) 0; min-height: 85vh; display: flex; align-items: center; position: relative; overflow: hidden; }
+
+.hero::before { content: ''; position: absolute; width: 200%; height: 200%; top: -50%; left: -50%; z-index: 0; background: radial-gradient(ellipse at center, rgba(26, 115, 232, 0.08) 0%, rgba(26, 115, 232, 0) 70%); animation: pulse 15s infinite; }
+
+@keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+
+.hero-container { display: flex; align-items: center; justify-content: space-between; gap: 3rem; position: relative; z-index: 1; }
+
+.hero-content { flex: 1; max-width: 600px; }
+
+.badge { display: inline-flex; align-items: center; gap: 8px; background: white; padding: 8px 16px; border-radius: 50px; font-size: 14px; font-weight: 500; color: var(--text-dark); box-shadow: var(--shadow-sm); margin-bottom: 24px; }
+
+.badge-icon { color: var(--secondary); font-size: 18px; }
+
+.hero h1 { line-height: 1.2; }
+
+.hero h1 .highlight { color: var(--primary); position: relative; display: inline-block; }
+
+.hero h1 .highlight::after { content: ''; position: absolute; width: 100%; height: 12px; bottom: 2px; left: 0; background-color: rgba(26, 115, 232, 0.15); z-index: -1; border-radius: 4px; }
+
+.hero p { font-size: clamp(1.1rem, 2.5vw, 1.25rem); color: var(--text-gray); max-width: 540px; margin-bottom: 2rem; }
+
+.arrived-note { font-size: 0.95rem; color: var(--text-gray); background: white; border: 1px solid var(--border-light); border-left: 3px solid var(--secondary); border-radius: var(--radius-md); padding: 12px 16px; max-width: 540px; margin-top: 1.5rem; margin-bottom: 0; }
+
+.trust-signals { display: flex; flex-wrap: wrap; gap: 24px; margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--border-light); }
+
+.trust-item { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text-gray); }
+
+.trust-item svg { width: 20px; height: 20px; color: var(--secondary); }
+
+.hero-media { flex: 1; display: flex; justify-content: center; align-items: center; }
+
+.hero-image { width: 100%; max-width: 600px; border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); transform: perspective(1000px) rotateY(-8deg); transition: transform var(--transition-normal); overflow: hidden; background: white; border: 1px solid var(--border-light); }
+
+.hero-image:hover { transform: perspective(1000px) rotateY(0deg) translateY(-8px); box-shadow: 0 20px 40px rgba(0,0,0,0.15); }
+
+.hero-image img { width: 100%; height: auto; display: block; }
+
+.hero-buttons { display: flex; gap: 1rem; margin-top: 2rem; flex-wrap: wrap; }
+
+/* Features Section */
+.features { padding: clamp(4rem, 10vw, 6rem) 0; background-color: white; }
+
+.section-title { text-align: center; margin-bottom: clamp(3rem, 8vw, 4rem); }
+
+.section-title h2 { color: var(--text-dark); }
+
+.section-title p { max-width: 680px; margin: 0 auto; color: var(--text-gray); font-size: 1.15rem; }
+
+.features-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: clamp(2rem, 5vw, 2.5rem); }
+
+.feature-card { display: flex; flex-direction: column; align-items: flex-start; padding: clamp(2rem, 5vw, 2.5rem); background-color: white; border-radius: var(--radius-lg); box-shadow: 0 1px 3px rgba(0,0,0,0.1); transition: all var(--transition-normal); border: 1px solid var(--border-light); height: 100%; }
+
+.feature-card:hover { transform: translateY(-8px); box-shadow: var(--shadow-lg); border-color: var(--primary-light); }
+
+.feature-icon { width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; border-radius: 16px; background: linear-gradient(135deg, var(--primary-bg), rgba(52, 168, 83, 0.08)); margin-bottom: 1.5rem; }
+
+.feature-icon svg { width: 32px; height: 32px; color: var(--primary); }
+
+.feature-card h3 { color: var(--text-dark); margin-bottom: 0.75rem; font-size: 1.35rem; }
+
+.feature-card p { color: var(--text-gray); margin-bottom: 0; font-size: 1rem; line-height: 1.7; }
+
+/* Tool chooser */
+.tool-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem; align-items: stretch; }
+
+.tool-card { display: flex; flex-direction: column; padding: clamp(1.75rem, 4vw, 2.25rem); background: white; border-radius: var(--radius-lg); border: 1px solid var(--border-light); box-shadow: 0 1px 3px rgba(0,0,0,0.1); transition: all var(--transition-normal); position: relative; }
+
+.tool-card:hover { transform: translateY(-8px); box-shadow: var(--shadow-lg); border-color: var(--primary-light); }
+
+.tool-card .tool-audience { font-size: 0.8rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--primary); margin-bottom: 0.5rem; }
+
+.tool-card ul { color: var(--text-gray); font-size: 0.95rem; line-height: 1.9; padding-left: 1.2rem; margin-bottom: 1.5rem; }
+
+.tool-card .btn { margin-top: auto; width: 100%; text-align: center; }
+
+.tool-flag { position: absolute; top: -12px; right: 16px; background: var(--secondary); color: white; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; padding: 5px 12px; border-radius: 50px; box-shadow: var(--shadow-sm); }
+
+/* Comparison table */
+.compare-wrap { max-width: 900px; margin: 3rem auto 0; overflow-x: auto; }
+
+.compare { width: 100%; border-collapse: collapse; font-size: 0.95rem; min-width: 620px; background: white; border-radius: var(--radius-md); overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+
+.compare th, .compare td { padding: 14px 16px; text-align: left; border-bottom: 1px solid var(--border-light); }
+
+.compare thead th { background: var(--primary-bg); font-family: 'Google Sans'; font-weight: 700; color: var(--text-dark); }
+
+.compare tbody th { font-weight: 500; color: var(--text-gray); font-family: 'Roboto'; }
+
+.compare tr:last-child th, .compare tr:last-child td { border-bottom: none; }
+
+/* How It Works */
+.how-it-works { padding: clamp(4rem, 10vw, 6rem) 0; background-color: var(--bg-light); }
+
+.steps-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 2rem; max-width: 1100px; margin: 0 auto; }
+
+.step { text-align: center; padding: 2.5rem 2rem; background-color: white; border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); transition: all var(--transition-normal); border: 1px solid var(--border-light); }
+
+.step:hover { transform: translateY(-5px); box-shadow: var(--shadow-md); }
+
+.step-number { width: 64px; height: 64px; background: linear-gradient(135deg, var(--primary), var(--primary-dark)); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.5rem; font-size: 1.75rem; font-weight: 700; box-shadow: 0 4px 12px rgba(26, 115, 232, 0.4); }
+
+.step h3 { font-size: 1.25rem; margin-bottom: 0.75rem; color: var(--text-dark); }
+
+.step p { color: var(--text-gray); margin-bottom: 0; font-size: 1rem; }
+
+.flow-label { text-align: center; color: var(--text-gray); font-size: 1.05rem; font-weight: 500; margin-bottom: 1.5rem; }
+
+/* FAQ */
+.faq { padding: clamp(4rem, 10vw, 6rem) 0; background: white; }
+
+.faq-list { max-width: 820px; margin: 0 auto; }
+
+.faq-item { border: 1px solid var(--border-light); border-radius: var(--radius-md); margin-bottom: 1rem; overflow: hidden; background: white; }
+
+.faq-item summary { cursor: pointer; padding: 1.15rem 1.5rem; font-family: 'Google Sans'; font-weight: 500; font-size: 1.05rem; list-style: none; display: flex; justify-content: space-between; align-items: center; gap: 1rem; transition: background var(--transition-fast); }
+
+.faq-item summary::-webkit-details-marker { display: none; }
+
+.faq-item summary:hover { background: var(--bg-light); }
+
+.faq-item summary::after { content: '+'; font-size: 1.5rem; color: var(--primary); font-weight: 400; line-height: 1; flex-shrink: 0; }
+
+.faq-item[open] summary::after { content: '\2013'; }
+
+.faq-item .faq-body { padding: 0 1.5rem 1.35rem; color: var(--text-gray); }
+
+.faq-item .faq-body p { margin-bottom: 0.75rem; font-size: 1rem; }
+
+.faq-item .faq-body p:last-child { margin-bottom: 0; }
+
+/* Support / Ko-fi
+   Deliberately the warmest, most personal block on the page, and deliberately
+   NOT above the fold: the visitor hasn't used the tool yet, so an ask before
+   any value has landed reads as grabby and competes with getting them into the
+   app. It sits after the FAQ, which is the point at which this page has
+   actually explained itself. */
+.support-section { padding: clamp(3.5rem, 9vw, 5.5rem) 0; background: linear-gradient(135deg, #fff5f5 0%, #fffaf7 55%, #fff 100%); border-top: 1px solid #ffe0e0; border-bottom: 1px solid #ffe0e0; }
+
+.support-card { max-width: 720px; margin: 0 auto; background: white; border: 1px solid #ffdada; border-left: 5px solid #FF5E5B; border-radius: var(--radius-lg); padding: clamp(2rem, 5vw, 3rem); box-shadow: 0 6px 24px rgba(255, 94, 91, 0.12); position: relative; }
+
+.support-mark { position: absolute; top: -22px; left: clamp(2rem, 5vw, 3rem); width: 48px; height: 48px; border-radius: 50%; background: #FF5E5B; color: white; display: flex; align-items: center; justify-content: center; font-size: 24px; box-shadow: 0 4px 12px rgba(255, 94, 91, 0.4); }
+
+.support-card h2 { margin-top: 0.75rem; margin-bottom: 1.25rem; font-size: clamp(1.5rem, 3.5vw, 2rem); color: var(--text-dark); }
+
+.support-body p { color: var(--text-gray); font-size: clamp(1rem, 2.2vw, 1.08rem); line-height: 1.75; margin-bottom: 1rem; }
+
+.support-body p:last-child { margin-bottom: 1.75rem; }
+
+.support-body strong { color: var(--text-dark); }
+
+.support-btn { background: #FF5E5B; color: white; border: none; font-size: 18px; font-weight: 600; padding: 16px 36px; display: inline-flex; align-items: center; gap: 10px; box-shadow: 0 4px 14px rgba(255, 94, 91, 0.35); }
+
+.support-btn:hover { background: #e54542; transform: translateY(-2px); box-shadow: 0 8px 20px rgba(255, 94, 91, 0.45); color: white; }
+
+.support-note { font-size: 0.9rem; color: var(--text-gray); margin-top: 1.25rem; margin-bottom: 0; }
+
+/* CTA Section */
+.cta-section { padding: clamp(4rem, 10vw, 5rem) 0; background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%); color: white; text-align: center; }
+
+.cta-section h2 { color: white; margin-bottom: 1rem; }
+
+.cta-section p { font-size: 1.2rem; color: rgba(255,255,255,0.9); max-width: 600px; margin: 0 auto 2.5rem; }
+
+.cta-section .btn-primary { background: white; color: var(--primary); border-color: white; }
+
+.cta-section .btn-primary:hover { background: var(--bg-light); transform: translateY(-3px); }
+
+/* Footer */
+footer { background-color: var(--text-dark); color: white; padding: 4rem 0 2rem; }
+
+.footer-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 2.5rem; margin-bottom: 3rem; }
+
+.footer-col h3 { font-size: 1.15rem; margin-bottom: 1.5rem; color: white; position: relative; padding-bottom: 0.5rem; }
+
+.footer-col h3::after { content: ''; position: absolute; left: 0; bottom: 0; width: 40px; height: 3px; background: linear-gradient(90deg, var(--primary), var(--secondary)); border-radius: 2px; }
+
+.footer-col ul { list-style: none; }
+
+.footer-col li { margin-bottom: 0.75rem; }
+
+.footer-col a { color: var(--text-light); text-decoration: none; transition: color var(--transition-fast); font-size: 0.95rem; }
+
+.footer-col a:hover { color: white; text-decoration: underline; }
+
+.footer-brand { max-width: 280px; }
+
+.footer-brand p { font-size: 0.95rem; color: var(--text-light); line-height: 1.6; }
+
+.footer-bottom { text-align: center; padding-top: 2rem; border-top: 1px solid rgba(255, 255, 255, 0.1); }
+
+.footer-bottom p { color: var(--text-light); font-size: 0.9rem; margin-bottom: 0; }
+
+.footer-bottom a { color: var(--primary-light); text-decoration: none; }
+
+.footer-bottom a:hover { text-decoration: underline; }
+
+/* Mobile Navigation */
+.mobile-nav { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); z-index: 999; opacity: 0; visibility: hidden; transition: opacity var(--transition-normal), visibility var(--transition-normal); }
+
+.mobile-nav.active { opacity: 1; visibility: visible; }
+
+.mobile-nav-menu { position: fixed; top: 0; right: 0; width: 85%; max-width: 350px; height: 100%; background-color: white; box-shadow: -4px 0 15px rgba(0,0,0,0.2); padding: 2rem; transform: translateX(100%); transition: transform var(--transition-normal); overflow-y: auto; }
+
+.mobile-nav.active .mobile-nav-menu { transform: translateX(0); }
+
+.mobile-nav-close { position: absolute; top: 1.5rem; right: 1.5rem; font-size: 2rem; background: none; border: none; color: var(--text-gray); cursor: pointer; padding: 0; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 50%; }
+
+.mobile-nav-close:hover { background-color: var(--bg-light); }
+
+.mobile-nav ul { list-style: none; padding: 0; margin-top: 3rem; }
+
+.mobile-nav ul a { display: block; padding: 1rem 0; font-size: 1.1rem; color: var(--text-dark); text-decoration: none; border-bottom: 1px solid var(--border-light); font-family: 'Google Sans'; font-weight: 500; transition: color var(--transition-fast); }
+
+.mobile-nav ul a:hover { color: var(--primary); }
+
+/* Responsive */
+@media (max-width: 992px) {
+.hero-container { flex-direction: column; text-align: center; }
+.hero-content { margin-bottom: 3rem; max-width: 100%; }
+.hero-media { width: 100%; }
+.hero-buttons { justify-content: center; }
+.trust-signals { justify-content: center; }
+.arrived-note { margin-left: auto; margin-right: auto; text-align: left; }
+.hero-image { transform: perspective(1000px) rotateY(0deg); max-width: 500px; }
+}
+
+@media (max-width: 768px) {
+.trust-bar { font-size: 13px; padding: 8px 0; }
+header { top: 40px; }
+.menu-toggle { display: block; }
+nav { display: none; }
+.hero { padding: 2.5rem 0; min-height: auto; }
+.hero-buttons { width: 100%; flex-direction: column; }
+.btn { width: 100%; text-align: center; }
+.features-grid { grid-template-columns: 1fr; }
+.tool-grid { grid-template-columns: 1fr; }
+.steps-container { grid-template-columns: 1fr; }
+.feature-card { align-items: center; text-align: center; }
+.tool-card { align-items: flex-start; text-align: left; }
+.support-card { border-left-width: 1px; border-top: 5px solid #FF5E5B; }
+.support-mark { left: 50%; transform: translateX(-50%); }
+.support-card h2 { margin-top: 1.25rem; text-align: center; }
+.support-btn { width: 100%; justify-content: center; }
+.support-note { text-align: center; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+* { animation: none !important; transition: none !important; }
+.hero-image { transform: none; }
+}
+    </style>
+  </head>
+  <body>
+    <div class="trust-bar">
+      ✨ Free Forever • No Signup Required • Your Editable Project Stays In This Browser
+    </div>
+
+    <header>
+      <div class="header-container container">
+        <a href="#" class="logo">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="12" y1="18" x2="12" y2="12"></line>
+            <line x1="9" y1="15" x2="15" y2="15"></line>
+          </svg>
+          <div class="logo-text">AO3 <span class="highlight">Skin Generator</span></div>
+        </a>
+        <nav>
+          <ul>
+            <li><a href="#tools">The three tools</a></li>
+            <li><a href="#features">Features</a></li>
+            <li><a href="#how-it-works">How it works</a></li>
+            <li><a href="#faq">FAQ</a></li>
+            <li><a href="https://ko-fi.com/ao3skingen" target="_blank" rel="noopener noreferrer" class="nav-kofi">☕ Support</a></li>
+            <li><a href="https://app.ao3skingen.wordfokus.com" class="btn btn-primary" style="padding: 10px 20px; font-size: 15px;">Launch Generator</a></li>
+          </ul>
+        </nav>
+        <button class="menu-toggle" aria-label="Toggle Menu">☰</button>
+      </div>
+    </header>
+
+    <div class="mobile-nav" id="mobileNav">
+      <div class="mobile-nav-menu">
+        <button class="mobile-nav-close" aria-label="Close Menu">×</button>
+        <ul>
+          <li><a href="#tools">The three tools</a></li>
+          <li><a href="#features">Features</a></li>
+          <li><a href="#how-it-works">How it works</a></li>
+          <li><a href="#faq">FAQ</a></li>
+          <li><a href="https://ao3skingen.wordfokus.com/privacy-policy">Privacy</a></li>
+          <li><a href="https://ko-fi.com/ao3skingen" target="_blank" rel="noopener noreferrer" style="color: #FF5E5B; font-weight: 600;">☕ Support on Ko-fi</a></li>
+          <li><a href="https://app.ao3skingen.wordfokus.com" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">Launch Generator</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <main>
+      <!-- Hero Section -->
+      <section class="hero">
+        <div class="hero-container container">
+          <div class="hero-content">
+            <div class="badge">
+              <span class="badge-icon">✨</span>
+              <span>Built by the creator of WordFokus</span>
+            </div>
+
+            <h1>
+              Social Media AUs for <span class="highlight">Archive of Our Own</span>
+            </h1>
+
+            <p>
+              Build a text conversation, tweet thread or search page, and put it straight into your chapter — as a picture, or as real text your readers can select. There's a third tool for restyling AO3 itself. No coding, no account.
+            </p>
+
+            <div class="hero-buttons">
+              <a href="https://app.ao3skingen.wordfokus.com" class="btn btn-primary btn-large">Start a conversation</a>
+              <a href="https://app.ao3skingen.wordfokus.com/site-skin" class="btn btn-secondary btn-large">Build a site skin</a>
+            </div>
+
+            <p class="arrived-note">
+              <strong>Came here from a fic?</strong> The little credit under a screenshot points here. Everything on this page is free, and you can make the same thing in about two minutes.
+            </p>
+
+            <div class="trust-signals">
+              <div class="trust-item">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+                <span>Free forever, no signup</span>
+              </div>
+              <div class="trust-item">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                </svg>
+                <span>Your editable project stays in this browser</span>
+              </div>
+              <div class="trust-item">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                </svg>
+                <span>Checked against AO3's own rules</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="hero-media">
+            <div class="hero-image">
+              <img src="https://media.publit.io/file/AO3-Skins-App/AO3-Skin-Generator-Preview.png" alt="The AO3 Skin Generator, showing an iMessage conversation being built beside a live preview" width="600" height="400" loading="eager">
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Which tool? -->
+      <section class="features" id="tools" style="background: var(--bg-light);">
+        <div class="container">
+          <div class="section-title">
+            <h2>Which one do you want?</h2>
+            <p>Three tools. Two put a conversation in your fic and differ in what your readers get; the third changes how AO3 looks to you. Pick whichever matches what you're trying to do.</p>
+          </div>
+
+          <div class="tool-grid">
+            <div class="tool-card">
+              <div class="feature-icon">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+                </svg>
+              </div>
+              <div class="tool-audience">For your readers</div>
+              <h3>Fake screenshots</h3>
+              <p style="margin-bottom: 1rem;">The simplest thing that works. Build the conversation, get a picture, paste it into your chapter.</p>
+              <ul>
+                <li>iMessage, WhatsApp, X/Twitter, Google</li>
+                <li>Goes <strong>inside a chapter</strong></li>
+                <li><strong>Nothing to set up</strong> — it's an image</li>
+                <li>Best when you just want it done</li>
+              </ul>
+              <a href="https://app.ao3skingen.wordfokus.com" class="btn btn-primary">Make a screenshot</a>
+            </div>
+
+            <div class="tool-card">
+              <div class="tool-flag">Newest</div>
+              <div class="feature-icon">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 20h9"></path>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4z"></path>
+                </svg>
+              </div>
+              <div class="tool-audience">For your readers</div>
+              <h3>Work skins</h3>
+              <p style="margin-bottom: 1rem;">The same conversation as <em>real text</em>. It reflows on a phone, can be selected and copied, and screen readers can read it.</p>
+              <ul>
+                <li>All four platforms, light and dark</li>
+                <li>Goes in <strong>Preferences → Skins</strong>, once</li>
+                <li><strong>One skin covers every platform</strong> — a fic can only have one, so this matters</li>
+                <li>Best for long conversations</li>
+              </ul>
+              <a href="https://app.ao3skingen.wordfokus.com" class="btn btn-primary">Build a work skin</a>
+            </div>
+
+            <div class="tool-card">
+              <div class="feature-icon">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path>
+                </svg>
+              </div>
+              <div class="tool-audience">For you</div>
+              <h3>Site skins</h3>
+              <p style="margin-bottom: 1rem;">Recolour AO3 itself — page, cards, links, tags, fonts — then copy the CSS into your preferences.</p>
+              <ul>
+                <li>16 starting points, dark and light</li>
+                <li>Goes in <strong>Preferences → Skins</strong></li>
+                <li>Add your own header banner image</li>
+                <li>Only <strong>you</strong> see it, on every AO3 page</li>
+              </ul>
+              <a href="https://app.ao3skingen.wordfokus.com/site-skin" class="btn btn-primary">Build a site skin</a>
+            </div>
+          </div>
+
+          <div class="compare-wrap">
+            <table class="compare">
+              <caption class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">Comparison of the three tools</caption>
+              <thead>
+                <tr>
+                  <th scope="col">&nbsp;</th>
+                  <th scope="col">Screenshot</th>
+                  <th scope="col">Work skin</th>
+                  <th scope="col">Site skin</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th scope="row">Who sees it</th>
+                  <td>Every reader</td>
+                  <td>Every reader</td>
+                  <td>Only you</td>
+                </tr>
+                <tr>
+                  <th scope="row">Where it goes</th>
+                  <td>In the chapter</td>
+                  <td>Chapter + Preferences</td>
+                  <td>Preferences</td>
+                </tr>
+                <tr>
+                  <th scope="row">Setup on AO3</th>
+                  <td>None</td>
+                  <td>Once, then reuse</td>
+                  <td>Once</td>
+                </tr>
+                <tr>
+                  <th scope="row">Selectable text</th>
+                  <td>No — it's a picture</td>
+                  <td>Yes</td>
+                  <td>n/a</td>
+                </tr>
+                <tr>
+                  <th scope="row">Reflows on a phone</th>
+                  <td>No, readers zoom</td>
+                  <td>Yes</td>
+                  <td>n/a</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- Features Section -->
+      <section class="features" id="features">
+        <div class="container">
+          <div class="section-title">
+            <h2>What you get</h2>
+            <p>All three tools are free, run in your browser, and save as you work</p>
+          </div>
+
+          <div class="features-grid">
+            <div class="feature-card">
+              <div class="feature-icon">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                </svg>
+              </div>
+              <h3>Four platforms that look right</h3>
+              <p>iMessage and WhatsApp with the correct bubbles, tails, delivery ticks and read receipts. X/Twitter with verified badges, quote tweets and metrics. Google, in three flavours including Naver.</p>
+            </div>
+
+            <div class="feature-card">
+              <div class="feature-icon">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+              </div>
+              <h3>Reactions &amp; group chats</h3>
+              <p>Tap a message to add a reaction — where iMessage really puts a tapback, and where WhatsApp really puts its pill, stacking when more than one person picks the same one. Group chats give each person a name colour and a photo, plus date breaks and the small grey lines like &ldquo;Alex added Sam to the chat&rdquo;.</p>
+            </div>
+
+            <div class="feature-card">
+              <div class="feature-icon">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6M3 10l6-6"></path>
+                </svg>
+              </div>
+              <h3>Messages that do more than talk</h3>
+              <p>Reply to an earlier message and it carries the quoted original above it. Add four photos in the grid the real app uses, a link that unfurls into a card with its own title and thumbnail, or a voice note with its length. Threads, quote posts and polls on X/Twitter.</p>
+            </div>
+
+            <div class="feature-card">
+              <div class="feature-icon">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+              </div>
+              <h3>Voice notes and video that actually play</h3>
+              <p>In a work skin, a voice note or a video is a real player sitting in your chapter — your readers press play on AO3 itself, without leaving the page. Screenshots keep a still poster card instead, because a picture can&rsquo;t play. Nothing is uploaded either way: you point at a file that already lives somewhere.</p>
+            </div>
+
+            <div class="feature-card">
+              <div class="feature-icon">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                </svg>
+              </div>
+              <h3>A cast you set up once</h3>
+              <p>Say who's in the conversation in one place — names, handles, photos. Thirty ready-made avatars if you'd rather not hunt for one. Rename someone and the messages they already sent follow.</p>
+            </div>
+
+            <div class="feature-card">
+              <div class="feature-icon">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                </svg>
+              </div>
+              <h3>Checked before you paste</h3>
+              <p>AO3 refuses a whole skin over one CSS property it doesn't allow — and its list is stricter and stranger than you'd guess. Everything is checked against AO3's real rules first, so you don't find out after pasting.</p>
+            </div>
+
+            <div class="feature-card">
+              <div class="feature-icon">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                </svg>
+              </div>
+              <h3>Live preview</h3>
+              <p>Watch it change as you work. Site skins preview over a mock AO3 page — a work listing, a chapter, your dashboard — using the exact CSS you'll copy.</p>
+            </div>
+
+            <div class="feature-card">
+              <div class="feature-icon">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path>
+                </svg>
+              </div>
+              <h3>Auto-save</h3>
+              <p>Your work is saved in your browser as you type. Close the tab and pick up where you left off — no account, and nothing leaves your machine unless you export it.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- How It Works -->
+      <section class="how-it-works" id="how-it-works">
+        <div class="container">
+          <div class="section-title">
+            <h2>Three steps, either way</h2>
+            <p>Putting a conversation in a fic and restyling AO3 take about the same time. What you copy at the end is different.</p>
+          </div>
+
+          <h3 class="flow-label">💬 A conversation in your fic</h3>
+          <div class="steps-container" style="margin-bottom: 3.5rem;">
+            <div class="step">
+              <div class="step-number">1</div>
+              <h3>Pick a platform</h3>
+              <p>iMessage, WhatsApp, X/Twitter or Google — or open a ready-made example and edit it.</p>
+            </div>
+
+            <div class="step">
+              <div class="step-number">2</div>
+              <h3>Write the conversation</h3>
+              <p>Add messages, reactions, names and photos. The preview updates as you type.</p>
+            </div>
+
+            <div class="step">
+              <div class="step-number">3</div>
+              <h3>Copy it out</h3>
+              <p>Take the picture and paste one <code>&lt;img&gt;</code> tag — nothing to set up. Or take the work skin for real text, which is two pastes the first time and one after that.</p>
+            </div>
+          </div>
+
+          <h3 class="flow-label">🎨 A site skin for yourself</h3>
+          <div class="steps-container">
+            <div class="step">
+              <div class="step-number">1</div>
+              <h3>Pick a look</h3>
+              <p>Sixteen templates, filtered by dark, light, minimal or decorative.</p>
+            </div>
+
+            <div class="step">
+              <div class="step-number">2</div>
+              <h3>Make it yours</h3>
+              <p>Four colours, two fonts, card corners, tag shape, a header banner. Readability is checked as you go.</p>
+            </div>
+
+            <div class="step">
+              <div class="step-number">3</div>
+              <h3>Copy into AO3</h3>
+              <p>Paste the CSS into <strong>Preferences → Skins → Create Site Skin</strong>, then choose Use.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- FAQ -->
+      <section class="faq" id="faq">
+        <div class="container">
+          <div class="section-title">
+            <h2>Questions people actually ask</h2>
+            <p>Mostly about which thing goes where, because AO3's three kinds of skin are genuinely confusing</p>
+          </div>
+
+          <div class="faq-list">
+            <details class="faq-item">
+              <summary>What's the difference between a work skin and a site skin?</summary>
+              <div class="faq-body">
+                <p>A <strong>work skin</strong> styles one fic, for everyone who reads it. A <strong>site skin</strong> restyles AO3 itself, and only you see it. They're both made in Preferences → Skins, which is why they get mixed up.</p>
+                <p>This tool makes both, plus plain screenshots that need neither.</p>
+              </div>
+            </details>
+
+            <details class="faq-item">
+              <summary>Screenshot or work skin — which should I use?</summary>
+              <div class="faq-body">
+                <p>Use a <strong>screenshot</strong> if you want it done in two minutes with nothing to configure. It's a picture, so readers can't select the text and have to zoom in on a phone.</p>
+                <p>Use a <strong>work skin</strong> for anything long, or if you care that the conversation reflows on a phone, can be copied, and can be read by a screen reader. It costs one setup on AO3, and after that you reuse it.</p>
+              </div>
+            </details>
+
+            <details class="faq-item">
+              <summary>My fic already has a work skin. Can I add another?</summary>
+              <div class="faq-body">
+                <p>No — AO3 allows a work exactly one, and picking a second silently drops whatever the first one was doing. Add this skin's CSS to the end of the one you already have.</p>
+                <p>For the same reason there's a "covers all four platforms" option: if chapter 4 is a different app, you want one skin that already knows about it rather than a choice between two.</p>
+              </div>
+            </details>
+
+            <details class="faq-item">
+              <summary>Do I need an account?</summary>
+              <div class="faq-body">
+                <p>No. There's no signup, and your work is saved in your own browser rather than on a server. Clearing your browser data clears your projects, so export anything you want to keep.</p>
+              </div>
+            </details>
+
+            <details class="faq-item">
+              <summary>Will the images in my fic stop working one day?</summary>
+              <div class="faq-body">
+                <p>Worth knowing: AO3 never stores a copy of an image, it links to wherever it lives. If a host stops serving a file, it disappears from every chapter you've already posted, with no warning. This has happened to popular skins before.</p>
+                <p>So keep the PNG somewhere you can re-upload it from — or use a work skin, where the conversation is text in your chapter and only the small icons are fetched.</p>
+              </div>
+            </details>
+
+            <details class="faq-item">
+              <summary>Is this official, or affiliated with AO3?</summary>
+              <div class="faq-body">
+                <p>No. It's an unofficial fan tool, not connected to the Organization for Transformative Works. It just knows AO3's rules well enough to stay inside them.</p>
+              </div>
+            </details>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================================================================
+           Also by the same developer — implementation doc §11.6, Tier 1.
+
+           Placement is deliberate and load-bearing:
+             * BELOW the tools, features, how-it-works and FAQ, so nothing is
+               sold before the free thing has been explained;
+             * ABOVE the Ko-fi block but in its own separate section, because §4.5
+               forbids a donation ask and a product promotion sharing one
+               surface. Do not merge these two sections;
+             * NEVER in generated output. Nothing on this page reaches a work
+               skin, a PNG, or anything pasted into AO3 — see §2.
+
+           Copy note: avoid generic "organise your worldbuilding" wording. Most
+           fanfiction authors do not have that problem, because canon already
+           built the world. Manuscript scanning and series bibles are the two
+           specifics that land on someone who has just finished a fic.
+      =================================================================== -->
+      <section class="features" id="more-tools" style="background: var(--bg-light);">
+        <div class="container">
+          <div class="section-header">
+            <h2>Also by the same developer</h2>
+            <p>Separate Google&nbsp;Docs add-ons. Neither is needed for anything on this page — everything above is free.</p>
+          </div>
+
+          <div class="features-grid" style="max-width: 900px; margin: 0 auto;">
+            <div class="feature-card">
+              <div class="feature-icon">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                </svg>
+              </div>
+              <h3>WordFokus</h3>
+              <p>Distraction-free drafting in Google&nbsp;Docs, for the chapters between the messages.</p>
+              <p><a href="https://app.wordfokus.com" target="_blank" rel="noopener noreferrer">Visit WordFokus →</a></p>
+            </div>
+
+            <div class="feature-card">
+              <div class="feature-icon">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+                </svg>
+              </div>
+              <h3>WorldKonstruct</h3>
+              <p>A story bible that lives beside your manuscript — characters, locations, factions and events, with @mentions that update themselves when you rename someone. Point it at a draft you have already written and it can find the elements for you. Useful once a fic turns into a series and you can no longer remember what you decided in chapter&nbsp;3.</p>
+              <p><a href="https://app.wordfokus.com/worldkonstruct" target="_blank" rel="noopener noreferrer">Visit WorldKonstruct →</a></p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Support Section -->
+      <section class="support-section" id="support">
+        <div class="container">
+          <div class="support-card">
+            <div class="support-mark" aria-hidden="true">☕</div>
+
+            <h2>Keeping this free costs me evenings, not servers</h2>
+
+            <div class="support-body">
+              <p>
+                I build this on my own, in the evenings and at weekends. There's no company behind it
+                and no investor, and it isn't going to sprout a paywall later. Hosting is cheap — it's
+                the hours that add up.
+              </p>
+              <p>
+                One thing I did spend real money on: I bought the image hosting outright instead of
+                running on a free tier. Free image hosts are how fics lose their pictures years after
+                posting — the host quietly stops serving a file and every chapter using it goes blank.
+                I'd rather that never happened to your work.
+              </p>
+              <p>
+                <strong>If this has saved you an afternoon</strong> and you're in a position to, a
+                few pounds back makes it easier to keep going. If you're not — genuinely, use it
+                anyway. That's what it's for.
+              </p>
+            </div>
+
+            <a href="https://ko-fi.com/ao3skingen" target="_blank" rel="noopener noreferrer" class="btn support-btn">
+              <span aria-hidden="true" style="font-size: 22px;">☕</span>
+              Support on Ko-fi
+            </a>
+
+            <p class="support-note">
+              One-off or monthly — the toggle's at the top of the Ko-fi page. Takes about thirty
+              seconds, and you don't need an account.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- CTA Section -->
+      <section class="cta-section">
+        <div class="container">
+          <h2>Ready when you are</h2>
+          <p>All three tools are free forever, need no signup, and remember your work between visits.</p>
+          <div class="hero-buttons" style="justify-content: center;">
+            <a href="https://app.ao3skingen.wordfokus.com" class="btn btn-primary btn-large">Start a conversation</a>
+            <a href="https://app.ao3skingen.wordfokus.com/site-skin" class="btn btn-secondary btn-large">Build a site skin</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="container">
+        <div class="footer-grid">
+          <div class="footer-col footer-brand">
+            <h3>AO3 Skin Generator</h3>
+            <p>
+              Screenshots and work skins for your fics, and site skins for how you read. Free, unofficial, and built with ❤️ for the fanfiction community.
+            </p>
+          </div>
+
+          <div class="footer-col">
+            <h3>Product</h3>
+            <ul>
+              <li><a href="#tools">The three tools</a></li>
+              <li><a href="#features">Features</a></li>
+              <li><a href="#how-it-works">How it works</a></li>
+              <li><a href="#faq">FAQ</a></li>
+              <li><a href="https://app.ao3skingen.wordfokus.com">Screenshot &amp; work skin generator</a></li>
+              <li><a href="https://app.ao3skingen.wordfokus.com/site-skin">Site skin builder</a></li>
+            </ul>
+          </div>
+
+          <div class="footer-col">
+            <h3>Resources</h3>
+            <ul>
+              <li><a href="https://archiveofourown.org/faq/skins-and-archive-interface?language_id=en#howdoiskin">AO3 skin tutorial</a></li>
+              <li><a href="https://ao3skingen.wordfokus.com/examples-gallery">Template gallery</a></li>
+              <li><a href="https://app.wordfokus.com" target="_blank" rel="noopener noreferrer">WordFokus — focused drafting</a></li>
+              <li><a href="https://app.wordfokus.com/worldkonstruct" target="_blank" rel="noopener noreferrer">WorldKonstruct — story bible</a></li>
+            </ul>
+          </div>
+
+          <div class="footer-col">
+            <h3>Legal &amp; support</h3>
+            <ul>
+              <li><a href="https://ao3skingen.wordfokus.com/privacy-policy">Privacy policy</a></li>
+              <li><a href="https://ao3skingen.wordfokus.com/terms-of-service">Terms of service</a></li>
+              <li><a href="https://ko-fi.com/ao3skingen" target="_blank" rel="noopener noreferrer" style="color: #FF5E5B; font-weight: 500;">☕ Support on Ko-fi</a></li>
+            </ul>
+          </div>
+
+          <div class="footer-col">
+            <h3 style="color: #FF5E5B;">☕ Buy me a coffee</h3>
+            <p style="font-size: 0.9rem; color: var(--text-light); margin-bottom: 1rem;">If this tool helped you, consider supporting its development!</p>
+            <a href="https://ko-fi.com/ao3skingen" target="_blank" rel="noopener noreferrer" style="display: inline-block; background: #FF5E5B; color: white; padding: 10px 20px; border-radius: 20px; text-decoration: none; font-weight: 500; font-size: 14px;">Support on Ko-fi →</a>
+          </div>
+        </div>
+
+        <div class="footer-bottom">
+          <p>
+            © 2026 AO3 Skin Generator. Built by the creator of <a href="https://wordfokus.com">WordFokus</a>.
+            An unofficial fan tool, not affiliated with the Organization for Transformative Works.
+            Made with ❤️ for the fanfiction community.
+          </p>
+        </div>
+      </div>
+    </footer>
+
+    <script>
+      // Mobile menu toggle
+      const menuToggle = document.querySelector('.menu-toggle');
+      const mobileNav = document.getElementById('mobileNav');
+      const mobileNavClose = document.querySelector('.mobile-nav-close');
+
+      function toggleMobileMenu(show) {
+        if (mobileNav) {
+          mobileNav.classList.toggle('active', show);
+          document.body.style.overflow = show ? 'hidden' : '';
+          if (menuToggle) {
+            menuToggle.textContent = show ? '×' : '☰';
+          }
+        }
+      }
+
+      if (menuToggle && mobileNav) {
+        menuToggle.addEventListener('click', (e) => {
+          e.stopPropagation();
+          toggleMobileMenu(!mobileNav.classList.contains('active'));
+        });
+      }
+
+      if (mobileNavClose && mobileNav) {
+        mobileNavClose.addEventListener('click', () => toggleMobileMenu(false));
+      }
+
+      // Close mobile menu when clicking backdrop
+      if (mobileNav) {
+        mobileNav.addEventListener('click', (e) => {
+          if (e.target === mobileNav) {
+            toggleMobileMenu(false);
+          }
+        });
+      }
+
+      // Close mobile menu when clicking nav links
+      const mobileNavLinks = document.querySelectorAll('.mobile-nav a');
+      mobileNavLinks.forEach(link => {
+        link.addEventListener('click', () => {
+          toggleMobileMenu(false);
+        });
+      });
+
+      // Smooth scrolling for anchor links
+      document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener('click', function (e) {
+          const href = this.getAttribute('href');
+          if (href === '#' || !href.startsWith('#')) return;
+
+          const targetId = href.substring(1);
+          const targetElement = document.getElementById(targetId);
+
+          if (targetElement) {
+            e.preventDefault();
+            const headerOffset = 120;
+            const elementPosition = targetElement.getBoundingClientRect().top;
+            const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+
+            window.scrollTo({
+              top: offsetPosition,
+              behavior: 'smooth'
+            });
+          }
+        });
+      });
+    </script>
+  </body>
+</html>
