@@ -138,7 +138,11 @@ nav a:hover { color: var(--primary); }
 
 .hero-image:hover { transform: perspective(1000px) rotateY(0deg) translateY(-8px); box-shadow: 0 20px 40px rgba(0,0,0,0.15); }
 
-.hero-image img { width: 100%; height: auto; display: block; }
+/* The hero shot is a phone-shaped conversation, so it is portrait. Left to
+   itself at 600px wide it would be ~1120px tall and own the whole fold. Cap the
+   height and anchor to the top: the header, sender colours and reply card are
+   the part that has to be visible, and the crop falls off the bottom. */
+.hero-image img { width: 100%; height: auto; display: block; max-height: 620px; object-fit: cover; object-position: top; }
 
 .hero-buttons { display: flex; gap: 1rem; margin-top: 2rem; flex-wrap: wrap; }
 
@@ -451,7 +455,14 @@ nav { display: none; }
 
           <div class="hero-media">
             <div class="hero-image">
-              <img src="https://media.publit.io/file/AO3-Skins-App/AO3-Skin-Generator-Preview.png" alt="The AO3 Skin Generator, showing an iMessage conversation being built beside a live preview" width="600" height="400" loading="eager">
+              <!-- Captured from the application itself by scripts/capture-hero.mjs,
+                   and served from the app's own host so no third party can take the
+                   hero down. Regenerate it whenever a chat renderer changes.
+                   Portrait, so it is height-capped below rather than allowed to
+                   stretch the hero to 1100px. -->
+              <img src="https://app.ao3skingen.wordfokus.com/hero-scene-crop.png"
+                   alt="An iMessage group chat built with the tool: two people with their own name colours, a laughing Tapback counted twice, a reply quoting the message it answers, and a four-photo grid, marked Read"
+                   width="750" height="1400" loading="eager">
             </div>
           </div>
         </div>
