@@ -529,6 +529,63 @@ async function renderChunk(
     clone.querySelectorAll('.wa-images,.wa-link-preview,.wa-media').forEach(el => {
       (el as HTMLElement).style.cssText += ';margin-top:12px';
     });
+
+    // The WhatsApp group header, which is the iMessage header defect a few
+    // blocks below wearing different class names. "Squad Goals" lost its
+    // descenders and the participant list under it was sliced horizontally by
+    // the band's bottom edge. `.android-header` and `.android-header-name-
+    // wrapper` are both `overflow:hidden`, and html2canvas paints text a little
+    // below the line box Chromium measured, so the overflow is cut rather than
+    // shown. Same structure, same bug — it simply never received the same
+    // treatment when iMessage did.
+    //
+    // Deliberately NOT the iMessage remedy of `overflow:visible` on the text
+    // itself. The name and subtitle here are `white-space:nowrap` with
+    // `text-overflow:ellipsis`, and `overflow:visible` would stop a long group
+    // name truncating and run it out of the header instead. This is the
+    // `.search-text` case from the Google block: overflow clips at the PADDING
+    // edge, so padding gives the descenders room while the ellipsis keeps
+    // working. The wrapper takes `overflow:visible` because it carries no
+    // ellipsis of its own — its children each truncate themselves.
+    //
+    // Export-only, for the usual reason: the preview and the archive both draw
+    // this header correctly.
+    const androidHeader = clone.querySelector('.android-header') as HTMLElement | null;
+    if (androidHeader) {
+      androidHeader.style.overflow = 'visible';
+      androidHeader.style.paddingBottom = '10px';
+      const wrapper = clone.querySelector('.android-header-name-wrapper') as HTMLElement | null;
+      if (wrapper) {
+        wrapper.style.overflow = 'visible';
+        wrapper.style.height = 'auto';
+      }
+      clone.querySelectorAll('.android-header-name, .android-header-subtitle').forEach(el => {
+        (el as HTMLElement).style.cssText += ';line-height:1.7;padding-bottom:3px';
+      });
+    }
+
+    // The reply quote card, cut through the middle of its quoted line.
+    //
+    // `.wa-reply span` is `max-height:3.8em;overflow:hidden`. It is tempting to
+    // read that as a clamp landing mid-line, but the arithmetic rules it out:
+    // the span's line-height is 1.4 and the reproduction's quote is ONE line,
+    // so it occupies ~1.4em against a 3.8em cap and the clamp is never reached.
+    //
+    // The clipper is `overflow:hidden` on its own. The span's height is auto —
+    // exactly one line box — and html2canvas paints the glyphs a little below
+    // the line box Chromium measured, so the bottoms fall outside the span and
+    // are cut. That is the same mechanism as the header above, not a clamp
+    // problem, and it bites a one-line quote as readily as a long one.
+    //
+    // So `overflow:visible` is the fix. `max-height:none` goes with it because
+    // a clamp with visible overflow would spill instead of clipping, and
+    // because the clamp is redundant anyway: the excerpt is already capped at
+    // 180 characters where it is built. iMessage reached the same conclusion
+    // and dropped its own `max-height` in the stylesheet — see the note above
+    // `blockquote.ios-reply span` in generator.ts.
+    clone.querySelectorAll('.wa-reply span').forEach(el => {
+      (el as HTMLElement).style.cssText += ';max-height:none;overflow:visible';
+    });
   }
 
   // Swap remote images for same-origin data URIs before rasterising. Without
