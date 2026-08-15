@@ -45,7 +45,10 @@ export const PLATFORM_ASSETS = {
     replyIconGrey: '/assets/twitter-replyIcon.png',
     retweetIconGrey: '/assets/twitter-retweetIcon.png',
     likeIconGrey: '/assets/twitter-likeIcon.png',
-    logoGrey: '/assets/twitter-logo.png',
+    // A real light-on-dark X, not the fallback. This one pointed at the black
+    // logo like its neighbours, which made the mark invisible on a dark tweet
+    // card — the branch in the renderer existed but resolved to the same file.
+    logoGrey: '/assets/twitter-logoGrey.png',
   },
   instagram: {
     headerGradient: '/assets/instagram-logo.png',
@@ -104,6 +107,7 @@ export const LOCAL_ASSETS_MAP: Record<string, boolean> = {
   // Twitter
   'twitter-verifiedBadge.png': true,
   'twitter-logo.png': true,
+  'twitter-logoGrey.png': true,
   'twitter-replyIcon.png': true,
   'twitter-retweetIcon.png': true,
   'twitter-likeIcon.png': true,
