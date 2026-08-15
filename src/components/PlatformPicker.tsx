@@ -49,13 +49,31 @@ const PLATFORMS = [
   },
 ] as const;
 
+/**
+ * The button text for every starter example.
+ *
+ * A missing entry falls back to the raw id, which is why five of the newest and
+ * richest examples were offering visitors a button labelled
+ * `ios-rich-group-scene`. The fallback is kept because rendering *something* is
+ * better than rendering nothing, but it is a last resort and not a plan:
+ * `examples-catalog.unit.spec.ts` fails when an example has no label here, in
+ * the same test that checks it has an analytics id.
+ *
+ * **Adding an example means adding it in three places** — `examples.ts`, this
+ * map, and `TEMPLATE_IDS` in `analytics.ts` — and the test covers the last two.
+ */
 const EXAMPLE_LABELS: Record<string, string> = {
   'twitter-character-thread': 'Character Thread',
   'twitter-verified-account': 'Verified Account',
   'twitter-media-image': 'Media Tweet',
+  'twitter-quote-post': 'Quote Post',
+  'twitter-four-image-post': 'Four-Image Grid',
+  'twitter-video-post': 'Video Poster',
+  'twitter-long-thread': 'Long Thread',
   'ios-two-person-chat': 'Two-Person Chat',
   'ios-contact-avatar': 'Contact with Avatar',
   'ios-typing-indicators': 'Typing Indicators',
+  'ios-rich-group-scene': 'Rich Group Scene',
   'whatsapp-chat': 'WhatsApp Chat',
   'whatsapp-profile-picture': 'Profile Picture',
   'whatsapp-timestamps-receipts': 'Timestamps & Receipts',
@@ -207,6 +225,23 @@ export const PlatformPicker: React.FC<Props> = ({
               )
             )}
           </div>
+
+          {/* The gallery's only entry point from inside the application.
+              Until now it was reachable from three page footers and from
+              nowhere in the tool. This is the screen where someone is already
+              choosing an example, and it is a full-page entry screen with no
+              composer to occlude — the same reasoning that put MoreTools below.
+              A quiet link, deliberately not a card. */}
+          <p className="mt-5 text-center">
+            <a
+              href="https://ao3skingen.wordfokus.com/examples-gallery"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs font-medium text-stone-500 underline underline-offset-2 hover:text-violet-700"
+            >
+              Browse every example with screenshots →
+            </a>
+          </p>
         </div>
       )}
 
