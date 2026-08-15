@@ -498,11 +498,39 @@ function whatsappMessageHTML(message: Message, project: SkinProject, options: { 
   const endsRun = !isSameWhatsAppRun(project, message, next);
   const groupClass = startsRun && endsRun ? 'single' : startsRun ? 'first' : endsRun ? 'last' : 'middle';
   const identity = resolveMessageIdentity(project, message);
+  // The avatar beside the name, mirroring the iOS group sender exactly.
+  //
+  // WhatsApp group messages never drew one. The reported symptom read as an
+  // AO3 problem — inline styles being stripped — but the inline-styled avatar
+  // code in the old shared `msgHTML` was unreachable for this platform:
+  // `msgHTML` returns to `whatsappMessageHTML` before it ever gets there. The
+  // markup simply had no avatar in it, on the archive or anywhere else.
+  //
+  // Like iOS, it resolves from the canonical scene character, so renaming or
+  // re-picturing someone in the People panel updates messages already written.
+  //
+  // The tone is a finite enum compiled to a class, never a free hex in a
+  // `style` attribute: AO3 strips inline styles outright, so a hex would reach
+  // the preview and the PNG and be dropped on the archive. `wa-tone-*` already
+  // exists and already carries the participant's colour.
+  const groupTone = whatsappToneForMessage(project, message);
+  const groupAvatar = project.settings.androidGroupMode && !message.outgoing
+    ? identity.avatarUrl
+      ? `<img src="${sanitizeUrl(identity.avatarUrl)}" alt="" class="group-avatar" width="20" height="20" /> `
+      : `<span class="group-avatar-initials">${sanitizeText(identity.name.substring(0, 2).toUpperCase())}</span> `
+    : '';
   const groupSender = project.settings.androidGroupMode && !message.outgoing
     // Keep a real separator in the source. With the skin enabled this element
     // is block-level, while skin-off/downloaded HTML needs the space so the
     // participant name cannot weld itself to the first word of the message.
-    ? `<b class="group-sender wa-tone-${whatsappToneForMessage(project, message)}">${sanitizeText(identity.name)}</b> `
+    //
+    // The avatar sits INSIDE the name element, which is where WhatsApp differs
+    // from iMessage. `.group-sender` is display:block here, so the sender gets
+    // a line of its own above the message — that is WhatsApp's layout and it
+    // predates this change. A sibling avatar, the way the iOS renderer does it,
+    // would be pushed onto a line by itself by that block. Nesting keeps the
+    // avatar and the name on the one line and leaves the message where it was.
+    ? `<b class="group-sender wa-tone-${groupTone}">${groupAvatar}${sanitizeText(identity.name)}</b> `
     : '';
   const hiddenSpeaker = groupSender ? '' : `<dt class="visually-hidden">${sanitizeText(identity.name)}: </dt>`;
   const reply = whatsappReplyHTML(message, project, options.sourceMessages || options.allMessages);
@@ -778,10 +806,6 @@ function iosMessageHTML(message: Message, project: SkinProject, options: { index
   return `${timeBreak}<div class="row ${message.outgoing ? 'out' : 'in'} ${groupClass}" data-message-id="${sanitizeAttribute(message.id)}"><dl class="msg">${hiddenSpeaker}<dd class="${classes}">${groupSender}${reply}${text}${images}${link}${media}${time}${tailSvg}${tapbacks}${legacyReaction}</dd>${statusIndicator}</dl></div>`;
 }
 
-function safeCssColor(value: string | undefined, fallback: string): string {
-  return value && /^#[0-9a-f]{6}$/i.test(value.trim()) ? value.trim() : fallback;
-}
-
 function msgHTML(msg: Message, template: string, project: SkinProject, options?: { index?: number; allMessages?: Message[]; sourceMessages?: Message[]; isReply?: boolean; renderMode?: HtmlRenderMode }): string {
   // Time break (iOS/Android)
   const timeBreak = msg.showTimeBreak && msg.timeBreakText
@@ -844,57 +868,23 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
   const resolvedIdentity = resolveMessageIdentity(project, msg);
   const avatar = resolvedIdentity.avatarUrl ? `<img src="${sanitizeUrl(resolvedIdentity.avatarUrl)}" alt="${sanitizeAttribute(resolvedIdentity.name)} avatar" class="avatar" />` : '';
   
-  // Group Chat: Show sender name with avatar/initials for incoming messages (WhatsApp & iOS)
-  const isGroupMode = (template === 'android' && project.settings.androidGroupMode) ||
-                       (template === 'ios' && project.settings.iosGroupMode);
-  
-  // Resolve the participant from the stable scene identity first. Messages
-  // written before group mode was enabled have a characterId but no
-  // participantId, and their stamped sender name can become stale after an
-  // edit. The old id/name paths remain as compatibility fallbacks.
-  let participantId = msg.participantId;
-  const groupParticipants = template === 'android'
-    ? project.settings.androidGroupParticipants
-    : project.settings.iosGroupParticipants;
-
-  const participant = isGroupMode && !msg.outgoing
-    ? groupParticipants?.find(entry => !!msg.characterId && entry.characterId === msg.characterId)
-      || groupParticipants?.find(entry => entry.id === participantId)
-      || groupParticipants?.find(entry => entry.name.toLowerCase() === msg.sender.toLowerCase())
-    : undefined;
-  if (participant) participantId = participant.id;
-  
-  const showSenderName = isGroupMode && !msg.outgoing && participantId;
-  
-  let senderNameHTML = '';
-  if (showSenderName) {
-    if (participant) {
-      // Identity fields come from the canonical scene character so edits apply
-      // retroactively. The participant binding owns only group-specific colour.
-      const displayName = resolvedIdentity.name;
-      const displayAvatar = resolvedIdentity.avatarUrl;
-      // Build avatar or initials with inline styles for maximum specificity
-      let avatarHTML = '';
-      if (displayAvatar) {
-        // The width/height ATTRIBUTES are the ones that matter on AO3: `style`
-        // is on no allowed-attribute list, so the sanitizer strips it silently
-        // and the inline sizing below never reaches the archive at all.
-        avatarHTML = `<img src="${sanitizeUrl(displayAvatar)}" alt="${sanitizeAttribute(displayName)}" class="group-avatar" width="20" height="20" style="width:20px;height:20px;border-radius:50%;object-fit:cover;flex-shrink:0;display:block !important;" />`;
-      } else {
-        // Generate initials (first 2 chars of name)
-        const initials = displayName.substring(0, 2).toUpperCase();
-        const participantColor = safeCssColor(participant.color, '#777777');
-        avatarHTML = `<div class="group-avatar-initials" style="width:20px;height:20px;border-radius:50%;display:flex !important;align-items:center;justify-content:center;font-size:8px;font-weight:700;flex-shrink:0;background-color:${participantColor}20;color:${participantColor};">${sanitizeText(initials)}</div>`;
-      }
-      
-      // Use roleColor from message or fall back to participant color
-      const displayColor = safeCssColor(msg.roleColor, safeCssColor(participant.color, '#777777'));
-      senderNameHTML = `<div class="group-sender-row" style="display:flex !important;align-items:center;gap:6px;margin-bottom:4px;visibility:visible !important;">${avatarHTML}<div class="group-sender" style="color: ${displayColor};">${sanitizeText(displayName)}</div></div>`;
-    }
-  }
-  
-  // Only show sender name for templates that need it (not WhatsApp 1-on-1)
-  const who = (template === 'android' && !isGroupMode) ? '' : `<dt class="sender">${sanitizeText(resolvedIdentity.name)}</dt>`;
+  // The group sender row that used to live here is gone, and with it the only
+  // markup in this file that carried inline `style` attributes.
+  //
+  // It was unreachable. Both chat platforms return above — `android` to
+  // `whatsappMessageHTML` and `ios` to `iosMessageHTML` — so nothing that
+  // could ever set `isGroupMode` reached this far, and only `twitter` and
+  // `google` get here now. The block built a `.group-sender-row` flex wrapper
+  // with `!important` inline styles and a free participant hex, none of which
+  // AO3 keeps; it read like a live defect and was simply dead.
+  //
+  // Each platform now owns its own group sender, both of them tone-class based
+  // with no inline styles: iOS at the `ios-tone-` avatar above, WhatsApp at the
+  // `wa-tone-` one in `whatsappMessageHTML`.
+  //
+  // `who` no longer needs its `template === 'android'` guard for the same
+  // reason: android cannot reach this line.
+  const who = `<dt class="sender">${sanitizeText(resolvedIdentity.name)}</dt>`;
 
   /**
    * The hidden speaker label, and when to leave it out.
@@ -945,9 +935,10 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
     ? resolvedIdentity.name
     : msg.outgoing ? (msg.sender || 'You') : (msg.sender || 'Them');
 
-  const hiddenSpeaker = senderNameHTML
-    ? ''
-    : `<dt class="visually-hidden">${sanitizeText(speaker)}: </dt>`;
+  // Always emitted here. The branch that suppressed it existed for the group
+  // sender row above, which never ran on this path; the two chat renderers
+  // that do have a visible speaker name make the same decision themselves.
+  const hiddenSpeaker = `<dt class="visually-hidden">${sanitizeText(speaker)}: </dt>`;
   
   // iOS/Android grouping logic
   let isFirstInGroup = true;
@@ -982,12 +973,7 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
   const hasReaction = (template === 'ios' || template === 'android') && !!msg.reaction;
   const bubbleClasses = `bubble ${msg.outgoing?'out':'in'}${hasAttachment ? ' image-bubble' : ''}${hasReaction ? ' has-reaction' : ''}${chatEmojiSize ? ` emoji-only ${chatEmojiSize}` : ''}`;
   let bubble = `<dd class="${bubbleClasses}">`;
-  
-  // Add group sender name INSIDE bubble (at top)
-  if (senderNameHTML) {
-    bubble += senderNameHTML;
-  }
-  
+
   // Add message text if present
   if (sanitized && sanitized.trim()) {
     bubble += chatMessageContent;
@@ -1218,15 +1204,10 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
     
     let finalBubble = '';
     if (hasImage) {
-      // Build bubble with both text and image - INCLUDE senderNameHTML for group mode!
       let bubbleContent = '';
-      
-      // Add group sender name at top of bubble (for group mode incoming messages)
-      if (senderNameHTML) {
-        bubbleContent += senderNameHTML;
-      }
-      
-      // Add message text
+
+      // No group sender name here either: the block that built it was
+      // unreachable on this path, and both chat renderers now emit their own.
       bubbleContent += sanitized;
       
       // Add image
@@ -2038,19 +2019,15 @@ ${tones}
 #workskin .ios-input-bar .ios-input-plus{margin-left:0;}
 #workskin .ios-input-plus,#workskin .ios-input-mic{color:${colour.chromeColor};font-size:1.2em;line-height:1;}
 #workskin .ios-input-bar .input-placeholder{flex:1;background:${colour.inputFieldBg};border:1px solid ${colour.inputFieldBorder};border-radius:1.286em;padding:0.571em 0.857em;font-size:0.875em;color:${colour.inputPlaceholderColor};}
-/* The gap property is spelled out as child margins: AO3 keeps a property only
-   if it is on its list or CONTAINS a shorthand name, so column-gap passes and
-   bare gap does not. Same substitution as the Twitter stylesheet. */
-#workskin dd.bubble .group-sender-row{display:flex !important;align-items:center;margin-bottom:0.267em;visibility:visible !important;opacity:1 !important;}
-#workskin dd.bubble.image-bubble .group-sender-row{display:flex !important;align-items:center;margin-bottom:0.4em;visibility:visible !important;opacity:1 !important;}
-#workskin dd.bubble .group-sender-row > *{margin-right:0.4em;}
-#workskin dd.bubble .group-sender-row > *:last-child{margin-right:0;}
-/* No object-fit — it is not on AO3's list and has no legal equivalent. The
-   avatar is a fixed 20x20 square, so a non-square source letterboxes instead of
-   cropping. Visible only to authors who upload a non-square avatar. */
-#workskin dd.bubble .group-avatar{width:1.333em;height:1.333em;border-radius:50%;flex-shrink:0;display:block !important;}
-#workskin dd.bubble .group-avatar-initials{width:2.5em;height:2.5em;border-radius:50%;display:flex !important;align-items:center;justify-content:center;font-size:0.533em;font-weight:700;flex-shrink:0;}
-#workskin dd.bubble .group-sender{font-size:0.733em;font-weight:600;line-height:1.2;opacity:0.9;display:inline-block !important;}
+/* Four .group-sender-row rules and three overrides of the avatar classes stood
+   here. All of them were dead. The wrapper they styled came from a branch of
+   the shared msgHTML that this renderer returns before ever reaching, so it was
+   never emitted; the .group-avatar and .group-avatar-initials overrides
+   restated the rules already set above, at a larger size and with !important,
+   and the .group-sender rule named a class iMessage does not use — its sender
+   is .ios-group-sender. Three sources disagreed about the size and display mode
+   of one element and not one of them was reachable.
+   The live rules are above, beside .ios-group-sender. */
 ${getTextFormattingCSS(isDark, 15)}
 #workskin .wm{margin-top:1.778em;font-size:0.563em;opacity:0.45;text-align:center;color:${colour.timeBreakColor};}
 ${VISUALLY_HIDDEN_CSS}`;
@@ -2084,6 +2061,11 @@ function androidColours(senderBg: string, recvBg: string) {
       typingLabelColor: 'rgba(0,0,0,0.6)',
       typingDotBg: 'rgba(0,0,0,0.4)',
       avatarPlaceholderBg: '#128c7e',
+      // The neutral fill behind a monogram avatar, matching the iOS palette
+      // key of the same name. Deliberately NOT avatarPlaceholderBg: that is
+      // solid brand teal, and the monogram is painted in the participant's
+      // tone on top of it, which would be teal on teal.
+      cardBg: 'rgba(0,0,0,0.06)',
       bubbleShadow: '0 1px 2px rgba(0,0,0,0.1)',
       // WhatsApp draws the reaction as a pill in the surface colour, attached
       // to the bubble — not as a bare emoji floating under it.
@@ -2104,6 +2086,7 @@ function androidColours(senderBg: string, recvBg: string) {
       typingLabelColor: 'rgba(255,255,255,0.6)',
       typingDotBg: 'rgba(255,255,255,0.4)',
       avatarPlaceholderBg: '#00a884',
+      cardBg: 'rgba(255,255,255,0.12)',
       bubbleShadow: '0 1px 2px rgba(0,0,0,0.3)',
       reactionChipBg: '#233138',
       reactionChipBorder: 'rgba(255,255,255,0.08)',
@@ -2157,6 +2140,19 @@ ${PARAGRAPH_RESET_CSS}
 #workskin .row.out.last dd.bubble,#workskin .row.out.single dd.bubble{border-bottom-right-radius:0.143em;}
 #workskin .row.in.last dd.bubble,#workskin .row.in.single dd.bubble{border-bottom-left-radius:0.143em;}
 #workskin .group-sender{display:block;font-size:0.8em;font-weight:700;line-height:1.2;margin-bottom:0.35em;}
+/* The participant avatar, which WhatsApp group chats never drew. It lives
+   inside .group-sender, so both of these size themselves against that
+   element's 0.8em rather than the bubble's.
+
+   The monogram takes its colour from the wa-tone class on the parent, which is
+   the whole point: a tone is a finite enum compiled to a class, so it survives
+   AO3. A free hex in a style attribute would not — the archive strips inline
+   styles, and the preview and the published work would disagree.
+
+   No object-fit: not on AO3's list and it has no legal equivalent, so a
+   non-square avatar letterboxes into the circle rather than cropping. */
+#workskin .group-sender .group-avatar,#workskin .group-sender .group-avatar-initials{display:inline-block;width:1.667em;height:1.667em;border-radius:50%;vertical-align:middle;margin-right:0.35em;flex-shrink:0;}
+#workskin .group-sender .group-avatar-initials{background:${colour.cardBg};color:inherit;text-align:center;line-height:1.667em;font-size:0.75em;font-weight:700;}
 ${tones}
 #workskin .message-text{display:inline;}
 #workskin .wa-reply{display:block;margin:0 0 0.45em 0;padding:0.4em 0.5em;border-left:0.25em solid #667781;border-radius:0.25em;background:rgba(0,0,0,0.06);font-style:normal;}

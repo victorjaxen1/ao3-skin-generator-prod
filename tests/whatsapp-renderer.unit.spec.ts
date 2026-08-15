@@ -166,4 +166,48 @@ test.describe('WhatsApp renderer and export contract', () => {
     expect(html).toContain('Replying to Alex');
     expect(html).toContain('row out single');
   });
+
+  // Group messages carry a participant avatar, on both branches.
+  //
+  // They never did. The symptom read as AO3 stripping the inline styles off an
+  // avatar, but the inline-styled avatar code lived in a branch of the shared
+  // msgHTML that this renderer returns before reaching — the markup had no
+  // avatar in it at all. Both branches are asserted because the monogram is
+  // what a scene built from the picker gets: participants have no avatarUrl
+  // until someone sets one.
+  test('a group message carries a participant avatar, with and without an avatar url', () => {
+    const withoutAvatar = buildHTML(richWhatsApp());
+    expect(withoutAvatar).toContain('class="group-avatar-initials"');
+    expect(withoutAvatar).toContain('>AL</span>');
+    expect(withoutAvatar).not.toContain('class="group-avatar"');
+
+    const project = richWhatsApp();
+    project.cast = {
+      characters: [{ id: 'alex', name: 'Alex', avatarUrl: 'https://example.com/alex.png' }],
+    };
+    project.settings.androidGroupParticipants = [
+      { id: 'alex', name: 'Alex', color: '#137333', whatsappTone: 'green', characterId: 'alex' },
+      { id: 'bea', name: 'Bea', color: '#6f42c1', whatsappTone: 'purple' },
+    ];
+    project.messages = project.messages.map(message =>
+      message.id === 'alex-1' ? { ...message, characterId: 'alex' } : message);
+
+    const withAvatar = buildHTML(project);
+    expect(withAvatar).toContain('class="group-avatar"');
+    expect(withAvatar).toContain('https://example.com/alex.png');
+    // Bea still has none, so the monogram branch has to survive alongside it.
+    expect(withAvatar).toContain('class="group-avatar-initials"');
+  });
+
+  // The strongest form of the rule, and deliberately not narrowed to the
+  // avatar: AO3 strips `style` outright, so anything styled that way reaches
+  // the preview and the PNG and is silently dropped on the published work. An
+  // assertion aimed at one class would have missed the sender row that used to
+  // carry its own inline flex.
+  test('WhatsApp group markup carries no inline style attribute anywhere', () => {
+    for (const mode of ['static', 'ao3-work'] as const) {
+      const html = buildHTML(richWhatsApp(), mode);
+      expect(html, `${mode} output must not inline styles`).not.toContain('style=');
+    }
+  });
 });
