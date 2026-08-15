@@ -353,7 +353,13 @@ async function renderChunk(
     clone.querySelectorAll('.tweet .verified-badge').forEach(el => {
       (el as HTMLElement).style.cssText += ';width:18px;height:18px;display:block';
     });
-    clone.querySelectorAll('.tweet .twitter-logo').forEach(el => {
+    // Compact only. This nudges the logo down to sit on the name line's
+    // baseline, and it asserts `position:relative` — which as an INLINE style
+    // beats the stylesheet, so applying it to the expanded card's logo would
+    // drop it out of its absolute corner and back into flow in the PNG alone.
+    // The expanded logo needs no compensation: it is positioned from the card,
+    // not aligned against a line box.
+    clone.querySelectorAll('.tweet:not(.expanded) .twitter-logo').forEach(el => {
       (el as HTMLElement).style.cssText +=
         ';width:20px;height:20px;display:block;flex-shrink:0;position:relative;top:7px';
     });

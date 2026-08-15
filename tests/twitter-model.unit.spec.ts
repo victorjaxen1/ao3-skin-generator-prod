@@ -140,6 +140,36 @@ test('timeline keeps reply context without thread connectors and post timestamps
   expect(buildHTML(project)).toContain('class="tweet reply');
 });
 
+// Both tweet templates carry the X logo.
+//
+// There are two of them — compact and expanded — and only compact ever had
+// the logo. Nothing asserted the expanded one did, so it shipped without it
+// in the 13 August overhaul and stayed that way: the four examples a
+// developer reaches for first are all compact, and the bug hid behind them.
+//
+// The last case is the one that matters. A blank project defaults to scene
+// mode `single`, and `resolveTwitterLayout` sends the first post of a single
+// scene to the expanded template — so the DEFAULT path for a first-time
+// visitor building a tweet was the one missing the logo.
+test('both tweet templates carry the X logo, including a blank project default', () => {
+  const compact = twitterProject([post('root', 'Root'), post('reply', 'Reply', 'root', 'casey')]);
+  compact.settings.twitterSceneMode = 'thread';
+  const compactHTML = buildHTML(compact);
+  expect(compactHTML).toContain('class="tweet reply');
+  expect(compactHTML).toContain('class="twitter-logo"');
+
+  const expanded = twitterProject([{ ...post('root', 'Root'), twitterLayout: 'expanded' }]);
+  const expandedHTML = buildHTML(expanded);
+  expect(expandedHTML).toContain('class="tweet expanded"');
+  expect(expandedHTML).toContain('class="twitter-logo"');
+
+  // The default path, spelled out rather than assumed: no layout, no scene
+  // mode, exactly what the picker produces.
+  const blank = twitterProject([post('root', 'Root')]);
+  expect(resolveTwitterLayout(blank, blank.messages[0], 0)).toBe('expanded');
+  expect(buildHTML(blank)).toContain('class="twitter-logo"');
+});
+
 test('migrates legacy theme and global quote once, with canonical fields winning', () => {
   const project = twitterProject([post('root', 'Root'), post('other', 'Other')]);
   project.settings.twitterDarkMode = true;

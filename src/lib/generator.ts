@@ -1181,7 +1181,16 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
     // Check if this should be displayed as expanded view (clicked-into reply)
     if (msg.expandedView) {
       // Expanded view: avatar on left, larger text and the focal post's metrics.
-      return `${activity}<div class="tweet expanded" data-message-id="${sanitizeAttribute(msg.id)}">${effectiveAvatar}<div class="expanded-content"><div class="expanded-name"><b class="name">${safeDisplayName}</b>${verified}</div><div class="expanded-handle">${openParen}<span class="handle">${sanitizeText(handle)}</span>${closeParen}${accountLabel}</div>${replyingTo}${attribution}<div class="expanded-body">${bodyWithFormatting}${translationContext}${tweetMedia}${quote}${poll}</div>${timestampLine ? `<div class="time-line">${sanitizeText(timestampLine)}</div>`:''}${metrics}</div></div>`;
+      // The logo goes in the card's top-right corner, which is where the real
+      // X detail view puts it — not inline after the display name. `.expanded-
+      // name` is its own block above the handle, so an inline logo would sit
+      // against the name rather than at the right edge. Positioned from
+      // `.tweet.expanded`, which the stylesheet makes the containing block.
+      //
+      // Last child on purpose: it is decorative (alt=""), and with the skin off
+      // AO3 still renders the <img>, so putting it first would drop a stray
+      // logo above the avatar before the reader reaches the name.
+      return `${activity}<div class="tweet expanded" data-message-id="${sanitizeAttribute(msg.id)}">${effectiveAvatar}<div class="expanded-content"><div class="expanded-name"><b class="name">${safeDisplayName}</b>${verified}</div><div class="expanded-handle">${openParen}<span class="handle">${sanitizeText(handle)}</span>${closeParen}${accountLabel}</div>${replyingTo}${attribution}<div class="expanded-body">${bodyWithFormatting}${translationContext}${tweetMedia}${quote}${poll}</div>${timestampLine ? `<div class="time-line">${sanitizeText(timestampLine)}</div>`:''}${metrics}</div><img src="${xLogo}" alt="" class="twitter-logo" width="20" height="20" /></div>`;
     }
     
     // Add reply class if this is a threaded reply. `no-metrics` suppresses the
@@ -2440,8 +2449,26 @@ ${pollWidths}
 #workskin .tweet .replying-to{font-size:0.813em;color:${colour.textSecondary};margin:0.615em 0 0.308em 0;line-height:1.231;}
 #workskin .tweet .replying-to .reply-handle{color:#1d9bf0;text-decoration:none;}
 #workskin .tweet .replying-to .reply-handle:hover{text-decoration:underline;}
-#workskin .tweet.expanded{padding:1em;display:flex;margin-left:-0.75em;}
+/* position:relative so the X logo can sit in the card's corner, the way the
+   real detail view draws it. AO3 allows position, top and right — all three
+   are on the allowlist — so this survives the archive. It must be a stylesheet
+   rule and not an inline style: AO3 strips inline styles outright, and the app
+   and the archive would then disagree about where the logo is. */
+#workskin .tweet.expanded{padding:1em;display:flex;margin-left:-0.75em;position:relative;}
 #workskin .tweet.expanded > *{margin-left:0.75em;}
+/* Out of flow, so the flex row above never lays it out and the -0.75em/0.75em
+   margin pair cannot shift it. Matches the card's 1em padding.
+
+   Descendant selector plus display:contents, both required, for the reason
+   spelled out at .quote-head below. AO3 wraps a bare <img> child in a
+   paragraph of its own, and that paragraph then becomes a real flex item: a
+   child combinator here stopped matching the moment the wrapper appeared, the
+   logo dropped back into flow inside it, and .expanded-content lost 31px of
+   width under injection. Measured, not guessed — ao3-injection.spec.ts caught
+   it. The descendant selector keeps positioning the image through the wrapper;
+   display:contents keeps the wrapper from taking any width. */
+#workskin .tweet.expanded > p{display:contents;}
+#workskin .tweet.expanded .twitter-logo{position:absolute;top:1em;right:1em;margin:0;width:1.25em;height:1.25em;display:block;}
 #workskin .tweet.expanded .avatar{width:2.5em;height:2.5em;flex-shrink:0;margin:0;}
 #workskin .tweet.expanded .expanded-content{flex:1;min-width:0;}
 #workskin .tweet.expanded .expanded-name{display:flex;align-items:center;margin-bottom:0.125em;margin-left:-0.25em;}
