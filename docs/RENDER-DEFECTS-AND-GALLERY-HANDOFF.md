@@ -136,7 +136,60 @@ What actually changed:
 
 **If the owner wants the image back**, the supported route is to paste a URL into that field per project. Do **not** restore a remote URL as a default — that re-introduces the permanence bug across every work published afterwards.
 
-**Worth doing instead** (small, and it converts a support question into a self-answering UI): add a line of help text under the field explaining that the header draws itself and this is an optional override whose host must stay up. One `<p>` in `SettingsSheet.tsx`.
+### 3.1 Is the grey correct? Yes.
+
+Raised during review: *"isn't the iMessage header a kinda blue header? this is just grey."*
+
+It is grey, and that is right. [`generator.ts:1763`](src/lib/generator.ts#L1763) falls back to a flat `colour.chromeBg` when no header image is set. Modern iOS Messages has a light grey, translucent navigation bar; the blue in iMessage is two other things, and the app already draws both — `chromeColor: '#007aff'` on the back chevron and info icon, and the outgoing bubble fill. Compare WhatsApp, which correctly uses `headerBgColor: '#075e54'`.
+
+A remembered blue header bar is either iOS 6-era Messages, or the retired remote strip was a stylised design rather than a faithful one.
+
+### 3.2 "Can we download a copy to AO3?" — No, and this is the important fact
+
+**AO3 does not host images at all.** It stores no copy and only links to wherever a file already lives. The app's own public FAQ says so:
+
+> AO3 never stores a copy of an image, it links to wherever it lives. If a host stops serving a file, it disappears from every chapter you've already posted, with no warning.
+
+So there is no upload target on AO3's side, and no version of "attach the header image to the work" exists. Every image in a work skin is a permanent hotlink to a third-party server, refetched by every reader of every chapter indefinitely. That is the whole basis of Learning 18, and it is why this cannot be solved by moving the file somewhere better on AO3.
+
+### 3.3 Decided: build a header tint, not a header image
+
+**Owner decision, August 15, 2026.** The real complaint is that the header looks flat, and an image is the wrong instrument for it. A finite tint beats a background image on every axis that matters here:
+
+| | Header image | Header tint |
+| --- | --- | --- |
+| External request per reader | one, forever | none |
+| Breaks when a host dies | every chapter already posted | never |
+| Survives skin-off and EPUB download | no | yes |
+| AO3-safe | only while the host lives | yes |
+| Bytes added to the work skin | zero, but a network dependency | a few CSS rules |
+
+**Three parts, in this order:**
+
+1. **Add `iosHeaderTone`** — a finite enum compiled to a class, exactly like the shipped `iosTone` and `whatsappTone`. Learning 11 is binding: a value that must survive AO3 is an enum compiled to a class, **never** a free hex emitted as an inline `style`, because AO3 strips inline styles outright and the app and the archive would then disagree.
+2. **Keep the CSS-drawn header as the default.** The default tone must reproduce today's `chromeBg` exactly, so no existing project changes appearance.
+3. **Optional, later:** route header *images* through the owner's own `/api/image-upload` rather than a pasted URL, so the file lands on hosting the owner controls and pays for. Still a third-party dependency and still a permanence risk — just a risk the owner owns rather than a stranger's. Do not build this until someone asks for it.
+
+**Do not** restore a remote URL as a default under any of these.
+
+#### Implementation notes
+
+- **Scope it to iOS first.** WhatsApp's header is brand-teal and a tint control there mostly offers ways to make it wrong. The reported gap is iMessage.
+- **Each tone must carry its own foreground.** The header renders `contactNameColor` text plus `chromeColor` icons. A dark tint with the light-mode `#000` name is unreadable, so a tone defines background *and* the text/icon colours that go with it, per theme. Do not let a user pick a background independently of its foreground.
+- **This is a schema change**, so the standing rule applies: write the pure `v7 -> v8` migration and its fixtures **before** touching the importer, and add an explicit dispatch entry in `PROJECT_FILE_MIGRATIONS` even though the step adds no data to existing projects — `v6 -> v7` does exactly that and says why in `docs/PROJECT-FILE-SCHEMA.md`. A migration must never invent content: an old project gets the default tone, not a guess.
+- **Master skin.** `MASTER_SKIN_VERSION` bumps, which re-opens the AO3 read-back gate — the v7 read-back is *already* outstanding and its test is skipping. Prefer closing that gate before adding v8, or the repository will owe two read-backs instead of one.
+
+#### Tests to write
+
+- every tone emits a class and **no** inline `style` on the header;
+- the default tone's compiled CSS is byte-identical to today's `chromeBg` output, which is what proves existing projects are untouched;
+- the master skin still lints clean and contains no empty rules;
+- skin-off output is unchanged by tone — a tint is decoration, and Learning 12's rule stands that colour may reach inside a work while layout may not;
+- a `v7` fixture migrates to `v8` with the default tone and no other field altered.
+
+#### Also worth doing while in `SettingsSheet.tsx`
+
+Add one line of help text under the header-image field saying the header draws itself and this is an optional override whose host must stay up. It converts a recurring support question into a self-answering UI, and it will read as the natural sibling of the new tint control.
 
 ---
 
