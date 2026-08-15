@@ -112,10 +112,53 @@ await scenePage.screenshot({
   path: cropFile,
   clip: { x: box.x, y: box.y, width: box.width, height: Math.min(box.height, 700) },
 });
+// A 1200x630 social card.
+//
+// og:image and twitter:image want landscape at a fixed size; the hero crop is
+// portrait, so reusing it would letterbox badly in every feed that renders it.
+//
+// One phone, not two. The first attempt overlapped a second column for density
+// and its left edge sliced the first column's bubbles mid-word — dense, and
+// unmistakably broken at a glance, which is the worst thing a share card can
+// be. A single angled phone with room around it reads as intentional.
+const cardFile = outFile.replace(/\.png$/i, '-social.png');
+const cardPage = await context.newPage();
+await cardPage.setViewportSize({ width: 1200, height: 630 });
+await cardPage.setContent(
+  `<!doctype html><html><head><meta charset="utf-8"><style>
+     html,body{margin:0;padding:0;width:1200px;height:630px;overflow:hidden;
+       background:linear-gradient(135deg,#e8f0fe 0%,#f8f9fa 100%);font-family:'Segoe UI',Roboto,Arial,sans-serif;}
+     .wrap{display:flex;height:630px;align-items:center;gap:40px;padding:0 56px;box-sizing:border-box;}
+     .copy{flex:0 0 470px;}
+     .copy h1{font-size:52px;line-height:1.1;margin:0 0 18px;color:#202124;font-weight:700;letter-spacing:-0.5px;}
+     .copy h1 em{font-style:normal;color:#1a73e8;}
+     .copy p{font-size:23px;line-height:1.45;color:#5f6368;margin:0 0 22px;}
+     .chips{display:flex;gap:10px;flex-wrap:wrap;}
+     .chip{background:#fff;border:1px solid #dadce0;border-radius:50px;padding:8px 16px;font-size:16px;color:#3c4043;font-weight:500;}
+     .stage{flex:1;display:flex;justify-content:center;align-items:center;height:630px;}
+     .phone{width:375px;height:560px;background:#fff;border-radius:26px;
+       box-shadow:0 22px 60px rgba(32,33,36,0.26);overflow:hidden;
+       transform:rotate(-3deg);}
+   </style><style>${extracted.styles}</style></head>
+   <body><div class="wrap">
+     <div class="copy">
+       <h1>Social-media scenes<br>for <em>AO3</em></h1>
+       <p>Build a conversation, then publish it as a picture &mdash; or as real text your readers can select.</p>
+       <div class="chips"><span class="chip">Free, no signup</span><span class="chip">iMessage &middot; WhatsApp &middot; X &middot; Google</span></div>
+     </div>
+     <div class="stage"><div class="phone">${extracted.html}</div></div>
+   </div></body></html>`,
+  { waitUntil: 'networkidle' }
+);
+await cardPage.waitForTimeout(2500);
+await cardPage.screenshot({ path: cardFile, clip: { x: 0, y: 0, width: 1200, height: 630 } });
+await cardPage.close();
+
 await scenePage.close();
 
 console.log(`hero written: ${outFile}`);
 console.log(`hero crop written: ${cropFile}`);
+console.log(`social card written: ${cardFile}`);
 if (failedImages.length) {
   console.log(`\nWARNING: ${failedImages.length} image request(s) did not load — the hero may show broken images:`);
   for (const entry of [...new Set(failedImages)]) console.log('  ' + entry);

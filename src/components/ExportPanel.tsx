@@ -397,6 +397,34 @@ async function renderChunk(
     clone.querySelectorAll('dd.bubble.emoji2 .emoji-content').forEach(el => {
       (el as HTMLElement).style.cssText += ';margin-bottom:14px';
     });
+
+    // A rich block painted across the last line of the text above it.
+    //
+    // "This is what you are driving into." came out of Save PNG sliced through
+    // the middle of its second line, with the photo grid sitting on top of the
+    // lower half. The preview and the archive are both correct, so only an
+    // exported picture could show it.
+    //
+    // This is the *same defect* already fixed for Twitter a few blocks above:
+    // html2canvas paints a wrapped line about six pixels below the line box
+    // Chromium measured, so a following block starts inside it. Twitter's
+    // media grid, video card, quote and poll were compensated at the time;
+    // iMessage and WhatsApp have had the same rich blocks since the 13-14
+    // August rebuilds and were never given the same treatment.
+    //
+    // Same remedy, for the same reason it was chosen there: move the raster
+    // block down eight CSS pixels and reserve the eight back in flow, so two
+    // consecutive cards cannot be pushed into each other. Export-only —
+    // changing the stylesheet would move the preview and the archive, and
+    // neither of those is wrong.
+    clone
+      .querySelectorAll([
+        '.ios-images', '.ios-link-preview', '.ios-audio-card', '.ios-video-card',
+        '.wa-images', '.wa-link-preview', '.wa-media',
+      ].join(','))
+      .forEach(el => {
+        (el as HTMLElement).style.cssText += ';position:relative;top:8px;margin-bottom:8px';
+      });
   }
 
   // The iMessage header name, which no test in this repo could see.
