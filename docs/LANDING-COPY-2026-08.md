@@ -179,8 +179,10 @@ belongs low on the page, below the tools and features.)*
 > be useful — both separate Google Docs add-ons, neither needed for anything on
 > this page.
 >
-> **WordFokus** — distraction-free drafting in Google Docs, for the chapters
-> between the messages.
+> **WordFokus** — drafting in Google Docs that won't let you edit as you write.
+> It locks what you have already typed, so you stop re-polishing the first
+> sentence and the chapter actually gets finished. Editing comes afterwards, when
+> there is something to edit.
 > `Visit WordFokus` → `https://app.wordfokus.com`
 >
 > **WorldKonstruct** — a story bible that lives beside the manuscript:
@@ -190,12 +192,20 @@ belongs low on the page, below the tools and features.)*
 > longer remember what you decided in chapter 3.
 > `Visit WorldKonstruct` → `https://app.wordfokus.com/worldkonstruct`
 
-**Why the WorldKonstruct line is worded that way.** Two specifics do the work,
-and both are true of the shipped add-on: *manuscript scanning*, which makes it
-relevant to someone who has already finished writing — the state nearly every
-SkinGen visitor is in — and *series bibles*, which is the one long-fic problem
-this audience genuinely has. Avoid generic "organise your worldbuilding" copy;
-it describes a job most fanfic authors don't have, because canon already did it.
+**Why both lines are worded that way.** Each names a *mechanism*, not a category.
+
+*WordFokus* is not "distraction-free writing" — that phrase covers a hundred apps
+and describes nothing. Refusing to let you edit while you draft is unusual,
+immediately understandable, and the actual reason someone would install it. It
+also fits this audience precisely: an author who has just finished a fic knows
+exactly how long they spent rewriting the first paragraph.
+
+*WorldKonstruct* rests on two specifics, both true of the shipped add-on:
+*manuscript scanning*, which makes it relevant to someone who has already
+finished writing — the state nearly every SkinGen visitor is in — and *series
+bibles*, the one long-fic problem this audience genuinely has. Avoid generic
+"organise your worldbuilding" copy; it describes a job most fanfic authors don't
+have, because canon already did it.
 
 **Two constraints on this block, from Section 2 of the implementation doc:**
 

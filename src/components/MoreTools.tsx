@@ -32,10 +32,17 @@ interface Product {
   name: string;
   href: string;
   /**
-   * One line, and specific rather than generic. "Organise your worldbuilding"
-   * describes a job most fanfiction authors do not have, because canon already
-   * did it — see Section 11.6. Manuscript scanning and series bibles are the two
-   * things that land on someone who has just finished a fic.
+   * Specific rather than generic, because the generic version of each of these
+   * describes a product the reader cannot picture.
+   *
+   * WordFokus is not "distraction-free writing" — that phrase covers a hundred
+   * apps and names no mechanism. It refuses to let you edit while you draft,
+   * which is an unusual and immediately understandable thing to do, so say that.
+   *
+   * WorldKonstruct is not "organise your worldbuilding" — that describes a job
+   * most fanfiction authors do not have, because canon already did it. See
+   * Section 11.6. Manuscript scanning and series bibles are the two specifics
+   * that land on someone who has just finished a fic.
    */
   blurb: string;
 }
@@ -45,7 +52,7 @@ const PRODUCTS: readonly Product[] = [
     id: 'wordfokus',
     name: 'WordFokus',
     href: 'https://app.wordfokus.com',
-    blurb: 'Distraction-free drafting in Google Docs, for the chapters between the messages.',
+    blurb: 'Drafting in Google Docs that will not let you edit as you write. It locks what you have already typed, so you stop re-polishing the first sentence and the chapter actually gets finished.',
   },
   {
     id: 'worldkonstruct',
