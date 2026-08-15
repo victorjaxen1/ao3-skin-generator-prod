@@ -19,7 +19,10 @@ import { fileURLToPath } from 'url';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const baseUrl = process.argv[2] || 'http://127.0.0.1:3200';
 const outFile = process.argv[3] || path.join(here, '..', 'public', 'hero-scene-builder.png');
-const EXAMPLE_ID = 'ios-rich-group-scene';
+// Matches either the raw id or the friendly picker label. The picker showed raw
+// ids until `4c0c4e0` labelled them, and this script broke the moment it did —
+// so accept both rather than track which side is current.
+const EXAMPLE_MATCH = /rich group scene|ios-rich-group-scene/i;
 
 const browser = await chromium.launch({ channel: process.env.UX_CHANNEL || 'msedge' });
 const context = await browser.newContext({
@@ -43,7 +46,7 @@ await page.goto(baseUrl, { waitUntil: 'networkidle' });
 
 // The picker labels the newest examples with their raw id, so match either the
 // friendly label or the id itself.
-const exampleButton = page.getByRole('button', { name: new RegExp(EXAMPLE_ID, 'i') });
+const exampleButton = page.getByRole('button', { name: EXAMPLE_MATCH });
 await exampleButton.first().click();
 
 // Analytics consent defaults to off and asks on first visit. Correct product
@@ -106,12 +109,45 @@ await scenePage.locator('#workskin').screenshot({ path: outFile });
 // quoted original, and the photo grid, ending on the read receipt.
 // `clip` is ignored on an element screenshot, so the crop has to come from a
 // page screenshot with an explicit region.
-const cropFile = outFile.replace(/\.png$/i, '-crop.png');
 const box = await scenePage.locator('#workskin').boundingBox();
+
+const cropFile = outFile.replace(/\.png$/i, '-crop.png');
 await scenePage.screenshot({
   path: cropFile,
   clip: { x: box.x, y: box.y, width: box.width, height: Math.min(box.height, 700) },
 });
+
+// A second crop, framed on the video card.
+//
+// The hero slot is about 620px tall against a conversation that is ~1700, so it
+// holds roughly three message blocks and the only real question is which three.
+// The top-of-conversation crop spent them on two plain text bubbles and a reply,
+// which is the least distinctive thing this product does — every fake-screenshot
+// site can draw a grey bubble. Playable video in a work skin is the thing none of
+// them can do, so that is what the hero should be pointing at.
+//
+// Anchored to the real element rather than to measured pixel offsets, because
+// the example's content shifts whenever anyone edits it and a hardcoded y would
+// silently start framing the wrong bubble.
+const videoCard = scenePage.locator('.ios-video-card').first();
+const highlightFile = outFile.replace(/\.png$/i, '-video.png');
+if (await videoCard.count()) {
+  const cardBox = await videoCard.boundingBox();
+  // Reach upward for the sender's line above the card, so the frame still reads
+  // as a conversation rather than as a floating media player.
+  const top = Math.max(box.y, cardBox.y - 90);
+  const bottom = Math.min(box.y + box.height, cardBox.y + cardBox.height + 44);
+  await scenePage.screenshot({
+    path: highlightFile,
+    // `fullPage` is required, not cosmetic: the video card sits ~2800px down a
+    // 900px viewport, and without it the clip is "outside the resulting image".
+    fullPage: true,
+    clip: { x: box.x, y: top, width: box.width, height: bottom - top },
+  });
+  console.log(`hero video crop written: ${highlightFile}`);
+} else {
+  console.log('WARNING: no .ios-video-card found — video crop skipped');
+}
 // A 1200x630 social card.
 //
 // og:image and twitter:image want landscape at a fixed size; the hero crop is

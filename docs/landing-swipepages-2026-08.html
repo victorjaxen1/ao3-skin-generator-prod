@@ -141,19 +141,21 @@ nav a:hover { color: var(--primary); }
 
 .hero-image:hover { transform: perspective(1000px) rotateY(0deg) translateY(-8px); box-shadow: 0 20px 40px rgba(0,0,0,0.15); }
 
-/* The hero shot is a phone-shaped conversation, so it is portrait. Left to
-   itself at 600px wide it would be ~1120px tall and own the whole fold.
-   Cap the height and anchor to the top, so the header, sender colours and
-   reply card are what stays visible.
+/* The hero frames the video card, and the framing is the decision.
 
-   The mask is the part that matters: a bare `max-height` crop sliced a bubble
-   in half at the bottom edge and read as a broken image rather than a design
-   choice. Fading the last fifth out makes the cut deliberate, and implies the
-   conversation continues — which it does. -webkit- prefix included for Safari,
-   which still needs it. */
-.hero-image img { width: 100%; height: auto; display: block; max-height: 620px; object-fit: cover; object-position: top;
-  -webkit-mask-image: linear-gradient(to bottom, #000 78%, transparent 100%);
-  mask-image: linear-gradient(to bottom, #000 78%, transparent 100%); }
+   A phone conversation is ~1700px tall and this slot is ~650, so it holds about
+   three message blocks and the only real question is which three. The first
+   version spent them on two grey bubbles and a reply — the least distinctive
+   thing this product does, and something every fake-screenshot site can draw.
+   Playable video inside a work skin is the thing none of them can do.
+
+   No object-fit crop: the image is sized to fit as-is, so nothing is sliced.
+   The masks only soften both edges — the top one tidies the partial bubble the
+   frame starts on, the bottom implies the conversation continues, which it
+   does. -webkit- prefix for Safari, which still needs it. */
+.hero-image img { width: 100%; height: auto; display: block; max-height: 660px;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 9%, #000 94%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 9%, #000 94%, transparent 100%); }
 
 .hero-buttons { display: flex; gap: 1rem; margin-top: 2rem; flex-wrap: wrap; }
 
@@ -471,9 +473,9 @@ nav { display: none; }
                    hero down. Regenerate it whenever a chat renderer changes.
                    Portrait, so it is height-capped below rather than allowed to
                    stretch the hero to 1100px. -->
-              <img src="https://app.ao3skingen.wordfokus.com/hero-scene-crop.png"
-                   alt="An iMessage group chat built with the tool: two people with their own name colours, a laughing Tapback counted twice, a reply quoting the message it answers, and a four-photo grid, marked Read"
-                   width="750" height="1400" loading="eager">
+              <img src="https://app.ao3skingen.wordfokus.com/hero-scene-video.png"
+                   alt="An iMessage scene built with the tool: a voice note, then a message carrying a video with its poster, play button, title, running time and description — a real player that readers press play on inside the chapter"
+                   width="750" height="808" loading="eager">
             </div>
           </div>
         </div>
