@@ -535,3 +535,78 @@ Do this first. Do not write a fix against a guess about which of the three it is
 ### Note on ordering
 
 This change touches generated markup that reaches AO3, so it wants its own commit and its own review — separate from §4, which only touches the raster path.
+
+---
+
+## 10. The examples gallery — what shipped, August 16 2026
+
+The §7 brief is done except for one item that is not a code change. Read §7
+first; this section only records the result and the two things it found.
+
+### What was built
+
+| Piece | Detail |
+| --- | --- |
+| `scripts/capture-gallery-cards.mjs` | One preview per starter, captured from the **DOM** of a local production build and written to `public/gallery/<id>.png`. Reuses the three properties §6 established — DOM not html2canvas, lift onto a bare page, decline analytics — and adds one of its own: **a failed image request fails the run**, because a gallery card with missing avatars is Learning 24 published as marketing |
+| Six missing cards | `twitter-quote-post`, `twitter-four-image-post`, `twitter-video-post`, `twitter-long-thread`, `ios-rich-group-scene` and `whatsapp-group-chat`. The brief predicted five; the test found six |
+| The fourth list, closed | `tests/examples-catalog.unit.spec.ts` now parses `public/examples-gallery.html` and asserts every example has exactly one card, every card names a live example, and the sixteen site-skin ids agree in both directions |
+| Imagery, off a third-party host | All twelve existing cards pointed at `media.publit.io`. They now point at `https://app.ao3skingen.wordfokus.com/gallery/*` — absolute, because the page is served from two hosts and only an absolute address works on both |
+| Copy | Audited against the shipped feature set and against `docs/LANDING-COPY-2026-08.md`. The page described a screenshot generator, exactly as the brief predicted: no mention of work skins, playable media, group chats, replies or reactions. The trust bar now matches the wording the landing page and hub use, verbatim |
+| Tier 1 product shelf | An "Also by the same developer" block, wording lifted from the landing copy, placed away from the Ko-fi footer link per §4.5 |
+
+### Still open from §7
+
+**Item 2, the duplicate-host problem.** The canonical still points at
+`ao3skingen.wordfokus.com/examples-gallery` while the deep links and the card
+images point at the app. Deciding which host owns the page and 301ing the other
+is an external change on a host this repository does not serve, and the previous
+developer wrote down a reason for the current canonical — so it was left alone
+rather than flipped unilaterally. It is owner work, not engineering.
+
+### The deploy ordering, which is not optional
+
+The card images are absolute production URLs, so **they 404 until `public/gallery/`
+is deployed**. This is the hero-404 trap from §8 arriving a second time, and the
+rule from it holds: deploy the assets, `curl` every image URL the page names, and
+only then treat the page as live. Locally the page can be checked by fulfilling
+`https://app.ao3skingen.wordfokus.com/**` from the local server — a plain URL
+rewrite is refused by Playwright across protocols, so fetch and fulfil instead.
+
+### What looking at the pictures found
+
+**A group initials badge that had never fitted its circle.** Captured
+`ios-rich-group-scene.png` showed `MA` and `DE` broken across two lines, the
+second letter sitting outside the circle. Measured in the live preview:
+`clientHeight` 12, `scrollHeight` 24.
+
+The cause is an arithmetic trap worth carrying: **a length in `em` resolves
+against the element's own `font-size`**, so `width:1.333em` declared beside
+`font-size:0.6em` on the same element does not draw a 1.333em circle in the
+bubble's text — it draws 0.8em, a 12px circle around two bold 9px letters. The
+fix keeps the product 0.8 (`font-size:0.5em`, `width:1.6em`), so the painted
+circle is unchanged and only the letters gained room, plus `white-space:nowrap`
+as the guard.
+
+This reaches AO3. It is in `#workskin dd.bubble .group-avatar-initials`, so every
+work published with a v7 skin has it, and re-pasting the skin is what picks the
+fix up. No new class is emitted, so **no `MASTER_SKIN_VERSION` bump** — the
+read-back gate still owes exactly one read-back, not two.
+
+`tests/group-avatar-initials.spec.ts` pins it by measurement rather than markup,
+because the markup was always correct and every existing assertion on it stayed
+green throughout. Note it selects `#workskin:visible`: `.first()` returns the
+off-screen Save PNG target, which measures as zeroes (§6 rule 5, met again).
+
+**A "media" card that is an empty box.** `twitter-media-image` ships an
+intentional `placehold.co` "Add your image" placeholder, so its card advertises
+media and shows a grey rectangle. The card copy was changed to say so rather than
+the picture being faked. Worth a product decision later: a starter that points at
+a third-party host is Learning 18's shape, even though a placeholder is doing an
+instructional job here.
+
+### One check that fired on correct code
+
+The capture script first flagged four "failed" images in the rich iOS scene. They
+were `302`s from a host that redirects, followed successfully. `!response.ok()`
+is not a failure test for images; `status >= 400` is. An alarm that fires on
+working code teaches you to ignore the alarm — Learning 23's neighbour.
