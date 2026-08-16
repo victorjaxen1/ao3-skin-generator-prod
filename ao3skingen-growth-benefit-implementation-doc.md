@@ -389,6 +389,28 @@ time, and each generalizes beyond the feature that taught it:
     surfaces the wider suite touched. When a rename breaks an unrelated test,
     decide which side is wrong before editing either.
 
+Added by the August 16 gallery and trust-copy pass:
+
+27. **A length in `em` resolves against the element's own `font-size`, so
+    declaring both on one element multiplies them.** `width:1.333em` beside
+    `font-size:0.6em` on the group initials badge did not draw a 1.333em circle
+    in the bubble's text — it drew 0.8em, a 12px circle around two bold 9px
+    letters, which wrapped and put the second letter outside the circle in the
+    preview, the PNG *and* the archive. It had been shipping for as long as
+    group chats have existed, through 395 unit tests, four raster suites and a
+    characterization golden, because **every one of them asserts on markup and
+    the markup was always correct**. Learning 15 again, with no html2canvas and
+    no asset involved: the defect was in the arithmetic between two properties,
+    and only a picture shows it. When a rule sets `font-size` and a length on the
+    same element, work out the product before believing the number you wrote.
+28. **A marketing surface is a place defects get published, not just described.**
+    The gallery's twelve cards were screenshots of a product two platform
+    rebuilds out of date, hosted on a third party this repository cannot keep in
+    step. Regenerating them from a local build is what surfaced Learning 27 —
+    the picture had to be taken before anyone looked at it. Any public page that
+    shows the product should be generated from the product, and the generator
+    should refuse to write a card whose images did not load.
+
 Added by the August 15 strategy review:
 
 20. **A schema that will not fill itself is telling you the products do not
@@ -672,7 +694,8 @@ None are regressions; all are unowned.
 
 | Issue | Detail |
 | --- | --- |
-| `tests/settings-render.spec.ts` — **8 failing** | The largest known-failing block, and the least understood. Named individually so a *ninth* failure cannot hide inside the total: iMessage status bar renders when enabled; iMessage group name renders in the header; WhatsApp group mode shows group name and participant count; Twitter renaming updates tweets already written; your own name reaches the hidden speaker label; WhatsApp hides online status controls in group mode; a reaction lands inside the bubble; Google settings offer exactly one Advanced section. Several assert on settings *reaching the render*, which is worth knowing before trusting any settings-driven behaviour. Decide per test whether the test or the renderer is right. |
+| `tests/settings-render.spec.ts` — **3 failing as of August 16** (was 8) | Re-measured on August 16 against a local production build and confirmed identical against production: **iMessage status bar renders when enabled**, **WhatsApp group mode shows group name and participant count**, and **a reaction lands inside the bubble**. The other five named below now pass, presumably fixed by the August 15 render work rather than deliberately. Do not read the shrinking number as the block being understood — it is not, and the three that remain are the ones that assert settings reach the render. The August 15 record follows. |
+| `tests/settings-render.spec.ts` — 8 failing, August 15 record | The largest known-failing block, and the least understood. Named individually so a *ninth* failure cannot hide inside the total: iMessage status bar renders when enabled; iMessage group name renders in the header; WhatsApp group mode shows group name and participant count; Twitter renaming updates tweets already written; your own name reaches the hidden speaker label; WhatsApp hides online status controls in group mode; a reaction lands inside the bubble; Google settings offer exactly one Advanced section. Several assert on settings *reaching the render*, which is worth knowing before trusting any settings-driven behaviour. Decide per test whether the test or the renderer is right. |
 | `tests/cors-export.spec.ts` — 1 failing | "non-CORS image survives, and is actually in the output". Fails locally **and** against production, so it is not simply a missing local `IMGBB_API_KEY`. Given it guards the proxy path that keeps images in a PNG, it is the most worth triaging. |
 | `tests/upload-errors.spec.ts` — 3 failing | All three time out waiting for the `Upload an image file` control. Plausibly the upload feature being unavailable, but it fails on production too, so confirm rather than assume. |
 | Remaining oversized assets | The optimiser only touches files over 120KB. Everything above that line is done; a future pass could lower the threshold. |
@@ -700,7 +723,22 @@ The next work should proceed in this order:
    `MASTER_SKIN_VERSION` bump, because no new class is emitted and a v7 skin
    already carries rules for every class involved; **do not bump to v8 before
    this gate closes**, or the repository owes two read-backs instead of one.
-2. **Close the copy gap — this is now the highest-value non-blocked work.**
+2. **Close the copy gap — the gallery half is done; the SwipePages and WordPress
+   halves are not.** Completed on August 16: `public/examples-gallery.html` was
+   regenerated, audited and drift-proofed — new imagery captured from a local
+   build into `public/gallery/` and off `media.publit.io`, the six missing
+   starter cards added, copy brought up to the shipped feature set and the
+   approved landing wording, and a Tier 1 product shelf placed away from the
+   Ko-fi link. `tests/examples-catalog.unit.spec.ts` now parses the HTML, so the
+   fourth hand-maintained list can no longer drift in silence. **The imagery is
+   referenced by absolute production URLs and 404s until `public/gallery/` is
+   deployed** — deploy the assets before treating the page as live, and `curl`
+   each one, which is the §8 hero lesson repeating. Still open: the duplicate-host
+   canonical decision (owner work on a host this repository does not serve), and
+   the WordPress hub's stale `ao3skingen.netlify.app` links. The original brief
+   follows.
+
+   **Close the copy gap — this is now the highest-value non-blocked work.**
    Section 1 already identified it as the cheapest remaining growth lever, and
    Section 11.6 promotes it to the main one: the product does considerably more
    than any public page says, and the same pass can place the owner's other
@@ -716,17 +754,25 @@ The next work should proceed in this order:
    precedent in `scripts/generate-*.mjs`) or extend
    `tests/examples-catalog.unit.spec.ts` to parse the HTML and assert it agrees.
    Do not add a fifth list and hope.
-3. **Finish Release 0's audit.** The licence and the content-policy language
-   closed on August 15. What is left is re-reading the privacy policy and Terms
-   against the current product — neither has been checked since structured media
-   and the Section 11.6 product surface shipped.
+3. ~~**Finish Release 0's audit.**~~ **Closed August 16.** The licence and the
+   content-policy language closed on August 15; the privacy policy and Terms were
+   re-read against the current product on August 16. Privacy gained section 2.2,
+   "What Your Readers' Browsers Request", carrying Section 7.4's three missing
+   sentences plus the privacy-enhanced YouTube domain and what preflight warns
+   about; Terms section 2 stopped describing a screenshot generator, section 5.2
+   now names the source-available `LICENSE` rather than leaving the old MIT
+   conflict implicit, and section 6 lists YouTube and author-chosen media hosts.
+   Both dates moved to August 16, 2026. The two pages are deployed with the app,
+   so they need no separate paste.
 4. **Finish Release 2's external half.** The two code gaps closed on August 15.
    What remains is owner/operations work: recheck WordPress sitemap and Search
    Console, and build the weekly content-free dashboard from the events that now
    exist — `project_activated` among them.
-5. **Extend the privacy disclosure to structured media.** Section 7.4's text
-   predates playable media. A reader's browser now fetches third-party audio,
-   video, and YouTube embeds from a published work. Say so.
+5. ~~**Extend the privacy disclosure to structured media.**~~ **Closed August 16**,
+   in the same pass as item 3. Section 7.4's replacement text is live in
+   `public/privacy-policy.html` §2.2 and `public/terms-of-service.html` §§2 and 6.
+   Section 7.4's own prose below still shows the disclosure as incomplete; treat
+   the published pages as current and 7.4 as the record of why.
 6. **Build product visibility per Section 11.6, in its stated tiers.** Tiers 1
    and 2 first; Tier 3 only when there is traffic worth measuring; Tier 4 only
    after Tier 3 can judge it.
