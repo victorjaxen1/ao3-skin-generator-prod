@@ -4,15 +4,20 @@
 
 - **Owner:** Project owner
 - **Audience:** A developer who is new to this codebase
-- **Revised:** August 15, 2026 — twice. The second revision is the **strategy
-  correction** in Section 11.6; read it before planning any commercial work
-  (previous revision: August 12, 2026)
-- **Repository baseline:** `main` at `c733066`, plus uncommitted activation work
-  described under "Closed later on August 15"
+- **Revised:** August 16, 2026 — the gallery and trust-copy pass, recorded under
+  "The gallery and trust-copy pass" below. The **strategy correction** in
+  Section 11.6 dates from August 15 and still governs all commercial work; read
+  it before planning any (previous revisions: August 15 ×2, August 12)
+- **Repository baseline:** `main` at `bae2f05`, **deployed and verified on
+  production**. The tracked tree is clean; 23 untracked owner files are
+  deliberately preserved
 - **Status:** Active implementation handoff. Releases 0–3 are substantially
   shipped, **Release 4's bridge is withdrawn on audience grounds rather than
   merely blocked** (Section 11.6), and a large unplanned **platform authoring
   program** has landed on top of all of them
+- **The single most valuable thing you can do:** close one of the two archive
+  gates. They need an AO3 account and about an hour, they outrank every code
+  task in this document, and no test in this repository can substitute for them
 - **Application today:** `https://app.ao3skingen.wordfokus.com/`
 - **Public landing page:** `https://ao3skingen.wordfokus.com/`
 - **Additional crawlable product/guide hub:** `https://www.wordfokus.com/ao3skingen/`
@@ -65,40 +70,51 @@ The four things that invalidate old assumptions:
    browser performs, which is a permanence and public-copy question the privacy
    disclosure in Section 7.4 does not yet cover.
 
-### Implementation progress — August 15, 2026
+### Implementation progress — August 16, 2026
 
-**Core engineering program: 74% complete.** This is a planning estimate, not a
+**Core engineering program: 79% complete.** This is a planning estimate, not a
 product metric. It is the equal-weight average of the five numbered releases,
-rescored against repository and production evidence gathered on August 15, 2026:
+rescored against repository and production evidence gathered on August 15 and
+re-scored for Release 0 on August 16.
+
+**A correction to the previous revision's arithmetic.** It reported 74% in the
+heading and again in the closing paragraph, while its own calculation line said
+`(95 + 95 + 85 + 100 + 15) / 5 = 78`. The table was right and the prose was
+stale — 74% was the figure from before Releases 0 and 2 were rescored, and it
+survived the edit in two places. If you are comparing against an older revision,
+compare table to table, not heading to heading.
 
 | Release | Completion | Evidence shipped | Remaining work |
 | --- | ---: | --- | --- |
-| Release 0 — trust and baseline | **95%** (was 86%) | Pro and fake activation removed; generic donation/success path removed; fiction label and neutral attribution separated; the hardcoded commercial credit is gone from generated output, and a unit test pins that master-skin credit stays off by default and is added at most once; README, Terms, validation copy, scripts, and pinned AO3 ruleset updated. **Both remaining items closed later on August 15:** a tracked `LICENSE` now exists (source-available, all rights reserved) with the README agreeing, and every watermark reference is gone from `content-policy.html` — replaced by an accurate description of the default fiction label and the separate opt-in credit. The unsupported "1,200+ writers" claim was removed from both hub files in the same pass | Two content items, neither engineering: the SwipePages landing still has to be updated by hand from [`docs/LANDING-COPY-2026-08.md`](docs/LANDING-COPY-2026-08.md), and the privacy policy and Terms have not been re-read against the current product |
-| Release 1 — secure images | **95%** (unchanged) | Server-only `/api/image-upload`; explicit file and rendered-scene consent; byte/type/magic-byte limits; provider timeout; origin checks; hardened DNS/redirect/streaming proxy; narrowed CSP; security tests. **Re-verified August 15:** no live application bundle contains `api.imgbb.com`, so the browser no longer reaches the provider at all | Replace the warm-instance rate/daily counters with a durable shared budget store only if traffic or abuse warrants it. One new surface to keep honest: structured media means published works reference third-party media hosts, which preflight warns about but the privacy copy does not yet describe |
+| Release 0 — trust and baseline | **98%** (was 95%) | Pro and fake activation removed; generic donation/success path removed; fiction label and neutral attribution separated; the hardcoded commercial credit is gone from generated output, and a unit test pins that master-skin credit stays off by default and is added at most once; README, Terms, validation copy, scripts, and pinned AO3 ruleset updated. **Both remaining items closed later on August 15:** a tracked `LICENSE` now exists (source-available, all rights reserved) with the README agreeing, and every watermark reference is gone from `content-policy.html` — replaced by an accurate description of the default fiction label and the separate opt-in credit. The unsupported "1,200+ writers" claim was removed from both hub files in the same pass **Raised to 98% on August 16:** the privacy policy and Terms were re-read against the current product and are deployed — Privacy gained §2.2 "What Your Readers' Browsers Request", Terms §2 stopped describing a screenshot generator, §5.2 names the source-available `LICENSE` instead of leaving the old MIT conflict implicit, and §6 lists YouTube and author-chosen media hosts | **One item, and it is not engineering.** The SwipePages landing still has to be updated by hand from [`docs/LANDING-COPY-2026-08.md`](docs/LANDING-COPY-2026-08.md). It is the last 2% and it needs a human with a SwipePages login, not a developer |
+| Release 1 — secure images | **95%** (unchanged) | Server-only `/api/image-upload`; explicit file and rendered-scene consent; byte/type/magic-byte limits; provider timeout; origin checks; hardened DNS/redirect/streaming proxy; narrowed CSP; security tests. **Re-verified August 15:** no live application bundle contains `api.imgbb.com`, so the browser no longer reaches the provider at all | Replace the warm-instance rate/daily counters with a durable shared budget store only if traffic or abuse warrants it. ~~One new surface to keep honest: structured media means published works reference third-party media hosts, which preflight warns about but the privacy copy does not yet describe~~ — **written and deployed August 16**, scored under Release 0 |
 | Release 2 — identity, domains, analytics | **85%** (was 76%) | Shared product config; SSR metadata (**verified live**: the app root serves `robots: noindex,follow` and its own canonical before hydration); PWA/deep-link fixes; branded app domain; Netlify 301 to the branded app (**verified live**); the SwipePages landing links the branded app (**verified live**); typed content-free analytics with explicit opt-in and reopenable privacy choices. **Both code-side gaps closed later on August 15**: `project_activated` now fires from a pure predicate, and the five missing example ids are in the allowlist behind a drift test | Raised because the two code gaps closed; the external items did not move. The WordPress hub still links the old Netlify host, and the sitemap/Search Console recheck and the weekly dashboard remain. All three are owner/content work, not engineering |
 | Release 3 — backup and publishing handoff | **100%** (held) | Strict versioned scene and site-theme files; safe replace with automatic backup; validated character storage; fallback preview; deterministic transcript; attachment/scene alt; composed preflight; coordinated output-specific AO3 handoffs. **The release held through six schema migrations** — the strongest evidence in this document that the boundary was built correctly | Keep writing pure `vN→vN+1` migrations with fixtures. Preflight has grown to 24 composed checks; keep composing existing validators rather than writing a second one. Still no evidence justifying a ZIP |
 | Release 4 — cast portability | **15%, and now on hold** (was 0%) | **The data prerequisite shipped.** Section 11.1 asked for one canonical answer to "what is the cast"; `SceneCast` plus `identity.ts` is that answer, with archive-or-reassign instead of silent deletion, and library entries copied into a scene rather than linked live. `cast_exported`/`cast_imported` remain reserved-only event types | **The remaining 85% should not be built as specified.** Section 11.6 withdraws the WorldKonstruct bridge on audience grounds — the owner inputs are no longer the binding constraint, the audience mismatch is. The percentage is retained so the number stays comparable, not as a plan to finish it |
 
-Calculation: `(95 + 95 + 85 + 100 + 15) / 5 = 78`, reported as 78%.
+Calculation: `(98 + 95 + 85 + 100 + 15) / 5 = 78.6`, reported as 79%.
 
-Releases 0 and 2 were rescored against work that landed on the afternoon of
-August 15. Releases 1, 3, and 4 carry their morning scores unchanged, because
-nothing in that work touched them and no fresh evidence was gathered for them.
-Release 4 keeps 15% even though its plan changed, so that the figure keeps
-meaning "how much of the original scope exists" rather than silently absorbing a
-strategy decision.
+Release 0 was rescored on August 16 against deployed evidence. Releases 1–4
+carry their August 15 scores, because the August 16 work touched none of them
+and no fresh evidence was gathered for them. Release 1's "remaining work" column
+names the privacy copy for structured media, which **is** now written — but that
+was a Release 0 deliverable being described from Release 1's side, so it is
+struck there rather than scored twice. Release 4 keeps 15% even though its plan
+changed, so that the figure keeps meaning "how much of the original scope
+exists" rather than silently absorbing a strategy decision.
 
 Sections 12–15 contain ongoing compatibility, accessibility, measurement, and
 distribution work. They are not counted as a finite sixth release, and neither
 is the platform program below. Track their individual deliverables, but do not
-change the 74% figure without rescoring all five releases against repository and
-production evidence.
+change the 79% figure without rescoring all five releases against repository and
+production evidence — and change it in the table, the calculation line, **and**
+the heading together, which is the mistake the previous revision made.
 
 ### The unscored sixth program — platform authoring depth
 
 The largest body of work in this baseline belongs to none of the five releases.
 It is recorded here so that it is visible, and it is deliberately **not** folded
-into the 74% figure, for the same reason Sections 12–15 are not: the five
+into the 79% figure, for the same reason Sections 12–15 are not: the five
 releases score the growth-and-publishing plan, and rescoring them against work
 they never scoped would make the number mean nothing.
 
@@ -210,6 +226,71 @@ One finding worth recording: an early test asserted that setting
 legacy fallback that the identity panel keeps in sync via `updateSceneCharacter`.
 Reading the resolver is correct, and Learning 19 applies — decide which side is
 wrong before editing either.
+
+### The gallery and trust-copy pass — August 16, 2026
+
+Five commits, merged to `main` and **verified on production** rather than
+assumed. It closed next-work items 2 (in part), 3 and 5, and it found one defect
+that reaches AO3.
+
+| Commit | What | Reaches AO3? |
+| --- | --- | --- |
+| `578e961` | The iOS group initials badge stops wrapping out of its circle | **Yes** |
+| `852590a` | `scripts/capture-gallery-cards.mjs` and 18 example previews in `public/gallery/` | No |
+| `4a5cc03` | The examples gallery: six missing cards, own-host imagery, audited copy, Tier 1 shelf, and a drift test that parses the HTML | No |
+| `fc31b25` | Privacy and Terms re-read against the current product, including structured media | No |
+| `bae2f05` | This record, learnings 27–28, and a corrected known-failing baseline | — |
+
+Hashes are the post-merge ones. The pull request was merged with **rebase**, so
+the pre-merge hashes in any branch you still have locally will differ.
+
+#### The defect, and why nothing caught it
+
+A gallery card captured from the current build showed the iMessage group badge
+rendering `MA` broken across two lines, the second letter outside the circle.
+Measured in the live preview: `clientHeight` 12, `scrollHeight` 24.
+
+`width` in `em` resolves against the element's **own** `font-size`, so
+`width:1.333em` declared beside `font-size:0.6em` on the same element does not
+draw a 1.333em circle in the bubble's text — it draws 0.8em, a 12px circle
+around two bold 9px letters. The fix keeps the product at 0.8
+(`font-size:0.5em`, `width:1.6em`), so the painted circle is unchanged and only
+the letters gained room, with `white-space:nowrap` as the guard.
+
+It had been shipping for as long as group chats have, through 399 unit tests,
+four raster suites, an injection harness and a characterization golden —
+**because every one of them asserts on markup, and the markup was always
+correct.** That is Learning 27, and it is the third time this document has had to
+record a defect that no markup assertion could see.
+
+**No `MASTER_SKIN_VERSION` bump**: no new class is emitted, and a v7 skin already
+carries a rule for this class. The read-back gate still owes exactly one
+read-back, not two. Authors who have already pasted a v7 skin keep the old badge
+until they re-paste — which is true of every generator fix and is worth saying
+plainly when someone reports it.
+
+#### Deploy verification, run against production after the merge
+
+Not a claim that a build succeeded — these were measured on
+`app.ao3skingen.wordfokus.com`:
+
+- all **18** `/gallery/*.png` return 200. They exist in no earlier deploy, so
+  they are also the freshness proof: a cached 200 could not produce them;
+- the live gallery contains **zero** `media.publit.io` references, 18 own-host
+  card images, 34 cards, and one deep link for each of the six new starters;
+- rendered with progressive scrolling: no failed image response and no image
+  with zero pixels. The page was looked at, not just parsed;
+- Privacy serves §2.2 and `youtube-nocookie.com`; Terms serves
+  "source-available, not open source" and the media-host clause; both dated
+  August 16, 2026;
+- the badge, measured live: `12×12`, `scrollHeight` 12, `white-space: nowrap`.
+  `tests/group-avatar-initials.spec.ts` also passes pointed at production.
+
+One method note, because it will save you the same detour: grepping the live JS
+chunks for the new CSS rule found it in **none** of the ten the server-rendered
+HTML references. That is not a failed deploy — the generator is in a lazily
+loaded chunk. Measure the rendered element instead; it is the stronger check and
+it is what the test asserts anyway.
 
 ### Shipped commit trail
 
@@ -478,14 +559,52 @@ Added by the August 15 strategy review:
 
 ### Clean handoff for the next developer
 
-Start from `main` at or after `5e207fc`, which is deployed. Do not reset or
-clean the workspace; the untracked screenshots, reference exports, article
-drafts, implementation blueprints, and image-handling examples belong to the
-owner. There were 23 untracked entries at the close of the August 15 render
-pass and none of them were committed — that is deliberate, not an oversight.
-Some are clearly owner material (`docs/AO3-CONTENT-PLAN.md`, `docs/articles/`,
-the two article generator scripts under `scripts/`) and may be worth committing
-once the owner says so; the rest are screenshots and drafts.
+**Start here. Ten minutes of reading before you touch anything.**
+
+Start from `main` at or after `bae2f05`, which is deployed and was verified on
+production on August 16. Do not reset or clean the workspace; the untracked
+screenshots, reference exports, article drafts, implementation blueprints, and
+image-handling examples belong to the owner. There were 23 untracked entries at
+the close of the August 16 pass and none of them were committed — that is
+deliberate, not an oversight. Some are clearly owner material
+(`docs/AO3-CONTENT-PLAN.md`, `docs/articles/`, the two article generator scripts
+under `scripts/`) and may be worth committing once the owner says so; the rest
+are screenshots and drafts.
+
+#### The five things that will cost you a day if you learn them the hard way
+
+1. **Browser tests point at production by default.** `playwright.config.ts` reads
+   `baseURL: process.env.UX_BASE_URL || 'https://app.ao3skingen.wordfokus.com'`.
+   A bare `npx playwright test tests/whatsapp-raster.spec.ts` tells you nothing
+   about your working tree. Always set `UX_BASE_URL`. This cuts both ways and is
+   also the cheap way to ask "does this fail on production too?", which is how
+   the known-failing baseline below was established.
+2. **`--project=unit` needs no server; every other project does.** The unit
+   project is pure and fast — ~400 tests in under 40 seconds.
+3. **Stale `next start` servers survive being killed here** and then answer 200
+   while serving the *previous* build, which produces a confidently wrong
+   capture. `pkill` does not work; `Get-NetTCPConnection -LocalPort N` plus
+   `Stop-Process` does. Use a fresh port per run and check the log says `Ready`,
+   not `EADDRINUSE`.
+4. **There are two `#workskin` nodes.** The off-screen Save PNG capture target
+   comes first in document order, so `.first()` measures zeroes. Select
+   `#workskin:visible`.
+5. **When you change any renderer, export a real picture and look at it.** Six
+   shipped defects in three days were invisible to lint, to the injection
+   harness, and to ~400 unit tests, and every one of them was found by looking.
+   Learnings 15, 23, 24 and 27 are four separate instances of this.
+
+#### Where the work stands in one paragraph
+
+Releases 0–3 are essentially done; Release 4 is deliberately not being built
+(Section 11.6). The application is materially larger than this plan ever scoped —
+three of four platforms were rebuilt as fiction-authoring tools, and that work is
+tracked in its own per-platform documents under `docs/`. **The binding constraint
+is no longer engineering.** What remains is two archive gates that need a human
+with an AO3 account, and a handful of content and operations tasks on surfaces
+this repository does not serve. If you are a developer looking for the next thing
+to code, read the next-work list honestly: items 0, 1, and 4 are not code, and
+item 2's remaining half is not either.
 
 Environment and boundaries:
 
@@ -520,6 +639,10 @@ Section 3 table can no longer give:
 | Tolerant local recovery | [`src/lib/storage.ts`](src/lib/storage.ts) | A different trust boundary; never merge the two |
 | Composed blockers and warnings | [`src/lib/preflight.ts`](src/lib/preflight.ts) | 24 checks, all composed from existing validators |
 | Site skin | `src/lib/siteSkin/*` | `compile.ts` feeds preview and export from one call |
+| The starter example catalogue | [`src/lib/examples.ts`](src/lib/examples.ts) | `TEMPLATE_EXAMPLES` is the source. **It is duplicated in four places** — `getExampleNames` in the same file, `EXAMPLE_LABELS` in `PlatformPicker.tsx`, `TEMPLATE_IDS` in `analytics.ts`, and the cards in `public/examples-gallery.html`. All four are now pinned by `tests/examples-catalog.unit.spec.ts`, including the HTML, which it parses. Do not add a fifth |
+| The only commercial destination in `src/` | [`src/components/MoreTools.tsx`](src/components/MoreTools.tsx) | Section 11.6 Tier 2. `tests/more-tools.unit.spec.ts` asserts it is the *only* module in `src/` holding a linkable commercial URL, and that no AO3-bound output contains one |
+| Public pages served with the app | `public/*.html` | `examples-gallery`, `privacy-policy`, `terms-of-service`, `content-policy`. They deploy with the app and need no separate paste — unlike the SwipePages landing and the WordPress hub, which do (Learning 10) |
+| Example card imagery | `public/gallery/*.png` + [`scripts/capture-gallery-cards.mjs`](scripts/capture-gallery-cards.mjs) | Regenerate against a local production build when a renderer changes, or the gallery advertises a product that no longer exists. The script fails the run if any image did not load |
 
 Verification commands on Windows PowerShell:
 
@@ -557,27 +680,32 @@ For production verification, replace `UX_BASE_URL` with
 `https://app.ao3skingen.wordfokus.com`. **Browser projects default to the live
 app**, so an unset `UX_BASE_URL` silently tests production.
 
-Evidence re-gathered for this revision on August 15, 2026, and again after the
-render-defect pass later the same day:
+Evidence re-gathered on August 15, 2026, again after the render-defect pass later
+the same day, and **updated where re-measured on August 16**:
 
-- TypeScript check: **passed**; production build: **passed**;
-- deterministic unit suite: **395 passed, 1 skipped** (362 earlier in the day,
-  249 at the original audit). The single skip is the AO3 read-back gate
+- TypeScript check: **passed**; production build: **passed** (both re-run
+  August 16);
+- deterministic unit suite: **399 passed, 1 skipped** on August 16 (395 and 362
+  earlier, 249 at the original audit). The single skip is the AO3 read-back gate
   described above, and it is skipping for a correct reason: no human has saved
   the v7 skin on the archive yet. **Both `ao3 master workskin*.txt` files in
   the repository root are `v2`** — five versions stale — so the gate cannot be
   closed by anything in the working tree;
-- browser suites re-run serially against a local production build after the
-  render pass: `ao3-injection`, `whatsapp-raster`, `ios-raster`,
-  `twitter-raster`, `skin-off` — **21 passed**. `work-skin` and
-  `whatsapp-authoring` each failed once under two workers and passed alone;
-  treat a single failure in a combined run as a flake until it repeats;
-- **Twelve browser tests fail on `main` and did so before this work** — eight in
-  `settings-render`, one in `cors-export`, three in `upload-errors`. Each was
-  confirmed by running it against the deployed site, which carried none of the
-  new changes. Tabulated under "Open issues found while verifying" below. Treat
-  that list as the current known-failing baseline: if you see exactly those,
-  you have broken nothing;
+- browser suites re-run serially against a local production build on August 16:
+  `group-avatar-initials`, `ao3-injection`, `ios-raster`, `whatsapp-raster`,
+  `skin-off` — **22 passed**. The August 15 run of `ao3-injection`,
+  `whatsapp-raster`, `ios-raster`, `twitter-raster`, `skin-off` was 21 passed.
+  `work-skin` and `whatsapp-authoring` each failed once under two workers and
+  passed alone; treat a single failure in a combined run as a flake until it
+  repeats;
+- **Seven browser tests fail on `main`, down from twelve** — three in
+  `settings-render` (was eight), one in `cors-export`, three in `upload-errors`.
+  Each was confirmed by running it against the deployed site, which carried none
+  of the changes under test. Tabulated under "Open issues found while verifying"
+  below. Treat that list as the current known-failing baseline: if you see
+  exactly those, you have broken nothing. **The five that stopped failing were
+  not deliberately fixed** — they appear to have been carried by the August 15
+  render work, so the block is no better understood than it was;
 - `public/assets` is **2.6MB, down from 9.7MB**, after
   `scripts/optimize-assets.mjs`. Re-exported the WhatsApp group scene and
   compared it against the pre-optimisation capture: no visible difference;
@@ -588,11 +716,18 @@ render-defect pass later the same day:
 - live production probes: app 200 with SSR robots/canonical, landing 200 with the
   branded app URL, Netlify 301 to the branded app, no `api.imgbb.com` in any live
   bundle, and the live iOS bundle carries the v7 markers (`ios-tone-`,
-  `Tapback`), so `c733066` is deployed.
+  `Tapback`), so `c733066` is deployed;
+- **August 16 production verification of `bae2f05`:** 18/18 `/gallery/*.png`
+  return 200; the live examples gallery contains zero `media.publit.io`
+  references and 34 cards; the page renders with no failed image request and no
+  zero-pixel image; Privacy §2.2 and the Terms changes are served; and the group
+  initials badge measures `12×12` with `scrollHeight` 12 and
+  `white-space: nowrap` on the live site.
 
-Not re-run, and therefore not claimed: the **mobile** browser project, and live
-upload checks. The platform plans record their own passing runs from 13–14
-August; treat those as current unless you change a renderer.
+Not re-run, and therefore not claimed: the **mobile** browser project, live
+upload checks, `twitter-raster`, `work-skin`, and the site-skin suites — none
+were touched on August 16. The platform plans record their own passing runs from
+13–14 August; treat those as current unless you change a renderer.
 
 #### The render-defect pass, August 15 2026 — what shipped
 
@@ -701,7 +836,15 @@ None are regressions; all are unowned.
 | Remaining oversized assets | The optimiser only touches files over 120KB. Everything above that line is done; a future pass could lower the threshold. |
 | `pkill -f "next start"` does not work here | Stale dev servers survive it on this Windows setup and then serve a **previous build** on the port you expect, which produces a confidently wrong capture. Twice cost real time. Use a fresh port per run and check the log says `Ready`, not `EADDRINUSE`. |
 
-The next work should proceed in this order:
+The next work should proceed in this order.
+
+**Read this before picking one up.** Items 0, 1 and 4 are not code, and item 2's
+remaining half is not either. That is not a gap in the plan — it is the finding.
+The engineering that this document scoped is substantially done, and the things
+now standing between the product and its users are an AO3 account, a SwipePages
+login and a WordPress editor. A developer who opens this list looking for a
+ticket will drift toward item 6 or 7, which are the two that should wait. If you
+only have an hour, spend it on item 1.
 
 0. **Re-paste the landing page into SwipePages.** Newly the cheapest item on the
    list, and the only one left from the render pass. `hero-scene-video.png` now
@@ -717,12 +860,18 @@ The next work should proceed in this order:
    what the archive stores. Do the master-skin read-back first; it has a history
    of finding bugs nothing else can see. Two changes landed on August 15 that
    reach the archive — the expanded tweet's corner logo and the WhatsApp group
-   avatar — and neither has been seen by AO3. Both were built to the rules
-   (finite tone classes, no inline styles, descendant selectors, only allowlisted
-   properties) but that is a prediction too. Neither required a
-   `MASTER_SKIN_VERSION` bump, because no new class is emitted and a v7 skin
-   already carries rules for every class involved; **do not bump to v8 before
-   this gate closes**, or the repository owes two read-backs instead of one.
+   avatar — and neither has been seen by AO3. **A third landed on August 16: the
+   group initials badge sizing.** All three were built to the rules (finite tone
+   classes, no inline styles, descendant selectors, only allowlisted properties)
+   but that is a prediction too. None required a `MASTER_SKIN_VERSION` bump,
+   because no new class is emitted and a v7 skin already carries rules for every
+   class involved; **do not bump to v8 before this gate closes**, or the
+   repository owes two read-backs instead of one.
+
+   When you do the read-back, check the group initials badge specifically. It is
+   the newest archive-bound change, it is a sizing rule rather than a colour, and
+   sizing is the class of thing AO3's stripping has never been observed to touch
+   — which makes it a cheap, informative probe rather than a likely failure.
 2. **Close the copy gap — the gallery half is done; the SwipePages and WordPress
    halves are not.** Completed on August 16: `public/examples-gallery.html` was
    regenerated, audited and drift-proofed — new imagery captured from a local
@@ -1612,6 +1761,15 @@ on completed handoffs, with a seven-day cooldown and permanent dismissal.
 
 ### 7.4 Correct public copy
 
+> **Status, August 16, 2026: the in-repository half of this section is done and
+> deployed.** `public/privacy-policy.html` and `public/terms-of-service.html`
+> carry the disclosure below *including* the structured-media paragraph this
+> section marked as missing, the licence conflict is resolved in favour of
+> source-available (see `LICENSE`), and the README was rewritten. What remains is
+> the SwipePages landing and the WordPress hub, which this repository does not
+> serve. The text below is kept as the source of truth for *what* must be said,
+> not as a list of outstanding work.
+
 Update [`src/components/PlatformPicker.tsx`](src/components/PlatformPicker.tsx),
 [`public/privacy-policy.html`](public/privacy-policy.html),
 [`public/terms-of-service.html`](public/terms-of-service.html), and the owned web
@@ -1630,9 +1788,10 @@ Use this technical disclosure as the source of truth:
 Do not say “your data never leaves your browser.” Do not describe the finished
 rendered scene as though it contains no creative content.
 
-**This disclosure is now incomplete, and updating it is item 4 on the next-work
-list.** It was written before structured media existed. Three sentences are
-missing, and all three describe the reader's browser rather than the author's:
+**This disclosure was incomplete until August 16, 2026.** It was written before
+structured media existed. Three sentences were missing, and all three describe
+the reader's browser rather than the author's — they are now live as Privacy
+§2.2, "What Your Readers' Browsers Request":
 
 > Link cards, voice messages, and videos are stored as web addresses. AO3 SkinGen
 > never downloads, copies, or re-hosts those files. When someone reads your
@@ -3050,8 +3209,9 @@ them real rather than hypothetical:
   so the preview, the PNG, the work skin, the skin-off reading, and the
   transcript cannot disagree.
 
-At `c733066`, the implementation is **74% complete** by the release scoring
-defined at the top of this document, up from 72%. That movement is deliberately
+At `bae2f05`, the implementation is **79% complete** by the release scoring
+defined at the top of this document, up from 78% at `c733066` and 72% before
+that. That movement is deliberately
 much smaller than the volume of work would suggest: Release 2 was rescored
 *downward* after two measurement gaps were found, Release 4 was credited only for
 its shipped data prerequisite, and the platform program that dominates this
