@@ -147,11 +147,11 @@ h2 { margin-top: 2rem; }
       <section class="content-section">
         <div class="container">
           <div class="last-updated">
-            Last updated: August 6, 2026
+            Last updated: August 16, 2026
           </div>
 
           <div class="info-box">
-            <p><strong>TL;DR:</strong> No account is required. Editable text and settings stay in this browser. Pasted image addresses may use our proxy during export, and hosted image features upload content only when you choose them. Content-free analytics measures tool usage, not story content.</p>
+            <p><strong>TL;DR:</strong> No account is required. Editable text and settings stay in this browser. Pasted image addresses may use our proxy during export, and hosted image features upload content only when you choose them. Audio, video and link cards are stored as addresses and never copied by us — your readers' browsers fetch them from whoever hosts them. Content-free analytics measures tool usage, not story content.</p>
           </div>
 
           <h2>1. Introduction</h2>
@@ -165,8 +165,15 @@ h2 { margin-top: 2rem; }
           <p><strong>Images You Upload:</strong> If you upload a file, that file is sent to our image-upload service and ImgBB. Images hosted there are publicly accessible to anyone with the link.</p>
           <p><strong>Hosted AO3 Image Code:</strong> If you choose “Get AO3 image code,” the finished rendered scene — including any visible story text — is uploaded to ImgBB so it has a public image address.</p>
           <p><strong>Image Addresses You Paste:</strong> Pasted image addresses are requested from their host for preview and may be sent to our image proxy when an export needs them. The proxy does not intentionally retain the address or image after the request.</p>
+          <p><strong>Media Addresses You Paste:</strong> Link cards, voice messages, and videos are stored as web addresses. AO3 Skin Generator never downloads, copies, or re-hosts those files.</p>
 
-          <h3>2.2 Information Collected Automatically</h3>
+          <h3>2.2 What Your Readers' Browsers Request</h3>
+          <p>This section is about other people's browsers, not yours, and it applies after you publish.</p>
+          <p>When someone reads your posted work, their browser requests any media you referenced directly from whoever hosts it — so if that host removes the file or goes away, the work loses it, and AO3 keeps no copy. The same is true of the small pieces of interface artwork a scene uses, which are requested from this application's own address.</p>
+          <p>A YouTube video is embedded through YouTube's privacy-enhanced domain (<code>youtube-nocookie.com</code>) rather than the standard one. That is YouTube's own reduced-tracking mode; their terms still apply to your readers once a video plays.</p>
+          <p>Before you export, the pre-publication check tells you how many external hosts a scene depends on and warns you about addresses from services that are known to expire. We can check that an address is well formed and load a preview. We cannot promise that someone else's server will still be answering in a year.</p>
+
+          <h3>2.3 Information Collected Automatically</h3>
           <p><strong>Analytics Data:</strong> If you allow analytics, we use Google Analytics to understand how visitors interact with our service. This includes:</p>
           <ul>
             <li>Pages visited and features used</li>
@@ -178,7 +185,7 @@ h2 { margin-top: 2rem; }
           </ul>
           <p>Analytics events may record which tool, template, and export type were used. We do not include story text, names, handles, image addresses, or generated code in those event parameters.</p>
 
-          <h3>2.3 Information We Do NOT Collect</h3>
+          <h3>2.4 Information We Do NOT Collect</h3>
           <ul>
             <li>We do not require accounts, so we don't collect names, emails, or passwords</li>
             <li>We do not store your generated skins, CSS, or HTML on our servers</li>
@@ -261,7 +268,8 @@ h2 { margin-top: 2rem; }
           <p>Your continued use of the service after changes take effect constitutes acceptance of the updated policy.</p>
 
           <h2>10. Third-Party Links</h2>
-          <p>Our service may contain links to external websites (Ko-fi, WordFokus, AO3, etc.). We are not responsible for the privacy practices of these external sites. Please review their privacy policies independently.</p>
+          <p>Our service may contain links to external websites (Ko-fi, WordFokus, WorldKonstruct, AO3, etc.). We are not responsible for the privacy practices of these external sites. Please review their privacy policies independently.</p>
+          <p>Separately from links we place, a scene you build may reference media hosted elsewhere, and a published work will make requests to those hosts on your readers' behalf. Section 2.2 describes this.</p>
 
           <h2>11. GDPR Compliance (European Users)</h2>
           <p>If you are located in the European Economic Area (EEA), you have additional rights under GDPR:</p>
