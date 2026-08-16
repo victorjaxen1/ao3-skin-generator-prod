@@ -1827,7 +1827,18 @@ ${tones}
 /* No object-fit: it is not on AO3's property list and has no legal equivalent,
    so a non-square source letterboxes inside the box rather than cropping. */
 #workskin dd.bubble .group-avatar,#workskin dd.bubble .group-avatar-initials{display:inline-block;width:1.333em;height:1.333em;border-radius:50%;vertical-align:middle;margin-right:0.35em;margin-bottom:0.35em;flex-shrink:0;}
-#workskin dd.bubble .group-avatar-initials{background:${colour.cardBg};text-align:center;line-height:1.333em;font-size:0.6em;font-weight:700;}
+/* The initials badge re-declares its box, and the reason is arithmetic that is
+   easy to get wrong twice. A length in em resolves against the element's OWN
+   font-size, so width:1.333em beside font-size:0.6em does not draw a 1.333em
+   circle in the bubble's text — it draws 1.333 x 0.6 = 0.8em, a 12px circle
+   holding two bold 9px letters. They do not fit, they wrapped, and the second
+   letter fell outside the circle in the preview, the PNG and the archive alike.
+
+   0.5 x 1.6 is also 0.8, so the painted circle is the same size it has always
+   been; only the letters inside it got room. nowrap is the guard that makes the
+   next miscalculation show up as a slight overflow rather than as a second
+   line. Change one of these three numbers and you must change the others. */
+#workskin dd.bubble .group-avatar-initials{background:${colour.cardBg};text-align:center;font-size:0.5em;width:1.6em;height:1.6em;line-height:1.6em;font-weight:700;white-space:nowrap;}
 /* REPLY CONTEXT. A compact quote inside the new bubble, not a recreation of the
    live app's blurred focus mode — there is nothing to tap in a static work. */
 #workskin blockquote.ios-reply{display:block;margin:0 0 0.45em 0;padding:0.35em 0.5em;border-left:0.25em solid ${colour.quoteBar};border-radius:0.3em;background:${colour.cardBg};font-style:normal;color:inherit;overflow:hidden;}
@@ -2152,7 +2163,11 @@ ${PARAGRAPH_RESET_CSS}
    No object-fit: not on AO3's list and it has no legal equivalent, so a
    non-square avatar letterboxes into the circle rather than cropping. */
 #workskin .group-sender .group-avatar,#workskin .group-sender .group-avatar-initials{display:inline-block;width:1.667em;height:1.667em;border-radius:50%;vertical-align:middle;margin-right:0.35em;flex-shrink:0;}
-#workskin .group-sender .group-avatar-initials{background:${colour.cardBg};color:inherit;text-align:center;line-height:1.667em;font-size:0.75em;font-weight:700;}
+/* 0.75 x 1.667 = 1.25em of the sender line, and two bold letters at 0.75em
+   need about 1.44 of their own em against the 1.667 they are given — it fits,
+   but only just, which is how the iMessage variant above came to wrap. nowrap
+   holds the pair on one line if a font ever measures wider than this one. */
+#workskin .group-sender .group-avatar-initials{background:${colour.cardBg};color:inherit;text-align:center;line-height:1.667em;font-size:0.75em;font-weight:700;white-space:nowrap;}
 ${tones}
 #workskin .message-text{display:inline;}
 #workskin .wa-reply{display:block;margin:0 0 0.45em 0;padding:0.4em 0.5em;border-left:0.25em solid #667781;border-radius:0.25em;background:rgba(0,0,0,0.06);font-style:normal;}
