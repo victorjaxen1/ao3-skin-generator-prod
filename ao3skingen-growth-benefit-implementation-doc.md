@@ -426,7 +426,26 @@ Added by the August 15 strategy review:
     arriving without html2canvas anywhere in it — the defect is in an *asset*,
     and only looking at the render finds it. When a theme, locale, or mode
     branch exists, check that the two arms actually differ.
-24. **An inline style in the export clone outranks the stylesheet, so scope it
+24. **A timeout that resolves the same value as success is a silent data
+    loss.** `waitForImages` gave each image 3000ms and then `resolve(true)` —
+    the identical value a completed load resolves — so nothing downstream could
+    tell a loaded image from one that never arrived. The export rasterised a
+    blank gap and reported nothing, and a user's downloaded WhatsApp scene came
+    back with both character avatars and both bubble photos missing while the
+    preview looked perfect. A timeout is a *failure*; give it a distinguishable
+    result and a path to the user, or it will quietly delete work. The same
+    function also treated `img.complete` as proof of success, which it is not —
+    it is equally true of an image that finished by failing.
+25. **The developer's machine is the fastest machine any user has.** That defect
+    was invisible here for the whole render pass: every export taken on this
+    box had the images, because a 900KB avatar loads instantly on a fast
+    connection. It was reported from a real download, and reproducing it meant
+    reasoning about *why* the same scene differed rather than trying to trigger
+    it locally. When a user's render disagrees with yours and the markup is
+    identical, suspect timing and payload size before rendering logic — and
+    check what the app is actually shipping over the wire, which in this case
+    was 9.7MB of `public/assets` for a page of 40px circles.
+26. **An inline style in the export clone outranks the stylesheet, so scope it
     as narrowly as the thing it compensates for.** `ExportPanel` forced
     `position:relative` on every `.tweet .twitter-logo` to seat the compact
     logo on its name line. When the expanded tweet gained a logo positioned in
@@ -437,7 +456,7 @@ Added by the August 15 strategy review:
 
 ### Clean handoff for the next developer
 
-Start from `main` at or after `6364508`, which is deployed. Do not reset or
+Start from `main` at or after `5e207fc`, which is deployed. Do not reset or
 clean the workspace; the untracked screenshots, reference exports, article
 drafts, implementation blueprints, and image-handling examples belong to the
 owner. There were 23 untracked entries at the close of the August 15 render
@@ -472,7 +491,7 @@ Section 3 table can no longer give:
 | Identity resolution and migration | [`src/lib/identity.ts`](src/lib/identity.ts) | The one resolver every output reads through |
 | Per-platform models | [`ios.ts`](src/lib/ios.ts), [`twitter.ts`](src/lib/twitter.ts), [`whatsapp.ts`](src/lib/whatsapp.ts) | Deliberately separate; they must not read each other's fields |
 | Markup and stylesheets | [`src/lib/generator.ts`](src/lib/generator.ts) | One stylesheet drives preview, PNG, and both skins |
-| The export clone — effectively a third renderer | [`src/components/ExportPanel.tsx`](src/components/ExportPanel.tsx) | Inline styles applied to a detached clone before html2canvas. They **outrank the stylesheet**, apply to the PNG only, and are where every html2canvas compensation lives. Scope each selector to the case it fixes (Learning 24) |
+| The export clone — effectively a third renderer | [`src/components/ExportPanel.tsx`](src/components/ExportPanel.tsx) | Inline styles applied to a detached clone before html2canvas. They **outrank the stylesheet**, apply to the PNG only, and are where every html2canvas compensation lives. Scope each selector to the case it fixes (Learning 26). It also owns `waitForImages`, which decides what is allowed to be missing from a PNG (Learning 24) |
 | Bundled platform chrome | [`src/lib/platformAssets.ts`](src/lib/platformAssets.ts) | Paths plus `LOCAL_ASSETS_MAP`, which is what the work-skin path treats as chrome to absolutise. A "grey variant" here may be a literal duplicate of the light one — check before trusting a theme branch (Learning 23) |
 | Single and master work skins | [`src/lib/workSkin.ts`](src/lib/workSkin.ts) | `MASTER_SKIN_VERSION` is stamped as a CSS rule, because AO3 deletes comments |
 | Strict file boundary | [`src/lib/projectFile.ts`](src/lib/projectFile.ts) | v1–v7, pure migrations |
@@ -498,6 +517,20 @@ Note that `npm run test:unit` is now `playwright test --project=unit`, not a
 `tests/*.unit.spec.ts` glob — the previous revision's Section 7.1 script list is
 superseded by what is actually in `package.json`.
 
+**Use a port nothing else is on, and check the server actually started.** A
+previous `next start` survives `pkill -f "next start"` on this Windows setup;
+the port then answers 200 while serving the **previous build**, and every
+capture taken against it is confidently wrong. `npm run start` prints
+`EADDRINUSE` into its log and keeps running, so the failure is quiet unless you
+look. Tail the log for `Ready` before trusting anything you capture.
+
+To see an exported PNG the way a user gets it, use the capture playbook in §6 of
+[`docs/RENDER-DEFECTS-AND-GALLERY-HANDOFF.md`](docs/RENDER-DEFECTS-AND-GALLERY-HANDOFF.md).
+Match the picker button by a plain ASCII substring — the accessible names
+contain an em dash (`Group Chat — WhatsApp template`) that does not survive
+being passed through a shell argument, and the failure looks like a missing
+button rather than an encoding problem.
+
 For production verification, replace `UX_BASE_URL` with
 `https://app.ao3skingen.wordfokus.com`. **Browser projects default to the live
 app**, so an unset `UX_BASE_URL` silently tests production.
@@ -517,10 +550,15 @@ render-defect pass later the same day:
   `twitter-raster`, `skin-off` — **21 passed**. `work-skin` and
   `whatsapp-authoring` each failed once under two workers and passed alone;
   treat a single failure in a combined run as a flake until it repeats;
-- **`tests/settings-render.spec.ts` fails six tests on `main`, and did so
-  before this pass.** Confirmed by running it against the deployed site, which
-  carried none of the new work. One expects a `2 participants` subtitle where
-  the renderer emits the members list. Open, unowned, and not a regression;
+- **Twelve browser tests fail on `main` and did so before this work** — eight in
+  `settings-render`, one in `cors-export`, three in `upload-errors`. Each was
+  confirmed by running it against the deployed site, which carried none of the
+  new changes. Tabulated under "Open issues found while verifying" below. Treat
+  that list as the current known-failing baseline: if you see exactly those,
+  you have broken nothing;
+- `public/assets` is **2.6MB, down from 9.7MB**, after
+  `scripts/optimize-assets.mjs`. Re-exported the WhatsApp group scene and
+  compared it against the pre-optimisation capture: no visible difference;
 - AO3 CSS ruleset audit: **182 properties and 20 shorthands, no drift** in either
   direction, against pinned upstream commit
   `cf1d7f997047eaca14370985dafd156a91696313`. The `aspect-ratio` gap recorded in
@@ -549,10 +587,16 @@ diagnosis, is in
 | `845933f` | A real light-on-dark X logo asset, so dark tweets stop drawing it black on black | **Yes** |
 | `dc30b8a` | Help text under the iOS header-image field explaining the empty default | No |
 | `6364508` | Documentation corrections | — |
+| `080844d` | `public/assets` cut from 9.7MB to 2.6MB — the avatars were 1024x768 photographs for 40px circles | **Yes**, indirectly: these are live hotlinks from published works |
+| `5e207fc` | The PNG export stops silently dropping images that never loaded, and says which ones are missing | No — export path only |
 
 One commit per blast radius, deliberately: the export-clone changes and the
 generated-markup changes have different review needs and different failure
-modes on the archive.
+modes on the archive. The asset commit is deliberately separate from the export
+commit for the same reason — **the bytes behind `/assets/*.png` are hotlinked
+by works already posted to AO3**, so replacing them is a live change to other
+people's published pages, while `ExportPanel` is not. Filenames must never
+change for that reason; content may.
 
 Three things worth carrying forward:
 
@@ -586,6 +630,53 @@ on that file alone would not have proved the new build was live — it could hav
 been cached — so `assets/twitter-logoGrey.png`, which exists in no earlier
 deploy, was probed as well, and the WhatsApp and Twitter exports were captured
 from production and inspected.
+
+#### The follow-up round — images missing from a real download
+
+Reported immediately after the deploy above, and worth reading as a unit with
+it, because it is the same defect class arriving from the opposite direction.
+
+**Symptom.** A downloaded WhatsApp group PNG had both character avatars and
+both bubble photos missing — blank space where the pictures belong — while the
+preview was correct and the *same scene exported here had them*.
+
+**Cause, and why it hid.** `waitForImages` gave each image 3000ms and then
+resolved `true`, the same value a successful load resolves, so a slow image was
+indistinguishable from a loaded one. The export rasterised the gap and said
+nothing. What made it fire for a user and not a developer was payload:
+`public/assets` was 9.7MB, with avatars stored as 1024x768 full-colour
+photographs up to 965KB each for images painted as ~40px circles. The two
+photos in the reported bubble are literally the same files as the avatars,
+which is why all four vanished together while the CSS-drawn initials and the
+proxied YouTube poster survived — a useful fingerprint: **the survivors tell
+you which loading path worked.**
+
+**Fixed in two commits**, assets then behaviour. Photos resized to 640px and
+quantised to 256 colours; flat graphics keep their geometry and take the
+palette only. 256 was chosen by compositing against the original at the size
+the image is actually painted — 128 saves another 60% and visibly bands skin
+tones. `scripts/optimize-assets.mjs` is idempotent and documents both policies;
+run it when assets are added.
+
+**The reported symptom was not the reported cause.** The bug was filed as a
+missing audio waveform. The waveform is 24 CSS boxes, renders correctly in
+every capture, and the native `<audio>` alternative only ever reaches copied
+AO3 work HTML — never the PNG. The real defect was in the same card's
+neighbourhood but was the images. Confirm which element is actually absent
+before working the path the report names.
+
+#### Open issues found while verifying, not caused by this work
+
+All confirmed against production, which did not carry the changes under test.
+None are regressions; all are unowned.
+
+| Issue | Detail |
+| --- | --- |
+| `tests/settings-render.spec.ts` — **8 failing** | The largest known-failing block, and the least understood. Named individually so a *ninth* failure cannot hide inside the total: iMessage status bar renders when enabled; iMessage group name renders in the header; WhatsApp group mode shows group name and participant count; Twitter renaming updates tweets already written; your own name reaches the hidden speaker label; WhatsApp hides online status controls in group mode; a reaction lands inside the bubble; Google settings offer exactly one Advanced section. Several assert on settings *reaching the render*, which is worth knowing before trusting any settings-driven behaviour. Decide per test whether the test or the renderer is right. |
+| `tests/cors-export.spec.ts` — 1 failing | "non-CORS image survives, and is actually in the output". Fails locally **and** against production, so it is not simply a missing local `IMGBB_API_KEY`. Given it guards the proxy path that keeps images in a PNG, it is the most worth triaging. |
+| `tests/upload-errors.spec.ts` — 3 failing | All three time out waiting for the `Upload an image file` control. Plausibly the upload feature being unavailable, but it fails on production too, so confirm rather than assume. |
+| Remaining oversized assets | The optimiser only touches files over 120KB. Everything above that line is done; a future pass could lower the threshold. |
+| `pkill -f "next start"` does not work here | Stale dev servers survive it on this Windows setup and then serve a **previous build** on the port you expect, which produces a confidently wrong capture. Twice cost real time. Use a fresh port per run and check the log says `Ready`, not `EADDRINUSE`. |
 
 The next work should proceed in this order:
 
