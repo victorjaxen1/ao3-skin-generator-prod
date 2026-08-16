@@ -25,18 +25,56 @@ interface Props {
 // Helpers
 // ---------------------------------------------------------------------------
 
-async function waitForImages(root: HTMLElement): Promise<void> {
-  const images = root.querySelectorAll('img');
-  await Promise.all(
-    Array.from(images).map(img => {
-      if (img.complete) return Promise.resolve(true);
-      return new Promise(resolve => {
-        img.onload = () => resolve(true);
-        img.onerror = () => resolve(true);
-        setTimeout(() => resolve(true), 3000);
+/**
+ * How long a single image may take to arrive before the export gives up on it.
+ *
+ * This used to be 3000ms, and the timeout resolved `true` — the same value a
+ * successful load resolves — so a slow image was indistinguishable from a
+ * loaded one. The export carried on and rasterised a blank gap where the
+ * picture should be, with nothing told to the user. That was reported from a
+ * real download: a WhatsApp group scene whose photos and avatars were simply
+ * absent from the PNG, on a connection slower than the developer's.
+ *
+ * The bundled avatars were the trigger — 1024x768 PNGs up to 965KB apiece for a
+ * ~40px circle — and `scripts/optimize-assets.mjs` has since cut them by ~75%,
+ * which is the real fix. This is the safety net: a generous ceiling, and an
+ * honest report when it is hit.
+ */
+const IMAGE_LOAD_TIMEOUT_MS = 10_000;
+
+/**
+ * Wait for every image in the clone, and report the ones that never arrived.
+ *
+ * `img.complete` alone is not proof of success — it is also true for an image
+ * that finished by failing, which is why the naturalWidth check is here. An
+ * image that is `complete` with no intrinsic width is broken, and the old code
+ * counted it as ready.
+ */
+async function waitForImages(root: HTMLElement): Promise<FailedImage[]> {
+  const images = Array.from(root.querySelectorAll('img'));
+  const loaded = (img: HTMLImageElement) => img.complete && img.naturalWidth > 0;
+
+  const results = await Promise.all(
+    images.map(img => {
+      if (loaded(img)) return Promise.resolve(null);
+      return new Promise<FailedImage | null>(resolve => {
+        const settle = (reason: string | null) => {
+          window.clearTimeout(timer);
+          img.onload = null;
+          img.onerror = null;
+          resolve(reason ? { url: img.currentSrc || img.src, reason } : null);
+        };
+        const timer = window.setTimeout(
+          () => settle(`did not load within ${IMAGE_LOAD_TIMEOUT_MS / 1000}s`),
+          IMAGE_LOAD_TIMEOUT_MS,
+        );
+        img.onload = () => settle(loaded(img) ? null : 'loaded with no image data');
+        img.onerror = () => settle('could not be loaded');
       });
-    })
+    }),
   );
+
+  return results.filter((entry): entry is FailedImage => entry !== null);
 }
 
 function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
@@ -598,9 +636,17 @@ async function renderChunk(
   // this, html2canvas requests them with crossOrigin='anonymous' and any host
   // that doesn't send CORS headers drops out of the PNG silently.
   const unconvertible = await inlineCrossOriginImages(clone);
-  if (unconvertible.length > 0) onImageWarning?.(unconvertible);
 
-  await waitForImages(clone);
+  // Reported together, and only once. Both lists are "images that will not be
+  // in your PNG", and the proxy failures are already known by the time we wait,
+  // so raising two separate warnings for one export would just be noise. An
+  // image that failed to proxy is skipped by the wait as well — it is the same
+  // <img>, and reporting it twice would tell the user their scene lost two
+  // pictures when it lost one.
+  const proxyFailed = new Set(unconvertible.map(entry => entry.url));
+  const neverArrived = (await waitForImages(clone)).filter(entry => !proxyFailed.has(entry.url));
+  const missing = [...unconvertible, ...neverArrived];
+  if (missing.length > 0) onImageWarning?.(missing);
 
   const captureWidth = captureArea.scrollWidth;
   const captureHeight = captureArea.scrollHeight;
@@ -944,9 +990,15 @@ export const ExportPanel: React.FC<Props> = ({
     // The server's reason is more use than a guess: "too many at once" and
     // "that host blocks downloads" call for completely different responses.
     const reason = failed[0]?.reason || '';
+    // Three different causes want three different responses. "Too many at once"
+    // and "that host blocks downloads" are the proxy's; a slow or broken load is
+    // neither, and telling someone to re-upload a picture that is simply taking
+    // too long to arrive sends them to fix the wrong thing.
     const advice = /too many/i.test(reason)
       ? reason
-      : `${reason} Try saving the image and using the upload button instead.`;
+      : /did not load|could not be loaded|no image data/i.test(reason)
+        ? `${reason}. Check your connection and try the export again.`
+        : `${reason} Try saving the image and using the upload button instead.`;
     showError(`${subject} — ${advice}`);
   };
 
