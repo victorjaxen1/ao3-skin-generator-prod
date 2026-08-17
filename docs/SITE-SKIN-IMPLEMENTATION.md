@@ -1302,7 +1302,7 @@ claim has a longer story, the section number is the story.
 | --- | --- |
 | Deployed | ✅ `main` → Netlify, at `/site-skin`. Commits `f2bc76c` (Phase 9) and `5c47eda` (the §14 fix) |
 | Phases 0–6, 8, 9, 10 | ✅ complete |
-| Phase 7 — **saved on real AO3** | ⚠️ **opened 17 Aug 2026.** 4 of 16 templates, **3 of 15 probes (P8, P10, P15)**, all passing — **327/327 declarations kept** (§24b-bis). Still the gate for the rest |
+| Phase 7 — **saved on real AO3** | ⚠️ **opened 17 Aug 2026.** 5 of 16 templates, **7 of 15 probes — P5, P6, P8, P10, P12, P13, P15** — all passing, **448/448 declarations kept** (§24b-bis). **Every probe a save could answer is answered.** What is left is rendering, not acceptance |
 | Templates | 16, all lint clean, all round-tripping through storage. **Ten carry a header gradient as of 17 Aug 2026** (§21a) |
 | Tests | **520 unit** (`--project=unit`), **29 browser** — counts as of 17 Aug 2026, after the Magic Picker (§24) and the form region (§25) |
 | Fonts | ✅ **24 stacks, grouped and role-split** (§19f). **Append-only** — the original seven are pinned byte for byte, because `validateTheme` matches the literal string a stored theme holds |
@@ -3231,19 +3231,41 @@ theme to go through — Neon Terminal with both fonts changed. 75/75 kept.
 - And being the editor's output rather than the catalog's, it proves a claim the
   first three could not: **what a user builds survives, not just what we ship**.
 
-The claim in the UI is no longer purely a prediction — **for the declaration
-shapes these four carry**, which is most of them. It still is for banners
-(P5/P6/P12) and for required-tags-as-words (P13).
+**A fifth save the same day took four probes at once** — Sun-Bleached Western,
+heavily customised: a banner, 125% type, plain tags, an 18px radius, a vertical
+fade and required-tags-as-words on. 121/121 kept, the largest single skin through
+the gate.
+
+- **P5** — a 100-character `githubusercontent.com` path in double quotes, whole.
+- **P12, in the layered form, which was the real unknown** —
+  `url("…gif"), linear-gradient(180deg, …)` survived as **one declaration, in
+  order**. A value carrying *both* a `url()` and a gradient had never been near
+  `sanitize_css_gradient`.
+- **P13** — all eleven §18c-2 rules, including `position: static`, `left: auto`
+  and `min-height: 0`.
+- **P6, and it is the one worth having watched.** The address was broken by one
+  letter on purpose. The header **degraded to the gradient** — still 22em, no
+  layout shift, the title still legible in white over it. §12 is the story of
+  images dying and nobody being able to tell why; the layered `background-image`
+  was built so that when it happens the skin falls back to something deliberate.
+  **That is now an observation rather than an intention.**
+
+The claim in the UI is no longer purely a prediction. **Every probe that a save
+could answer has been answered**, across five skins and 448 declarations, and
+nothing was dropped or rewritten in any of them. What is still unobserved is
+whether the result *looks* right on the pages the mock only approximates — a
+different and much less dangerous class of unknown.
 
 ### 24c. What is NOT proven
 
-- **Phase 7 is open but no longer empty** — 4 of 16 templates and 3 of 15 probes,
-  all passing (§24b-bis). Phase B adds nothing to it: it emits no property the
+- **Phase 7 is open but no longer empty** — 5 of 16 templates and **7 of 15
+  probes**, all passing (§24b-bis). Phase B adds nothing to it: it emits no property the
   sixteen templates do not already emit, which is the precise test §23c says to
-  apply — applied deliberately this time rather than assumed. **The unproven half
-  is now specific rather than total**: banners (P5/P6/P12 — the largest remaining
-  surface, and the only `url()` we emit), required-tags-as-words (P13), and P11's
-  capability probe. **P15 passed**, so the font bank is settled.
+  apply — applied deliberately this time rather than assumed. **The character of what is left has changed**: banners, fonts, gradients,
+  required-tags and the layered `background-image` are all settled, so nothing
+  outstanding is about *whether AO3 accepts our CSS*. What remains is P11's
+  capability probe and the rendering probes — whether the result looks right on
+  pages the mock only approximates.
 - **The 2% "deliberate" floor is taste, tuned on synthetic fixtures.** Two real
   images agree with it. Twenty would be evidence; two is a smoke test.
 - **`readBannerBrightness`'s 0.18 threshold has never been looked at on a real
@@ -3256,7 +3278,7 @@ shapes these four carry**, which is most of them. It still is for banners
 
 | # | Work | Why here |
 | --- | --- | --- |
-| 1 | **Finish Phase 7** — P5/P6/P12 on a banner-ready template, then P11, then P13 | The gate, now 4/16 and 3/15 done (§24b-bis). P8, P10 and **P15** are passed. Banners are what is left and `neon` is already banner-ready — add an imgur address and re-save. That covers the only `url()` we emit and the layered `url(), linear-gradient()` form in one go |
+| 1 | **Finish Phase 7** — P11, then the rendering probes P1–P4, P7, P9, P14 | The gate, now 5/16 and **7/15** (§24b-bis). Every probe a *save* could answer is answered; what is left is what a *page* answers. None of it blocks a release the way the acceptance questions did |
 | 2 | **Whatever the gate finds.** Assume it finds something | |
 | 3 | **§18c-3 and §18c-4 together** | They share the same ten-rule adjacency list |
 | 4 | **§18c-5, then §18c-6** | 18c-6 needs §18c-0's third cascade mode |

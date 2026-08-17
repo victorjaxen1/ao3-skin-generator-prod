@@ -56,7 +56,7 @@ the reopened editor still contains every rule we emitted.
 | 13 | Midnight Academia | `academia` | ⬜ | ⬜ | ⬜ | banner-ready |
 | 14 | Soft Shoujo | `shoujo` | ⬜ | ⬜ | ⬜ | banner-ready |
 | 15 | Neon Terminal | `neon` | ✅ | ✅ | ✅ | 17 Aug 2026, **with both fonts changed** — this is P15's carrier. **75/75 declarations kept.** banner-ready, but saved without a banner |
-| 16 | Sun-Bleached Western | `western` | ⬜ | ⬜ | ⬜ | banner-ready |
+| 16 | Sun-Bleached Western | `western` | ✅ | ✅ | ✅ | 17 Aug 2026, **heavily customised** — banner, 125% type, plain tags, 18px radius, vertical fade, required-tags-as-words. **121/121 kept.** Carries P5, P6, P12 and P13 |
 
 Between them the sixteen cover every branch the compiler has except the banner
 `url()` and the two later toggles, which is what the probes below are for:
@@ -107,16 +107,16 @@ real page.
 | P2 | **Drop cap on a multi-chapter work** | same selector, other branch. Confirm **one** capital per chapter and **none** on the summary or notes — the defect the prototype shipped | ⬜ |
 | P3 | **Divider on both work shapes** | `hr::after` glyph and the three border longhands | ⬜ |
 | P4 | **Header dropdown, logged in** | `#header .menu`, `#small_login` and the four hover/open selectors only exist for a signed-in reader | ⬜ |
-| P5 | **A banner from imgur** | the one `url()` we emit, and the one thing AO3 can refuse on address grounds alone | ⬜ |
-| P6 | **A banner that 404s** | the accent must still be underneath it (§4b), so a dead image degrades to the theme rather than to white | ⬜ |
+| P5 | **A banner from imgur** | the one `url()` we emit, and the one thing AO3 can refuse on address grounds alone | ✅ **17 Aug 2026 — passes**, on `user-images.githubusercontent.com` rather than imgur. `url("https://…-fe7c-11ea-8512-69f90cb65e48.gif")` came back **whole**, double quotes intact, a 100-character path of digits and hyphens untouched. `URI_REGEX` took it |
+| P6 | **A banner that 404s** | the accent must still be underneath it (§4b), so a dead image degrades to the theme rather than to white | ✅ **17 Aug 2026 — passes, and this is the one worth having watched.** One letter was removed from the address on purpose. The header **degraded to the gradient**: still 22em tall, no layout shift, `#9c4a21 → #753819` fading cleanly, the title still legible in white over it and `.primary` still transparent. Not white, not a flat fill — exactly the claim §4b and §19b-bis make, now observed instead of designed |
 | P7 | **Tag colours on a real listing and a real work page** | `li.warnings a.tag` vs `dd.warning a.tag` — two markups, and only the listing one is common | ⬜ |
 | P8 | **Themed scrollbar in Chrome, and Firefox unharmed** | `::-webkit-scrollbar` is a selector AO3 has no opinion about; confirm it survives the save and that Firefox simply ignores it | ✅ **17 Aug 2026.** All four scrollbar rules came back whole in all three readbacks. "AO3 validates declarations, never selectors" is now an observation. Firefox behaviour not separately checked |
 | P9 | **Footer and system messages** | AO3's red tile and `.notice`'s pale blue, on one dark and one light theme (§4.6, §4.8) | ⬜ |
 | P10 | **A work that has its own work skin** — read it with a site skin on | The bug that shipped on 13 Aug 2026 (§14): the drop cap landed on every chat bubble in the work. Confirm one capital at the top of the chapter and none inside the author's markup, that the author's own `<hr>` keeps its own styling, and that their fonts and backgrounds survive. Use a work made with this app's conversation generator | ✅ **17 Aug 2026, and this was the one that mattered.** A generator-built work (Twitter card, WhatsApp thread, four-image grid, quote post) read under all three site skins: the author's design is **identical across all three**. Exactly one drop cap per page, at the first direct child of `.userstuff`, none inside the author's markup. §14 confirmed fixed on the archive, not just in the mock |
-| P11 | **The §17 capability probe** — a scratch skin, not a template | Settles plan §17 against the only authority. See below | ⬜ |
-| P12 | **A header fade, alone and under a banner** | The first gradient we actually *ship* (§18b's header-gradient row, built 16 Aug 2026). **As of 17 Aug 2026 ten templates carry one by default**, so the first half of this probe now happens on its own the moment you save Moonlit Library — what still needs doing by hand is the **layered** form: add a banner to Midnight Academia and save. That emits `background-image: url("…"), linear-gradient(…)`, a different shape from P11's bare gradient and the one a user will really produce. Confirm both survive the readback, that the header reads as one continuous fade rather than two bands, and that AO3's navigation strip does not reappear in its own colour | ⬜ |
+| P11 | **The §17 capability probe** — a scratch skin, not a template | Settles plan §17 against the only authority. See below | ⬜ **the last unproven capability question.** Everything it was going to ask about `box-shadow`, gradients and `url()` has now been answered by P5/P6/P12 and the five saves, so what is left for it is narrow |
+| P12 | **A header fade, alone and under a banner** | The first gradient we actually *ship* (§18b's header-gradient row, built 16 Aug 2026). **As of 17 Aug 2026 ten templates carry one by default**, so the first half of this probe now happens on its own the moment you save Moonlit Library — what still needs doing by hand is the **layered** form: add a banner to Midnight Academia and save. That emits `background-image: url("…"), linear-gradient(…)`, a different shape from P11's bare gradient and the one a user will really produce. Confirm both survive the readback, that the header reads as one continuous fade rather than two bands, and that AO3's navigation strip does not reappear in its own colour | ✅ **17 Aug 2026 — passes, in the layered form, which was the real unknown.** `background-image: url("…gif"), linear-gradient(180deg, #9c4a21, #753819)` survived as **one declaration**. AO3 routes any token containing `gradient` to `sanitize_css_gradient` (§17 Correction 5), and a value carrying **both** a `url()` and a gradient had never been through it. It is kept whole, in order |
 | P14 | **The four page types the mock could not render** — Profile, Collections, Own works, and the filter sidebar, on **one dark template** | Added 17 Aug 2026 from the §22 audit, and **rewritten the same day, because §22e landed**: this is no longer "record how wrong it looks", it is the confirmation that the region pass worked. All four are built from `.listbox`, which AO3 paints `#ddd` with a `#fff` inner panel, a white 1px ring *outside* the box and an inset grey bevel *inside* the panel. Confirm on each page that **the outer box and the inner panel are different colours** (the polarity — outer takes the page colour, inner the card colour, and painting both alike is the failure that looks correct in a diff), that **neither keeps a light edge** (the two `box-shadow: none` declarations are what remove the ring and the bevel, and a background colour alone cannot), and that headings on them are legible. Then glance at a work's metadata table (`dl.meta`'s border, and the grey halo on the `.wrapper` AO3 always puts around it), the statistics page's zebra rows, and — §22c — **any listing at all**, where every relationship tag should have lost its pale grey chip while still painting on hover | ⬜ |
-| P13 | **Required tags as words, on a real listing** | Off in every template (§18c-2), so nothing in the table above reaches it. Turn "Required tags as words" on, save, and open a works listing. Nine declarations across eight selectors, all of them undoing AO3's own `13-group-blurb.css` — which is the risk: our mock reproduces that stylesheet from a transcription, and the live page is the only place the **cascade** is real. Confirm the four phrases are legible and in the flow, that no sprite remains behind them, that the 65px gutter is reclaimed, and — the one our mock cannot show — that a **bookmark** blurb and a **series** blurb are not left broken by the same rules. `.bookmark .short .header` has a `min-height` of its own | ⬜ |
+| P13 | **Required tags as words, on a real listing** | Off in every template (§18c-2), so nothing in the table above reaches it. Turn "Required tags as words" on, save, and open a works listing. Nine declarations across eight selectors, all of them undoing AO3's own `13-group-blurb.css` — which is the risk: our mock reproduces that stylesheet from a transcription, and the live page is the only place the **cascade** is real. Confirm the four phrases are legible and in the flow, that no sprite remains behind them, that the 65px gutter is reclaimed, and — the one our mock cannot show — that a **bookmark** blurb and a **series** blurb are not left broken by the same rules. `.bookmark .short .header` has a `min-height` of its own | ✅ **17 Aug 2026 — passes.** All eleven §18c-2 rules came back whole, including the ones most likely to be refused: `position: static`, `left: auto`, `top: auto`, `display: inline`, `min-height: 0`, `color: inherit`, `font-size: 1em`, `margin-left: 0`. The four theme-aware colours came too |
 
 | P15 | **A multi-name font stack, saved and read back** | Added 17 Aug 2026, when the font bank grew from 7 stacks to 24. `sanitize_css_font` is its own branch of the sanitizer — it never reaches `VALUE_REGEX` — and it splits on commas and checks **each name** against `[a-z0-9\- ]` after downcasing and stripping `!important`. **One bad name drops the whole declaration**, so a five-name stack is five chances to lose the font entirely, where the old three-name stacks were three. Set Headings to *Snell — formal script* (`'Snell Roundhand', 'Palace Script MT', 'Edwardian Script ITC', cursive` — the longest and most quote-heavy stack we ship) and Body to *Baskerville — elegant*, save, then **reopen the skin in AO3's editor** and confirm both `font-family` declarations came back **whole, with every name present**. A stack that returns truncated is a correction to write into §3's font branch. Also confirm the quoting survived: we emit single quotes, and AO3's regex permits them | ✅ **17 Aug 2026 — passes.** Both stacks came back **whole**, in all three places they are emitted. `Baskerville, 'Baskerville Old Face', 'Hoefler Text', Georgia, serif` — **five names, three quoted** — and `'Snell Roundhand', 'Palace Script MT', 'Edwardian Script ITC', cursive` — **four names, three quoted**. Single quotes preserved byte for byte. `sanitize_css_font` neither truncated a stack nor dropped a declaration, so the 24-stack bank is safe as shipped and §6d's mapping targets in MAGIC-PICKER do not shrink |
 
@@ -279,11 +279,42 @@ And it is **the first save of a theme the editor produced rather than the catalo
 shipped**, which is a different claim: it proves the *editor's* output survives,
 not just the sixteen we hand-checked.
 
-### Still not proven by this run
+### The fifth save — the banner, and four probes at once
 
-- **P5, P6, P12's layered form** — no banner was in play, so `url()` and the
-  `url(), linear-gradient()` layering are still unproven. `neon` is banner-ready
-  and was saved without one.
+**Sun-Bleached Western, heavily customised**: a banner, 125% type, plain tags,
+an 18px radius, a vertical fade, and required-tags-as-words on. 121/121 kept —
+the largest single skin through the gate, and the same lone `:has()` re-wrap.
+
+It settles four probes:
+
+- **P5 — the `url()`.** A 100-character `githubusercontent.com` path of digits
+  and hyphens, in double quotes, came back untouched.
+- **P12 — the layered form, which was the real unknown.**
+  `background-image: url("…gif"), linear-gradient(180deg, #9c4a21, #753819)`
+  survived as **one declaration, in order**. AO3 routes any token containing
+  `gradient` to `sanitize_css_gradient` (§17 Correction 5), and a value carrying
+  **both** a `url()` and a gradient had never been near it.
+- **P13 — required tags as words.** All eleven §18c-2 rules, including the ones
+  most likely to be refused: `position: static`, `left: auto`, `top: auto`,
+  `display: inline`, `min-height: 0`, `color: inherit`.
+- **P6 — the dead banner, and this is the one worth having watched.** One letter
+  removed from the address on purpose. **The header degraded to the gradient**:
+  still 22em, no layout shift, the fade clean, the title still legible in white,
+  `.primary` still transparent over it. Not white, not a flat fill.
+
+P6 is the one that matters in production. §12 is the story of images dying and
+nobody being able to tell why; the layered `background-image` was designed so
+that when it happens the skin degrades to something deliberate. **That is now an
+observation rather than a design intention.** The one honest cost: a 22em header
+with no image is 22em of empty gradient. Preserving the height is still right —
+CSS cannot detect a 404, so the alternative is a layout that shifts when a
+server hiccups — but it is worth knowing what the failure looks like.
+
+Three more branches came with it, none reached by the first four: **`font-size`
+at a non-100% scale**, **`height` on `#header .heading`**, and the **plain-tag
+branch of the tag-colour rules** (colour only, no `border-color`).
+
+### Still not proven by this run
 - **P13** — required-tags-as-words is off in every template.
 - **The remaining thirteen templates**, though §19c's reasoning applies: they
   introduce no declaration shape these three did not carry, so they want a
@@ -312,19 +343,19 @@ fifteen probes. The gate is no longer empty, and the claim in the UI is no longe
 purely a prediction for the shapes these three carry.
 
 - **Date run:** 17 Aug 2026
-- **Templates saved:** 4 of 16 — `moonlit`, `paper`, `lavender`, and `neon` with
-  both fonts changed. All accepted on first submit, all applied, all read back
-  clean
+- **Templates saved:** 5 of 16 — `moonlit`, `paper`, `lavender`, `neon` with both
+  fonts changed, and `western` heavily customised with a banner. All accepted on
+  first submit, all applied, all read back clean
 - **Templates that failed to save:** none
-- **Rules the readback showed missing:** **none.** 327 of 327 declarations
-  survived across the four. Verified by mechanical diff, not by reading
+- **Rules the readback showed missing:** **none.** 448 of 448 declarations
+  survived across the five. Verified by mechanical diff, not by reading
 - **Values AO3 rewrote:** none. Every hex, length, keyword and quoted string came
   back byte-identical
 - **Corrections written back into `SITE-SKIN-IMPLEMENTATION.md` §7:** none needed
   — our model of `clean_css_code` made no wrong prediction on these three. **This
   is the first evidence the model is right rather than merely careful**
-- **Probes passed:** P8 (scrollbar), P10 (work skin under a site skin — the
-  highest-priority one, §15f), **P15 (the font bank)**
+- **Probes passed:** **seven of fifteen** — P5, P6, P8, P10, P12, P13, P15.
+  Every one that a save could answer
 - **New trap found:** AO3 re-wraps selector lists at every comma including inside
   `:has()`. Harmless for a site skin, potentially destructive for a **work** skin,
   which AO3 prefixes. Written up above and in plan §15e
@@ -332,11 +363,11 @@ purely a prediction for the shapes these three carry.
 
 ### What still has to happen
 
-1. **P5, P6, P12's layered form** — the four banner-ready templates, where the
-   only `url()` we emit lives. **This is now the largest unproven surface**, and
-   `neon` is already banner-ready: add an imgur address and re-save.
-2. **P11** — the capability probe, which is what §18b is waiting on.
-3. **P13** — required-tags-as-words, off in every template.
-4. **The remaining twelve templates**, spot-checked rather than one row each:
+1. **P11** — the capability probe, and now the only capability question left.
+   Most of what it was written to ask has been answered by the five saves.
+2. **P1–P4, P7, P9, P14** — the *rendering* probes. Nothing here is about whether
+   AO3 accepts the CSS any more; it is about whether the result looks right on
+   pages the mock only approximates.
+3. **The remaining eleven templates**, spot-checked rather than one row each:
    they introduce no declaration shape these three did not carry. §19c's
    reasoning, applied. The four banner-ready ones are the exception.
