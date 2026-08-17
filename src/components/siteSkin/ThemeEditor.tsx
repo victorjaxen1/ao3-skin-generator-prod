@@ -26,6 +26,8 @@ interface Props {
   onChange: <K extends keyof SiteSkinTheme>(key: K, value: SiteSkinTheme[K]) => void;
   issues: ReadabilityIssue[];
   onFix: (issue: ReadabilityIssue) => void;
+  /** Opens the Magic Picker. The page owns the dialog and the apply path. */
+  onPickFromImage: () => void;
 }
 
 const COLOR_LABELS: { key: keyof SiteSkinTheme['colors']; label: string; hint: string }[] = [
@@ -229,7 +231,7 @@ const BannerRow: React.FC<{
  * readability warning next to its cause also means the fix button is next to
  * the control the user would otherwise reach for.
  */
-export const ThemeEditor: React.FC<Props> = ({ theme, onChange, issues, onFix }) => {
+export const ThemeEditor: React.FC<Props> = ({ theme, onChange, issues, onFix, onPickFromImage }) => {
   const setColor = (key: keyof SiteSkinTheme['colors'], value: string) =>
     onChange('colors', { ...theme.colors, [key]: value });
 
@@ -245,6 +247,25 @@ export const ThemeEditor: React.FC<Props> = ({ theme, onChange, issues, onFix })
           onChange={v => setColor(key, v)}
         />
       ))}
+
+      {/* Under the four swatches on purpose: it sets exactly these and nothing
+          else, so it belongs beside them rather than in its own group. Four
+          colour pickers is the slowest way to describe a look you already have
+          a picture of. Undo covers it — see PaletteFromImageDialog. */}
+      <div className="py-3">
+        <button
+          type="button"
+          onClick={onPickFromImage}
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold text-violet-700 bg-violet-50 border border-violet-200 rounded-lg hover:bg-violet-100 transition-colors"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+            <circle cx="8.5" cy="8.5" r="1.5" />
+            <path d="M21 15l-5-5L5 21" />
+          </svg>
+          Take these from a picture
+        </button>
+      </div>
 
       {issues.length > 0 && (
         <div className="py-3 space-y-2">

@@ -697,3 +697,61 @@ test('work survives a reload', async ({ page }) => {
   await page.getByRole('button', { name: /Keep editing/ }).click();
   expect(await exportedCss(page)).toContain('#ff8800');
 });
+
+/**
+ * The Magic Picker (docs/MAGIC-PICKER-IMPLEMENTATION.md §5).
+ *
+ * These deliberately never reach the network. A test that pasted a real image
+ * address would be measuring imgur's uptime, and the extraction itself is
+ * covered exhaustively without a browser in tests/palette.unit.spec.ts. What is
+ * only checkable here is that both doors exist, that the promise on them is the
+ * one §3 settled, and that the client-side pre-check fires before a round trip.
+ */
+test('the gallery offers a way out of the sixteen', async ({ page }) => {
+  await page.goto('/site-skin');
+  await page.evaluate(() => localStorage.removeItem('ao3SiteSkinTheme'));
+  await page.reload();
+
+  const panel = page.getByRole('heading', { name: /None of these\?/ });
+  await expect(panel).toBeVisible();
+
+  // §3 is a product decision, not copy: we promise colours and never a match,
+  // because "match" sets up a comparison we lose on every single use.
+  const body = await page.locator('body').innerText();
+  expect(body).toContain('We read its colours');
+  expect(body.toLowerCase()).not.toContain('match this');
+
+  // And it says what a skin cannot carry, in the same breath.
+  await expect(page.getByText(/A skin can carry colours, not layout or fonts/)).toBeVisible();
+});
+
+test('a paste that is not an address is refused without a round trip', async ({ page }) => {
+  await page.goto('/site-skin');
+  await page.evaluate(() => localStorage.removeItem('ao3SiteSkinTheme'));
+  await page.reload();
+
+  // Fail here, not after a proxy fetch: the commonest paste error deserves the
+  // fastest possible answer, and the proxy is HTTPS-only anyway.
+  await page.getByLabel('Image address').fill('my-picture.png');
+  await page.getByRole('button', { name: 'Get the colours' }).click();
+  // Filtered, because Next's own route announcer is a second role="alert".
+  await expect(page.getByRole('alert').filter({ hasText: 'full address' })).toContainText('https://');
+
+  // Still on the gallery — nothing was applied.
+  await expect(page.getByRole('heading', { name: 'Make AO3 feel like yours' })).toBeVisible();
+});
+
+test('the editor carries the same picker, beside the colours it sets', async ({ page }) => {
+  await openEditor(page);
+
+  await page.getByRole('button', { name: 'Take these from a picture' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Build colours from a picture' });
+  await expect(dialog).toBeVisible();
+
+  // It must say what it leaves alone. The gallery adopts a whole theme; this
+  // one replaces four hex strings and must not quietly reset the user's fonts.
+  await expect(dialog).toContainText('Your fonts and shapes stay as they are');
+
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+});

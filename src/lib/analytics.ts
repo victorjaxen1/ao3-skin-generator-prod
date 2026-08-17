@@ -37,6 +37,7 @@ export type AnalyticsEvent =
   | { name: 'cast_imported'; characterCountBucket: CountBucket }
   | { name: 'next_step_shown'; nextStep: NextStep; placement: string }
   | { name: 'product_cta_clicked'; product: 'worldkonstruct' | 'wordfokus'; placement: string }
+  | { name: 'palette_applied'; source: 'image' | 'site'; polarity: 'light' | 'dark'; placement: 'gallery' | 'editor' }
   | { name: 'donation_clicked'; placement: string };
 
 export type AnalyticsConsent = 'granted' | 'denied';
@@ -71,6 +72,14 @@ const TEMPLATE_IDS = new Set([
   'google-search-history', 'google-research-montage', 'google-news-articles',
   'moonlit', 'paper', 'lavender', 'crimson', 'forest', 'ocean', 'rose', 'contrast',
   'terminal', 'golden', 'gothic', 'clean', 'academia', 'shoujo', 'neon', 'western',
+  // Not a template — the fixed id every Magic Picker extraction carries
+  // (`palette.ts`). It is here because the funnel below keys on `templateId`,
+  // and without it a theme built from a picture would record no
+  // `template_selected`, no `project_activated` and no export at all: the whole
+  // funnel for the one feature we most need to measure, silent. The catalog
+  // drift test cannot catch this, because a generated theme is deliberately not
+  // in the catalog; `tests/palette.unit.spec.ts` pins it instead.
+  'from-image',
 ]);
 
 /** Exported for the drift test only; never widen this at a call site. */
@@ -254,6 +263,16 @@ export function analyticsPayload(event: AnalyticsEvent): Record<string, string |
     case 'product_cta_clicked':
       return (value.product === 'worldkonstruct' || value.product === 'wordfokus') && PLACEMENTS.has(value.placement as string)
         ? { product: value.product, placement: value.placement as string }
+        : null;
+    // Content-free by construction: which door, which way round, where from.
+    // The address is never a parameter — MAGIC-PICKER §10 wants to know whether
+    // anyone uses this and whether a URL or an image is the better front door,
+    // and neither question needs to know what the picture was.
+    case 'palette_applied':
+      return (value.source === 'image' || value.source === 'site')
+        && (value.polarity === 'light' || value.polarity === 'dark')
+        && (value.placement === 'gallery' || value.placement === 'editor')
+        ? { source: value.source, polarity: value.polarity, placement: value.placement }
         : null;
     case 'donation_clicked':
       return PLACEMENTS.has(value.placement as string) ? { placement: value.placement as string } : null;

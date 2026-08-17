@@ -16,6 +16,7 @@ import { PreviewState } from '../lib/siteSkin/mockPage';
 import { hasStoredTheme, loadStoredTheme, persistTheme } from '../lib/siteSkin/storage';
 import { TemplateGallery } from '../components/siteSkin/TemplateGallery';
 import { ThemeEditor } from '../components/siteSkin/ThemeEditor';
+import { PaletteFromImageDialog } from '../components/siteSkin/PaletteFromImage';
 import { SkinPreview } from '../components/siteSkin/SkinPreview';
 import { ExportSkinDialog } from '../components/siteSkin/ExportSkinDialog';
 import { ProductHead } from '../components/ProductHead';
@@ -40,6 +41,7 @@ export default function SiteSkinPage() {
   const [hasSaved, setHasSaved] = useState(false);
   const [previewState, setPreviewState] = useState<PreviewState>('browse');
   const [showExport, setShowExport] = useState(false);
+  const [showPicker, setShowPicker] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'failed'>('saved');
   const [saveError, setSaveError] = useState('');
 
@@ -169,6 +171,29 @@ export default function SiteSkinPage() {
     });
   }, []);
 
+  /**
+   * The picker's editor path: take the colours, leave everything else.
+   *
+   * The gallery path adopts the generated theme wholesale through
+   * `handleSelectTemplate`, because there the user has no theme yet. Here they
+   * do, and its fonts, corners, tag style and details are their work — a colour
+   * picker that silently reset the typography would be the §5.2 problem in
+   * reverse. The header fields ride along only when the picker actually set a
+   * banner, which it does only for an address AO3 accepts.
+   *
+   * No confirmation and no safety backup: this writes four hex strings and lands
+   * on the history stack, so Ctrl+Z is the whole escape hatch.
+   */
+  const applyExtractedTheme = useCallback((extracted: SiteSkinTheme) => {
+    setTheme(prev => ({
+      ...prev,
+      colors: { ...extracted.colors },
+      header: extracted.header.bannerUrl
+        ? { ...prev.header, ...extracted.header }
+        : prev.header,
+    }));
+  }, []);
+
   const undo = useCallback(() => {
     setHistoryIndex(i => {
       if (i <= 0) return i;
@@ -188,6 +213,7 @@ export default function SiteSkinPage() {
   useEffect(() => {
     const handle = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && showExport) setShowExport(false);
+      if (e.key === 'Escape' && showPicker) setShowPicker(false);
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === 'z') {
         e.preventDefault();
         undo();
@@ -199,7 +225,7 @@ export default function SiteSkinPage() {
     };
     window.addEventListener('keydown', handle);
     return () => window.removeEventListener('keydown', handle);
-  }, [showExport, undo, redo]);
+  }, [showExport, showPicker, undo, redo]);
 
   const head = (
     <ProductHead
@@ -303,7 +329,13 @@ export default function SiteSkinPage() {
             className="w-full lg:w-[340px] flex-shrink-0 overflow-y-auto bg-white lg:border-r border-stone-200 px-4 order-2 lg:order-1"
             style={{ paddingBottom: 'calc(1.5rem + var(--analytics-consent-h, 0px))' }}
           >
-            <ThemeEditor theme={theme} onChange={updateTheme} issues={issues} onFix={handleFix} />
+            <ThemeEditor
+              theme={theme}
+              onChange={updateTheme}
+              issues={issues}
+              onFix={handleFix}
+              onPickFromImage={() => setShowPicker(true)}
+            />
           </div>
 
           <div className="flex-1 min-h-[45vh] lg:min-h-0 order-1 lg:order-2 flex flex-col">
@@ -311,6 +343,12 @@ export default function SiteSkinPage() {
           </div>
         </div>
       </div>
+
+      <PaletteFromImageDialog
+        isOpen={showPicker}
+        onClose={() => setShowPicker(false)}
+        onUse={applyExtractedTheme}
+      />
 
       <ExportSkinDialog
         isOpen={showExport}

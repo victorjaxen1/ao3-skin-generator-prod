@@ -1,7 +1,12 @@
 /**
  * Client for the image proxy (src/pages/api/image-proxy.ts).
  *
- * Used only by the export pipeline. Remote images display fine in the preview,
+ * Two callers, for the same underlying reason. The export pipeline is the
+ * original; the site-skin Magic Picker (`siteSkin/imageSample.ts`) is the second,
+ * and it needs the proxy because a cross-origin image *taints a canvas* — the
+ * same-origin `data:` URI below is what makes `getImageData` legal at all.
+ *
+ * Remote images display fine in the preview,
  * but html2canvas requests them with crossOrigin='anonymous', so any host that
  * doesn't send Access-Control-Allow-Origin fails to load and leaves a hole in
  * the exported PNG with no warning. Swapping those images for same-origin

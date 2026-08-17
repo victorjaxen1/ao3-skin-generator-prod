@@ -3116,6 +3116,88 @@ card *will* touch it, and will find the same missing generator.
 
 ---
 
+## 24. Handoff — 17 Aug 2026, later still (revision 10)
+
+**The current handoff.** §15 still owns the file map, the five invariants and
+the traps. §20b, §20d, §21b and §23b–c are still true and are not restated.
+
+### 24a. What landed
+
+| | Status |
+| --- | --- |
+| **Magic Picker Phase B** — paste a picture, get a theme | ✅ `palette.ts`, `imageSample.ts`, `PaletteFromImage.tsx`, `ThemeThumbnail.tsx`. Two entry points: the gallery, and the Colours group in the editor |
+| Proven against real images | ✅ End to end through the real proxy and a real canvas. The React logo yields its own cyan (`#60dbfb`) as accent with the transparent margin correctly ignored; a photograph yields the grass olive (`#717455`) and is correctly refused as a banner because `.photos` is not on AO3's TLD list. Both compile and pass the lint |
+| Tests | **518 unit** (was 492), **29 browser** (was 26). `tests/palette.unit.spec.ts` is new |
+| The contrast floor | ✅ Structural, not statistical. 210 synthetic fixtures × 2 polarities, `findReadabilityIssues` empty for all of them |
+| Untouched | ✅ `compile.ts`, `ao3Css.ts`, `colors.ts`, `theme.ts`, `templates.ts`, `mockPage.ts`, `storage.ts`, `imageSecurity.ts`, `/api/image-proxy.ts`. **No new endpoint and no new declaration shape** |
+| Privacy copy | ✅ The proxy clause now covers palette reading, not only export |
+
+The full build record, the four corrections it made to its own plan, and the
+Phase C spec are in `docs/MAGIC-PICKER-IMPLEMENTATION.md` §5 and §11.
+
+### 24b. Three learnings, and the first one is about this file
+
+**1. A plan is a place errors hide with their reasons attached.** Two of the four
+defects found in the picker plan were *already recorded in this repository as
+bugs that had happened before* — `mixHex`'s argument order, which `compile.ts`
+documents surviving a green test suite, and the analytics allowlist, which
+`analytics.ts` documents silencing five examples for two days. A reviewed,
+committed plan re-specified both. **Before writing a line, open every function
+the plan names and read its signature.** `mixHex(background, text, 0.07)` reads
+correctly in English and is backwards in TypeScript.
+
+**2. A "safety fallback" is where a bug goes to be invisible.** `liftSurface`
+compounded a 6% step toward white, which is Zeno's arrow — it never arrives. On a
+page at luminance 0.87, where the only qualifying colour is very near pure white,
+it ran out of iterations and fell through to its own fallback, quietly producing
+a *darker* card on a light theme. Nothing errored; the fallback did its job. It
+was caught only because a test asserted the *rule* ("the card is lighter than the
+page") rather than the *absence of a crash*. Interpolating to the pole instead of
+compounding toward it fixed it.
+
+Beside §23c's pair, this is the third face of the same coin: **being stricter
+than AO3 is our recurring bug; assuming AO3 agrees with our model is that bug
+wearing another face; and a fallback that silently absorbs a wrong answer is the
+third.**
+
+**3. Driving the real UI found an accessibility defect no unit test could.** The
+picker's two result cards were labelled "Light" and "Dark" — one word each, which
+is right on screen because the pictures carry the rest. Announced, "Dark" is
+indistinguishable from the gallery's "Dark" mood filter sitting a few hundred
+pixels below it. It is now `aria-label="Use the dark version"`. The strict-mode
+violation that exposed it was a *test* problem; the ambiguity underneath it was a
+*product* problem, and only the first one was ever going to complain.
+
+### 24c. What is NOT proven
+
+- **Phase 7 is still the open gate**, unchanged, and now the only thing in front
+  of everything else. Phase B does not add to it: it emits no property the
+  sixteen templates do not already emit, which is the precise test §23c says to
+  apply — applied deliberately this time rather than assumed.
+- **The 2% "deliberate" floor is taste, tuned on synthetic fixtures.** Two real
+  images agree with it. Twenty would be evidence; two is a smoke test.
+- **`readBannerBrightness`'s 0.18 threshold has never been looked at on a real
+  AO3 header.** It follows from luminance already being perceptually weighted,
+  and it is the kind of number only a screenshot can settle.
+
+### 24d. What to do next, in order
+
+§23e's list stands, with one item done and one added:
+
+| # | Work | Why here |
+| --- | --- | --- |
+| 1 | **Phase 7 + P11–P15 on real AO3** | The gate. Nothing should go in ahead of it. **Do P10 first** (§15f) |
+| 2 | **Whatever the gate finds.** Assume it finds something | |
+| 3 | **§18c-3 and §18c-4 together** | They share the same ten-rule adjacency list |
+| 4 | **§18c-5, then §18c-6** | 18c-6 needs §18c-0's third cascade mode |
+| 5 | **Magic Picker Phase C** | Now ~2 days rather than ~2½: B built the UI, the quantizer and both entry points. **Still needs its own security review** — it is the first endpoint that fetches non-image content from an arbitrary host (MAGIC-PICKER §6b) |
+| 6 | **§18b** depth | Blocked on the gate and on §22e |
+| 7 | The `bannerSet` analytics line from §20d | Still one line, still unwritten |
+
+§19c's palettes remain unblocked and outside this order.
+
+---
+
 ## Sources
 
 AO3 rules verified against otwarchive `master`, 6 August 2026, **re-verified

@@ -5,8 +5,9 @@
 and §19 (the fandom question). This document is the full build; §19b and §19a
 over there are its history and are partly superseded here — see §7.
 
-**Status: not built.** Phase A landed 17 Aug 2026 and is the only part that
-exists. Phases B and C are specified, not written.
+**Status: Phases A and B are built.** Phase A landed 17 Aug 2026; Phase B
+landed 17 Aug 2026 (§11 records what it cost and what it corrected). Phase C is
+specified, not written.
 
 > ## Start here
 >
@@ -19,8 +20,9 @@ exists. Phases B and C are specified, not written.
 > everyone who uses it.
 >
 > **Read in this order:** §1 (why), §2 (the wall), §3 (what it must promise),
-> then §5 (Phase B) — which is the one to build first, and is nearly free.
-> §6 (Phase C) is the headline feature and the one with real risk in it.
+> then §5 (Phase B) — which is built, and whose §5f records four things the
+> first draft of this plan got wrong. §6 (Phase C) is the headline feature and
+> the one with real risk in it.
 >
 > **The invariant that keeps this cheap is §8.** The output is a
 > `SiteSkinTheme` and nothing else. If you find yourself editing `compile.ts`,
@@ -120,7 +122,9 @@ a good hook, and it converts the font result from a broken promise into a bonus:
 There is a second honesty problem worth designing for up front: **the modal
 result is boring.** Most sites people admire are near-white, dark-grey text and
 one saturated accent. That extraction lands very close to Clean Slate, which we
-already ship. §6e is the mitigation.
+already ship. §5e and §6e are the mitigation, and §5e is the one that is built:
+**both polarities are shown side by side at the moment of choice**, so the
+common result is a decision rather than a verdict.
 
 ---
 
@@ -153,10 +157,14 @@ One bad name drops the entire declaration.
 
 ---
 
-## 5. Phase B — palette from an image
+## 5. Phase B — palette from an image ✅ built 17 Aug 2026
 
-**Build this first.** It is nearly free, it is the engine Phase C needs, and it
-ships value on its own. §19b costed it at about a day and that still looks right.
+**Built first**, as ordered: it is nearly free, it is the engine Phase C needs,
+and it ships value on its own. §19b costed it at about a day and that was right.
+
+Read §5f before changing any of it. The first draft of this section contained
+four errors, and two of them would have shipped a working feature that was
+quietly wrong.
 
 ### 5a. Why it goes through `/api/image-proxy`, for two reasons
 
@@ -166,7 +174,8 @@ and resolves the hostname through DNS before checking it against blocked IPv4 an
 IPv6 ranges. `fetchValidatedImage` wraps it in a manual redirect loop with a byte
 cap, a timeout, an SVG refusal and a magic-bytes-versus-`content-type` check.
 `/api/image-proxy` adds an origin check and 60 requests per IP per minute, takes
-`POST {url}` and returns `{ dataUri, mimeType }`. **Nothing new is needed.**
+`POST {url}` and returns `{ dataUri, mimeType }`. **Nothing new is needed** — and
+nothing new was added.
 
 The reason that is easy to miss: **a cross-origin image taints a canvas.**
 Loading the picture straight into an `<img>` and calling `getImageData` throws a
@@ -175,34 +184,52 @@ not. Routing through the proxy returns the bytes as a `data:` URI, which is
 same-origin, which is what makes the pixels readable at all.
 
 > Anyone who "simplifies" this by dropping the proxy will find it works on their
-> test image and fails on most real ones. **Put that in the comment.**
+> test image and fails on most real ones. **That is in the comment**, at the top
+> of `src/lib/siteSkin/imageSample.ts`.
+
+`next.config.js`'s CSP was checked and already permits `img-src … data:`, which
+the export path relies on too. `connect-src 'self'` covers the POST.
 
 ### 5b. The pipeline
 
 | Step | Where | Note |
 | --- | --- | --- |
-| Fetch | `/api/image-proxy` | existing endpoint, unchanged |
-| Downscale to ~64×64 | client, canvas | cheap, and it blurs JPEG artefacts that would otherwise cluster as their own colour |
-| Skip near-transparent pixels | client | **load-bearing.** Fan art PNGs have transparent margins; without an alpha floor they quantize as white and every theme comes out cream |
-| Cluster | new `src/lib/siteSkin/palette.ts` | popularity binning or median cut. No dependency, ~60 lines |
-| Map to four fields | `palette.ts` | below |
+| Fetch | `/api/image-proxy` via `proxyImageToDataUri` | existing endpoint **and existing client**, unchanged |
+| Downscale to ≤64×64 | `imageSample.ts`, canvas | cheap, and it blurs JPEG artefacts that would otherwise cluster as their own colour. **Leave `imageSmoothingEnabled` on** — the averaging is the point, not a defect |
+| Skip near-transparent pixels | `palette.ts` | **load-bearing.** Fan art PNGs have transparent margins; without an alpha floor they quantize as white and every theme comes out cream |
+| Cluster | `palette.ts` | 4-bit-per-channel popularity bins, then a merge pass. No dependency, ~70 lines |
+| Map to four fields | `palette.ts` | §5c |
+
+The split is deliberate: **`palette.ts` never touches the DOM** and takes a plain
+`ArrayLike<number>` of RGBA bytes, which is why the whole of §5c is unit-tested
+against synthetic pixel arrays with no browser in the room. `imageSample.ts` is
+the only file that knows what a canvas is, and it is nineteen lines.
 
 ### 5c. The mapping, and the floor that makes it shippable
 
 | Field | From |
 | --- | --- |
-| `accent` | the highest-chroma cluster with enough population to be deliberate |
-| `background` | the darkest (or lightest) neutral cluster — **offer both polarities**, which is one toggle and doubles the perceived output for no extra maths |
-| `surface` | `mixHex(background, text, 0.06–0.10)` |
+| `accent` | the highest-chroma cluster **with enough population to be deliberate** (≥2% of sampled pixels), excluding near-black and near-white |
+| `background` | the image's overall cast, mixed a short way into the polarity's pole — `mixHex(cast, pole, 0.12)` light, `0.18` dark. **Both polarities are always computed**; the user picks |
+| `surface` | `background` stepped toward white until it clears a 1.12 contrast ratio against it |
 | `text` | `bestTextColor(background, surface)` |
-| all of it | then `fixAccent` — and only then |
+| `accent`, again | `fixAccent(accent, background, surface)` — and only then |
 
 **The last row is the feature, not a safety net.** A muddy poster produces a
 muddy theme unless the result is pushed through the same contrast maths every
 template already obeys.
 
-> **Required test.** Over a fixture set of synthetic pixel arrays,
-> `findReadabilityIssues` must return **empty** for every extracted theme. An
+**And the floor is structural, not statistical.** `colorsFromSwatches` runs the
+result through `findReadabilityIssues` and, if anything is left, pushes the
+background further toward its pole and recomputes — up to six times. A mid-tone
+page is the only input that can defeat both text colours at once, and moving it
+toward the pole is exactly the repair. So the extractor cannot emit a palette
+the editor would then warn about.
+
+> **Required test — written.** `tests/palette.unit.spec.ts` runs a fixture set of
+> synthetic pixel arrays (flat greys, a mid-tone wall, transparent-margin fan
+> art, a two-colour poster, muddy photographs, 200 pseudo-random images) through
+> both polarities. `findReadabilityIssues` returns **empty** for every one. An
 > extraction path that can produce a warning the templates cannot is a path that
 > makes the product worse for the users most likely to use it.
 
@@ -210,9 +237,14 @@ template already obeys.
 
 **`header.textColor: 'auto'` stops being a guess.** It exists because of a
 sentence in `theme.ts` and §4b: *"we cannot measure the brightness of a
-photograph."* Once the pixels are in hand, **we can.** `textShadow` likewise
-becomes a recommendation the app can justify rather than a toggle whose purpose
-is invisible until you try it.
+photograph."* Once the pixels are in hand, **we can.** `readBannerBrightness`
+returns mean luminance and its spread, so `textColor` becomes a measurement and
+`textShadow` becomes a recommendation the app can justify — on when the image is
+*busy*, which is the only condition under which a glow earns its place.
+
+**But this only applies when the sampled image is actually the banner** — see
+§5f, correction 3. It is gated on the address passing `checkAo3ImageUrl` *and*
+the user opting in.
 
 **A Discord CDN address becomes a partial win.** It fails `checkAo3ImageUrl` and
 always will (§3a — the `?` in a query string kills the whole skin). It is still a
@@ -220,19 +252,100 @@ perfectly good image to read colours from. *"That address can't be used as a
 banner on AO3 — but here are your colours from it"* turns the single most common
 rejection in the product into something useful.
 
-### 5e. Give it a stable id
+### 5e. The shape of the interaction, and where it lives
 
-`site-skin.tsx` keys activation analytics on `site-skin:${theme.meta.id}`. Use a
-fixed `meta.id` (`from-image`), or a per-extraction id will fragment the metric
-into noise.
+**Two entry points, one component.**
+
+| Where | Why there | What it applies |
+| --- | --- | --- |
+| **The gallery**, in a panel above the mood chips | §1's premise *is* the gallery moment: the reader has looked at all sixteen and wants none of them | A whole theme, through the existing `handleSelectTemplate` |
+| **The editor**, a button in the Colours group | The §19b framing — *"paste your banner, we'll build the theme around it"* — for someone who already has a theme they like the shape of | **The four colours only**, plus the banner fields if opted in. Fonts, radius, tag style and details are the user's work and are left alone |
+
+**The result screen is two cards, not one.** Light and dark side by side, each
+rendered by the *same* `ThemeThumbnail` every gallery card uses — so it shares
+`derive()`, and the picker can never advertise a header the compiler would not
+produce. That is §3's boring-result mitigation and it costs one extra call to a
+pure function.
+
+**Undo is the escape hatch, and that is why there is no confirmation step.** The
+editor path pushes onto the existing history stack, so `Ctrl+Z` reverts it. This
+is deliberately *unlike* the theme-backup import in `ExportSkinDialog`, which
+downloads a safety copy first — that one replaces everything including the
+fonts and the banner, this one replaces four hex strings.
+
+**The copy never says "match".** §3. The panel says *"Build one from a picture"*
+and *"We read its colours"*; the result says *"Your colours, two ways."*
+
+### 5f. Four corrections to this section's own first draft
+
+None of these came from a failing test. Three came from reading the code the
+plan was going to call, and one from reading the shipped catalog.
+
+**1. `mixHex`'s arguments were the wrong way round.** The draft said
+`surface = mixHex(background, text, 0.06–0.10)`. `mixHex(a, b, weight)` keeps
+`weight` of the **first** colour, so that expression is *90% text* — a cream card
+carrying cream text on every dark theme. This exact inversion is already recorded
+in `compile.ts`'s `controlBg` comment, where it *survived a green test suite*
+because the test compared the emitted value against `d.controlBg` rather than
+against a contrast floor. Writing it into the plan a second time is how a lesson
+gets unlearned.
+
+**2. And the dependency was wrong too — a card is lighter than the page in
+*both* polarities.** Deriving `surface` from `text` inverts it on light themes:
+light text is dark, so `background + 7% text` is a *darker* card. Check the
+sixteen: Paper & Ink is `#f4efe5` → `#fffdf8`, Moonlit Library is `#101725` →
+`#182238`. Both lighter. So the surface steps toward **white** regardless of
+polarity, and the target is a contrast *ratio* rather than a mix weight — which
+also dissolves the draft's circular definition, where `surface` needed `text` and
+`text` needed `surface`.
+
+**3. The banner brightness measurement was pointed at the wrong image.** §5d is
+right that having the pixels turns `header.textColor` from a guess into a
+measurement — but in Phase B the pasted image is *usually not the banner*. That
+is §5d's own second half: the whole point of the Discord line is that the address
+works for colours and not for AO3. Measuring an image the header will never
+render, and then writing the answer into `header.textColor`, is a measurement of
+the wrong thing presented as a fact. Gated on `checkAo3ImageUrl(url).ok` **and**
+the user ticking the banner box.
+
+**4. §5e's stable `meta.id` is necessary and not sufficient — the analytics
+boundary drops the id on the floor.** The draft correctly says to use a fixed
+`from-image` id so activation does not fragment. But `analyticsPayload` validates
+every `templateId` against a hard-coded `TEMPLATE_IDS` allowlist and returns
+`null` — **rejecting the whole event** — for anything else. Without adding
+`from-image` there, a generated theme records no `template_selected`, no
+`project_activated`, no `export_started`, no `export_ready` and no
+`handoff_completed`: the entire funnel for the one feature whose adoption §10
+says we need to measure, silent. `analytics.ts`'s own comment records this
+happening before, to five examples, for two days.
+
+The existing drift test does not catch it, because it iterates
+`SITE_SKIN_TEMPLATES` and the generated theme is deliberately not in the catalog.
+So the guard lives in `tests/palette.unit.spec.ts` instead, next to the id it
+protects.
+
+### 5g. What Phase B deliberately does not do
+
+- **No fonts.** An image has no `font-family` to read. The generated theme takes
+  Georgia and the default scale, and §6d is where that stops being a default.
+- **No `cardRadius`.** Same reason — it is a Phase C signal, from CSS.
+- **No `og:image`, no URL, no HTML.** `palette.ts` contains no concept of a URL
+  at all, which is what keeps Phase C a thin fetcher in front of it rather than a
+  second extraction system.
+- **No server-side downscale.** The proxy still returns full-resolution bytes, so
+  an 8 MB image crosses the wire as ~11 MB of base64 to extract sixteen colours
+  from. The export path already ships exactly this, so it is not a new cost. If
+  it bites, the fix is a downscale mode on the server, not a client workaround.
 
 ---
 
 ## 6. Phase C — the URL picker
 
-The headline feature, and the one with real risk. **Do not start it before Phase
-B works**, because the right design is a thin fetcher in front of Phase B's
-quantizer rather than a second extraction system.
+The headline feature, and the one with real risk. **Phase B works now**, which is
+the precondition: the right design is a thin fetcher in front of Phase B's
+quantizer rather than a second extraction system. `paletteFromPixels` and
+`colorsFromSwatches` are already exported and already tested; Phase C should call
+them and add nothing to them.
 
 ### 6a. The shape
 
@@ -277,7 +390,7 @@ browser on Netlify functions is real infrastructure for a marginal gain.
 | `:root` custom properties | **the best signal on modern sites.** Tailwind and design-token sites put the palette here in named form |
 | Declared `color` / `background-color` frequency | good, weight by rule specificity as a proxy for area |
 | `font-family` on `body` and on `h1`–`h3` | the two we need — see §7 |
-| `border-radius` on cards/buttons | → `shape.cardRadius` |
+| `border-radius` on cards/buttons | → `shape.cardRadius`, snapped to the four values `CARD_RADII` offers |
 | `og:image` | → Phase B |
 
 **Accept that JS-rendered sites yield little.** A React SPA whose HTML is an
@@ -304,12 +417,17 @@ The source gives you a stack like `Inter, system-ui, sans-serif` or
 The lookup table is the whole feature here and it is taste, not code. ~200 names
 is an afternoon.
 
+**Emit the stack string, never an index.** `fontStacksFor(role)[n]` is a moving
+target because the bank is append-only and grows; the classifier's output must be
+a literal `FONT_STACKS` value or `validateTheme` will drop it at the storage
+boundary and the user will lose the font on reload.
+
 ### 6e. The boring-result problem
 
-If the extraction returns near-white, dark-grey and one accent, **say so and
-offer the dark inversion**: *"This site is light. Want the night version?"* —
-Phase B already computes both polarities (§5c). That turns the most common
-disappointing result into a choice, and it is free.
+Phase B already shows both polarities side by side (§5e), so Phase C inherits the
+mitigation rather than needing one: *"This site is light. Here it is both ways."*
+The extra move available to C and not to B is to **say which it was** — naming
+the source's own polarity is the difference between a choice and a guess.
 
 ---
 
@@ -324,6 +442,8 @@ disappointing result into a choice, and it is free.
   §19b-bis stands, and stands firmly: **we still ship no images**, the header
   gradient is still the answer to a palette-only template, and `bannerUrl` still
   takes an address the user chose and hosts.
+- **§19b's pipeline table** is superseded by §5b and §5c here, which correct it
+  — see §5f.
 - **§19a's logo refusal is NOT reopened.** SVG format, `?v=3` query strings and
   the rights question are all still walls. This feature reads colours; it never
   points an AO3 page at somebody else's asset.
@@ -341,7 +461,10 @@ is satisfied by construction — the thing produced *is* a theme, so the preview
 shows it.
 
 **It therefore emits no declaration shape the release gate does not already have
-to prove.** Different hex values in rules the checklist already covers.
+to prove.** Different hex values in rules the checklist already covers. Phase B
+held this exactly: `compile.ts`, `ao3Css.ts`, `colors.ts` and `mockPage.ts` are
+untouched, and `tests/palette.unit.spec.ts` asserts `lintAo3Css(compile(theme))`
+is empty for every extracted theme so that the claim keeps being true.
 
 > If you find yourself adding a property to `compile.ts` to support this, you
 > have left the design. The picker chooses values for controls that already
@@ -353,6 +476,12 @@ it" are different states.* The gate (Phase 7) is still empty. A machine that
 generates themes on demand inherits every sanitizer surprise at scale, so **the
 gate should close before Phase C ships**, even though Phase C adds nothing to it.
 
+Phase B is safe ahead of the gate for the reason §19b gave and §11 re-checked
+against §23c's lesson: it emits **no property the sixteen templates do not
+already emit**, only different values in the same rules. §23c's trap was a
+*property* (`box-shadow`) that had never been compiled before and was assumed
+covered because the lint permitted it. Nothing here is new to the compiler.
+
 ---
 
 ## 9. Build order
@@ -361,12 +490,14 @@ gate should close before Phase C ships**, even though Phase C adds nothing to it
 | --- | --- | --- | --- |
 | A | Font bank + picker UI | — | ✅ done |
 | — | **Phase 7 release gate**, incl. P15 | a human with an AO3 account | — |
-| B | `palette.ts` + image extraction + the contrast-floor test | — | ~1 day |
+| B | `palette.ts` + image extraction + the contrast-floor test | — | ✅ done, ~1 day |
 | C1 | Font classification lookup + `classifyFont()` | A | ~½ day |
 | C2 | `/api/site-palette` + security review | — | ~1 day |
-| C3 | Picker UI, both polarities, the "what we did" explanation | B, C1, C2 | ~1 day |
+| C3 | Picker UI, both polarities, the "what we did" explanation | B, C1, C2 | ~½ day — B built the UI, C3 re-points it |
 
-B is independently shippable and should not wait for C.
+C3 shrank because Phase B's `PaletteFromImage` already owns the input, the
+loading state, the error surface, the two-polarity result and both entry points.
+Phase C adds a source toggle and a "what we did" line to a component that exists.
 
 ---
 
@@ -379,7 +510,73 @@ B is independently shippable and should not wait for C.
 - **Is the URL or the image the better front door?** The instinct in this
   document is that a URL is lower friction — pasting a link beats finding an
   image, hosting it, and satisfying `checkAo3ImageUrl`. That is a belief, not a
-  measurement, and Phase B ships early partly so it can be measured.
-- **Analytics.** §20d's `bannerSet` line is still unwritten, and the same
-  argument applies here: without one event we will not know whether anyone uses
-  this.
+  measurement, and Phase B shipped early partly so it can be measured.
+  **`palette_applied` is now the instrument** (§11), and it carries `source`, so
+  when C ships the comparison is a query rather than a new build.
+- **Is the 2% "deliberate" floor right?** It is taste, tuned against synthetic
+  fixtures rather than against real fan art. A logo-sized splash of saturated
+  colour on a muted photograph is exactly the case it exists to catch and exactly
+  the case that could go wrong in either direction. Worth twenty real images.
+
+---
+
+## 11. What Phase B cost, and what it touched
+
+**Landed 17 Aug 2026.** One day, as costed.
+
+| File | Change |
+| --- | --- |
+| `src/lib/siteSkin/palette.ts` | **new.** Quantizer, the §5c mapping, the structural contrast floor, `readBannerBrightness`. No DOM, no URL |
+| `src/lib/siteSkin/imageSample.ts` | **new.** 19 lines: proxy → `<img>` → 64px canvas → `getImageData`. The only file that knows what a canvas is |
+| `src/components/siteSkin/PaletteFromImage.tsx` | **new.** The panel, the dialog wrapper, the two-polarity result |
+| `src/components/siteSkin/ThemeThumbnail.tsx` | **new**, by extraction — `Thumbnail` moved out of `TemplateGallery.tsx` unchanged so the picker's result cards and the gallery's template cards are the same component |
+| `src/components/siteSkin/TemplateGallery.tsx` | imports the thumbnail; gains the picker panel |
+| `src/components/siteSkin/ThemeEditor.tsx` | one button in the Colours group |
+| `src/pages/site-skin.tsx` | owns the dialog and the two apply paths |
+| `src/lib/imageProxy.ts` | comment only — it is no longer "used only by the export pipeline" |
+| `src/lib/analytics.ts` | `from-image` added to `TEMPLATE_IDS` (§5f.4); new `palette_applied` event |
+| `public/privacy-policy.html` | one clause — the proxy is no longer only "when an export needs them" |
+| `tests/palette.unit.spec.ts` | **new**, 30 tests: the quantizer, the mapping, the floor over 200+ fixtures, the lint round-trip, the storage round-trip, the analytics guard |
+| `tests/site-skin.spec.ts` | the journey: the panel exists, rejects a non-address without a round trip, and both entry points open |
+
+**Unchanged, and that is the point:** `compile.ts`, `ao3Css.ts`, `colors.ts`,
+`theme.ts`, `templates.ts`, `mockPage.ts`, `storage.ts`, `/api/image-proxy.ts`,
+`imageSecurity.ts`. No new endpoint, no new property, no new AO3 surface.
+
+### 11a. Two defects the tests found, which the plan could not have
+
+**`liftSurface` compounded instead of interpolating, and its own fallback hid
+it.** The first version stepped `mixHex('#ffffff', candidate, 0.06)` off the
+previous candidate — Zeno's arrow, which never arrives at white. On a page at
+luminance 0.87, where the only colour clearing the 1.12 target is very near pure
+white, it exhausted its iterations and fell through to the "page is already at
+the pole" branch, quietly producing a **darker card on a light theme**. Nothing
+threw. The fallback worked exactly as designed, on a question it should never
+have been asked. It was caught because the test asserts the *rule* — the card is
+lighter than the page, as all sixteen templates are — rather than asserting that
+nothing crashed. Interpolating from the background to the pole fixed it, and the
+comment in `palette.ts` carries the arithmetic.
+
+**The result cards were ambiguous to a screen reader.** "Light" and "Dark" is the
+right label on screen, because the two cards sit side by side and the pictures
+carry the difference. Announced, "Dark" is indistinguishable from the gallery's
+"Dark" mood filter a few hundred pixels below. Now
+`aria-label="Use the dark version"`. This surfaced as a Playwright strict-mode
+violation while driving the real UI — the *test* problem was trivial and the
+*product* problem underneath it was real, and only the trivial one complained.
+
+### 11b. The learning
+
+**A plan is a place errors hide with their reasons attached.** All four §5f
+corrections were in a document that had been read, reviewed and committed —
+and two of them (`mixHex`'s argument order, and the analytics allowlist) were
+each *already recorded elsewhere in this repository as a bug that had happened
+before*. The comment in `compile.ts` and the comment in `analytics.ts` both name
+the exact failure the plan then re-specified.
+
+The general shape: **a plan that names an existing helper has not checked that
+helper's contract.** `mixHex(background, text, 0.07)` reads correctly in English
+and is backwards in TypeScript. The cheapest defence is the one that caught it
+here — before writing a line, open every function the plan names and read its
+signature and its comment, especially where the plan is quoting itself from an
+earlier section.

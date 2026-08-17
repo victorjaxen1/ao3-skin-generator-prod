@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { SiteSkinTheme, Mood, MOODS } from '../../lib/siteSkin/theme';
 import { TEMPLATES, TEMPLATE_DESCRIPTIONS } from '../../lib/siteSkin/templates';
-import { derive } from '../../lib/siteSkin/compile';
+import { ThemeThumbnail } from './ThemeThumbnail';
+import { PaletteFromImage } from './PaletteFromImage';
 import { MoreTools } from '../MoreTools';
 
 interface Props {
@@ -16,96 +17,6 @@ const MOOD_LABELS: Record<Mood, string> = {
   light: 'Light',
   minimal: 'Minimal',
   decorative: 'Decorative',
-};
-
-/**
- * A small illustration of a theme, not a preview.
- *
- * The honest, compiled-CSS rendering is one click away in the editor; twelve
- * live iframes on a gallery screen would be neither fast nor more truthful at
- * 200 pixels wide. What it does share with the compiler is `derive()` — so the
- * header foreground and card borders here are the same derived colours the
- * export uses, and a card can never advertise a legible header that the real
- * skin does not produce.
- */
-const Thumbnail: React.FC<{ theme: SiteSkinTheme }> = ({ theme }) => {
-  const d = derive(theme);
-  return (
-    <div
-      className="h-32 rounded-t-xl overflow-hidden flex flex-col"
-      style={{ backgroundColor: d.background }}
-      aria-hidden="true"
-    >
-      <div
-        className="flex items-center gap-1.5 px-2.5 h-8 flex-shrink-0 text-[10px] font-bold"
-        style={{
-          backgroundColor: d.accent,
-          // The same layer the compiler emits, from the same derived string —
-          // ten of the sixteen ship one, and a card showing a flat accent
-          // where the editor shows a fade is the drift this thumbnail sharing
-          // `derive()` exists to prevent.
-          backgroundImage: d.headerGradient || undefined,
-          color: d.headerFg,
-          fontFamily: theme.typography.headingFont,
-          borderBottom: `2px solid ${d.headerDeep}`,
-        }}
-      >
-        <span>Archive</span>
-        <span className="ml-auto flex gap-1">
-          {[0, 1, 2].map(i => (
-            <i
-              key={i}
-              className="block w-4 h-1 rounded-full"
-              style={{ backgroundColor: d.headerFg, opacity: 0.6 }}
-            />
-          ))}
-        </span>
-      </div>
-      <div className="p-2.5 flex-1">
-        <div
-          className="p-2 h-full"
-          style={{
-            backgroundColor: d.surface,
-            border: `1px solid ${d.border}`,
-            borderRadius: theme.shape.cardRadius,
-          }}
-        >
-          <div
-            className="text-[10px] font-semibold truncate"
-            style={{ color: d.accent, fontFamily: theme.typography.headingFont }}
-          >
-            A Study in Lamplight
-          </div>
-          <div
-            className="h-1 rounded mt-1.5"
-            style={{ backgroundColor: theme.colors.text, opacity: 0.35, width: '90%' }}
-          />
-          <div
-            className="h-1 rounded mt-1"
-            style={{ backgroundColor: theme.colors.text, opacity: 0.35, width: '60%' }}
-          />
-          <div className="flex gap-1 mt-2">
-            {[0, 1, 2].map(i => (
-              <span
-                key={i}
-                className="block h-3 w-8"
-                style={{
-                  backgroundColor: d.surface,
-                  border: `1px solid ${d.tagBorder}`,
-                  borderRadius:
-                    theme.shape.tagStyle === 'pill'
-                      ? '999px'
-                      : theme.shape.tagStyle === 'label'
-                      ? '3px'
-                      : '0px',
-                }}
-              />
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
 };
 
 export const TemplateGallery: React.FC<Props> = ({ onSelect, onResume, resumeName }) => {
@@ -140,6 +51,14 @@ export const TemplateGallery: React.FC<Props> = ({ onSelect, onResume, resumeNam
           </div>
         )}
 
+        {/* Above the chips, not below the grid. The premise of the picker is
+            the gallery moment itself — a reader who has looked at all sixteen
+            and wants none of them — and a panel underneath sixteen cards is a
+            panel nobody scrolls to. */}
+        <div className="mb-8">
+          <PaletteFromImage placement="gallery" onUse={onSelect} />
+        </div>
+
         <div className="flex flex-wrap justify-center gap-2 mb-8" role="group" aria-label="Filter templates">
           {(['all', ...MOODS] as const).map(mood => (
             <button
@@ -167,7 +86,7 @@ export const TemplateGallery: React.FC<Props> = ({ onSelect, onResume, resumeNam
               onClick={() => onSelect(theme)}
               className="text-left bg-white border border-stone-200 rounded-xl overflow-hidden hover:border-violet-400 hover:shadow-lg hover:-translate-y-0.5 transition-all focus-visible:ring-2 focus-visible:ring-violet-500"
             >
-              <Thumbnail theme={theme} />
+              <ThemeThumbnail theme={theme} />
               <div className="p-3 flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <h2 className="text-sm font-semibold text-stone-900">{theme.meta.name}</h2>
