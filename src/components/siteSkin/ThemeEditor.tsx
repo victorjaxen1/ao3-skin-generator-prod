@@ -1,7 +1,10 @@
 import React from 'react';
 import {
   SiteSkinTheme,
-  FONT_STACKS,
+  FONT_GROUP_LABELS,
+  FontGroup,
+  FontRole,
+  fontStacksFor,
   FONT_SCALES,
   CARD_RADII,
   TAG_STYLES,
@@ -16,7 +19,7 @@ import {
 import { ReadabilityIssue } from '../../lib/siteSkin/colors';
 import { checkAo3ImageUrl } from '../../lib/siteSkin/ao3Css';
 import { normalizeImageUrl } from '../../lib/urlNormalize';
-import { SelectRow, ToggleRow, SectionDivider } from '../SettingsRows';
+import { ToggleRow, SectionDivider } from '../SettingsRows';
 
 interface Props {
   theme: SiteSkinTheme;
@@ -92,6 +95,74 @@ function SegmentRow<T extends string | number>({
     </div>
   );
 }
+
+/**
+ * A font picker that shows you the font.
+ *
+ * Three decisions here, and each replaces something the plain `SelectRow` could
+ * not do once the bank grew from seven stacks to twenty-four:
+ *
+ * 1. **Native `<select>` with `<optgroup>`.** Grouping twenty-four faces by
+ *    shelf is the difference between a list and a wall. It stays a native
+ *    control for the same reason `ToggleRow` is a real `role="switch"` — the
+ *    keyboard and screen-reader behaviour is correct for free, and a custom
+ *    listbox would be a week of getting that back.
+ * 2. **Each option is styled in its own stack.** Chrome and Firefox on desktop
+ *    render option text in the face it names, which turns the menu into a
+ *    specimen sheet. Safari and most mobile browsers ignore it — hence 3.
+ * 3. **A specimen line under the control**, which works everywhere. It renders
+ *    the same sample the preview would, in the stack you just picked.
+ *
+ * **The specimen is not a second rendering of the skin** (invariant 3). It is a
+ * typeface sample in the control rail; the iframe remains the only thing that
+ * renders `compile()`'s output. Note it also renders using *this* machine's
+ * fonts, which is exactly why the caveat below the Type group is not optional —
+ * a face you can see here may not exist on a reader's device.
+ */
+const FontRow: React.FC<{
+  label: string;
+  role: FontRole;
+  sample: string;
+  value: string;
+  onChange: (v: string) => void;
+}> = ({ label, role, sample, value, onChange }) => {
+  const stacks = fontStacksFor(role);
+  const groups = (Object.keys(FONT_GROUP_LABELS) as FontGroup[])
+    .map(g => ({ group: g, items: stacks.filter(f => f.group === g) }))
+    .filter(g => g.items.length > 0);
+
+  return (
+    <div className="py-3">
+      <div className="flex items-center justify-between gap-3">
+        <label htmlFor={`font-${role}`} className="text-sm font-medium text-stone-900">
+          {label}
+        </label>
+        <select
+          id={`font-${role}`}
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          className="text-sm text-stone-700 bg-stone-100 border-0 rounded-lg px-3 py-1.5 cursor-pointer focus:ring-2 focus:ring-violet-500 max-w-[190px]"
+        >
+          {groups.map(({ group, items }) => (
+            <optgroup key={group} label={FONT_GROUP_LABELS[group]}>
+              {items.map(f => (
+                <option key={f.value} value={f.value} style={{ fontFamily: f.value }}>
+                  {f.label}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+      </div>
+      <p
+        className="mt-2 text-stone-800 leading-snug truncate"
+        style={{ fontFamily: value, fontSize: role === 'heading' ? '1.2rem' : '0.9rem' }}
+      >
+        {sample}
+      </p>
+    </div>
+  );
+};
 
 /**
  * The banner address.
@@ -197,16 +268,23 @@ export const ThemeEditor: React.FC<Props> = ({ theme, onChange, issues, onFix })
       )}
 
       <SectionDivider label="Type" />
-      <SelectRow
+      {/* Headings get every face, including handwriting and display. Body text
+          gets serif, sans and monospace only — a script face behind every blurb
+          summary and every chapter would make the archive harder to read, which
+          is the opposite of what a reading skin is for. The split is in the
+          bank itself (`roles`), so the storage boundary enforces it too. */}
+      <FontRow
         label="Headings"
+        role="heading"
+        sample="The Cartographer's Impossible Map"
         value={theme.typography.headingFont}
-        options={FONT_STACKS.map(f => ({ value: f.value, label: f.label }))}
         onChange={v => onChange('typography', { ...theme.typography, headingFont: v })}
       />
-      <SelectRow
+      <FontRow
         label="Body text"
+        role="body"
+        sample="The map began lying on a Tuesday, which Mara felt was typical of it."
         value={theme.typography.bodyFont}
-        options={FONT_STACKS.map(f => ({ value: f.value, label: f.label }))}
         onChange={v => onChange('typography', { ...theme.typography, bodyFont: v })}
       />
       <SegmentRow
@@ -215,6 +293,17 @@ export const ThemeEditor: React.FC<Props> = ({ theme, onChange, issues, onFix })
         options={FONT_SCALES}
         onChange={v => onChange('typography', { ...theme.typography, baseFontScale: v })}
       />
+      {/* The honesty line, and it is load-bearing rather than a disclaimer.
+          AO3 rejects @font-face, so we can never send a reader a font file —
+          a font-family is a suggestion their device either can or cannot
+          honour. The specimens above render with the fonts on THIS machine,
+          so without this sentence the picker quietly over-promises. */}
+      <p className="text-xs text-stone-400 py-3 leading-relaxed">
+        AO3 doesn&apos;t allow skins to supply font files, so a font only appears for
+        readers whose device already has it. Each choice lists several
+        alternatives and ends in a safe fallback, so everyone sees something
+        close.
+      </p>
 
       <SectionDivider label="Shape" />
       <SegmentRow

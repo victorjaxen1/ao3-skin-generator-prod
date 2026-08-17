@@ -32,6 +32,12 @@ architecture with ours.
 > the reusable part: *read AO3's stylesheet, not our preview*, because a region
 > missing from the mock is invisible and invisible looks exactly like finished.
 >
+> **A second product document now exists: `MAGIC-PICKER-IMPLEMENTATION.md`** —
+> paste a link, get a skin built from its colours. Its Phase A (the font bank,
+> §19f) shipped 17 Aug 2026; Phases B and C are specified for a developer and are
+> **not built**. If you are about to touch fonts, read its §2a first: **no skin
+> can ever supply a font file**, and the reasons are permanent.
+>
 > **§16–§18 are revision 5** and they change the roadmap. We read 115 published
 > site skins from two prolific authors and diffed every declaration in them
 > against both AO3's real sanitizer and our model of it. Two findings:
@@ -736,6 +742,8 @@ Always emit a fallback stack, and keep every family name inside
 | 15 | **Theme from the banner image** — quantize the picture the user already pasted, derive all four colours from it, and stop guessing the header foreground | ⬜ §19b |
 | 16 | **Palettes that read as fandoms** — ~12 more templates, mood-named as always | ⬜ §19c |
 | 17 | **Regions: listboxes, indexes, meta tables** — the §22 audit's build spec, plus §22c's chip. Four of the nine page types a real skin author screenshots. Acceptance: differential and capability probe **unmoved** | ✅ 17 Aug 2026 — 0/0 and no divergences; landed *before* the gate, on §18a's argument. Two rows of §22e's table were dropped on evidence and one was added; see §23b |
+| 18 | **The font bank** — `FONT_STACKS` 7 → 24, grouped and role-split; grouped picker with live specimens. Phase A of the Magic Picker | ✅ 17 Aug 2026 — append-only, all 16 templates unchanged; see §19f |
+| 19 | **The Magic Picker** — paste a link, get a skin from its colours. Phases B and C | ⬜ **owned by `MAGIC-PICKER-IMPLEMENTATION.md`**, not by this file. Phase C wants the gate closed first (§23c) |
 
 ### Corrections made to `ao3Css.ts` after Phase 8
 
@@ -1296,7 +1304,8 @@ claim has a longer story, the section number is the story.
 | Phases 0–6, 8, 9, 10 | ✅ complete |
 | Phase 7 — **saved on real AO3** | ❌ **never done.** The one open gate |
 | Templates | 16, all lint clean, all round-tripping through storage. **Ten carry a header gradient as of 17 Aug 2026** (§21a) |
-| Tests | 468 unit (`--project=unit`), 24 browser (`tests/site-skin.spec.ts`) — counts as of 17 Aug 2026, after §22e |
+| Tests | 492 unit (`--project=unit`), 26 browser (`tests/site-skin.spec.ts`) — counts as of 17 Aug 2026, after §22e and the font bank |
+| Fonts | ✅ **24 stacks, grouped and role-split** (§19f). **Append-only** — the original seven are pinned byte for byte, because `validateTheme` matches the literal string a stored theme holds |
 | Mobile preview | ⚠️ scrolls sideways instead of scaling. Known, deliberate |
 | Marketing copy | ⚠️ correct about site skins; still silent on the work-skin export |
 | `ao3Css.ts` vs AO3 | ✅ **0 false accepts, 0 false rejects** over 4,418 corpus declarations — §17's corrections landed 16 Aug 2026 |
@@ -1328,6 +1337,7 @@ it needs a human with an account, not a test.**
 | `tests/site-skin.spec.ts` | the journey, and every assertion checks the **compiled CSS**, not that a control moved | always |
 | `tests/ao3-css.unit.spec.ts` | the sanitizer model's pinned rules | with `ao3Css.ts` |
 | `docs/SITE-SKIN-AO3-CHECKLIST.md` | the Phase 7 gate, unfilled | when you have an AO3 account open |
+| `docs/MAGIC-PICKER-IMPLEMENTATION.md` | paste a link → a skin from its colours. Owns Phases B and C; Phase A (the font bank) is built | building the picker, or wondering why fonts work the way they do |
 | `scripts/ao3-sanitizer-oracle.mjs` | a faithful JS port of `css_cleaner.rb`'s value path, built to be **disagreed with** — never shipped, never imported by `src/` | re-verifying against upstream |
 | `scripts/ao3-corpus-differential.mjs` | every corpus declaration through both the oracle and our lint. **Acceptance bar: 0 false accepts, 0 false rejects** | before and after any `ao3Css.ts` change |
 | `scripts/ao3-capability-probe.mjs` | ~75 named techniques × {AO3 allows, we allow}. Answers "can we do X?" in one run | designing a new control (§18) |
@@ -1417,6 +1427,18 @@ both specs. If you cannot see it in the preview, stop — invariant 4.
   `ao3Css.ts`, run `scripts/ao3-corpus-differential.mjs` — the acceptance bar is
   **0 false accepts and 0 false rejects**, and the harness to prove it is checked
   in.
+- **`FONT_STACKS` is append-only, and "improving" a stack is a data-loss bug.**
+  `validateTheme` accepts a font only if the string is a member of the list, and a
+  stored theme holds the **literal stack string**. Deepening `'Georgia, serif'`
+  into a longer fallback chain therefore does not upgrade anyone — it makes every
+  saved theme that chose it fail the membership test and silently fall back. Add
+  new stacks; never edit an existing `value`. The original seven are pinned byte
+  for byte by a test that says so (§19f).
+- **No skin can ever ship a font file.** `@font-face` is refused at selector
+  level, `src` is not an allowed property, and `url()` never reaches a font. Not
+  ours, not Google's, not any library's. Three separate people will propose
+  webfonts; the answer is in `MAGIC-PICKER-IMPLEMENTATION.md` §2a with the
+  citation.
 - **AO3 accepts far more garbage than it rejects.** `border: d4836e` (a hex code
   missing its `#`) is stored happily, as `d` + `4836` + `e`. Our lint is not a
   correctness checker and must not become one — it exists to predict *refusal*,
@@ -2418,6 +2440,14 @@ reasons — a new endpoint with a new SSRF surface, plus a second fetch for
 `og:image`, for a signal nobody has. "Paste an image address" reuses
 `/api/image-proxy` untouched; that is the one worth building (§19b).
 
+> **Reopened 17 Aug 2026 — see §19d and `MAGIC-PICKER-IMPLEMENTATION.md`.** The
+> paragraph above is the only part of §19b-bis that no longer holds. It rejected
+> the URL picker as a *fandom* mechanism, which is the right call for that
+> framing; it was never argued against as a *taste* mechanism, for the reader who
+> has looked at all sixteen templates and wants none of them. The costs it names
+> are real and the new document pays them deliberately. **Everything else in
+> §19b-bis stands: we still ship no images.**
+
 ### 19c. Phase 16 — palettes that read as fandoms
 
 Sixteen templates, all mood-named: Moonlit Library, Paper & Ink, Gothic Velvet.
@@ -2505,6 +2535,51 @@ while the gate stays open rather than after.
 
 The order between them is a product call, not a technical one. §19c is faster and
 visible immediately; §19b is the thing that makes someone tell a friend.
+
+### 19f. The Magic Picker — its own document, and the font bank that unblocked it
+
+**Added 17 Aug 2026.** §19b (theme from an image) turns out to be one phase of a
+larger feature, and the larger feature now has its own build spec:
+**`docs/MAGIC-PICKER-IMPLEMENTATION.md`**, written to be handed to a developer.
+It supersedes §19b's scope and the closing paragraph of §19b-bis; it supersedes
+nothing else here, and **"we ship no images" survives it intact**.
+
+The picker is: *paste a link — a website, or a picture — and we build the skin
+from its colours.* Three phases, and only the first exists.
+
+| Phase | What | Status |
+| --- | --- | --- |
+| **A** | **The font bank** — `FONT_STACKS` 7 → 24, grouped and role-split, with a grouped picker and live specimens | ✅ **17 Aug 2026** |
+| B | Palette from an image — §19b, unchanged, reusing `/api/image-proxy` | ⬜ ~1 day |
+| C | The URL front door — a new endpoint, `og:image` as the primary signal, font classification | ⬜ ~2½ days, needs a security review |
+
+**Why the font bank came first, and why it was worth doing alone.** AO3 rejects
+`@font-face` outright, `src` is not an allowed property, and `url()` never
+reaches a font — so **no skin can ever supply a font file**, ours or a library's.
+A `font-family` is only a suggestion the reader's device may or may not honour.
+That is settled community knowledge, stated outright in the tutorial
+[work 28934610](https://archiveofourown.org/works/28934610), whose own stacks run
+fifteen names deep.
+
+With the old seven stacks (3 serif, 3 sans, 1 mono) any classifier's honest
+answer was "Georgia" or "Arial", so the font half of the picker was a shrug no
+matter how good the extraction got. Twenty-four stacks — each naming a Windows
+face, a macOS counterpart and a generic — make *"this site uses a geometric sans,
+closest AO3 allows is Futura"* a real answer.
+
+> **The bank is append-only, and this is the trap.** `validateTheme` accepts a
+> font only if the string is a member of `FONT_STACKS`, and a stored theme holds
+> the literal stack string. Deepening `'Georgia, serif'` into a longer chain
+> would not be an improvement — it would silently reset every saved theme that
+> had chosen it. A test pins the original seven byte for byte.
+
+Script and display faces are **heading-only**, enforced in `validateTheme` as
+well as in the editor: a handwriting face behind every blurb summary would make
+the archive harder to read, which is the opposite of what a reading skin is for.
+
+**All sixteen templates are unchanged** — the new stacks are available and chosen
+by nobody, which is what keeps this change reviewable. It also means **nothing in
+the gate's template table reaches them**; `P15` is the only probe that does.
 
 ---
 
@@ -2928,6 +3003,8 @@ is only what moved since §21.
 | **§22e — the region pass** (§21e item 2) | ✅ `.listbox`, `.listbox .index`, `dl.meta`, `dl.index dd`, `.statistics` even rows, and the meta halo. Mock first, as ordered |
 | Acceptance | ✅ Differential **0 false accepts / 0 false rejects** over 4,418 declarations, unmoved. Capability probe: **no divergences**. `tsc --noEmit` clean |
 | Tests | 468 unit (was 442), 24 browser (was 23) — all passing |
+| **The font bank** (§19f) | ✅ Landed later the same day. `FONT_STACKS` 7 → 24, grouped and role-split; new `FontRow` picker with optgroups and live specimens. Append-only, all 16 templates unchanged. **492 unit, 26 browser** |
+| **`MAGIC-PICKER-IMPLEMENTATION.md`** | ✅ Written, not built. Phases B and C are specified for a developer; only Phase A (the font bank) exists |
 
 Everything is still **uncommitted**, still on `growth/tier1-tier2-trust-copy`,
 and still wants a branch of its own. That has not changed since §20a.

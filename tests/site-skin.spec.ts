@@ -468,6 +468,69 @@ test('AO3s listboxes, indexes and meta tables take the theme', async ({ page }) 
   expect(css).toContain('li.relationships a');
 });
 
+/**
+ * The font bank, and the one rule in it that protects readers rather than taste.
+ *
+ * AO3 rejects `@font-face`, so a skin can never supply a font file — the bank is
+ * a bank of NAMES, and the only lever we have is how many faces a stack names
+ * before it gives up. Growing it 7 → 24 made the picker's shape the question:
+ * grouped, role-split, and honest about the fact that a font is a suggestion.
+ */
+test('the font picker is grouped, and body text is never offered a script face', async ({
+  page,
+}) => {
+  await openEditor(page);
+
+  const headings = page.getByLabel('Headings', { exact: true });
+  const body = page.getByLabel('Body text', { exact: true });
+
+  // Grouped rather than a flat wall of twenty-four.
+  const groupsOn = (loc: typeof headings) =>
+    loc.evaluate(el =>
+      Array.from((el as HTMLSelectElement).querySelectorAll('optgroup')).map(g => g.label)
+    );
+  expect(await groupsOn(headings)).toContain('Handwriting');
+  expect(await groupsOn(headings)).toContain('Serif');
+
+  // The rule that matters: a handwriting face behind every blurb summary and
+  // every chapter would make the archive harder to read, which is the opposite
+  // of what a reading skin is for.
+  expect(await groupsOn(body)).not.toContain('Handwriting');
+  expect(await groupsOn(body)).not.toContain('Display');
+
+  const optionCount = (loc: typeof headings) =>
+    loc.evaluate(el => (el as HTMLSelectElement).options.length);
+  expect(await optionCount(headings)).toBeGreaterThan(await optionCount(body));
+
+  // A heading face reaches the compiled CSS and the preview together — the
+  // specimen line in the rail is a typeface sample, never the source of truth.
+  await headings.selectOption({ label: 'Snell — formal script' });
+  const frame = page.frameLocator('iframe[title="Site skin preview"]');
+  await expect
+    .poll(() =>
+      frame
+        .locator('#main h2.heading')
+        .first()
+        .evaluate(el => getComputedStyle(el).fontFamily)
+    )
+    .toContain('Snell');
+
+  const css = await exportedCss(page);
+  expect(css).toContain('Snell Roundhand');
+  // Still legal: sanitize_css_font takes letters, digits, dashes and spaces.
+  expect(css).not.toMatch(/font-family:[^;]*[._]/);
+});
+
+test('the picker says plainly that a font may not reach the reader', async ({ page }) => {
+  // Load-bearing rather than a disclaimer. The specimens render with the fonts
+  // on the machine looking at them, so without this the picker over-promises to
+  // exactly the person least able to check.
+  await openEditor(page);
+  await expect(
+    page.getByText(/doesn't allow skins to supply font files/i)
+  ).toBeVisible();
+});
+
 test('the themed scrollbar is emitted, and removable', async ({ page }) => {
   await openEditor(page);
 

@@ -135,24 +135,109 @@ export interface SiteSkinTheme {
   };
 }
 
+/** Which shelf a stack sits on in the picker. Drives the `<optgroup>`s. */
+export type FontGroup = 'serif' | 'sans' | 'display' | 'script' | 'mono';
+
+/** Where a stack may be used. Script and display faces are headings only. */
+export type FontRole = 'heading' | 'body';
+
+export interface FontStack {
+  value: string;
+  label: string;
+  group: FontGroup;
+  roles: readonly FontRole[];
+}
+
+export const FONT_GROUP_LABELS: Record<FontGroup, string> = {
+  serif: 'Serif',
+  sans: 'Sans-serif',
+  display: 'Display',
+  script: 'Handwriting',
+  mono: 'Monospace',
+};
+
 /**
- * Web-safe stacks only.
+ * Installed fonts only — a bank of *names*, never of files.
  *
- * AO3 rejects @font-face outright, so there are no webfonts to be had — and
- * every family name has to survive `sanitize_css_font`, which allows letters,
- * digits, dashes and spaces and nothing else. No periods, no underscores.
- * `tests/site-skin.unit.spec.ts` checks that against the real rule, so adding
- * a stack with a stray character fails the build rather than a user's save.
+ * AO3 rejects `@font-face` outright, `src` is not one of its 181 allowed
+ * properties, and `url()` is permitted only on background, border and
+ * list-style. There is therefore no reachable path to loading a font file:
+ * not one we host, and not one from Google Fonts or any other library. A
+ * `font-family` here is a **suggestion** — the reader's device walks the stack
+ * until it finds something it already has, then falls through to AO3's own
+ * defaults, then to whatever it defaults to on its own.
+ *
+ * That is the whole technique, and it is what published AO3 authors do: the
+ * long-running tutorial "Fonts, and colors, and work skins, oh my!"
+ * (archiveofourown.org/works/28934610) says it outright — *"Since embedding the
+ * fonts isn't an option on AO3, you can only enter a picture (hosted elsewhere)
+ * or hope that your reader's device has at least one of the fonts that you list
+ * in a given rule"* — and its own stacks run up to fifteen names deep.
+ *
+ * So each stack below names a **Windows candidate, then a macOS counterpart,
+ * then a generic family**. Android and iOS carry few of these classics and will
+ * mostly land on the generic, which is expected: the chains are ordered so that
+ * the thing a reader falls through to is still a defensible choice rather than
+ * an accident.
+ *
+ * Every family name must survive `sanitize_css_font`, which allows letters,
+ * digits, dashes and spaces and nothing else — no periods, no underscores.
+ * `tests/site-skin.unit.spec.ts` runs all of these through our port of that
+ * rule, so a stray character fails the build rather than a user's save.
+ *
+ * ## Do not edit the first seven values
+ *
+ * `validateTheme` accepts a font only if the string is a member of this list,
+ * and a stored theme holds the literal stack string. Deepening
+ * `'Georgia, serif'` into a longer chain would therefore not be an improvement
+ * — it would silently reset every saved theme that had chosen it, because the
+ * old string would no longer be found here. **This list is append-only.** A test
+ * pins those seven byte for byte.
  */
-export const FONT_STACKS: readonly { value: string; label: string }[] = [
-  { value: 'Georgia, serif', label: 'Georgia — classic book' },
-  { value: "'Palatino Linotype', Palatino, serif", label: 'Palatino — literary' },
-  { value: "'Times New Roman', Times, serif", label: 'Times — newsprint' },
-  { value: 'Arial, Helvetica, sans-serif', label: 'Arial — plain' },
-  { value: "'Trebuchet MS', Verdana, sans-serif", label: 'Trebuchet — friendly' },
-  { value: 'Verdana, Geneva, sans-serif', label: 'Verdana — wide and clear' },
-  { value: "'Courier New', Courier, monospace", label: 'Courier — typewriter' },
+export const FONT_STACKS: readonly FontStack[] = [
+  // ── The original seven. Byte-identical, permanently. See above. ──────────
+  { value: 'Georgia, serif', label: 'Georgia — classic book', group: 'serif', roles: ['heading', 'body'] },
+  { value: "'Palatino Linotype', Palatino, serif", label: 'Palatino — literary', group: 'serif', roles: ['heading', 'body'] },
+  { value: "'Times New Roman', Times, serif", label: 'Times — newsprint', group: 'serif', roles: ['heading', 'body'] },
+  { value: 'Arial, Helvetica, sans-serif', label: 'Arial — plain', group: 'sans', roles: ['heading', 'body'] },
+  { value: "'Trebuchet MS', Verdana, sans-serif", label: 'Trebuchet — friendly', group: 'sans', roles: ['heading', 'body'] },
+  { value: 'Verdana, Geneva, sans-serif', label: 'Verdana — wide and clear', group: 'sans', roles: ['heading', 'body'] },
+  { value: "'Courier New', Courier, monospace", label: 'Courier — typewriter', group: 'mono', roles: ['heading', 'body'] },
+
+  // ── Serif ────────────────────────────────────────────────────────────────
+  { value: 'Cambria, Constantia, Georgia, serif', label: 'Cambria — modern book', group: 'serif', roles: ['heading', 'body'] },
+  { value: "Baskerville, 'Baskerville Old Face', 'Hoefler Text', Georgia, serif", label: 'Baskerville — elegant', group: 'serif', roles: ['heading', 'body'] },
+  { value: "Garamond, 'Book Antiqua', Palatino, serif", label: 'Garamond — old-style', group: 'serif', roles: ['heading', 'body'] },
+  // Didot and Bodoni are high-contrast faces: hairline strokes that disappear
+  // at body sizes on a low-DPI screen. Heading only, deliberately.
+  { value: "Didot, 'Bodoni MT', 'Times New Roman', serif", label: 'Didot — high fashion', group: 'serif', roles: ['heading'] },
+
+  // ── Sans-serif ───────────────────────────────────────────────────────────
+  { value: "'Segoe UI', Candara, Optima, sans-serif", label: 'Segoe — crisp interface', group: 'sans', roles: ['heading', 'body'] },
+  { value: 'Tahoma, Geneva, Verdana, sans-serif', label: 'Tahoma — compact', group: 'sans', roles: ['heading', 'body'] },
+  { value: "'Gill Sans', 'Gill Sans MT', Calibri, sans-serif", label: 'Gill Sans — humanist', group: 'sans', roles: ['heading', 'body'] },
+  { value: "Futura, 'Century Gothic', 'Avant Garde', sans-serif", label: 'Futura — geometric', group: 'sans', roles: ['heading', 'body'] },
+  { value: "'Franklin Gothic Medium', 'Arial Narrow', Helvetica, sans-serif", label: 'Franklin — newsstand', group: 'sans', roles: ['heading', 'body'] },
+
+  // ── Display — headings only ──────────────────────────────────────────────
+  { value: "Rockwell, 'Bookman Old Style', Georgia, serif", label: 'Rockwell — slab', group: 'display', roles: ['heading'] },
+  { value: "Copperplate, 'Copperplate Gothic Light', 'Century Gothic', sans-serif", label: 'Copperplate — engraved', group: 'display', roles: ['heading'] },
+  { value: "Impact, Haettenschweiler, 'Arial Black', sans-serif", label: 'Impact — poster', group: 'display', roles: ['heading'] },
+
+  // ── Handwriting — headings only ──────────────────────────────────────────
+  { value: "'Segoe Script', 'Bradley Hand', 'Brush Script MT', cursive", label: 'Segoe Script — handwritten', group: 'script', roles: ['heading'] },
+  { value: "'Snell Roundhand', 'Palace Script MT', 'Edwardian Script ITC', cursive", label: 'Snell — formal script', group: 'script', roles: ['heading'] },
+  { value: "'Comic Sans MS', 'Chalkboard SE', 'Marker Felt', cursive", label: 'Comic Sans — casual', group: 'script', roles: ['heading'] },
+
+  // ── Monospace ────────────────────────────────────────────────────────────
+  { value: "Consolas, Menlo, Monaco, 'Lucida Console', monospace", label: 'Consolas — modern code', group: 'mono', roles: ['heading', 'body'] },
+  { value: "'American Typewriter', 'Courier New', monospace", label: 'American Typewriter — vintage', group: 'mono', roles: ['heading', 'body'] },
 ];
+
+/** The stacks offered for one role, in catalog order. */
+export function fontStacksFor(role: FontRole): readonly FontStack[] {
+  return FONT_STACKS.filter(f => f.roles.includes(role));
+}
 
 export const FONT_SCALES: readonly { value: number; label: string }[] = [
   { value: 0.9, label: 'Small' },
@@ -214,8 +299,14 @@ export function validateTheme(input: unknown, fallback: SiteSkinTheme): SiteSkin
   const raw = input as Record<string, any>;
 
   const color = (v: unknown, d: string) => (typeof v === 'string' && HEX.test(v.trim()) ? v.trim().toLowerCase() : d);
-  const font = (v: unknown, d: string) =>
-    typeof v === 'string' && FONT_STACKS.some(f => f.value === v) ? v : d;
+  // Role-aware, so a stored theme cannot put a handwriting face behind every
+  // listing on the archive. The editor never offers one for body text, but the
+  // storage boundary is what has to hold when the JSON did not come from the
+  // editor — a hand-edited localStorage entry, or a theme saved before a stack
+  // changed role. Falls back to the template's own font, not to a global
+  // default, so the repair is a theme that still looks deliberate.
+  const font = (v: unknown, d: string, role: FontRole) =>
+    typeof v === 'string' && fontStacksFor(role).some(f => f.value === v) ? v : d;
   const mood = (v: unknown, d: Mood): Mood => (MOODS.includes(v as Mood) ? (v as Mood) : d);
 
   const meta = raw.meta ?? {};
@@ -245,8 +336,8 @@ export function validateTheme(input: unknown, fallback: SiteSkinTheme): SiteSkin
       accent: color(colors.accent, fallback.colors.accent),
     },
     typography: {
-      headingFont: font(typography.headingFont, fallback.typography.headingFont),
-      bodyFont: font(typography.bodyFont, fallback.typography.bodyFont),
+      headingFont: font(typography.headingFont, fallback.typography.headingFont, 'heading'),
+      bodyFont: font(typography.bodyFont, fallback.typography.bodyFont, 'body'),
       baseFontScale: FONT_SCALES.some(s => s.value === typography.baseFontScale)
         ? typography.baseFontScale
         : fallback.typography.baseFontScale,

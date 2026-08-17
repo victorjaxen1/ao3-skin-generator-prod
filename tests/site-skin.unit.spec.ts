@@ -1,7 +1,13 @@
 import { test, expect } from '@playwright/test';
 import { compile, compileRules, derive } from '../src/lib/siteSkin/compile';
 import { TEMPLATES, cloneTheme, findTemplate, gradientFor } from '../src/lib/siteSkin/templates';
-import { FONT_STACKS, validateTheme, SiteSkinTheme } from '../src/lib/siteSkin/theme';
+import {
+  FONT_STACKS,
+  FONT_GROUP_LABELS,
+  fontStacksFor,
+  validateTheme,
+  SiteSkinTheme,
+} from '../src/lib/siteSkin/theme';
 import { lintAo3Css, isLegalFontStack, checkAo3ImageUrl, stripCssComments } from '../src/lib/siteSkin/ao3Css';
 import {
   mixHex,
@@ -83,6 +89,102 @@ test.describe('the font stacks we offer', () => {
   test('rejects a family name with a character AO3 will not take', () => {
     expect(isLegalFontStack('"Foo.Bar", serif')).toBe(false);
     expect(isLegalFontStack('Foo_Bar, serif')).toBe(false);
+  });
+
+  /**
+   * The migration guard, and it is the one test in this block whose absence
+   * would cost users something they cannot get back.
+   *
+   * `validateTheme` accepts a font only if the string is a member of
+   * `FONT_STACKS`, and a stored theme holds the literal stack string. So
+   * "improving" `Georgia, serif` into a deeper chain is not an edit to a list —
+   * it silently resets every saved theme that had chosen it, because the stored
+   * string stops being found. **The bank is append-only**, and these seven are
+   * pinned byte for byte to say so out loud.
+   */
+  test('the original seven stacks are byte-identical, forever', () => {
+    expect(FONT_STACKS.slice(0, 7).map(f => f.value)).toEqual([
+      'Georgia, serif',
+      "'Palatino Linotype', Palatino, serif",
+      "'Times New Roman', Times, serif",
+      'Arial, Helvetica, sans-serif',
+      "'Trebuchet MS', Verdana, sans-serif",
+      'Verdana, Geneva, sans-serif',
+      "'Courier New', Courier, monospace",
+    ]);
+  });
+
+  test('every stack ends in a generic family, so nobody lands on nothing', () => {
+    // A font-family is a suggestion. If a reader has none of the named faces
+    // and the stack does not end in a generic, their device falls through to
+    // AO3's defaults — which is our styling silently not applying rather than
+    // degrading. The generic is the floor.
+    const GENERIC = ['serif', 'sans-serif', 'monospace', 'cursive', 'fantasy'];
+    for (const stack of FONT_STACKS) {
+      const last = stack.value.split(',').pop()!.trim();
+      expect(GENERIC, stack.value).toContain(last);
+    }
+  });
+
+  test('no stack carries a character sanitize_css_font refuses', () => {
+    // Belt and braces beside isLegalFontStack: that function is our port of
+    // AO3's rule, and this asserts the two characters that have actually
+    // bitten — a period and an underscore — against the raw string.
+    for (const stack of FONT_STACKS) {
+      expect(stack.value, stack.value).not.toMatch(/[._]/);
+    }
+  });
+
+  test('handwriting and display faces are never offered for body text', () => {
+    // A script face behind every blurb summary and every chapter makes the
+    // archive harder to read, which is the opposite of what a reading skin is
+    // for. The rule lives in the bank rather than in the editor so that the
+    // storage boundary enforces it too.
+    for (const stack of fontStacksFor('body')) {
+      expect(['script', 'display'], stack.label).not.toContain(stack.group);
+    }
+    // And the split is real rather than vacuous.
+    expect(fontStacksFor('heading').length).toBeGreaterThan(fontStacksFor('body').length);
+    expect(FONT_STACKS.some(f => f.group === 'script')).toBe(true);
+  });
+
+  test('a stored theme cannot smuggle a script face into body text', () => {
+    // The editor never offers one, so this is about JSON that did not come from
+    // the editor — a hand-edited localStorage entry, or a theme saved before a
+    // stack changed role.
+    const script = FONT_STACKS.find(f => f.group === 'script')!;
+    const restored = validateTheme(
+      {
+        ...JSON.parse(JSON.stringify(SAMPLE)),
+        typography: { ...SAMPLE.typography, bodyFont: script.value, headingFont: script.value },
+      },
+      SAMPLE
+    );
+    // Heading keeps it — that is where it is legal.
+    expect(restored.typography.headingFont).toBe(script.value);
+    // Body falls back to the template's own font, not to a global default, so
+    // the repaired theme still looks deliberate.
+    expect(restored.typography.bodyFont).not.toBe(script.value);
+    expect(fontStacksFor('body').some(f => f.value === restored.typography.bodyFont)).toBe(true);
+  });
+
+  test('every template still picks fonts the bank offers for that role', () => {
+    for (const template of TEMPLATES) {
+      expect(
+        fontStacksFor('heading').some(f => f.value === template.typography.headingFont),
+        `${template.meta.name} heading`
+      ).toBe(true);
+      expect(
+        fontStacksFor('body').some(f => f.value === template.typography.bodyFont),
+        `${template.meta.name} body`
+      ).toBe(true);
+    }
+  });
+
+  test('every group has a label, so no optgroup renders untitled', () => {
+    for (const stack of FONT_STACKS) {
+      expect(FONT_GROUP_LABELS[stack.group], stack.value).toBeTruthy();
+    }
   });
 });
 
