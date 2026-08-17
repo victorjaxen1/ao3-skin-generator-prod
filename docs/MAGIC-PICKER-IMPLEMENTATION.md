@@ -711,3 +711,102 @@ the part of this feature that had no threat model before it was written.
   once for both endpoints rather than twice by halves.
 - **The rate limit is per instance and in memory**, so it counts per serverless
   container rather than globally — the same as `/api/image-proxy`.
+
+---
+
+## 13. Handoff — 17 Aug 2026, after Phase C
+
+**Where this stands: the feature is finished and it is not deployed.** All three
+phases are built, tested and committed; production is still running the commit
+before them. That gap is deliberate and §13c is the decision waiting for you.
+
+### 13a. The exact state of the world
+
+| | |
+| --- | --- |
+| Branch | `feat/magic-picker-phase-b`, pushed to `origin`. Head `dbd34c2` |
+| Production | `main` at `4e476a6`, Netlify deploy `6a82f20a`, 17 Aug 11:35 UTC. **Neither Phase B nor Phase C is live** |
+| Merged to `main`? | **No.** No PR opened. Nothing in §12 has run anywhere but a developer's machine and a dev server |
+| Tests | 636 unit (`npm run test:unit`), 31 site-skin journeys. `tsc` clean, `npm run build` clean |
+| Release gate | ✅ closed before Phase C, as §8 required. P15 passed, so §6d's targets stand |
+
+**What is live today** is the font bank (Phase A) and nothing else from this
+document. A reader on the site right now cannot paste anything.
+
+### 13b. Where the pieces live, and which one to open
+
+| File | What it owns | Open it when |
+| --- | --- | --- |
+| `src/lib/siteSkin/palette.ts` | pixels → swatches → four colours, and **the contrast floor**. Phase B's engine, and Phase C's too via `swatchesFromColors` | changing how colours are chosen |
+| `src/lib/siteSkin/siteStyle.ts` | HTML and CSS *text* → colours, fonts, radius, `og:image`, polarity. **No I/O** | changing what a page yields |
+| `src/lib/siteSkin/fontClassify.ts` | ~200 faces → 19 characters → a `FONT_STACKS` value, plus the sentence | the classifier is wrong about a font |
+| `src/lib/siteSkin/siteTheme.ts` | the merge: which signal wins, and what we say about it | changing precedence or the notes |
+| `src/lib/server/siteFetch.ts` | the only file that opens a page. Security lives here | anything about fetching |
+| `src/pages/api/site-palette.ts` | the endpoint: origin check, rate limit, **field-by-field response** | changing what crosses to the client |
+| `src/components/siteSkin/PaletteFromImage.tsx` | both doors, both polarities, the notes, the banner offer | anything the user sees |
+
+**The dependency runs one way and must keep doing so:** the component knows about
+the network, `siteTheme` knows about themes, `siteStyle` and `palette` and
+`fontClassify` know about neither. That is what makes 636 tests runnable with no
+browser and no server, and it is the property that will erode first if somebody
+needs "just one fetch" inside a pure file.
+
+### 13c. What to do next, in order
+
+**1. Decide whether to ship it, and that is a judgement rather than a task.**
+The endpoint is new outbound attack surface. §12c is the review; it found and
+fixed one real defect and lists two accepted risks. A second pair of eyes on
+`siteFetch.ts` before merge is cheap and proportionate.
+
+**2. Answer §10's remaining question with twenty sites, not five.** Whether
+`og:image` is genuinely better than the stylesheet is still unmeasured — the
+five-site probe compared nothing, because sampling a social card needs a canvas
+and the probe was a unit test. Do it in a Playwright *browser* test that drives
+`extractFromSite` both ways and puts the two palettes side by side. It is an
+hour, and it decides whether §6a's "primary signal" claim survives.
+
+**3. Watch `palette_applied`.** It carries `source` (`image` | `site`),
+`polarity` and `placement`, and it is the instrument for the question this whole
+document is a bet on: *is a URL a lower-friction front door than an image?*
+Nobody knows yet. The event is content-free by construction — no address is ever
+a parameter.
+
+**4. Tune the taste, once there is evidence.** Three knobs, in the order they are
+likely to be wrong:
+
+- `FACES` in `fontClassify.ts` — the table *is* the feature, and it is opinion.
+- the weights in `siteStyle.ts` (`WEIGHTS`, `PAGE_SELECTOR`) — a coarse
+  three-tier proxy for "how much of the page is this colour".
+- `MIN_DELIBERATE` (2%) in `palette.ts` — still tuned against synthetic
+  fixtures rather than real fan art, exactly as §10 says.
+
+### 13d. What will bite you
+
+- **`FONT_STACKS` is append-only.** Editing an existing stack string silently
+  resets every stored theme that chose it. The classifier must emit a literal
+  member, never an index. Tests pin both.
+- **`analyticsPayload` rejects the whole event on an unknown `templateId`.** A
+  generated theme keeps `MAGIC_THEME_ID` (`from-image`) for exactly this reason,
+  website or picture. Change the id and the funnel goes silent, not wrong.
+- **The parser is fed hostile input.** `readCssRules` is an `indexOf` scan
+  because the regex version was a denial of service (§12c). If you rewrite it,
+  keep the 1 MB timing test.
+- **Never return the fetched body.** The endpoint enumerates its response field
+  by field on purpose; a spread would widen it silently the next time an
+  extractor grows a field.
+- **A cross-origin image taints a canvas.** Both doors go through
+  `/api/image-proxy` for that reason as much as for SSRF. Dropping it works on
+  your test image and fails on most real ones.
+
+### 13e. What is deliberately not built
+
+- **No headless browser.** A React shell yields `theme-color` and `og:image`;
+  §6c says accept that, and `og:image` is primary precisely because it survives.
+- **No second extraction system.** Phase C adds a fetcher and a merge, and
+  reuses Phase B's quantizer, floor and repair whole.
+- **No fonts or radius applied in the editor path.** The editor replaces four
+  hex strings; the gallery adopts the whole theme. The font notes are filtered
+  out in the editor because explaining a substitution that will not happen is
+  worse than silence.
+- **No images shipped by us, ever.** SITE-SKIN §19b-bis, unchanged. A gradient
+  costs zero bytes and cannot expire.

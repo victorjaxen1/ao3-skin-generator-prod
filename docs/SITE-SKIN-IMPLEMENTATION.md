@@ -39,9 +39,10 @@ architecture with ours.
 > missing from the mock is invisible and invisible looks exactly like finished.
 >
 > **A second product document now exists: `MAGIC-PICKER-IMPLEMENTATION.md`** —
-> paste a link, get a skin built from its colours. **Phases A and B shipped
-> 17 Aug 2026**; Phase C (the URL front door) is specified for a developer and is
-> not built. If you are about to touch fonts, read its §2a first: **no skin can
+> paste a link, get a skin built from its colours. **All three phases were built
+> 17 Aug 2026 — A (the font bank) is deployed; B (a picture) and C (a website)
+> are committed on `feat/magic-picker-phase-b` and are NOT deployed.** Its §13 is
+> the handoff. If you are about to touch fonts, read its §2a first: **no skin can
 > ever supply a font file**, and the reasons are permanent — and its §5f, which
 > is four defects found in that document's own plan by reading the functions it
 > named.
@@ -751,7 +752,7 @@ Always emit a fallback stack, and keep every family name inside
 | 16 | **Palettes that read as fandoms** — ~12 more templates, mood-named as always | ⬜ §19c |
 | 17 | **Regions: listboxes, indexes, meta tables** — the §22 audit's build spec, plus §22c's chip. Four of the nine page types a real skin author screenshots. Acceptance: differential and capability probe **unmoved** | ✅ 17 Aug 2026 — 0/0 and no divergences; landed *before* the gate, on §18a's argument. Two rows of §22e's table were dropped on evidence and one was added; see §23b |
 | 18 | **The font bank** — `FONT_STACKS` 7 → 24, grouped and role-split; grouped picker with live specimens. Phase A of the Magic Picker | ✅ 17 Aug 2026 — append-only, all 16 templates unchanged; see §19f |
-| 19 | **The Magic Picker** — paste a link, get a skin from its colours. Phases B and C | ⬜ **owned by `MAGIC-PICKER-IMPLEMENTATION.md`**, not by this file. Phase C wants the gate closed first (§23c) |
+| 19 | **The Magic Picker** — paste a link, get a skin from its colours. Phases B and C | ✅ **built 17 Aug 2026, and NOT deployed** — owned by `MAGIC-PICKER-IMPLEMENTATION.md`, not by this file. B (a picture) and C (a website, `/api/site-palette`) are on `feat/magic-picker-phase-b`; `main` is unchanged. The gate closed first, as §23c asked. See MAGIC-PICKER §13 |
 
 ### Corrections made to `ao3Css.ts` after Phase 8
 
@@ -1308,17 +1309,17 @@ claim has a longer story, the section number is the story.
 
 | | |
 | --- | --- |
-| Deployed | ✅ `main` → Netlify, at `/site-skin`. Commits `f2bc76c` (Phase 9) and `5c47eda` (the §14 fix) |
+| Deployed | ✅ `main` → Netlify, at `/site-skin`. **Production is `4e476a6`, deploy `6a82f20a`, 17 Aug 11:35 UTC** — the font bank, and nothing of the picker itself |
 | Phases 0–6, 8, 9, 10 | ✅ complete |
 | Phase 7 — **saved on real AO3** | ⚠️ **opened 17 Aug 2026.** 5 of 16 templates, **10 of 15 probes — P2, P5, P6, P7, P8, P9, P10, P12, P13, P15** — all passing, **448/448 declarations kept** (§24b-bis). P1 and P14 partial, P3 still open. **The gate has now found and fixed its first defect** (§24c) |
 | Templates | 16, all lint clean, all round-tripping through storage. **Ten carry a header gradient as of 17 Aug 2026** (§21a) |
-| Tests | **525 unit** (`--project=unit`), **29 browser** — counts as of 17 Aug 2026 evening, after the Magic Picker (§24), the form region (§25) and the drop cap fix (§26) |
+| Tests | **636 unit** (`--project=unit`), **31 browser** — counts as of 17 Aug 2026 night, after Magic Picker Phase C (§27). 525/29 was the count before it |
 | Fonts | ✅ **24 stacks, grouped and role-split** (§19f). **Append-only** — the original seven are pinned byte for byte, because `validateTheme` matches the literal string a stored theme holds |
 | Mobile preview | ⚠️ scrolls sideways instead of scaling. Known, deliberate |
 | Marketing copy | ⚠️ correct about site skins; still silent on the work-skin export |
 | `ao3Css.ts` vs AO3 | ✅ **0 false accepts, 0 false rejects** over 4,418 corpus declarations — §17's corrections landed 16 Aug 2026 |
 | Regions styled | ⚠️ **~18 of ~25.** §18a landed 16 Aug 2026 — buttons, fields, pagination, comments and autocomplete — `.required-tags` followed on 17 Aug 2026 (§18c-2, only when a reader turns it on), and **§22e landed the same day**: `.listbox`, `.listbox .index`, `dl.meta`, `dl.index dd`, `.statistics`, the meta halo, and §22c's chip. That closes the four page types the audit found bare. **`#main fieldset` followed on 17 Aug 2026 (§25) — the form container, which is the comment form under every work.** **Still unowned: the tag cloud** (`a.cloud1…8`, deferred — the mock renders no Tags page, §22e), and §22f's list. `.splash` turns out to need nothing |
-| Magic Picker | ✅ **Phases A and B built** (§24, `MAGIC-PICKER-IMPLEMENTATION.md`). Paste a picture → a theme, from the gallery or the editor. Phase C (a website URL) is specified, needs a security review |
+| Magic Picker | ✅ **All three phases built** (§24, §27, `MAGIC-PICKER-IMPLEMENTATION.md`). Paste a picture *or a website* → a theme, from the gallery or the editor. ⚠️ **B and C are unmerged and unshipped** — branch `feat/magic-picker-phase-b`, head `dbd34c2`. Phase C's security review is done (MAGIC-PICKER §12c) and found a ReDoS, not an SSRF |
 | Fandom demand | ⚠️ **unserved.** All 16 templates are moods; what readers ask for is Harry Potter, Spider-Man, Iron Man — §19, added 16 Aug 2026 |
 
 **What "not saved on real AO3" means, precisely.** Our lint is a faithful port of
@@ -2588,8 +2589,8 @@ from its colours.* Three phases, and only the first exists.
 | Phase | What | Status |
 | --- | --- | --- |
 | **A** | **The font bank** — `FONT_STACKS` 7 → 24, grouped and role-split, with a grouped picker and live specimens | ✅ **17 Aug 2026** |
-| B | Palette from an image — §19b, unchanged, reusing `/api/image-proxy` | ⬜ ~1 day |
-| C | The URL front door — a new endpoint, `og:image` as the primary signal, font classification | ⬜ ~2½ days, needs a security review |
+| B | Palette from an image — §19b, unchanged, reusing `/api/image-proxy` | ✅ **17 Aug 2026**, ~1 day as costed. Unmerged |
+| C | The URL front door — a new endpoint, `og:image` as the primary signal, font classification | ✅ **17 Aug 2026**. Security review done — it found a ReDoS in the CSS parser, not an SSRF (MAGIC-PICKER §12c). Unmerged |
 
 **Why the font bank came first, and why it was worth doing alone.** AO3 rejects
 `@font-face` outright, `src` is not an allowed property, and `url()` never
@@ -3573,6 +3574,47 @@ something.**
    does the mock render the *hard case*, or only the easy one?
 6. **If you have an AO3 account, §26e item 2 is twenty minutes and closes three
    probes.** The checklist tells you exactly what to click.
+
+---
+
+## 27. Handoff — 17 Aug 2026, night (revision 12)
+
+**What happened: the Magic Picker finished.** Phase C — paste a *website*
+address, get a skin from its colours — is built, reviewed and committed, and it
+is the last of the three phases. `MAGIC-PICKER-IMPLEMENTATION.md` §12 and §13
+own the detail; this section is only what a reader of *this* file needs.
+
+**The one fact that matters here: none of the picker is deployed.** Production
+is `4e476a6`. Phases B and C live on `feat/magic-picker-phase-b` (head
+`dbd34c2`, pushed, no PR). What is live is the font bank and nothing else.
+
+**Phase 19 of §9's table is now ✅ rather than ⬜**, and the status block above
+is corrected: 636 unit tests and 31 browser, up from 525 and 29.
+
+**One new endpoint exists in the product**, and it is the first that fetches
+non-image content from an arbitrary host: `/api/site-palette`. It reuses
+`imageSecurity.ts` whole — the DNS-then-IP check, the manual redirect loop, the
+byte cap — and adds one rule of its own: **the fetched body never reaches the
+client.** The handler enumerates its response field by field.
+
+**§23c's lesson held and was not needed.** The gate closed before Phase C
+shipped, as §8 of the picker plan required, and P15 passed — so a generated
+theme emits no property the sixteen templates do not already emit, and the
+five-name font stacks are proven safe on the archive.
+
+**The security review found a denial of service, not an SSRF** — and not in the
+network code. The CSS rule parser was one regex with catastrophic backtracking:
+236 seconds on 200 KB of brace-free text, in a function handed a megabyte from
+an address a stranger typed. It is an `indexOf` scan now, with a timing test.
+The generalisable part is in the picker plan's §12c, and it is this: **the
+dangerous input did not come from the user — it came from the third party the
+user's input pointed at.** That is a threat surface this product did not have
+before and now permanently does.
+
+**What the next person should read:** `MAGIC-PICKER-IMPLEMENTATION.md` §13, which
+is a handoff written for exactly that purpose — the file map, the four traps,
+and the three things worth doing next in order. The first of them is a decision
+rather than a task: whether to merge.
 
 ---
 
