@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { compile, compileRules, derive } from '../src/lib/siteSkin/compile';
-import { TEMPLATES, cloneTheme, findTemplate } from '../src/lib/siteSkin/templates';
+import { TEMPLATES, cloneTheme, findTemplate, gradientFor } from '../src/lib/siteSkin/templates';
 import { FONT_STACKS, validateTheme, SiteSkinTheme } from '../src/lib/siteSkin/theme';
 import { lintAo3Css, isLegalFontStack, checkAo3ImageUrl, stripCssComments } from '../src/lib/siteSkin/ao3Css';
 import {
@@ -13,7 +13,7 @@ import {
   findReadabilityIssues,
   WCAG_LARGE_MIN,
 } from '../src/lib/siteSkin/colors';
-import { mockDocument, mockBody } from '../src/lib/siteSkin/mockPage';
+import { mockDocument, mockBody, AO3_BASE_CSS } from '../src/lib/siteSkin/mockPage';
 
 /**
  * The compiler's contract, pinned.
@@ -51,14 +51,17 @@ test.describe('every launch template compiles to CSS AO3 accepts', () => {
       for (const dropCap of [true, false]) {
         for (const scrollbar of [true, false]) {
           for (const tagColors of [true, false]) {
-            for (const tagStyle of ['pill', 'label', 'plain'] as const) {
-              const theme: SiteSkinTheme = {
-                ...SAMPLE,
-                shape: { ...SAMPLE.shape, tagStyle, tagColors },
-                details: { divider, dropCap, scrollbar },
-              };
-              const label = `${tagStyle}/${tagColors}/${divider}/${dropCap}/${scrollbar}`;
-              expect(lintAo3Css(compile(theme)), label).toEqual([]);
+            for (const requiredTagsAsText of [true, false]) {
+              for (const tagStyle of ['pill', 'label', 'plain'] as const) {
+                const theme: SiteSkinTheme = {
+                  ...SAMPLE,
+                  shape: { ...SAMPLE.shape, tagStyle, tagColors },
+                  reading: { requiredTagsAsText },
+                  details: { divider, dropCap, scrollbar },
+                };
+                const label = `${tagStyle}/${tagColors}/${divider}/${dropCap}/${scrollbar}/${requiredTagsAsText}`;
+                expect(lintAo3Css(compile(theme)), label).toEqual([]);
+              }
             }
           }
         }
@@ -221,6 +224,329 @@ test.describe('the header controls', () => {
       expect(template.header.textColor, template.meta.name).toBe('auto');
     }
   });
+
+  /**
+   * The header gradient — a header of its own for a palette-only template,
+   * costing zero bytes and no host.
+   *
+   * The alternative was shipping our own banner images, which would have made
+   * us a permanent image host for skins we cannot contact the owners of, on
+   * bandwidth that scales with the feature succeeding. §11's "we ship no
+   * images" survives revision 6 intact because of this control.
+   */
+  const withGradient = (gradient: SiteSkinTheme['header']['gradient']) => ({
+    ...SAMPLE,
+    header: { ...SAMPLE.header, gradient },
+  });
+
+  test('flat emits no gradient at all', () => {
+    expect(compile(withGradient('none'))).not.toContain('linear-gradient');
+  });
+
+  /**
+   * The catalog's gradients follow the mood, and this is where that rule is
+   * the specification rather than sixteen independent judgement calls.
+   *
+   * It matters because the alternative to a gradient was shipping our own
+   * banner images — which would have made us a permanent image host, on
+   * bandwidth that scales with the feature succeeding, for skins whose owners
+   * we cannot contact when a file moves. A per-template literal that drifted
+   * from the rule would quietly reopen "why is this one flat?" as a taste
+   * argument; pinning it to the mood keeps it a decision.
+   */
+  test('every template carries the gradient its moods imply', () => {
+    for (const template of TEMPLATES) {
+      expect(template.header.gradient, template.meta.name).toBe(
+        gradientFor(template.meta.moods)
+      );
+    }
+  });
+
+  test('minimal stays flat; everything else paints, and all sixteen still lint', () => {
+    // Restraint beats expression where a template carries both moods —
+    // Terminal Green is `dark, minimal` and must not fade.
+    for (const template of TEMPLATES) {
+      const css = compile(template);
+      const minimal = template.meta.moods.includes('minimal');
+      expect(css.includes('linear-gradient'), template.meta.name).toBe(!minimal);
+      // The gate has to re-prove every declaration shape we ship, so a catalog
+      // change is only safe if it adds none the lint has not already seen.
+      expect(lintAo3Css(css), template.meta.name).toEqual([]);
+    }
+    // Four flat templates would be a rounding error; six is the rule holding.
+    expect(TEMPLATES.filter(t => t.header.gradient === 'none')).toHaveLength(6);
+    expect(TEMPLATES.filter(t => t.header.gradient === 'diagonal')).toHaveLength(8);
+    expect(TEMPLATES.filter(t => t.header.gradient === 'vertical')).toHaveLength(2);
+  });
+
+  test('a banner-ready template keeps its gradient underneath the banner', () => {
+    // The four exist for an image the user has not pasted yet. Without this
+    // they are a flat accent block until they do — and once they do, the
+    // gradient is what a dead host degrades to.
+    const academia = TEMPLATES.find(t => t.meta.id === 'academia')!;
+    expect(academia.header.gradient).toBe('diagonal');
+
+    const withImage = compileRules({
+      ...academia,
+      header: { ...academia.header, bannerUrl: 'https://i.imgur.com/x.png' },
+    }).find(r => r.selectors.includes('#header'))!;
+    const images = withImage.decls.filter(([p]) => p === 'background-image');
+    expect(images).toHaveLength(1);
+    expect(images[0][1].indexOf('url(')).toBeLessThan(images[0][1].indexOf('linear-gradient'));
+  });
+
+  test('a gradient runs accent → headerDeep, in literal hex', () => {
+    const d = derive(SAMPLE);
+    expect(compile(withGradient('vertical'))).toContain(
+      `background-image: linear-gradient(180deg, ${d.accent}, ${d.headerDeep})`
+    );
+    expect(compile(withGradient('diagonal'))).toContain(
+      `linear-gradient(135deg, ${d.accent}, ${d.headerDeep})`
+    );
+    // AO3 has no color-mix(), so both stops must already be resolved.
+    expect(compile(withGradient('vertical'))).not.toContain('color-mix');
+  });
+
+  test('the banner and the gradient stack in one declaration, banner on top', () => {
+    // Two rules setting background-image on #header would be defect 4.2 again:
+    // equal specificity, later wins, and one of the two controls quietly stops
+    // working. Layer order is paint order, so the gradient is the banner's
+    // fallback — a dead image degrades to it rather than to a flat fill.
+    const rule = compileRules({
+      ...withBanner(),
+      header: { ...SAMPLE.header, bannerUrl: 'https://i.imgur.com/x.png', gradient: 'vertical' },
+    }).find(r => r.selectors.includes('#header'))!;
+
+    const images = rule.decls.filter(([p]) => p === 'background-image');
+    expect(images).toHaveLength(1);
+    expect(images[0][1]).toBe(
+      `url("https://i.imgur.com/x.png"), linear-gradient(180deg, ${derive(SAMPLE).accent}, ${
+        derive(SAMPLE).headerDeep
+      })`
+    );
+  });
+
+  test('the nav bar goes transparent under a gradient, so the header is one surface', () => {
+    // AO3's .primary carries its own red fill and a tiled texture. Painting it
+    // a flat accent is right for a flat header and wrong for a fading one — it
+    // lays an opaque band across the middle of the gradient. What must NOT
+    // change is `background-image: none`; that is what removes the tile, and
+    // dropping it brings AO3's texture back regardless of the colour beneath.
+    const primary = (theme: SiteSkinTheme) =>
+      compileRules(theme).find(r => r.selectors.includes('#header .primary'))!;
+
+    expect(primary(withGradient('none')).decls).toContainEqual([
+      'background-color',
+      derive(SAMPLE).accent,
+    ]);
+    expect(primary(withGradient('vertical')).decls).toContainEqual([
+      'background-color',
+      'transparent',
+    ]);
+    for (const g of ['none', 'vertical', 'diagonal'] as const) {
+      expect(primary(withGradient(g)).decls, g).toContainEqual(['background-image', 'none']);
+    }
+  });
+
+  test('a gradient alone gets no background-size, which it does not need', () => {
+    const rule = compileRules(withGradient('vertical')).find(r => r.selectors.includes('#header'))!;
+    expect(rule.decls.some(([p]) => p === 'background-image')).toBe(true);
+    expect(rule.decls.some(([p]) => p === 'background-size')).toBe(false);
+  });
+
+  test('a gradient header lints clean — the §17 correction, end to end', () => {
+    // This is the assertion that would have failed before Phase 11. AO3 routes
+    // any token containing `gradient` to sanitize_css_gradient rather than to
+    // the value grammar, and our lint did not model that branch, so it refused
+    // every gradient the archive accepts.
+    for (const gradient of ['vertical', 'diagonal'] as const) {
+      expect(lintAo3Css(compile(withGradient(gradient))), gradient).toEqual([]);
+      expect(lintAo3Css(compile({ ...withBanner(), header: { ...SAMPLE.header, bannerUrl: 'https://i.imgur.com/x.png', gradient } })), gradient).toEqual([]);
+    }
+  });
+});
+
+// ── Reading: required tags as words ───────────────────────────────────────
+
+/**
+ * The accessibility control, and the one place this product is measurably
+ * better than the snippet everybody copies.
+ *
+ * Two claims are worth pinning beyond "the CSS came out": that we **un-hide**
+ * AO3's own words rather than generating any, and that we identify the four
+ * tags by their **class** rather than by their position in the list. The corpus
+ * add-on does the latter with `li+li+li` offsets hand-tuned to one person's
+ * font size, and it breaks for everyone else.
+ */
+test.describe('required tags as words', () => {
+  const withWords = (requiredTagsAsText: boolean, tagColors = SAMPLE.shape.tagColors) => ({
+    ...SAMPLE,
+    shape: { ...SAMPLE.shape, tagColors },
+    reading: { requiredTagsAsText },
+  });
+
+  test('off in every shipped template, and off emits nothing at all', () => {
+    // It changes the shape of every listing on the archive. A reader who
+    // picked a palette did not ask for that, which is the decision recorded in
+    // templates.ts — and this is where a template quietly acquiring it fails.
+    for (const template of TEMPLATES) {
+      expect(template.reading.requiredTagsAsText, template.meta.name).toBe(false);
+      expect(compile(template), template.meta.name).not.toContain('required-tags');
+    }
+    expect(compile(withWords(false))).not.toContain('required-tags');
+    expect(compile(withWords(false))).not.toContain('span.text');
+  });
+
+  test('every AO3 default that hides the words is undone', () => {
+    // Each row here is a real rule in 13-group-blurb.css. Leaving any one of
+    // them standing leaves the control half-working in a way that looks like
+    // our bug: the words appear inside a 25px box, or behind the sprite, or
+    // with 65px of empty space still reserved beside them.
+    const rules = compileRules(withWords(true));
+    const declsFor = (selector: string) =>
+      rules.filter(r => r.selectors.includes(selector)).flatMap(r => r.decls);
+
+    // position: absolute; top: 0; width: 60px
+    expect(declsFor('.blurb ul.required-tags')).toEqual(
+      expect.arrayContaining([
+        ['position', 'static'],
+        ['width', 'auto'],
+      ])
+    );
+
+    // display: block; width: 25px; height: 25px — on all three levels
+    for (const selector of [
+      '.blurb ul.required-tags li',
+      '.blurb ul.required-tags li a',
+      '.blurb ul.required-tags li span',
+    ]) {
+      expect(declsFor(selector), selector).toEqual(
+        expect.arrayContaining([
+          ['display', 'inline'],
+          ['height', 'auto'],
+          ['width', 'auto'],
+        ])
+      );
+    }
+
+    // The absolute positioning of the third and fourth icons.
+    expect(declsFor('.blurb ul.required-tags li + li + li')).toEqual(
+      expect.arrayContaining([
+        ['left', 'auto'],
+        ['position', 'static'],
+        ['top', 'auto'],
+      ])
+    );
+
+    // height: 0; width: 0; font-size: 0.001em; color: transparent
+    expect(declsFor('.blurb span.text')).toEqual(
+      expect.arrayContaining([
+        ['color', 'inherit'],
+        ['font-size', '1em'],
+      ])
+    );
+
+    // The sprite. Same defect as the footer's red tile if it survives (§4.6).
+    expect(declsFor('.blurb ul.required-tags li span')).toContainEqual([
+      'background-image',
+      'none',
+    ]);
+
+    // The 65px the icon block used to occupy, and the 55px floor under it.
+    expect(declsFor('.blurb .header .heading')).toContainEqual(['margin-left', '0']);
+    expect(declsFor('.blurb .header ul')).toContainEqual(['margin-left', '0']);
+    expect(declsFor('.blurb .header')).toContainEqual(['min-height', '0']);
+  });
+
+  test('the fourth icon needs no rule of its own', () => {
+    // AO3 positions it with `li+li+li+li`, which is more specific than our
+    // `li+li+li` — but ours carries !important and beats it anyway, and
+    // `li+li+li` already matches the fourth item. A second selector would be a
+    // redundant owner of `top`, which is how §4.2 started.
+    const selectors = compileRules(withWords(true)).flatMap(r => r.selectors);
+    expect(selectors).toContain('.blurb ul.required-tags li + li + li');
+    expect(selectors).not.toContain('.blurb ul.required-tags li + li + li + li');
+  });
+
+  test('the four tags are identified by class, never by position', () => {
+    const rules = compileRules(withWords(true, true));
+    const colored = rules.filter(r => r.decls.some(([p]) => p === 'color'));
+
+    for (const type of ['rating', 'warnings', 'category', 'iswip']) {
+      expect(
+        colored.some(r => r.selectors.some(s => s.includes(`.required-tags .${type}`))),
+        type
+      ).toBe(true);
+    }
+    // Nothing decides what a tag *means* from where it sits in the list. The
+    // adjacency rule that does exist only resets AO3's positioning.
+    for (const rule of colored) {
+      for (const selector of rule.selectors) {
+        expect(selector.includes('+'), `${selector} colours by position`).toBe(false);
+      }
+    }
+  });
+
+  test('the type colours are the theme’s own, and only when tags are coloured', () => {
+    const d = derive(withWords(true, true));
+    const css = compile(withWords(true, true));
+    expect(css).toContain(`.blurb ul.required-tags .warnings {\n  color: ${d.tagColors.warning}`);
+    expect(css).toContain(`.blurb ul.required-tags .category {\n  color: ${d.tagColors.relationship}`);
+
+    // Four hues, four different colours — the whole point is telling a rating
+    // from a warning at a glance.
+    const used = new Set([
+      d.tagColors.warning,
+      d.tagColors.relationship,
+      d.tagColors.character,
+      d.tagColors.freeform,
+    ]);
+    expect(used.size).toBe(4);
+
+    // With "colour tags by type" off, the words inherit like any other text.
+    // A reader who asked for one colour scheme does not get four here either.
+    expect(compile(withWords(true, false))).not.toContain('.required-tags .warnings');
+  });
+
+  test('the words the control reveals are AO3’s, already in the mock', () => {
+    // Invariant 4, and the claim the feature rests on: this un-hides content
+    // rather than generating it. If the mock had to add the words, the control
+    // would be inventing them on AO3 too — and it cannot, because CSS has no
+    // way to know a work's rating.
+    const browse = mockBody('browse');
+    expect(browse).toContain('<ul class="required-tags">');
+    expect(browse).toContain('<span class="text">No Archive Warnings Apply</span>');
+    expect(browse).toContain('rating');
+    expect(browse).toContain('iswip');
+    // A work in progress and a completed one, so the status is a real signal
+    // in the preview rather than the same word four times.
+    expect(browse).toContain('Work in Progress');
+    expect(browse).toContain('Complete Work');
+    // AO3's own hiding, without which the control has nothing to undo.
+    expect(AO3_BASE_CSS).toContain('.blurb span.text { height: 0; width: 0;');
+    expect(AO3_BASE_CSS).toContain('.blurb .header { min-height: 55px;');
+
+    // And AO3's own source order, which decides a real cascade question: both
+    // selectors are (0,2,1), so the later `margin: 0` is the only thing keeping
+    // the icon block out of the 65px gutter it exists to create.
+    expect(AO3_BASE_CSS.indexOf('.blurb .header .heading, .blurb .header ul')).toBeLessThan(
+      AO3_BASE_CSS.indexOf('.blurb ul.required-tags { position: absolute;')
+    );
+  });
+
+  test('a stored theme cannot smuggle anything through the reading group', () => {
+    const restored = validateTheme(
+      { ...SAMPLE, reading: { requiredTagsAsText: 'yes please' } },
+      SAMPLE
+    );
+    expect(restored.reading.requiredTagsAsText).toBe(SAMPLE.reading.requiredTagsAsText);
+
+    const missing = validateTheme({ ...SAMPLE, reading: undefined }, SAMPLE);
+    expect(missing.reading.requiredTagsAsText).toBe(SAMPLE.reading.requiredTagsAsText);
+
+    const kept = validateTheme({ ...SAMPLE, reading: { requiredTagsAsText: true } }, SAMPLE);
+    expect(kept.reading.requiredTagsAsText).toBe(true);
+  });
 });
 
 // ── Ownership: the §4 defects, as regressions ─────────────────────────────
@@ -229,13 +555,34 @@ test.describe('region ownership', () => {
   test('no selector is given the same property twice', () => {
     // Defect 4.2: the prototype set background-color on #main in two rules,
     // and the later one silently ate the Page colour control.
-    const seen = new Map<string, string>();
-    for (const rule of compileRules(SAMPLE)) {
-      for (const selector of rule.selectors) {
-        for (const [property] of rule.decls) {
-          const key = `${selector} { ${property} }`;
-          expect(seen.has(key), `${key} is owned by two rules`).toBe(false);
-          seen.set(key, property);
+    //
+    // Run with every optional control ON as well as with the shipped defaults.
+    // A conditional block is exactly where a second owner hides: the rules are
+    // not emitted at all for most themes, so a duplicate would pass this test
+    // for every template in the catalog and still break the one skin whose
+    // owner had turned the control on.
+    const themes: [string, SiteSkinTheme][] = [
+      ['as shipped', SAMPLE],
+      [
+        'every control on',
+        {
+          ...SAMPLE,
+          shape: { ...SAMPLE.shape, tagColors: true },
+          reading: { requiredTagsAsText: true },
+          details: { divider: true, dropCap: true, scrollbar: true },
+        },
+      ],
+    ];
+
+    for (const [label, theme] of themes) {
+      const seen = new Map<string, string>();
+      for (const rule of compileRules(theme)) {
+        for (const selector of rule.selectors) {
+          for (const [property] of rule.decls) {
+            const key = `${selector} { ${property} }`;
+            expect(seen.has(key), `${label}: ${key} is owned by two rules`).toBe(false);
+            seen.set(key, property);
+          }
         }
       }
     }
@@ -319,7 +666,14 @@ test.describe('region ownership', () => {
       '#chapters .userstuff > p:first-of-type::first-letter',
     ];
 
-    const themed = { ...SAMPLE, details: { ...SAMPLE.details, divider: true, dropCap: true } };
+    // Every optional block on, so the conditional rules are inside the sweep
+    // rather than skipped by it. A required-tags rule lands in a listing, never
+    // inside a work, so it belongs on the loud side of this test.
+    const themed = {
+      ...SAMPLE,
+      reading: { requiredTagsAsText: true },
+      details: { ...SAMPLE.details, divider: true, dropCap: true },
+    };
     let counted = 0;
 
     for (const rule of compileRules(themed)) {
@@ -369,6 +723,354 @@ test.describe('region ownership', () => {
     // Chrome still shouts, or half the skin does nothing on a real page (§3b).
     expect(ruleFor('#header .primary')).toContain('!important');
     expect(css).toContain('background-color: #101725 !important'); // body
+  });
+});
+
+/**
+ * §18a. Seven of sixteen templates have a dark page, and until these rules
+ * landed AO3's own defaults left light-grey islands on every one of them: every
+ * button, every pagination number, every form field, every comment byline.
+ *
+ * The tests that matter here are not "is it painted" — that is one assertion —
+ * but the two decisions that are easy to undo by accident.
+ */
+test.describe('chrome regions', () => {
+  const DARK = cloneTheme(TEMPLATES.find(t => t.meta.category === 'dark') ?? TEMPLATES[0]);
+  const css = compile(DARK);
+  const d = derive(DARK);
+
+  test('buttons, fields, pagination, comments and autocomplete are all repainted', () => {
+    for (const selector of [
+      '#main .actions a',
+      '#main button',
+      '#main input',
+      '#main input:focus',
+      '#main .current',
+      '#main fieldset legend',
+      'li.comment',
+      '.comment h4.byline',
+      '.thread .even',
+      '.autocomplete .dropdown ul li',
+      '.autocomplete .dropdown ul li.selected',
+    ]) {
+      expect(css, selector).toContain(`${selector}`);
+    }
+    // None of AO3's greys survive on a dark theme.
+    expect(css).toContain(`background-color: ${d.controlBg}`);
+    expect(css).toContain(`background-color: ${d.commentAlt}`);
+    expect(css).toContain(`background-color: ${d.fieldBg}`);
+  });
+
+  test('the button rule kills AO3s gradient, not just its background colour', () => {
+    // 08-actions.css layers linear-gradient(#fff 2%, #ddd 95%, #bbb 100%) on TOP
+    // of background: #eee, plus four vendor-prefixed copies. A background-color
+    // alone leaves the white-to-grey gradient sitting over it, and the control
+    // looks like it does nothing — the same defect as the footer's red tile.
+    const buttonRule = css.split('\n\n').find(block => block.startsWith('#main .actions a,'))!;
+    expect(buttonRule).toBeDefined();
+    expect(buttonRule).toContain('background-image: none');
+  });
+
+  /**
+   * The decision most likely to be "simplified" back into a bug.
+   *
+   * §18a's table specifies bare `.actions a`, `button`, `input` — which is what
+   * AO3 itself uses and what the corpus uses. We cannot, because our
+   * declarations carry `!important`. AO3 exempts its own header and footer from
+   * the button cascade with ID-scoped rules at (1,0,1) that beat `.actions a` at
+   * (0,1,1) — but those exemptions are NOT `!important`, so a shouted bare
+   * selector from us defeats them and puts a button-coloured chip behind every
+   * header nav link and every footer link, on every page.
+   */
+  test('no control selector is emitted bare, or it would repaint the header and footer', () => {
+    const selectors = compileRules(DARK).flatMap(r => r.selectors);
+    for (const bare of [
+      '.actions a',
+      '.actions a:link',
+      '.actions button',
+      '.actions input',
+      '.actions label',
+      'button',
+      'input',
+      'textarea',
+      'select',
+      'input[type="submit"]',
+      '.current',
+      'fieldset legend',
+    ]) {
+      expect(selectors, `"${bare}" must be scoped to #main`).not.toContain(bare);
+    }
+    // And the scoped forms really are there, so this is not passing vacuously.
+    expect(selectors).toContain('#main .actions a');
+    expect(selectors).toContain('#main input');
+  });
+
+  test('the dashboard keeps its own current-item colour', () => {
+    // Two owners for two different affordances: #dashboard .current is a nav
+    // highlight, #main .current is a page number. They can never collide —
+    // #dashboard is a SIBLING of #main, not inside it — but a future reader
+    // seeing two `.current` rules should find the reason pinned rather than
+    // "fix" one of them away.
+    const rules = compileRules(DARK);
+    const dashboard = rules.find(r => r.selectors.includes('#dashboard .current'))!;
+    const pagination = rules.find(r => r.selectors.includes('#main .current'))!;
+    expect(dashboard.decls).toContainEqual(['background-color', d.border]);
+    expect(pagination.decls).toContainEqual(['background-color', d.accent]);
+  });
+
+  test('every control is watchable in the preview, and the comment thread sits outside the work', () => {
+    // Invariant 4. §14c is what forgetting it costs.
+    const browse = mockBody('browse');
+    expect(browse).toContain('class="actions"');
+    expect(browse).toContain('class="pagination actions"');
+    expect(browse).toContain('class="current"');
+    expect(browse).toContain('type="submit"');
+    // Rendered OPEN, or the .selected rule ships unverified — the same argument
+    // that put the header dropdown in the mock.
+    expect(browse).toContain('class="autocomplete"');
+    expect(browse).toContain('<li class="selected">');
+
+    const reading = mockBody('reading');
+    expect(reading).toContain('id="feedback"');
+    expect(reading).toContain('class="comment group even"');
+    expect(reading).toContain('h4 class="byline heading"');
+    expect(reading).toContain('<textarea');
+
+    // #feedback is a SIBLING of #work-skin, never a child. That is what makes
+    // `!important` safe on every comment rule: an author's work skin is scoped
+    // to #workskin by AO3 and cannot reach a comment, so there is no author to
+    // trample (§14b). Nesting it inside the work would quietly make that false.
+    const workSkinStart = reading.indexOf('id="work-skin"');
+    const feedbackStart = reading.indexOf('id="feedback"');
+    const workSkinEnd = reading.indexOf('</div>', reading.indexOf('id="chapters"'));
+    expect(workSkinStart).toBeGreaterThan(-1);
+    expect(feedbackStart).toBeGreaterThan(workSkinEnd);
+  });
+
+  test('every template still lints clean with the chrome rules', () => {
+    for (const template of TEMPLATES) {
+      expect(lintAo3Css(compile(template)), template.meta.name).toEqual([]);
+    }
+  });
+
+  /**
+   * The test that earns its place, and the one whose absence let a real bug
+   * through a green suite.
+   *
+   * `mixHex(a, b, weight)` keeps `weight` of the FIRST colour. The chrome
+   * colours were first written as `mixHex(surface, text, 0.1)` — which is 90%
+   * text — so on every dark template `controlBg` came out a light cream and
+   * then carried cream text on top of it. Invisible buttons, on seven of
+   * sixteen templates: defect §4.4 exactly, in a new region.
+   *
+   * Every assertion above still passed, because they compared the emitted value
+   * against `d.controlBg` and were therefore tautological. A derived colour is
+   * only meaningfully tested against a contrast floor.
+   *
+   * 4.5:1 is WCAG AA for body text, which is what a button label and a comment
+   * are. The byline and the comment body both sit on these, so both are checked.
+   */
+  for (const template of TEMPLATES) {
+    test(`${template.meta.name}: every chrome surface carries legible text`, () => {
+      const t = derive(template);
+      const surfaces: [string, string][] = [
+        ['controlBg (buttons, bylines, legends)', t.controlBg],
+        ['fieldBg (inputs, textareas)', t.fieldBg],
+        ['commentAlt (alternating comments)', t.commentAlt],
+      ];
+      for (const [name, bg] of surfaces) {
+        expect(contrastRatio(t.text, bg), `${name} ${bg} vs text ${t.text}`).toBeGreaterThanOrEqual(4.5);
+      }
+      // The hover and .current states swap to the accent with the header
+      // foreground on it — the same pairing the header already guarantees.
+      expect(contrastRatio(t.headerFg, t.accent), 'headerFg on accent').toBeGreaterThanOrEqual(WCAG_LARGE_MIN);
+      // And a button has to be distinguishable from the card it sits on, or the
+      // whole control is invisible in a different way.
+      expect(contrastRatio(t.controlBg, t.surface), 'controlBg vs surface').toBeGreaterThan(1.05);
+    });
+  }
+});
+
+/**
+ * §22. The region audit — the four page types out of nine that a real skin
+ * author screenshots and we had never styled.
+ *
+ * These tests exist in a particular shape because of how the gap was found. It
+ * was not found by looking at the preview: the preview showed three
+ * finished-looking states and would have gone on showing them indefinitely,
+ * because a region absent from `mockPage.ts` is not "not yet styled" — it is
+ * invisible, and invisible is indistinguishable from finished (§22d). It was
+ * found by reading AO3's own stylesheets.
+ *
+ * So half of what follows asserts things about `AO3_BASE_CSS` rather than about
+ * our compiler. Those are the tests that would have caught this.
+ */
+test.describe('listboxes, indexes and meta tables', () => {
+  const DARK = cloneTheme(TEMPLATES.find(t => t.meta.category === 'dark') ?? TEMPLATES[0]);
+  const css = compile(DARK);
+  const d = derive(DARK);
+
+  test('the mock carries AO3s real rules, not a summary of what we override', () => {
+    // §21b's lesson, and the reason this block is about AO3's CSS rather than
+    // ours: every one of these was missing until 17 Aug 2026, which is exactly
+    // why the preview could not show the gap. Transcribed verbatim from
+    // public/stylesheets/site/2.0/*.
+    expect(AO3_BASE_CSS).toContain('.listbox, fieldset fieldset.listbox');
+    expect(AO3_BASE_CSS).toContain('box-shadow: 0 0 0 1px #fff');   // 11, outer ring
+    expect(AO3_BASE_CSS).toContain('box-shadow: inset 1px 1px 3px #bbb'); // 11, inner bevel
+    expect(AO3_BASE_CSS).toContain('li.relationships a { background: #eee; }');
+    expect(AO3_BASE_CSS).toContain('.statistics .index li:nth-of-type(even)');
+    expect(AO3_BASE_CSS).toContain('background: #ededed');          // 10, dl.index dd
+    expect(AO3_BASE_CSS).toContain('.wrapper:has(> table, > .meta)');
+
+    // dl.meta's border was transcribed as #ddd for a year. AO3 says #ccc, and a
+    // mock one shade kinder than the real page is a mock that flatters us.
+    expect(AO3_BASE_CSS).toContain('dl.meta { border: 1px solid #ccc;');
+    expect(AO3_BASE_CSS).not.toContain('dl.meta { border: 1px solid #ddd;');
+  });
+
+  test('every region the audit named is watchable in the preview', () => {
+    // Invariant 4. Four of AO3's nine screenshot-worthy page types are reached
+    // through the profile, so the Dashboard state is where they belong — a
+    // fourth preview tab would cost a tab and prove nothing extra.
+    const dashboard = mockBody('dashboard');
+    expect(dashboard).toContain('class="fandom listbox group"');
+    expect(dashboard).toContain('class="work listbox group"');
+    expect(dashboard).toContain('class="index group"');
+    expect(dashboard).toContain('class="subscription index group"');
+    expect(dashboard).toContain('class="statistics index group"');
+    // The listbox pattern is an outer box holding an inner panel, and the
+    // polarity of that pair is the decision most easily undone by accident. A
+    // mock with only one of the two cannot show it at all.
+    expect(dashboard).toMatch(/class="work listbox group"[\s\S]*class="index group"/);
+
+    // AO3's meta pattern: "meta is always wrapped in <div class='wrapper'>",
+    // which is what 10-types-groups hangs its grey halo off.
+    expect(mockBody('reading')).toMatch(/<div class="wrapper">\s*<dl class="work meta group">/);
+
+    // And the chip §22c is about is already in every listing in the mock.
+    expect(mockBody('browse')).toContain('<li class="relationships">');
+  });
+
+  test('the listbox pair keeps AO3s polarity: outer is the page, inner is the card', () => {
+    // AO3 paints the outer box #ddd and the inner panel #fff — outer darker,
+    // inner lighter, inner reads as the card. Painting both `surface` would
+    // flatten a distinction AO3 is using to separate a container from its
+    // contents, and would look right in a diff.
+    const rules = compileRules(DARK);
+    const outer = rules.find(r => r.selectors.includes('.listbox'))!;
+    const inner = rules.find(r => r.selectors.includes('.listbox .index'))!;
+    expect(outer.decls).toContainEqual(['background-color', d.background]);
+    expect(inner.decls).toContainEqual(['background-color', d.surface]);
+    expect(d.background).not.toBe(d.surface);
+    expect(outer.decls).toContainEqual(['border-color', d.border]);
+  });
+
+  test('both of AO3s listbox shadows are killed, not just its colours', () => {
+    // Same defect as the footer's red tile and the buttons' gradient: AO3 lays
+    // a white 1px ring OUTSIDE the outer box and a grey bevel INSIDE the panel,
+    // and a background colour reaches neither. This is the first box-shadow the
+    // compiler emits — §18b's card elevation must extend these two rules rather
+    // than adding new ones, or invariant 1 breaks the moment both ship.
+    for (const selector of ['.listbox', '.listbox .index', '.wrapper:has(> table, > .meta)']) {
+      const rule = compileRules(DARK).find(r => r.selectors.includes(selector));
+      expect(rule, `${selector} is unowned`).toBeDefined();
+      expect(rule!.decls, selector).toContainEqual(['box-shadow', 'none']);
+    }
+    const shadows = compileRules(DARK).filter(r => r.decls.some(([p]) => p === 'box-shadow'));
+    expect(shadows).toHaveLength(3);
+  });
+
+  test('the listbox heading is deliberately unowned, and this is why', () => {
+    // §22e listed `.listbox > .heading` for the text colour. It is not emitted,
+    // because it would be a rule that loses to another of OURS on every page it
+    // could apply to: every listbox on the archive is inside #main, our
+    // `#main .heading` accent rule is (1,1,0), and `.listbox > .heading` is
+    // (0,2,0). Both carry !important, so specificity decides and the accent
+    // wins. AO3's own #2a2a2a is already beaten by the same rule.
+    //
+    // A dead declaration that reads like a working one is worse than a missing
+    // one, so the omission is pinned rather than left to be "fixed" back in.
+    expect(css).not.toContain('.listbox > .heading');
+    expect(css).toContain('#main .heading');
+  });
+
+  test('the relationship chip goes, whether or not tags are coloured', () => {
+    // §22c, a regression rather than a gap. AO3 gives every relationship tag in
+    // every listing a pale grey chip; our "colour tags by type" control set the
+    // tag's TEXT colour and left the chip, so thirteen templates rendered
+    // tinted text on a light pill — worse than the accent it replaced.
+    for (const tagColors of [true, false]) {
+      const out = compile({ ...DARK, shape: { ...DARK.shape, tagColors } });
+      expect(out, `tagColors: ${tagColors}`).toContain('li.relationships a {');
+      expect(out, `tagColors: ${tagColors}`).toContain('background-color: transparent');
+    }
+  });
+
+  test('the chip rule still loses to the tag hover, so hovering paints', () => {
+    // `a.tag:hover` is (0,2,1); `li.relationships a` is (0,1,2). Both shout, so
+    // specificity decides and hover wins. That is the whole reason this is one
+    // declaration rather than a hover pair of its own — and it is the kind of
+    // thing that is true today and quietly false after a selector is "tidied".
+    const rules = compileRules(DARK);
+    const chip = rules.find(r => r.selectors.includes('li.relationships a'))!;
+    const hover = rules.find(r => r.selectors.includes('a.tag:hover'))!;
+    expect(chip.authorWins).toBeUndefined();
+    expect(hover.authorWins).toBeUndefined();
+    expect(hover.decls).toContainEqual(['background-color', d.accent]);
+    // And the chip does not try to own a hover of its own.
+    expect(rules.some(r => r.selectors.some(s => s.startsWith('li.relationships a:')))).toBe(false);
+  });
+
+  test('dl.meta is owned; its unused "wrapped data" mod is not', () => {
+    // §22e's row named `dl.meta .wrapper` too. Grepping every template in
+    // otwarchive master for `wrapper` finds thirty-three, and every one is the
+    // div AO3 wraps AROUND a meta list — works/_meta, stats/index,
+    // profile/show, series/show, collection_profile/show. None is inside a
+    // dl.meta. 12-group-meta's rule styles markup the archive does not render,
+    // so emitting it would put a permanently dead declaration in the stylesheet
+    // every user pastes.
+    expect(css).toContain('dl.meta {');
+    expect(css).not.toContain('dl.meta .wrapper');
+
+    // The wrapper AO3 *does* render is the one carrying the grey halo, and that
+    // is owned — on the work page and on the four other pages that use it.
+    expect(css).toContain('.wrapper:has(> table, > .meta)');
+  });
+
+  test('the index and statistics shadings reuse the comment colour', () => {
+    // Same job — making a long list of paired data readable — so the same
+    // colour rather than a third one that has to be kept in step by hand.
+    const rule = compileRules(DARK).find(r => r.selectors.includes('dl.index dd'))!;
+    expect(rule.decls).toContainEqual(['background-color', d.commentAlt]);
+    expect(rule.selectors).toContain('.statistics .index li:nth-of-type(even)');
+    expect(css).toContain('dl.meta');
+  });
+
+  for (const template of TEMPLATES) {
+    test(`${template.meta.name}: the listbox pair is still two visible surfaces`, () => {
+      // The polarity argument only holds if page and card are actually
+      // different colours. If a template ever set them equal — which nothing
+      // forbids — the outer box would vanish into the page and AO3's
+      // container-versus-contents distinction would be lost, silently, on
+      // Profile, Collections, Own works and the filter sidebar at once.
+      //
+      // A ratio rather than an inequality, for the reason §18a's chrome test
+      // learned the hard way: two hex strings can differ and be
+      // indistinguishable. 1.05 is the same floor `controlBg vs surface` uses.
+      const t = derive(template);
+      expect(contrastRatio(t.background, t.surface), 'page vs card').toBeGreaterThan(1.05);
+    });
+  }
+
+  test('every template still lints clean with the region rules', () => {
+    // box-shadow is the one property here the compiler had never emitted, and
+    // it only became legal when §17's corrections landed. The gate has to prove
+    // every declaration shape we ship, so a catalog that stopped linting would
+    // mean sixteen templates failing at save time rather than one.
+    for (const template of TEMPLATES) {
+      expect(lintAo3Css(compile(template)), template.meta.name).toEqual([]);
+    }
   });
 });
 

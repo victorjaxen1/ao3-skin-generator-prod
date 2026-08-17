@@ -80,6 +80,21 @@ export function derive(theme: SiteSkinTheme) {
       ? '#241f20'
       : readableOn(accent);
 
+  // The header gradient runs accent → headerDeep, so it needs no colour the
+  // theme does not already imply and cannot drift away from the accent.
+  //
+  // Both stops are literal hex by the time they are emitted, for the same
+  // reason everything else here is: AO3 has no color-mix(). And the whole
+  // function is legal because AO3 routes any token containing `gradient` to
+  // sanitize_css_gradient rather than to the value grammar — the branch §17
+  // (Correction 5) found. Before that landed, our own lint refused this.
+  const headerDeep = mixHex(accent, '#000000', 0.75);
+  const gradientAngle: Record<string, string> = { vertical: '180deg', diagonal: '135deg' };
+  const headerGradient =
+    theme.header.gradient === 'none'
+      ? ''
+      : `linear-gradient(${gradientAngle[theme.header.gradient]}, ${accent}, ${headerDeep})`;
+
   return {
     accent,
     surface,
@@ -88,10 +103,38 @@ export function derive(theme: SiteSkinTheme) {
     /** Legible on the accent-painted header. Fixes plan §4.4. */
     headerFg,
     /** A darker accent for the header's edge and its dropdown panels. */
-    headerDeep: mixHex(accent, '#000000', 0.75),
+    headerDeep,
+    /** The header's gradient layer, or '' when the control is off. */
+    headerGradient,
     /** Card edges: the accent, mostly dissolved into the card. */
     border: mixHex(accent, surface, 0.27),
     tagBorder: mixHex(accent, surface, 0.45),
+    /**
+     * A button sits slightly proud of the card it is on — in either polarity,
+     * which is why it mixes toward the TEXT colour rather than toward white or
+     * black. On a dark theme that lightens; on a light theme it darkens; the
+     * control reads as raised either way without a second control to say so.
+     *
+     * **Note the argument order.** `mixHex(a, b, weight)` keeps `weight` of the
+     * FIRST colour, so "surface nudged 10% toward text" is
+     * `mixHex(text, surface, 0.1)` — not `mixHex(surface, text, 0.1)`, which is
+     * 90% text and produces a cream button carrying cream text on every dark
+     * theme. That inversion was written here first and survived a green test
+     * suite, because the tests compared the emitted value against `d.controlBg`
+     * rather than against a contrast floor. The floor is asserted now.
+     */
+    controlBg: mixHex(text, surface, 0.1),
+    /** A visible edge on that button, without becoming a second accent. */
+    controlBorder: mixHex(text, surface, 0.25),
+    /**
+     * A form field reads as *recessed*, and the page colour inside a card is
+     * exactly that — so this needs no maths of its own. It is the one derived
+     * value here that is just another name for something the theme already has,
+     * and it is named anyway so the ownership table can point at it.
+     */
+    fieldBg: background,
+    /** AO3's alternating comment shading, at our contrast rather than #eee. */
+    commentAlt: mixHex(text, surface, 0.05),
     /**
      * The scrollbar thumb. Further toward the accent than a card edge, because
      * a scrollbar is a thing you aim at rather than a boundary you notice.
@@ -152,16 +195,37 @@ function buildRules(theme: SiteSkinTheme): Rule[] {
   });
 
   // ── Header ──────────────────────────────────────────────────────────────
-  // The banner sits on #header with the accent underneath it as a fallback,
-  // so a slow or dead image degrades to the theme colour rather than to white.
+  // Three things can paint the header, and they stack rather than compete:
+  // the banner on top, the gradient beneath it, the flat accent beneath both.
+  //
+  // Layer order in a `background-image` list is paint order — first is
+  // frontmost — so listing them this way means each one is the fallback for
+  // the one above it. A banner that is slow, deleted or blocked degrades to
+  // the gradient; a theme with no gradient degrades to the accent. That is a
+  // better version of what this comment used to promise, which was degrading
+  // to the theme colour rather than to white.
+  //
+  // Both layers live in ONE declaration on purpose. Two rules setting
+  // `background-image` on `#header` would be defect §4.2 again — equal
+  // specificity, later wins, and the first control silently stops working.
+  // Invariant 1 is one owner per (selector, property), not per control.
   const banner = theme.header.bannerUrl.trim();
+  const headerLayers = [
+    ...(banner ? [`url("${banner}")`] : []),
+    ...(d.headerGradient ? [d.headerGradient] : []),
+  ];
   rules.push({
     selectors: ['#header'],
     decls: [
       ['background-color', d.accent],
+      ...(headerLayers.length
+        ? ([['background-image', headerLayers.join(', ')]] as [string, string][])
+        : []),
+      // Emitted only for a banner: a gradient already fills its box. When both
+      // layers are present these apply to both, which is harmless — `cover` and
+      // `no-repeat` are what a gradient does anyway.
       ...(banner
         ? ([
-            ['background-image', `url("${banner}")`],
             ['background-position', 'center'],
             ['background-repeat', 'no-repeat'],
             ['background-size', 'cover'],
@@ -202,10 +266,17 @@ function buildRules(theme: SiteSkinTheme): Rule[] {
   // tiled texture image, so painting only #header leaves AO3's red strip in
   // place on every theme (§4.9). Separate rule, and no border of its own —
   // #header's bottom edge already sits directly below it.
+  //
+  // Under a gradient it goes transparent rather than flat. An opaque accent
+  // strip laid across a fading header is a visible band, and the header stops
+  // reading as one surface — which is the whole point of the control.
+  // `background-image: none` stays in both cases: it is what removes AO3's
+  // tile, and without it the strip keeps its texture no matter what colour
+  // sits underneath.
   rules.push({
     selectors: ['#header .primary'],
     decls: [
-      ['background-color', d.accent],
+      ['background-color', d.headerGradient ? 'transparent' : d.accent],
       ['background-image', 'none'],
     ],
   });
@@ -345,6 +416,386 @@ function buildRules(theme: SiteSkinTheme): Rule[] {
       });
     }
   }
+
+  // ── Reading: required tags as words ─────────────────────────────────────
+  //
+  // AO3 renders a work's rating, warnings, category and completion status as
+  // four sprite icons in a 2×2 block at the left of every blurb. The words are
+  // already in the DOM — `tags_helper.rb#get_symbols_for` emits
+  // `<span class="text">General Audiences</span>` inside each — and
+  // 13-group-blurb.css then hides them with `height: 0; width: 0;
+  // font-size: 0.001em; color: transparent` and paints a sprite over the outer
+  // span. So none of what follows invents content: it undoes the hiding.
+  //
+  // Which is why this is the accessibility control rather than a decoration.
+  // The icons are legible to a reader who has memorised them and to nobody
+  // else; everyone else hovers for a `title` tooltip, which is not available at
+  // all on a phone.
+  //
+  // **The inner span classes are the target, never `li+li+li`.** AO3 gives the
+  // `li`s no class and positions them by adjacency, so the corpus's version of
+  // this hangs its offsets off `li+li+li` and breaks the moment a reader's font
+  // size differs from the author's. `.rating`, `.warnings`, `.category` and
+  // `.iswip` are on the inner spans and are stable.
+  if (theme.reading.requiredTagsAsText) {
+    // Out of the absolutely-positioned icon block and back into the flow.
+    rules.push({
+      selectors: ['.blurb ul.required-tags'],
+      decls: [
+        ['position', 'static'],
+        ['width', 'auto'],
+      ],
+    });
+
+    // AO3 sizes all three levels to the 25px sprite. `display: inline` rather
+    // than `inline-block` so a long warning phrase wraps like text instead of
+    // holding a rigid box open.
+    rules.push({
+      selectors: [
+        '.blurb ul.required-tags li',
+        '.blurb ul.required-tags li a',
+        '.blurb ul.required-tags li span',
+      ],
+      decls: [
+        ['display', 'inline'],
+        ['height', 'auto'],
+        ['width', 'auto'],
+      ],
+    });
+
+    // One rule, not two. AO3 positions the third `li` with `li+li+li` and the
+    // fourth with `li+li+li+li` — but `li+li+li` matches the fourth as well
+    // (it is preceded by two `li`s), and every declaration here carries
+    // `!important`, which beats AO3's more specific fourth rule outright. A
+    // second selector for the fourth would be a redundant owner of `top`.
+    rules.push({
+      selectors: ['.blurb ul.required-tags li + li + li'],
+      decls: [
+        ['left', 'auto'],
+        ['position', 'static'],
+        ['top', 'auto'],
+      ],
+    });
+
+    // Separate owner from the `display/height/width` rule above, because this
+    // one is about the *text* AO3 hid rather than the box it hid it in.
+    rules.push({
+      selectors: ['.blurb span.text'],
+      decls: [
+        ['color', 'inherit'],
+        ['font-size', '1em'],
+      ],
+    });
+
+    // The sprite itself. Without this the icon is still painted, now behind
+    // the words — the same defect as the footer's red tile (§4.6).
+    rules.push({
+      selectors: ['.blurb ul.required-tags li span'],
+      decls: [['background-image', 'none']],
+    });
+
+    // Space between the four phrases, or they run together as one sentence.
+    rules.push({
+      selectors: ['.blurb ul.required-tags li'],
+      decls: [['padding-right', '1em']],
+    });
+
+    // AO3 reserves the left 65px of every blurb header for the icon block and
+    // gives the header a 55px floor to fit it. Both are dead space once the
+    // block is gone, and leaving them turns the control into "the icons became
+    // words and the layout stayed wrong".
+    //
+    // `margin-left`, not the `margin` shorthand AO3 uses: a longhand with
+    // `!important` overrides that one component and leaves the other three
+    // alone. (It is also an allowed property — it contains `margin`, §3.)
+    rules.push({
+      selectors: ['.blurb .header .heading', '.blurb .header ul'],
+      decls: [['margin-left', '0']],
+    });
+
+    rules.push({
+      selectors: ['.blurb .header'],
+      decls: [['min-height', '0']],
+    });
+
+    // And now the part nobody else's version of this has: the words are
+    // theme-aware.
+    //
+    // Two of the four mappings are exact — a warning is a warning, and AO3's
+    // categories (F/M, Gen, Multi) are relationship shapes. The other two are
+    // assignments rather than derivations, chosen so that all four are told
+    // apart at a glance: the rating takes the character hue because it reads as
+    // informational, and the completion status takes the freeform hue because
+    // "Complete Work" in green is the reading a reader already expects. Said
+    // plainly here rather than dressed up as semantics.
+    if (theme.shape.tagColors) {
+      const REQUIRED_TAG_COLORS: [selector: string, color: string][] = [
+        ['.blurb ul.required-tags .rating', d.tagColors.character],
+        ['.blurb ul.required-tags .warnings', d.tagColors.warning],
+        ['.blurb ul.required-tags .category', d.tagColors.relationship],
+        ['.blurb ul.required-tags .iswip', d.tagColors.freeform],
+      ];
+      for (const [selector, color] of REQUIRED_TAG_COLORS) {
+        rules.push({ selectors: [selector], decls: [['color', color]] });
+      }
+    }
+  }
+
+  // ── Chrome: buttons, fields, pagination, comments ───────────────────────
+  //
+  // Seven of our sixteen templates have a dark page, and on every one of them
+  // AO3's own defaults left light-grey islands we never repainted: every
+  // button (Post, Comment, Kudos, Subscribe, Sort & Filter), every pagination
+  // number, every search and comment box, every comment byline. A reader
+  // installs Neon Terminal, opens a work, and the comment button is 2010 grey.
+  // That reads as the skin being half-finished, because it was.
+  //
+  // **Everything here is scoped to `#main`, and §18a's table is not.** That is a
+  // deliberate departure, and the reason is our own `!important`. AO3 styles its
+  // buttons with a bare `.actions a, .actions button, …` in 08-actions.css, and
+  // then *exempts* the header and the footer from it with ID-scoped rules —
+  // `#header a, #header fieldset, … { background: transparent }` at (1,0,1) and
+  // `#footer a, #footer button { background: transparent }` at (1,0,1), both of
+  // which beat `.actions a` at (0,1,1) on the real page.
+  //
+  // Emitting the bare selector the way the corpus does would break both
+  // exemptions, because our declaration carries `!important` and AO3's does not
+  // — so a shouted (0,1,1) beats a quiet (1,0,1). The visible result would be a
+  // button-coloured chip behind every header nav link and every footer link, on
+  // every page. Scoping to `#main` keeps AO3's own structure intact: the header
+  // and footer are already owned by the rules above, and every control §18a is
+  // actually about — pagination, comment boxes, filter forms, work actions —
+  // lives inside `#main` anyway.
+  //
+  // None of these can land inside a work. Comments live in `#feedback`, which is
+  // a sibling of `#work-skin`, so §14b's authorWins question does not arise.
+  const CONTROL_SELECTORS = [
+    '#main .actions a',
+    '#main .actions a:link',
+    '#main .action',
+    '#main .action:link',
+    '#main .actions button',
+    '#main .actions input',
+    '#main input[type="submit"]',
+    '#main button',
+    '#main .actions label',
+  ];
+  rules.push({
+    selectors: CONTROL_SELECTORS,
+    decls: [
+      ['background-color', d.controlBg],
+      // Load-bearing, not tidiness. 08-actions.css layers
+      // `linear-gradient(#fff 2%, #ddd 95%, #bbb 100%)` (plus four
+      // vendor-prefixed copies) ON TOP of `background: #eee`. A background-color
+      // alone leaves that white-to-grey gradient sitting over it and the control
+      // looks like it does nothing — the same defect as the footer's red tile.
+      ['background-image', 'none'],
+      ['border-color', d.controlBorder],
+      ['color', d.text],
+    ],
+  });
+
+  rules.push({
+    selectors: [
+      '#main .actions a:hover',
+      '#main .actions a:focus',
+      '#main .actions button:hover',
+      '#main .actions button:focus',
+      '#main .actions input:hover',
+      '#main .actions input:focus',
+      '#main .action:hover',
+      '#main .action:focus',
+    ],
+    decls: [
+      ['background-color', d.accent],
+      ['color', d.headerFg],
+    ],
+  });
+
+  // Pagination's current page. `#dashboard .current` is a separate owner above
+  // and stays that way — the dashboard's current item is a nav highlight, this
+  // is a page number, and the dashboard is a sibling of #main rather than
+  // inside it, so the two selectors can never meet.
+  rules.push({
+    selectors: ['#main .current', '#main a.current', '#main .current a', '#main .current a:visited'],
+    decls: [
+      ['background-color', d.accent],
+      ['color', d.headerFg],
+    ],
+  });
+
+  // A field is the page colour inside a card: recessed rather than raised.
+  // `.actions input` above is a submit button and outranks this at (1,1,1),
+  // which is what keeps a button from being painted like a text box.
+  rules.push({
+    selectors: ['#main input', '#main textarea', '#main select'],
+    decls: [
+      ['background-color', d.fieldBg],
+      ['border-color', d.controlBorder],
+      ['color', d.text],
+    ],
+  });
+
+  // Kills AO3's `input:focus { background: #f3efec }` — a cream flash on a
+  // black theme, which is the most jarring half-second in the product.
+  rules.push({
+    selectors: ['#main input:focus', '#main textarea:focus', '#main select:focus'],
+    decls: [['background-color', d.fieldBg]],
+  });
+
+  rules.push({
+    selectors: ['#main .filters dt', '#main fieldset legend', '#main form.verbose legend'],
+    decls: [
+      ['background-color', d.controlBg],
+      ['color', d.text],
+    ],
+  });
+
+  // ── Comments ────────────────────────────────────────────────────────────
+  rules.push({
+    selectors: ['li.comment', 'div.comment'],
+    decls: [
+      ['background-color', d.surface],
+      ['border-color', d.border],
+    ],
+  });
+
+  rules.push({
+    selectors: ['.comment h4.byline'],
+    decls: [
+      ['background-color', d.controlBg],
+      ['color', d.text],
+    ],
+  });
+
+  rules.push({
+    selectors: ['.thread .even'],
+    decls: [['background-color', d.commentAlt]],
+  });
+
+  // ── Listboxes, indexes and meta tables ──────────────────────────────────
+  //
+  // §22. A published skin advertises itself with nine screenshots — Main,
+  // Profile, Footer, Filters, Forms, Works, Comments, Collections, Own works —
+  // and an audit of every selector we can emit against AO3's own stylesheets
+  // said we covered five of them. The four we did not all failed through the
+  // same construct: `.listbox`, which is what AO3 wraps a profile's Fandoms,
+  // Works, Series and Bookmarks sections in, and the filter sidebar, and every
+  // collection listing. On a dark template each one was a light-grey box
+  // holding a white panel — §18a's defect, one region deeper.
+  //
+  // **The polarity of the pair is deliberate.** AO3 paints the outer box #ddd
+  // and the inner panel #fff: outer darker, inner lighter, inner reads as the
+  // card. Mapping outer → `background` and inner → `surface` keeps that
+  // relationship in either polarity and reuses the two colours the Page and
+  // Cards controls already mean. Painting both `surface` would flatten a
+  // distinction AO3 is using to separate a container from its contents.
+  //
+  // **`box-shadow: none` is load-bearing**, for the same reason
+  // `background-image: none` is on the footer and the buttons: 11-group-listbox
+  // lays a white 1px ring *outside* the box and a grey bevel *inside* the panel,
+  // and neither is reachable by a background colour. These are the first
+  // `box-shadow` declarations the compiler emits, so §18b's card-elevation
+  // control must add its shadows to *these* rules rather than to new ones —
+  // otherwise invariant 1 breaks the moment both ship.
+  rules.push({
+    selectors: ['.listbox'],
+    decls: [
+      ['background-color', d.background],
+      ['border-color', d.border],
+      ['box-shadow', 'none'],
+    ],
+  });
+
+  rules.push({
+    selectors: ['.listbox .index'],
+    decls: [
+      ['background-color', d.surface],
+      ['box-shadow', 'none'],
+    ],
+  });
+
+  // §22e also listed `.listbox > .heading` for the text colour, and it is
+  // deliberately absent. AO3's `.listbox > .heading { color: #2a2a2a }` is
+  // (0,2,0) and every listbox on the archive lives inside `#main`, where our
+  // own `#main .heading` accent rule is (1,1,0) and already beats it. Emitting
+  // the row would add a rule that loses to another of ours on every page it
+  // could apply to — a dead declaration that reads like a working one. The
+  // heading is accent-coloured, like every other heading in `#main`.
+
+  // AO3's `.wrapper:has(> table, > .meta)` puts a grey halo around the work
+  // metadata table on every work page. Low priority in the audit only because
+  // nothing in the preview rendered a `.wrapper` around a `dl.meta`; the mock
+  // does now, which is what turned it from invisible into a visible grey ring
+  // on seven dark templates (§22d).
+  rules.push({
+    selectors: ['.wrapper:has(> table, > .meta)'],
+    decls: [['box-shadow', 'none']],
+  });
+
+  // The work metadata table's own edge — on every work page, and on Profile,
+  // Series, Collections and Stats besides.
+  //
+  // §22e's row also named `dl.meta .wrapper`, AO3's "wrapped data" mod, and it
+  // is deliberately absent. Grepping every template in otwarchive `master` for
+  // `wrapper` finds thirty-three, and **every one of them is the div AO3 wraps
+  // *around* a meta list** — `works/_meta`, `stats/index`, `profile/show`,
+  // `series/show`, `collection_profile/show`. Not one is inside a `dl.meta`. So
+  // 12-group-meta's `dl.meta .wrapper` styles markup the archive does not
+  // currently render, and emitting it would put a declaration in every user's
+  // pasted stylesheet that can never match anything.
+  rules.push({
+    selectors: ['dl.meta'],
+    decls: [['border-color', d.border]],
+  });
+
+  // The alternating shading AO3 uses to make a long list of paired data
+  // readable — #ededed on an index's values, #eee on the statistics page's even
+  // rows. Same job as the comment thread's, so it takes the same colour rather
+  // than a third one that would have to be kept in step by hand.
+  rules.push({
+    selectors: ['dl.index dd', '.statistics .index li:nth-of-type(even)'],
+    decls: [['background-color', d.commentAlt]],
+  });
+
+  // §22c — the regression, not a gap. `li.relationships a { background: #eee }`
+  // gives every relationship tag in every listing a pale grey chip, and our
+  // "colour tags by type" control sets that tag's TEXT colour and leaves the
+  // chip alone. So on a dark theme thirteen templates rendered a light pill
+  // carrying tinted text — a worse result than the accent it replaced, in the
+  // feature §13 shipped to make listings more readable.
+  //
+  // Unconditional, because the grey chip is wrong on a dark theme whether or
+  // not the reader turned tag colours on. `transparent` rather than a colour:
+  // whatever the tag is sitting on — a blurb, a listbox panel, the page — is
+  // already ours, and naming one of them here would be a second owner for it.
+  //
+  // Loses to `a.tag:hover` (0,2,1) at (0,1,2), so hovering still paints the
+  // accent. That is the reason this is one declaration and not a hover pair.
+  rules.push({
+    selectors: ['li.relationships a'],
+    decls: [['background-color', 'transparent']],
+  });
+
+  // ── Autocomplete ────────────────────────────────────────────────────────
+  // Not scoped to #main: AO3 attaches the dropdown next to the field it serves,
+  // and a tag field can appear outside the main region. Nothing else of ours
+  // targets `.autocomplete`, so there is no exemption to preserve here.
+  rules.push({
+    selectors: ['.autocomplete .dropdown ul li'],
+    decls: [
+      ['background-color', d.surface],
+      ['color', d.text],
+    ],
+  });
+
+  rules.push({
+    selectors: ['.autocomplete .dropdown ul li.selected'],
+    decls: [
+      ['background-color', d.accent],
+      ['color', d.headerFg],
+    ],
+  });
 
   // ── Scrollbar ───────────────────────────────────────────────────────────
   // AO3 validates declarations, not selectors — `clean_css_code` only ever

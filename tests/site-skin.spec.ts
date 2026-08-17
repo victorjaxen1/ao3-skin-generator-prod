@@ -266,6 +266,208 @@ test('tags coloured by type reach the preview, in both AO3 markups', async ({ pa
   expect(css).not.toContain('dd.freeform');
 });
 
+/**
+ * §18c-2. AO3 renders a work's rating, warnings, category and status as four
+ * sprite icons, and puts the real words in the DOM hidden behind them. This is
+ * the control that shows the words — the one item on this roadmap that makes
+ * the archive more usable rather than better looking.
+ *
+ * Read from the browser rather than from our string, because "the rule was
+ * emitted" and "the words are visible" are different claims: AO3 hides them
+ * with four separate declarations across three selectors, and missing any one
+ * leaves text that is transparent, or 0.001em tall, or trapped in a 25px box.
+ */
+test('required tags become words a reader can actually read', async ({ page }) => {
+  await openEditor(page); // Moonlit Library — ships with the control off.
+  const frame = page.frameLocator('iframe[title="Site skin preview"]');
+
+  const words = frame.locator('.blurb ul.required-tags .warnings .text').first();
+  const wordStyle = () =>
+    words.evaluate(el => {
+      const s = getComputedStyle(el);
+      const box = el.getBoundingClientRect();
+      return { color: s.color, fontSize: parseFloat(s.fontSize), width: box.width };
+    });
+
+  // AO3's own hiding, reproduced faithfully in the mock: transparent text at
+  // one thousandth of an em. Without this half of the test the control could
+  // "work" against a mock that was never hiding anything.
+  const hidden = await wordStyle();
+  expect(hidden.color).toBe('rgba(0, 0, 0, 0)');
+  // AO3 asks for 0.001em; Chrome reports 6px, because it refuses to compute a
+  // font smaller than its own minimum. Which is the reason AO3 also paints the
+  // text transparent and collapses the box — and the reason this control has to
+  // undo all three rather than any one of them.
+  expect(hidden.fontSize).toBeLessThan(8);
+  // 25px, not 0: AO3's `.required-tags li span` rule is more specific than its
+  // own `.blurb span.text { width: 0 }`, so the words are clamped to the icon
+  // box rather than collapsed. Either way there is nothing readable in there.
+  expect(hidden.width).toBeLessThanOrEqual(25);
+
+  await page.getByRole('switch', { name: 'Required tags as words' }).click();
+
+  await expect.poll(async () => (await wordStyle()).fontSize).toBeGreaterThan(10);
+  const shown = await wordStyle();
+  expect(shown.color).not.toBe('rgba(0, 0, 0, 0)');
+  expect(shown.width).toBeGreaterThan(50);
+
+  // The sprite has to go with it, or the words sit on top of the icon.
+  const sprite = await frame
+    .locator('.blurb ul.required-tags .warnings')
+    .first()
+    .evaluate(el => getComputedStyle(el).backgroundImage);
+  expect(sprite).toBe('none');
+
+  // And the 65px AO3 reserved beside the icons is given back to the title.
+  const headerMargin = await frame
+    .locator('.blurb .header .heading')
+    .first()
+    .evaluate(el => getComputedStyle(el).marginLeft);
+  expect(headerMargin).toBe('0px');
+
+  const css = await exportedCss(page);
+  expect(css).toContain('.blurb ul.required-tags');
+  expect(css).toContain('background-image: none');
+  // Identified by class, never by position — the corpus add-on's `li+li+li`
+  // offsets are tuned to one person's font size and break for everyone else.
+  expect(css).toContain('.required-tags .warnings');
+});
+
+/**
+ * §18a. Until these rules landed, a reader could install a black theme and find
+ * every button, pagination number, form field and comment byline still wearing
+ * AO3's 2010 grey. It read as the skin being half-finished, because it was.
+ *
+ * Computed style rather than string matching, because every interesting
+ * question here is a cascade question: our rules have to beat AO3's defaults in
+ * `#main`, and — the part that is easy to get wrong — must NOT beat AO3's own
+ * header and footer exemptions.
+ */
+test('AO3s grey chrome is repainted, and the header and footer are spared', async ({ page }) => {
+  await openEditor(page); // Moonlit Library — a dark page, so grey is obvious.
+  const frame = page.frameLocator('iframe[title="Site skin preview"]');
+
+  const style = (selector: string, property: 'backgroundColor' | 'backgroundImage') =>
+    frame
+      .locator(selector)
+      .first()
+      .evaluate((el, p) => getComputedStyle(el)[p as 'backgroundColor'], property);
+
+  const AO3_BUTTON_GREY = 'rgb(238, 238, 238)';
+  const AO3_BYLINE_GREY = 'rgb(221, 221, 221)';
+  const TRANSPARENT = 'rgba(0, 0, 0, 0)';
+
+  // The button. AO3 lays a white-to-grey gradient OVER its #eee, so killing the
+  // colour without the image leaves the control looking untouched — the same
+  // defect as the footer's red tile in §4.6.
+  const buttonBg = await style('#main .actions a', 'backgroundColor');
+  expect(buttonBg).not.toBe(AO3_BUTTON_GREY);
+  expect(await style('#main .actions a', 'backgroundImage')).toBe('none');
+  expect(await style('#main input[type="submit"]', 'backgroundColor')).toBe(buttonBg);
+
+  // A field is the PAGE colour — recessed inside the card, not raised like a
+  // button — so it must differ from both the button and AO3's white.
+  const fieldBg = await style('#main #tag_search', 'backgroundColor');
+  expect(fieldBg).not.toBe('rgb(255, 255, 255)');
+  expect(fieldBg).not.toBe(buttonBg);
+
+  // The scoping decision, and the only place it can be verified. §18a's table
+  // specifies a bare `.actions a`; we emit `#main .actions a` because AO3
+  // exempts its own header and footer from the button cascade with ID-scoped
+  // rules that are NOT !important — so a bare selector from us would defeat
+  // them and put a button chip behind every nav link on the site.
+  expect(await style('#header .primary a', 'backgroundColor')).toBe(TRANSPARENT);
+  expect(await style('#footer a', 'backgroundColor')).toBe(TRANSPARENT);
+
+  // Comments, which live in the Reading state — and outside the work skin.
+  await page.getByRole('tab', { name: 'Reading' }).click();
+  const bylineBg = await style('.comment h4.byline', 'backgroundColor');
+  expect(bylineBg).not.toBe(AO3_BYLINE_GREY);
+  expect(bylineBg).toBe(buttonBg); // both are controlBg
+
+  // AO3 alternates comment rows with #eee. Ours alternates too, at our contrast.
+  const alternating = await style('li.comment.even', 'backgroundColor');
+  expect(alternating).not.toBe(AO3_BUTTON_GREY);
+  expect(alternating).not.toBe(await style('#comment_1', 'backgroundColor'));
+
+  const css = await exportedCss(page);
+  expect(css).toContain('#main .actions a');
+  expect(css).toContain('.comment h4.byline');
+  expect(css).toContain('.autocomplete .dropdown ul li.selected');
+});
+
+/**
+ * §22. The four page types out of nine that a real skin author screenshots and
+ * we had never styled — Profile, Collections, Own works, the filter sidebar —
+ * all of which fail through `.listbox`.
+ *
+ * This has to be a browser test rather than a compiler one. Every claim in it
+ * is about a cascade: whether our rule actually beats AO3's on a real page,
+ * with AO3's own stylesheet loaded first and our `!important` doing the work.
+ * The compiler test can only say we emitted a declaration; only this one can
+ * say it won. And the whole §22 gap existed *because* nothing rendered these
+ * regions — a rule that cannot be seen is a rule nobody can check.
+ */
+test('AO3s listboxes, indexes and meta tables take the theme', async ({ page }) => {
+  await openEditor(page); // Moonlit Library — a dark page, so light grey shouts.
+  const frame = page.frameLocator('iframe[title="Site skin preview"]');
+
+  const style = (selector: string, property: 'backgroundColor' | 'boxShadow' | 'borderColor') =>
+    frame
+      .locator(selector)
+      .first()
+      .evaluate((el, p) => getComputedStyle(el)[p as 'backgroundColor'], property);
+
+  const AO3_LISTBOX_GREY = 'rgb(221, 221, 221)';
+  const WHITE = 'rgb(255, 255, 255)';
+  const AO3_SHADING = 'rgb(238, 238, 238)';
+
+  // The profile's listboxes live on the Dashboard state, because the dashboard
+  // IS the "your account" page — which is where a reader meets a listbox.
+  await page.getByRole('tab', { name: 'Dashboard' }).click();
+
+  const outer = await style('#user-works', 'backgroundColor');
+  const inner = await style('#user-works .index', 'backgroundColor');
+  expect(outer).not.toBe(AO3_LISTBOX_GREY);
+  expect(inner).not.toBe(WHITE);
+
+  // The polarity, and the only place it is observable. AO3 paints the outer box
+  // darker than the inner panel so the panel reads as the card; mapping outer →
+  // page and inner → card keeps that in either polarity. Painting both the same
+  // would pass every compiler assertion and lose the distinction on the page.
+  expect(outer).not.toBe(inner);
+
+  // AO3 rings the outer box with a white 1px shadow and bevels the inner panel
+  // with an inset grey one. A background colour reaches neither, so without
+  // these the boxes keep a light edge on every dark theme — the same defect as
+  // the footer's red tile.
+  expect(await style('#user-works', 'boxShadow')).toBe('none');
+  expect(await style('#user-works .index', 'boxShadow')).toBe('none');
+
+  // dl.index's values and the statistics page's even rows: both AO3 shades #eee
+  // / #ededed, both ours at the theme's contrast.
+  const indexValue = await style('dl.index dd', 'backgroundColor');
+  expect(indexValue).not.toBe('rgb(237, 237, 237)');
+  expect(await style('.statistics .index li:nth-of-type(even)', 'backgroundColor')).toBe(indexValue);
+
+  // §22c — the regression. Every relationship tag in every listing carried a
+  // pale grey chip, and "colour tags by type" only ever set the text on it.
+  await page.getByRole('tab', { name: 'Browse' }).click();
+  expect(await style('li.relationships a', 'backgroundColor')).toBe('rgba(0, 0, 0, 0)');
+  expect(await style('li.relationships a', 'backgroundColor')).not.toBe(AO3_SHADING);
+
+  // The work meta table, on every work page — its border, and the grey halo
+  // AO3 hangs off the `.wrapper` it is always inside.
+  await page.getByRole('tab', { name: 'Reading' }).click();
+  expect(await style('dl.meta', 'borderColor')).not.toBe('rgb(204, 204, 204)');
+  expect(await style('.work > .wrapper', 'boxShadow')).toBe('none');
+
+  const css = await exportedCss(page);
+  expect(css).toContain('.listbox');
+  expect(css).toContain('.listbox .index');
+  expect(css).toContain('li.relationships a');
+});
+
 test('the themed scrollbar is emitted, and removable', async ({ page }) => {
   await openEditor(page);
 
@@ -338,6 +540,51 @@ test('a banner reaches the preview and the compiled CSS', async ({ page }) => {
   expect(css).toContain(`url("${banner}")`);
   expect(css).toContain('background-size: cover');
   expect(css).toContain('#header .logo');
+});
+
+test('the header fade reaches the preview, and stacks under a banner', async ({ page }) => {
+  // The control that lets a palette-only template have a header of its own
+  // without us hosting a single image. Asserted against the browser's own
+  // computed style, not against our string: a gradient that compiles but does
+  // not paint is exactly the failure invariant 4 exists to catch.
+  await openEditor(page, 'Midnight Academia');
+
+  const frame = page.frameLocator('iframe[title="Site skin preview"]');
+  const headerImage = () =>
+    frame.locator('#header').evaluate(el => getComputedStyle(el).backgroundImage);
+
+  // The catalog ships this one with a fade, so the arriving state is the
+  // painted one — that is the decision recorded in the plan's §20d, and this
+  // is where a silent revert to a flat accent header would show up.
+  await expect.poll(headerImage, { timeout: 10000 }).toContain('linear-gradient');
+
+  // Flat has to actually remove it. A control that only ever adds is the half
+  // of the toggle nobody tests.
+  await page.getByLabel('Header fade').getByRole('button', { name: 'Flat' }).click();
+  await expect.poll(headerImage, { timeout: 10000 }).toBe('none');
+
+  await page.getByLabel('Header fade').getByRole('button', { name: 'Diagonal' }).click();
+  await expect.poll(headerImage, { timeout: 10000 }).toContain('linear-gradient');
+  expect(await exportedCss(page)).toContain('linear-gradient(135deg');
+
+  // AO3's navigation strip carries its own opaque fill. Under a gradient it
+  // has to get out of the way, or the header reads as two bands rather than
+  // one surface.
+  await expect
+    .poll(() =>
+      frame.locator('#header .primary').evaluate(el => getComputedStyle(el).backgroundColor)
+    )
+    .toMatch(/rgba\(0, 0, 0, 0\)|transparent/);
+
+  // A banner layers on top rather than replacing it — so a dead image degrades
+  // to the gradient instead of to a flat fill.
+  const banner = 'https://placehold.co/1600x500/2b2416/c9a227.png';
+  await page.getByLabel('Banner image').fill(banner);
+  await expect.poll(headerImage, { timeout: 10000 }).toContain(banner);
+
+  const withBoth = await headerImage();
+  expect(withBoth).toContain('linear-gradient');
+  expect(withBoth.indexOf(banner)).toBeLessThan(withBoth.indexOf('linear-gradient'));
 });
 
 test('the export dialog warns about image hosting, but only with a banner', async ({ page }) => {

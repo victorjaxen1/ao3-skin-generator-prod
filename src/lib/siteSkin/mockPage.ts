@@ -50,11 +50,72 @@ li.blurb { border: 1px solid #ddd; padding: 1em; overflow: hidden; }
 .blurb li, .actions > *, .stats > * { list-style: none; display: inline; padding-left: 0.25em; }
 li.blurb:after { content: " "; display: block; height: 0; font-size: 0; clear: both; visibility: hidden; }
 
-/* 08-actions — only the float. The button styling in that sheet is left out
-   deliberately: it is a large cascade with nothing our skin overrides, and
-   this one declaration is the reason AO3's nav bar sits BELOW the site title
-   rather than beside it. */
+/* 08-actions. The float is the reason AO3's nav bar sits BELOW the site title
+   rather than beside it.
+
+   The button cascade below used to be left out of this subset, with a comment
+   saying it was "a large cascade with nothing our skin overrides". That stopped
+   being true the moment the chrome rules landed, and it is the exact shape of
+   mistake invariant 4 exists to prevent: without these rules the preview shows
+   our buttons on a blank page and every specificity question answers itself
+   wrongly. The gradient is the part that matters — a background-color alone
+   leaves it sitting on top, which is what makes the control look dead. */
 ul.actions { float: right; }
+.actions a, .actions a:link, .action, .action:link,
+.actions button, .actions input, input[type="submit"], button, .actions label {
+  background: #eee;
+  background-image: linear-gradient(#fff 2%, #ddd 95%, #bbb 100%);
+  border: 1px solid #bbb;
+  border-radius: 0.25em;
+  color: #444;
+  cursor: pointer;
+  display: inline-block;
+  font-size: 0.875em;
+  padding: 0.25em 0.5em;
+  text-decoration: none;
+}
+/* AO3's own exemptions, and the reason our chrome rules are scoped to #main.
+   Both are ID-scoped at (1,0,1) and beat ".actions a" at (0,1,1) — but they
+   are NOT !important, so a shouted bare ".actions a" from us would defeat them
+   and put a button chip behind every header and footer link. */
+#footer a, #footer button { background: none; border: 0; border-radius: 0; }
+#header .primary a { background: none; border: 0; border-radius: 0; }
+
+/* 08-actions — pagination */
+ol.pagination { clear: both; text-align: center; padding: 0.5em 0; }
+ol.pagination li { display: inline; padding: 0 0.15em; }
+.current { background: #ccc; color: #111; border: 1px solid #bbb; padding: 0.25em 0.5em; border-radius: 0.25em; }
+
+/* 07-forms */
+input, textarea, select {
+  background: #fff;
+  border: 1px solid #bbb;
+  box-shadow: inset 0 1px 2px #ccc;
+  color: #2a2a2a;
+  font-family: inherit;
+  font-size: 0.875em;
+  padding: 0.25em;
+}
+/* The cream flash on focus, which is at its worst on a black theme. */
+input:focus, textarea:focus, select:focus { background: #f3efec; }
+fieldset { border: 1px solid #ccc; margin: 0 0 1em; padding: 0.75em; }
+fieldset legend { background: #eee; color: #444; padding: 0.15em 0.5em; border: 1px solid #ccc; }
+.filters dt { background: #eee; color: #444; padding: 0.15em 0.5em; }
+
+/* 15-group-comments */
+li.comment, div.comment { border: 1px solid #ccc; margin: 0 0 0.5em; padding: 0; list-style: none; }
+.comment h4.byline { background: #ddd; border-bottom: 1px solid #ccc; margin: 0; padding: 0.25em 0.5em; font-size: 1em; }
+.comment .userstuff { padding: 0.5em; margin: 0; }
+.thread .even { background: #eee; }
+.thread li { list-style: none; }
+
+/* 06-region-header / autocomplete. AO3 renders the dropdown next to the field
+   it serves; it is rendered OPEN here for the same reason the header dropdown
+   is — a rule that cannot be seen ships unverified (§10). */
+.autocomplete { position: relative; display: inline-block; }
+.autocomplete .dropdown ul { background: #fff; border: 1px solid #bbb; margin: 0; padding: 0; position: absolute; z-index: 40; width: 16em; }
+.autocomplete .dropdown ul li { background: #fff; color: #2a2a2a; display: block; padding: 0.25em 0.5em; list-style: none; }
+.autocomplete .dropdown ul li.selected { background: #ddd; }
 
 /* 02-elements */
 h1, h2, h3, h4, h5, h6, .heading { font-family: Georgia, serif; font-weight: 400; }
@@ -142,17 +203,107 @@ ul, ol { margin: 0; padding: 0; }
 a.tag { color: #111; line-height: 1.5; text-decoration: none; padding: 0; border-bottom: 1px dotted; }
 .tags li { display: inline; padding-left: 0; padding-right: 0.25em; }
 
-/* 10-types-groups — the work metadata table. Labels float left of their
-   values, which is what makes a work page's tags read as a list of rows. */
-dl.meta { border: 1px solid #ddd; padding: 0.75em; margin: 0 0 1em; }
+/* 10-types-groups, continued — the four hard-coded light colours §22 found,
+   in AO3's own file order (99, 126-146, 184, 265-271). Every one of them was
+   missing from this subset until 17 Aug 2026, which is why the preview showed
+   three finished-looking states while four of the nine pages a real skin author
+   screenshots were still AO3 grey. A region absent from this file is not "not
+   yet styled" — it is invisible, and invisible looks exactly like finished. */
+.wrapper:has(> table, > .meta) { box-shadow: 1px 1px 5px #aaa; }
+dl.index { margin: 0.643em 0; border: none; box-shadow: none; }
+dl.index dt { width: auto; float: none; border: none; }
+dl.index dd {
+  width: auto; float: none; clear: right;
+  margin: 0 0.25em 0.643em 2.5em; padding: 0.375em 0.15em 0.15em;
+  overflow: visible; background: #ededed;
+}
+/* The pale chip behind every relationship tag in every listing — §22c. Our
+   "colour tags by type" control sets the tag's text colour and left this
+   alone, so thirteen templates rendered tinted text on a light pill. */
+li.relationships a { background: #eee; }
+.statistics .index li { padding: 0.643em 0.375em; }
+.statistics .index li:nth-of-type(even) { background: #eee; }
+
+/* 11-group-listbox — the construct all four uncovered page types failed
+   through. AO3 paints the outer box #ddd and the inner panel #fff, so a reader
+   on a dark theme met a light-grey box holding a white one on Profile,
+   Collections, Own works and the filter sidebar. Transcribed verbatim from
+   public/stylesheets/site/2.0/11-group-listbox.css. */
+.listbox, fieldset fieldset.listbox {
+  clear: right;
+  background: #ddd;
+  border: 2px solid #ccc;
+  padding: 0;
+  margin: 0.643em auto;
+  overflow: hidden;
+  box-shadow: 0 0 0 1px #fff;
+}
+.listbox .heading { display: inline-block; }
+.listbox li.blurb, .listbox .landmark.heading, .listbox .tags .listbox, .listbox .lots li, .listbox .all li { display: block; }
+.listbox > .heading, .listbox .heading a:visited { margin: 0; color: #2a2a2a; padding: 0.25em; }
+.listbox .index {
+  width: auto; padding: 0.643em; margin: 0; float: none; clear: right;
+  background: #fff;
+  box-shadow: inset 1px 1px 3px #bbb;
+}
+.listbox li.blurb { box-shadow: none; }
+
+/* 12-group-meta — the work metadata table, on EVERY work page. Labels float
+   left of their values, which is what makes a work page's tags read as a list
+   of rows. The border was transcribed as "#ddd" until 17 Aug 2026; AO3 says
+   "#ccc", and the mock had been quietly one shade kinder than the real page. */
+dl.meta { border: 1px solid #ccc; padding: 0.75em; margin: 0 0 1em; }
 dl.meta dt { float: left; clear: left; margin: 0 0.25em 0 0; font-weight: bold; }
 dl.meta dd { margin: 0 0 0.25em; padding: 0 0 0 12em; }
 dl.meta ul.commas li { display: inline; padding-right: 0.25em; }
 
 /* 13-group-blurb */
 li.blurb { display: block; position: relative; clear: left; padding: 0.429em 0.75em; overflow: visible; }
-.blurb .header { margin-bottom: 0.375em; }
 .blurb .heading { display: block; }
+
+/* 13-group-blurb — the required-tags icon block, and every rule the "required
+   tags as words" control has to undo. AO3 lays the four icons out as a 2x2 grid
+   of 25px boxes pinned to the left of the blurb, reserves 65px of the header
+   for them, and hides the words that are already in the markup by shrinking
+   them to nothing and painting them transparent. The words are the accessible
+   content; the sprite is a picture of them.
+
+   **The order of the next two blocks is load-bearing.** ".blurb .header ul"
+   and ".blurb ul.required-tags" are both (0,2,1), so the later one wins — and
+   the later one is "margin: 0", which is what keeps the icon block at the left
+   edge of the blurb instead of indenting it into the title it is making room
+   for. Transcribed in AO3's order for that reason; swapping them puts the
+   icons on top of the heading, which is exactly what a first pass at this
+   subset did. */
+.blurb .header { min-height: 55px; margin-bottom: 0.375em; }
+.blurb .header .heading, .blurb .header ul {
+  display: block; background: transparent; margin: 0.375em 5.25em 0 65px;
+}
+
+.blurb ul.required-tags { position: absolute; top: 0; width: 60px; margin: 0; }
+.blurb ul.required-tags li,
+.blurb ul.required-tags li a,
+.blurb ul.required-tags li span {
+  display: block; width: 25px; height: 25px;
+  margin-top: 0; margin-bottom: 0; padding-left: 0;
+}
+.blurb ul.required-tags li { margin-bottom: 3px; }
+.blurb ul.required-tags li + li + li,
+.blurb ul.required-tags li + li + li + li { position: absolute; left: 28px; }
+.blurb ul.required-tags li + li + li { top: 0; }
+.blurb ul.required-tags li + li + li + li { top: 28px; }
+.blurb span.text { height: 0; width: 0; font-size: 0.001em; color: transparent; }
+/* AO3's icons come from one sprite sheet on its own domain. Hotlinking it
+   would be rude and would break offline, so — exactly like the logo below —
+   this is a stand-in at the same size and in the same layer. It has to be a
+   background-IMAGE, because "background-image: none" is what the control
+   emits to remove it; a stand-in painted with background-color would survive
+   the rule and sit behind the words. */
+.blurb ul.required-tags li span {
+  background-repeat: no-repeat;
+  background-image: linear-gradient(135deg, #900 0%, #900 50%, #c66 50%, #c66 100%);
+  border-radius: 2px;
+}
 .blurb h4 a:link { color: #900; }
 .blurb dl.stats { float: right; line-height: 1.5; }
 .blurb dl.stats dt, .blurb dl.stats dd { display: inline; margin: 0; padding-left: 0.25em; }
@@ -269,6 +420,36 @@ const FOOTER = `
  */
 type MockTag = { type: 'warnings' | 'relationships' | 'characters' | 'freeforms'; label: string };
 
+/**
+ * The four required tags, in `tags_helper.rb#get_symbols_for`'s own markup.
+ *
+ * Two details here are load-bearing and neither is obvious. The `li`s carry
+ * **no class** — which is why AO3 positions them with `li+li+li` and why our
+ * rules target the inner spans instead. And the real words are already present,
+ * in `span.text`, hidden by CSS rather than absent: the control that shows them
+ * is un-hiding content, not generating it, and this markup is where that claim
+ * is either true or false.
+ */
+type MockRequired = { rating: [string, string]; warnings: [string, string]; category: [string, string]; status: [string, string] };
+
+const DEFAULT_REQUIRED: MockRequired = {
+  rating: ['rating-general-audience', 'General Audiences'],
+  warnings: ['warning-no', 'No Archive Warnings Apply'],
+  category: ['category-gen', 'Gen'],
+  status: ['complete-yes', 'Complete Work'],
+};
+
+function requiredTags(r: MockRequired): string {
+  const item = ([className, text]: [string, string], group: string) => `
+      <li><a class="help symbol question" href="#"><span class="${className} ${group}" title="${text}"><span class="text">${text}</span></span></a></li>`;
+  return `
+    <ul class="required-tags">${item(r.rating, 'rating')}${item(r.warnings, 'warnings')}${item(
+    r.category,
+    'category'
+  )}${item(r.status, 'iswip')}
+    </ul>`;
+}
+
 function blurb(
   id: string,
   title: string,
@@ -276,11 +457,12 @@ function blurb(
   tags: MockTag[],
   summary: string,
   words: string,
-  chapters: string
+  chapters: string,
+  required: MockRequired = DEFAULT_REQUIRED
 ): string {
   return `
   <li id="work_${id}" class="work blurb group" role="article">
-    <div class="header module">
+    <div class="header module">${requiredTags(required)}
       <h4 class="heading">
         <a href="#">${title}</a> by <a rel="author" href="#">${author}</a>
       </h4>
@@ -302,11 +484,54 @@ function blurb(
   </li>`;
 }
 
+/**
+ * The controls §18a repaints, in AO3's own markup.
+ *
+ * Every one of these is here because a rule that cannot be watched ships
+ * unverified (§10, invariant 4). The autocomplete dropdown is rendered **open**
+ * for the same reason the header's is: a closed panel proves nothing about the
+ * rule that paints it, and `.selected` is a state a static mock can only show
+ * by asserting it.
+ */
+const BROWSE_CONTROLS = `
+<ul class="actions" role="menu">
+  <li><a href="#">Post</a></li>
+  <li><a href="#">Sort &amp; Filter</a></li>
+</ul>
+<form class="filters simple" action="#">
+  <fieldset>
+    <legend>Search within results</legend>
+    <div class="autocomplete">
+      <label for="tag_search">Tag</label>
+      <input id="tag_search" type="text" value="slow bu" autocomplete="off">
+      <div class="dropdown">
+        <ul>
+          <li class="selected">Slow Burn</li>
+          <li>Slow Build</li>
+          <li>Slow Romance</li>
+        </ul>
+      </div>
+    </div>
+    <p class="submit actions"><input type="submit" value="Search"></p>
+  </fieldset>
+</form>`;
+
+/** AO3 puts `.actions` on the pagination list too, so the page links are buttons. */
+const BROWSE_PAGINATION = `
+<ol class="pagination actions" role="navigation">
+  <li class="previous"><a href="#">← Previous</a></li>
+  <li><a href="#">1</a></li>
+  <li class="current">2</li>
+  <li><a href="#">3</a></li>
+  <li class="next"><a href="#">Next →</a></li>
+</ol>`;
+
 const BROWSE = `
 <h2 class="heading">Works in Original Work</h2>
 <div class="notice" role="status">
   <p>Your filters have been applied. 3 works found.</p>
 </div>
+${BROWSE_CONTROLS}
 <ol class="work index group">
 ${blurb(
   '1',
@@ -335,7 +560,15 @@ ${blurb(
   ],
   'He wrote them all. He sent none.',
   '3,104',
-  '1/1'
+  '1/1',
+  // Deliberately not the defaults. Four identical icon blocks would make the
+  // words look like boilerplate and would hide three of the four type colours.
+  {
+    rating: ['rating-mature', 'Mature'],
+    warnings: ['warning-yes', 'Graphic Depictions Of Violence'],
+    category: ['category-multi', 'M/M, F/M'],
+    status: ['complete-yes', 'Complete Work'],
+  }
 )}
 ${blurb(
   '3',
@@ -349,9 +582,18 @@ ${blurb(
   ],
   'Three months of quiet evenings, one shared apartment, and the slow discovery that home is a verb.',
   '47,219',
-  '12/15'
+  '12/15',
+  // A work in progress — the status icon nobody can tell from the others at a
+  // glance, which is most of the argument for the control.
+  {
+    rating: ['rating-teen', 'Teen And Up Audiences'],
+    warnings: ['warning-choosenotto', 'Creator Chose Not To Use Archive Warnings'],
+    category: ['category-femslash', 'F/F'],
+    status: ['complete-no', 'Work in Progress'],
+  }
 )}
-</ol>`;
+</ol>
+${BROWSE_PAGINATION}`;
 
 /**
  * **An author's work skin, sitting in the middle of the chapter.**
@@ -422,8 +664,17 @@ export const AUTHOR_WORK_SKIN_CSS = `
  * A work's metadata table (works/_meta). The type class sits on the `dd` here,
  * not on the `li` as it does in a listing — which is why the tag-colour rules
  * need two selectors per type, and why both places are in the mock.
+ *
+ * **The `div.wrapper` around it is not scaffolding.** otwcode's meta pattern
+ * states the rule outright — "meta is always wrapped in `<div class='wrapper'>`"
+ * — and `works/_meta.html.erb` opens with exactly that. It matters because
+ * 10-types-groups hangs `box-shadow: 1px 1px 5px #aaa` off
+ * `.wrapper:has(> table, > .meta)`, so every work page carries a grey halo
+ * around its metadata. The mock had no wrapper until 17 Aug 2026 and the halo
+ * was therefore invisible here while being on every work page on the archive.
  */
 const WORK_META = `
+  <div class="wrapper">
   <dl class="work meta group">
     <dt class="rating tags">Rating:</dt>
     <dd class="rating tags"><ul class="commas"><li><a class="tag" href="#">Teen And Up Audiences</a></li></ul></dd>
@@ -435,7 +686,53 @@ const WORK_META = `
     <dd class="character tags"><ul class="commas"><li><a class="tag" href="#">Mara</a></li><li><a class="tag" href="#">The Messenger</a></li></ul></dd>
     <dt class="freeform tags">Additional Tags:</dt>
     <dd class="freeform tags"><ul class="commas"><li><a class="tag" href="#">Slow Burn</a></li><li><a class="tag" href="#">Mutual Pining</a></li></ul></dd>
-  </dl>`;
+  </dl>
+  </div>`;
+
+/**
+ * A comment thread, and its position is the point.
+ *
+ * `#feedback` is a **sibling** of `#work-skin`, not a child — which is why the
+ * chrome rules that paint a byline or an alternating row can carry `!important`
+ * without the §14b problem. An author's work skin is scoped by AO3 to
+ * `#workskin` and cannot reach a comment, so there is no author here to trample.
+ * Nesting this inside the work would quietly make that false.
+ *
+ * `.even` sits on the second `li.comment` because AO3 alternates them there, and
+ * `.thread .even` (0,2,0) is what beats our own `li.comment` (0,1,1).
+ */
+const FEEDBACK = `
+  <div id="feedback" class="feedback">
+    <div class="comments module">
+      <h3 class="heading">Comments (2)</h3>
+      <ol class="thread">
+        <li id="comment_1" class="comment group">
+          <h4 class="byline heading"><a href="#">quietharbour</a> on Chapter 1
+            <span class="posted datetime">Wed 12 Aug 2026 09:14PM</span></h4>
+          <blockquote class="userstuff">
+            <p>The map redrawing itself around him is doing so much work in this chapter.</p>
+          </blockquote>
+        </li>
+        <li id="comment_2" class="comment group even">
+          <h4 class="byline heading"><a href="#">greenglassmoth</a> on Chapter 1
+            <span class="posted datetime">Thu 13 Aug 2026 07:02AM</span></h4>
+          <blockquote class="userstuff">
+            <p>Tuesdays were for inventory and the slow accumulation of small regrets — I am unwell.</p>
+          </blockquote>
+        </li>
+      </ol>
+      <form class="comment new" action="#">
+        <fieldset>
+          <legend>Leave a comment</legend>
+          <p>
+            <label for="comment_body" class="landmark">Comment</label>
+            <textarea id="comment_body" rows="3" cols="60">Every Tuesday I think about this fic.</textarea>
+          </p>
+          <p class="submit actions"><input type="submit" value="Comment"></p>
+        </fieldset>
+      </form>
+    </div>
+  </div>`;
 
 const READING = `
 <div class="work">
@@ -471,6 +768,7 @@ ${AUTHOR_WORK_SKIN}
       </div>
     </div>
   </div>
+  ${FEEDBACK}
 </div>`;
 
 const DASHBOARD_SIDEBAR = `
@@ -485,12 +783,30 @@ const DASHBOARD_SIDEBAR = `
   </ul>
 </div>`;
 
-const DASHBOARD_MAIN = `
-<h2 class="heading">inkandstarlight</h2>
-<div class="userstuff module">
-  <p>Writing mostly about maps, messengers, and the long way round.</p>
+/**
+ * A profile's listbox sections, in `users/_contents.html.erb`'s own markup.
+ *
+ * `<div class="… listbox group"><h3 class="heading">…</h3><ol class="index group">`
+ * is exactly what AO3 wraps Fandoms, Recent works, Recent series and Recent
+ * bookmarks in — and it is the construct §22 found we had never styled. Four of
+ * the nine page types a real skin author screenshots fail through it: Profile,
+ * Collections, Own works, and the filter sidebar.
+ *
+ * The nesting is the whole point. `.listbox` is an outer box AO3 paints #ddd,
+ * `.listbox .index` is an inner panel it paints #fff, and getting the polarity
+ * of that pair wrong is invisible in a diff and obvious on a page.
+ */
+const DASHBOARD_LISTBOXES = `
+<div class="fandom listbox group" id="user-fandoms">
+  <h3 class="heading">Fandoms</h3>
+  <ol class="index group">
+    <li><a href="#">Original Work</a> (4)</li>
+    <li><a href="#">No Fandom</a> (1)</li>
+  </ol>
 </div>
-<ol class="work index group">
+<div class="work listbox group" id="user-works">
+  <h3 class="heading">Recent works</h3>
+  <ul class="index group">
 ${blurb(
   '4',
   'Nine Letters, Unsent',
@@ -503,7 +819,47 @@ ${blurb(
   '3,104',
   '1/1'
 )}
-</ol>`;
+  </ul>
+</div>`;
+
+/**
+ * `dl.index` and the statistics page's zebra rows — the other two shadings §22
+ * found, and the reason `commentAlt` is not only a comment colour.
+ *
+ * `dl.index` is AO3's short-form alternative to a full blurb: subscriptions,
+ * related works, assignments. The diagram in otwcode's index pattern doc is
+ * dt → link, dd → actions, which is what this is. `.statistics .index` is
+ * `stats/index.html.erb`'s per-fandom listing, wrapped in a listbox of its own
+ * on the real page — the second `li` carries the even-row shading.
+ */
+const DASHBOARD_INDEXES = `
+<h3 class="heading">Subscriptions</h3>
+<dl class="subscription index group">
+  <dt><a href="#">The Cartographer's Impossible Map</a></dt>
+  <dd><ul class="actions"><li><a href="#">Unsubscribe</a></li></ul></dd>
+  <dt><a href="#">A Study in Lamplight</a></dt>
+  <dd><ul class="actions"><li><a href="#">Unsubscribe</a></li></ul></dd>
+</dl>
+<h3 class="heading">Statistics</h3>
+<ul class="statistics index group">
+  <li class="fandom listbox group">
+    <h5 class="heading">Original Work</h5>
+    <ul class="index group">
+      <li>Subscriptions: 41</li>
+      <li>Hits: 12,908</li>
+      <li>Kudos: 631</li>
+      <li>Bookmarks: 88</li>
+    </ul>
+  </li>
+</ul>`;
+
+const DASHBOARD_MAIN = `
+<h2 class="heading">inkandstarlight</h2>
+<div class="userstuff module">
+  <p>Writing mostly about maps, messengers, and the long way round.</p>
+</div>
+${DASHBOARD_LISTBOXES}
+${DASHBOARD_INDEXES}`;
 
 /** The `#main` content and any sibling regions, per preview state. */
 function stateMarkup(state: PreviewState): string {

@@ -166,6 +166,89 @@ test.describe('value rules', () => {
     expect(isAo3Safe('#main { max-width: calc(100% - 20px); }')).toBe(false);
   });
 
+  /**
+   * §17, Corrections 5–9. All five were the same failure — being stricter than
+   * AO3 — found by differential testing rather than by anything breaking, and
+   * measured at 34 false rejects across the published-skin corpus.
+   *
+   * The harness that found them is checked in and is the acceptance test for
+   * this file: `npx tsx scripts/ao3-corpus-differential.mjs <corpus>` must
+   * report **0 false accepts and 0 false rejects**. These tests are the
+   * cheap daily version of it; they are not a substitute for running it.
+   */
+  test('Correction 5: gradients are legal, on any property that takes the token path', () => {
+    // AO3's sanitize_css_token forks on the substring `gradient` into
+    // sanitize_css_gradient, which we did not model at all — so the lint
+    // refused every one of the corpus's 57 gradient declarations for a year
+    // while the archive stored them happily.
+    expect(isAo3Safe('body { background: linear-gradient(to bottom, #fab0b9, #ce9ffd); }')).toBe(true);
+    expect(isAo3Safe('body { background-image: radial-gradient(circle at 50% 0%, #402060 0%, #100818 70%); }')).toBe(true);
+    expect(isAo3Safe('body { background: repeating-linear-gradient(45deg, #eee 0px, #eee 10px, #ddd 20px); }')).toBe(true);
+    expect(isAo3Safe('body { background: conic-gradient(#f00, #0f0, #00f); }')).toBe(true);
+    expect(isAo3Safe('#header { background-image: linear-gradient(180deg, rgba(20,20,30,1) 0%, rgba(60,20,80,1) 100%); }')).toBe(true);
+    expect(isAo3Safe('li.blurb { border-image: linear-gradient(45deg, #bf242c 0%, #7fcf5d 100%) 1; }')).toBe(true);
+
+    // A gradient layered under a url() — both halves have to pass.
+    expect(isAo3Safe('#header { background: linear-gradient(#0008, #0008), url("https://i.imgur.com/a.png"); }')).toBe(true);
+
+    // The interior is still tokenised, so it is not a hole in the grammar.
+    expect(isAo3Safe('body { background: linear-gradient(to bottom, calc(1px), #fff); }')).toBe(false);
+
+    // And the fork is on the token path only. `color` is a plain listed
+    // property, matched whole, so no gradient reaches it.
+    expect(isAo3Safe('a { color: linear-gradient(#fff, #000); }')).toBe(false);
+  });
+
+  test('Correction 6: the value grammar repeats, so rem/vw/ch/fr and long decimals pass', () => {
+    // `^(VALUE_REGEX,?\s*)+$` — applied repeatedly. `0.5375em` is read as
+    // `0.537` + `5em`, and `rem` is not a unit at all: ALPHA_REGEX sweeps it up
+    // as a bare keyword on the next iteration. §3 documented this mechanism for
+    // `1000` → `100` + `0` and said not to tighten the check; the old
+    // implementation tightened it anyway for every case but that one.
+    expect(isAo3Safe('body { margin: 0.5375em 0; }')).toBe(true);
+    expect(isAo3Safe('body { margin: 0.5625em; }')).toBe(true);
+    expect(isAo3Safe('li.blurb { border-radius: 0.75rem; }')).toBe(true);
+    expect(isAo3Safe('#main { max-width: 20vw; }')).toBe(true);
+    expect(isAo3Safe('#main { max-width: 70ch; }')).toBe(true);
+    expect(isAo3Safe('#main { grid-template-columns: 1fr 1fr; }')).toBe(true);
+    expect(isAo3Safe('#main { width: 1000px; }')).toBe(true);
+  });
+
+  test('Correction 7: hex longer than six digits passes, as colour plus keyword', () => {
+    // `#[0-9a-f]{3,6}` consumes six and the repetition eats the tail: `44` is a
+    // number, `c` is a bare keyword. This was filed as the LAST thing to do
+    // because "it does not bite while we emit no alpha colours" — and then §18b
+    // asked for `box-shadow: 0 2px 8px #00000044`, which is simply how a soft
+    // shadow is written.
+    expect(isAo3Safe('li.blurb { box-shadow: 0 2px 8px #00000044; }')).toBe(true);
+    expect(isAo3Safe('li.blurb { border-color: #0f4a59c; }')).toBe(true);
+  });
+
+  test('Correction 8: the font shorthand is refused only when a token fails', () => {
+    // A blanket refusal by property name was stricter than the archive.
+    // `font: Georgia, serif` tokenises to two bare keywords and AO3 keeps it.
+    expect(isAo3Safe('body { font: Georgia, serif; }')).toBe(true);
+
+    // §3's *guidance* is unchanged and still right — never emit the shorthand,
+    // because it misses sanitize_css_font and a quoted family name has nowhere
+    // legal to be. The difference is that the refusal now comes from the
+    // grammar rather than from us.
+    const quoted = lintAo3Css('body { font: "Palatino Linotype", serif; }');
+    expect(quoted.some(v => v.kind === 'banned_value_for_property')).toBe(true);
+    expect(quoted[0].message).toContain('font-family');
+
+    // font-family itself still takes its own branch, where quotes are fine.
+    expect(isAo3Safe(`body { font-family: 'Palatino Linotype', Palatino, serif; }`)).toBe(true);
+  });
+
+  test('Correction 9: aspect-ratio has its own branch — the first upstream drift found', () => {
+    expect(isAo3Safe('#header { aspect-ratio: 16/9; }')).toBe(true);
+    expect(isAo3Safe('#header { aspect-ratio: auto; }')).toBe(true);
+    expect(isAo3Safe('#header { aspect-ratio: 1; }')).toBe(true);
+    // It is a narrow branch, not a pass-through to the value grammar.
+    expect(isAo3Safe('#header { aspect-ratio: 16px / 9px; }')).toBe(false);
+  });
+
   test('content must be one fully-quoted string, url(), or none', () => {
     // The decorative divider glyph — confirmed safe: any fully quoted string.
     expect(isAo3Safe('#workskin hr::after { content: "❦"; }')).toBe(true);

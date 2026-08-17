@@ -13,6 +13,7 @@ import { checkAo3ImageUrl } from './ao3Css';
 export type Mood = 'dark' | 'light' | 'minimal' | 'decorative';
 export type TagStyle = 'pill' | 'label' | 'plain';
 export type HeaderTextColor = 'auto' | 'light' | 'dark';
+export type HeaderGradient = 'none' | 'vertical' | 'diagonal';
 
 export interface SiteSkinTheme {
   schemaVersion: 1;
@@ -72,6 +73,48 @@ export interface SiteSkinTheme {
      * changing the accent — which would recolour every link on the site.
      */
     textColor: HeaderTextColor;
+    /**
+     * A gradient painted on the header, derived from the accent — no image, no
+     * host, nothing to expire.
+     *
+     * This is what gives a palette-only template a header of its own. The
+     * alternative considered and rejected was shipping our own banner images:
+     * it would have made us a permanent image host (every AO3 page view of
+     * every skin using one, billed to us, forever — and a renamed file breaks
+     * skins we cannot contact the owners of), and it would have put us in the
+     * position §11 and §16 both refuse, of distributing artwork. A gradient
+     * costs zero bytes and cannot break.
+     *
+     * It layers *under* `bannerUrl` rather than competing with it, so the two
+     * controls are independent and a dead banner degrades to the gradient.
+     */
+    gradient: HeaderGradient;
+  };
+  /**
+   * Legibility, not decoration — which is why it is not part of `details`.
+   *
+   * `details` is a divider glyph and a drop cap: things a reader turns on
+   * because they like them. These change what a page *says*, and the first one
+   * makes AO3 more usable rather than merely prettier.
+   */
+  reading: {
+    /**
+     * Show AO3's rating / warning / category / status icons as their real
+     * words.
+     *
+     * This does not invent content. `tags_helper.rb#get_symbols_for` already
+     * puts the words in the DOM inside `span.text` and then hides them —
+     * `height: 0; width: 0; font-size: 0.001em; color: transparent` — while a
+     * sprite is painted over the outer span. So the control un-hides what is
+     * there, which is why it is an accessibility win rather than a redesign:
+     * the icons carry meaning that only a reader who has memorised them can
+     * read, and everyone else hovers for a tooltip.
+     *
+     * Off in every shipped template. It changes the shape of every listing on
+     * the archive, and a reader who picked a colour scheme did not ask for
+     * that.
+     */
+    requiredTagsAsText: boolean;
   };
   details: {
     divider: boolean;
@@ -137,6 +180,12 @@ export const HEADER_TEXT_COLORS: readonly { value: HeaderTextColor; label: strin
   { value: 'dark', label: 'Dark' },
 ];
 
+export const HEADER_GRADIENTS: readonly { value: HeaderGradient; label: string }[] = [
+  { value: 'none', label: 'Flat' },
+  { value: 'vertical', label: 'Vertical' },
+  { value: 'diagonal', label: 'Diagonal' },
+];
+
 export const BANNER_HEIGHTS: readonly { value: string; label: string }[] = [
   { value: '6em', label: 'Slim' },
   { value: '10em', label: 'Medium' },
@@ -174,6 +223,7 @@ export function validateTheme(input: unknown, fallback: SiteSkinTheme): SiteSkin
   const typography = raw.typography ?? {};
   const shape = raw.shape ?? {};
   const header = raw.header ?? {};
+  const reading = raw.reading ?? {};
   const details = raw.details ?? {};
 
   const moods = Array.isArray(meta.moods)
@@ -229,6 +279,15 @@ export function validateTheme(input: unknown, fallback: SiteSkinTheme): SiteSkin
       textColor: HEADER_TEXT_COLORS.some(c => c.value === header.textColor)
         ? header.textColor
         : fallback.header.textColor,
+      gradient: HEADER_GRADIENTS.some(g => g.value === header.gradient)
+        ? header.gradient
+        : fallback.header.gradient,
+    },
+    reading: {
+      requiredTagsAsText:
+        typeof reading.requiredTagsAsText === 'boolean'
+          ? reading.requiredTagsAsText
+          : fallback.reading.requiredTagsAsText,
     },
     details: {
       divider: typeof details.divider === 'boolean' ? details.divider : fallback.details.divider,

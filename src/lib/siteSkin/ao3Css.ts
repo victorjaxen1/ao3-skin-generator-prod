@@ -22,6 +22,13 @@
  * A declaration survives if any of the three hold. A rule set whose
  * declarations are ALL dropped is itself an error (`:no_rules_for_selectors`),
  * so an empty rule is a failure, not a no-op.
+ *
+ * The value grammar was rebuilt on 16 Aug 2026 from the Ruby source rather than
+ * approximated (§17, Corrections 5–9). The acceptance test is
+ * `scripts/ao3-corpus-differential.mjs` against `scripts/ao3-sanitizer-oracle.mjs`,
+ * and the bar is **0 false accepts and 0 false rejects** over the 115-skin
+ * corpus. Run it before and after any change here — being stricter than AO3 is
+ * the failure this file keeps having, and it is invisible without that harness.
  */
 
 import {
@@ -112,39 +119,134 @@ export function isLegalFontStack(value: string): boolean {
   return stripped.split(',').every(name => FONT_NAME.test(name.trim()));
 }
 
-/**
- * An approximation of AO3's VALUE_REGEX, applied to a single token.
+/* ── The value grammar ─────────────────────────────────────────────────────
  *
- * Faithful to the parts a theme compiler can actually reach: colors, numbers
- * with units, and bare keywords. The function forms (transform/filter/shape/
- * drop-shadow/color-stop/var) are admitted wholesale rather than parsed,
- * because v1 emits none of them and a half-right parser here would be worse
- * than an honest passthrough.
+ * VALUE_REGEX and friends, rebuilt from `css_cleaner.rb` rather than
+ * approximated. The version this replaced tested one token at a time against a
+ * hand-written pattern, and was stricter than AO3 in five measurable ways
+ * (§17 of SITE-SKIN-IMPLEMENTATION.md — 34 false rejects across a 3,942
+ * declaration corpus, 0 false accepts).
  *
- * The number rule is `-?\.?\d{1,3}\.?\d{0,3}`, which reads like a three-digit
- * cap but is not one: `1000` matches as `100` + `0`, since the optional dot
- * between the two digit runs is optional. Do not tighten this to three digits
- * — that would reject values AO3 accepts. We emit `999px` for pill tags out of
- * convention, not necessity.
+ * The mechanism the approximation missed: AO3 applies the pattern
+ * **repeatedly** over the whole stripped value — `^(VALUE_REGEX,?\s*)+$` — so
+ * values nobody would call well-formed still parse, by being read as two
+ * tokens with no separator between them:
+ *
+ *   0.5375em   →  0.537    + 5em
+ *   0.75rem    →  0.75     + rem   (ALPHA_REGEX, not a unit)
+ *   20vw, 70ch →  20       + vw
+ *   1fr        →  1        + fr
+ *   #00000044  →  #000000  + 44
+ *   1000       →  100      + 0
+ *
+ * That is why `rem`, `vw`, `ch` and `fr` work without appearing in
+ * UNITS_REGEX, and why 8-digit hex passes. §3 documented exactly this for
+ * `1000` and told the reader not to tighten the check; the implementation
+ * tightened it anyway for every case except the one a test pinned.
+ *
+ * Two constants carry Ruby subtleties that a careless port gets wrong:
+ *
+ *  - NUMBER_WITH_UNIT_REGEX is built in a **double-quoted** Ruby string, where
+ *    `\s` is the escape for a literal space, not the character class. The
+ *    spaces below are literal on purpose.
+ *  - Regexp#to_s wraps each constant in a non-capturing group when it is
+ *    interpolated, which is what `g()` reproduces. Without it the alternations
+ *    bind wrongly.
  */
-const AO3_NUMBER = String.raw`-?\.?\d{1,3}\.?\d{0,3}`;
-const AO3_TOKEN = new RegExp(
-  '^(' +
-    // colors: #rgb..#rrggbb, rgb(a)/hsl(a), or a bare keyword (which also
-    // covers named colours, `solid`, `none`, `auto`, `left`…)
-    String.raw`#[0-9a-f]{3,6}` + '|' +
-    String.raw`(rgba?|hsla?)\([^()]*\)` + '|' +
-    String.raw`[a-z\-]+` + '|' +
-    // numbers, with or without a unit
-    `${AO3_NUMBER}(deg|cm|em|ex|in|mm|pc|pt|px|s|%)?` + '|' +
-    // function forms we do not emit but do not want to mis-reject
-    String.raw`(scale|translate|skew|rotate|matrix|rect|blur|brightness|contrast|grayscale|hue-rotate|invert|opacity|saturate|sepia|drop-shadow|color-stop|var|url)[a-z]*\([^()]*\)` +
-  ')$',
-  'i'
-);
+const g = (source: string) => `(?:${source})`;
 
+const ALPHA_REGEX = '[a-z\\-]+';
+const UNITS_REGEX = 'deg|cm|em|ex|in|mm|pc|pt|px|s|%';
+const NUMBER_REGEX = '-?\\.?\\d{1,3}\\.?\\d{0,3}';
+const NUMBER_WITH_UNIT_REGEX = `${g(NUMBER_REGEX)} *${g(UNITS_REGEX)}? *,? *`;
+const PAREN_NUMBER_REGEX = `\\(\\s*${g(NUMBER_WITH_UNIT_REGEX)}+\\s*\\)`;
+
+const TRANSFORM_FUNCTION_REGEX = `${g('scalex?y?|translatex?y?|skewx?y?|rotatex?y?|matrix')}${g(PAREN_NUMBER_REGEX)}`;
+const SHAPE_FUNCTION_REGEX = `${g('rect')}${g(PAREN_NUMBER_REGEX)}`;
+const RGBA_REGEX = `rgba?${g(PAREN_NUMBER_REGEX)}`;
+const HSLA_REGEX = `hsla?${g(PAREN_NUMBER_REGEX)}`;
+const COLOR_REGEX = `#[0-9a-f]{3,6}|${ALPHA_REGEX}|${g(RGBA_REGEX)}|${g(HSLA_REGEX)}`;
+const COLOR_STOP_REGEX = `color-stop\\s*\\(${g(NUMBER_WITH_UNIT_REGEX)}\\s*,?\\s*${g(COLOR_REGEX)}\\s*\\)`;
+const FILTER_FUNCTION_REGEX = `${g('blur|brightness|contrast|grayscale|hue-rotate|invert|opacity|saturate|sepia')}${g(PAREN_NUMBER_REGEX)}`;
+const DROP_SHADOW_VALUE_REGEX = `\\(\\s*${g(`${g(NUMBER_WITH_UNIT_REGEX)}|${g(COLOR_REGEX)}\\s*`)}+\\s*\\)`;
+const DROP_SHADOW_FUNCTION_REGEX = `${g('drop-shadow')}${g(DROP_SHADOW_VALUE_REGEX)}`;
+const CUSTOM_PROPERTY_NAME_REGEX = '\\-\\-[0-9a-z\\-_]+';
+const VAR_FUNCTION_REGEX = `var${g(`\\(\\s*${g(CUSTOM_PROPERTY_NAME_REGEX)}\\s*\\)`)}`;
+
+/* The address grammar. Shared with checkAo3ImageUrl below, which is the same
+ * rule read back to the user in plain language — see the long note there for
+ * why `?` in an address kills the whole skin. */
+const DOMAIN_REGEX = `https?://\\w[\\w\\-\\.]+\\.${g(AO3_TLDS.join('|'))}`;
+const URI_REGEX = `${g(`\\/images|${g(DOMAIN_REGEX)}`)}/[\\w\\-\\./]*[\\w\\-]\\.${g(AO3_IMAGE_EXTENSIONS.join('|'))}`;
+const URL_REGEX = `${g(URI_REGEX)}|"${g(URI_REGEX)}"|'${g(URI_REGEX)}'`;
+const URL_FUNCTION_REGEX = `url\\(\\s*${g(URL_REGEX)}\\s*\\)`;
+
+const VALUE_REGEX = [
+  TRANSFORM_FUNCTION_REGEX,
+  URL_FUNCTION_REGEX,
+  COLOR_STOP_REGEX,
+  COLOR_REGEX,
+  NUMBER_WITH_UNIT_REGEX,
+  ALPHA_REGEX,
+  SHAPE_FUNCTION_REGEX,
+  FILTER_FUNCTION_REGEX,
+  DROP_SHADOW_FUNCTION_REGEX,
+  VAR_FUNCTION_REGEX,
+]
+  .map(g)
+  .join('|');
+
+/** The repeating application — `^(VALUE_REGEX,?\s*)+$`. */
+const VALUE_FULL = new RegExp(`^${g(`${g(VALUE_REGEX)},?\\s*`)}+$`, 'i');
+
+/**
+ * AO3: `sanitize_css_value`.
+ *
+ * One caveat, and it can only make us stricter in a direction that has never
+ * bitten: upstream also accepts a value whose comma-separated parts are all in
+ * `SUPPORTED_CSS_KEYWORDS`. `ALPHA_REGEX` already sweeps up every bare word, so
+ * the keyword list can only rescue values containing punctuation the grammar
+ * refuses. The corpus differential runs at 0/0 without it.
+ */
+function isLegalValue(value: string): boolean {
+  return VALUE_FULL.test(value.toLowerCase().replace(/!important/g, '').trim());
+}
+
+/**
+ * AO3: `sanitize_css_gradient` — the branch this file did not know existed,
+ * and the largest capability gap it ever had (§17, Correction 5).
+ *
+ * `sanitize_css_token` sends any token containing the substring `gradient` here
+ * instead of to the value grammar. It splits `name(interior)`, requires `name`
+ * to contain `gradient`, and recursively tokenises the interior. So **every**
+ * gradient function is legal — linear, radial, conic, repeating, vendor-prefixed
+ * — on any property that takes the token path, which is every property whose
+ * name contains a shorthand substring: `background`, `background-image`,
+ * `background-color`, `border-image`, `list-style-image`.
+ *
+ * §11 read "AO3 permits gradients" off a published skin a year ago. It was
+ * right, nothing was built on it, and the lint quietly refused all 57 gradient
+ * declarations in the corpus in the meantime.
+ */
+const GRADIENT_CALL = /^([a-z\-]+)\((.*)\)/i;
+
+function isLegalGradient(token: string): boolean {
+  const match = token.match(GRADIENT_CALL);
+  if (!match) return false;
+
+  const [, name, interior] = match;
+  return /gradient/i.test(name) && areTokensLegal(interior);
+}
+
+/** AO3: `sanitize_css_token` — the gradient fork, then the value grammar. */
 function isLegalToken(token: string): boolean {
-  return AO3_TOKEN.test(token.trim());
+  return /gradient/i.test(token) ? isLegalGradient(token) : isLegalValue(token.trim());
+}
+
+/** AO3: `tokenize_and_sanitize_css_value`. Empty is a refusal, not a pass. */
+function areTokensLegal(value: string): boolean {
+  const tokens = tokenizeValue(value);
+  return tokens.length > 0 && tokens.every(isLegalToken);
 }
 
 /**
@@ -210,11 +312,7 @@ function tokenizeValue(value: string): string[] {
  * pattern on its own. Trailing junk (`…/a.png"); body{display:none}`) slipped
  * through for the same reason.
  */
-const AO3_URI = new RegExp(
-  '^(?:\\/images|https?:\\/\\/\\w[\\w\\-.]+\\.(?:' + AO3_TLDS.join('|') + '))' +
-    '\\/[\\w\\-./]*[\\w-]\\.(?:' + AO3_IMAGE_EXTENSIONS.join('|') + ')$',
-  'i'
-);
+const AO3_URI = new RegExp(`^${URI_REGEX}$`, 'i');
 
 /** The character set URI_REGEX permits after the scheme. No `?`, `:`, space, `%`. */
 const AO3_URI_CHARS = /^[\w\-./]+$/;
@@ -299,33 +397,31 @@ export function checkAo3ImageUrl(raw: string): ImageUrlVerdict {
 }
 
 /**
+ * AO3: the `aspect-ratio` branch, added upstream between `font-family` and
+ * `content`. It is the first real upstream drift this project has found — the
+ * Sources section recorded "no upstream drift" as of 7 Aug 2026, and this
+ * branch was not in our model, so `aspect-ratio: 16/9` was refused (§17,
+ * Correction 9). Re-verify the branch list when re-verifying the allowlists.
+ */
+const NUMBER_OR_RATIO_REGEX = `${g(NUMBER_REGEX)}${g(` *\\/ *${g(NUMBER_REGEX)}`)}?`;
+const ASPECT_RATIO = new RegExp(
+  `^${g(`${g(ALPHA_REGEX)}|${g('(?:auto +)?')}${g(NUMBER_OR_RATIO_REGEX)}${g(' +auto')}?`)}$`,
+  'i'
+);
+
+/**
  * Values AO3 cannot parse.
  *
  * The branch order below mirrors `sanitize_css_declaration_value` exactly:
- * font-family, then content, then the url() gate, then the value grammar.
- * Reordering any of it produces wrong answers — `content: url(...)` and
- * `font-family: 'Palatino Linotype'` are both legal only because their branch
- * runs before the general one.
+ * font-family, aspect-ratio, content, the url() gate, then — and the split
+ * matters — the **token** path for shorthand and custom properties, the
+ * whole-value path for everything else. Reordering any of it produces wrong
+ * answers: `content: url(...)` and `font-family: 'Palatino Linotype'` are legal
+ * only because their branch runs before the general one, and a gradient is
+ * legal only because `background-image` reaches the token path.
  */
 function checkValue(property: string, value: string): Violation | null {
   const v = value.trim();
-
-  if (/\bcolor-mix\s*\(/i.test(v)) {
-    return {
-      kind: 'banned_value_for_property',
-      subject: property,
-      message: `color-mix() is not in AO3's value grammar. Resolve it to a literal colour before emitting (see colors.ts mixHex).`,
-    };
-  }
-
-  if (property === 'font') {
-    return {
-      kind: 'banned_value_for_property',
-      subject: property,
-      message:
-        'The `font` shorthand misses AO3\'s font-family branch and is tokenised instead, which rejects any quoted family name. Emit font-family, font-size and font-style separately.',
-    };
-  }
 
   if (property === 'font-family') {
     if (!isLegalFontStack(v)) {
@@ -336,6 +432,16 @@ function checkValue(property: string, value: string): Violation | null {
       };
     }
     return null;
+  }
+
+  if (property === 'aspect-ratio') {
+    return ASPECT_RATIO.test(v.replace(/!important/gi, '').trim())
+      ? null
+      : {
+          kind: 'banned_value_for_property',
+          subject: property,
+          message: `aspect-ratio takes a keyword, a number, or a ratio like 16/9. Got: ${v}`,
+        };
   }
 
   // `content` is handled BEFORE the url() gate, matching the branch order in
@@ -375,45 +481,76 @@ function checkValue(property: string, value: string): Violation | null {
     return null;
   }
 
-  if (/\burl\s*\(/i.test(v)) {
-    if (!AO3_URL_PROPERTIES.includes(property)) {
-      return {
-        kind: 'banned_value_for_property',
-        subject: property,
-        message: `url() is only allowed on ${AO3_URL_PROPERTIES.join(', ')} — not on ${property}.`,
-      };
-    }
-
-    // The property is permitted, but the address inside still has to satisfy
-    // AO3's URI grammar. Checking it here rather than only in the editor makes
-    // the export dialog the last line of defence: a banner AO3 would refuse
-    // cannot be copied out of this app.
-    const inner = v.match(/url\(\s*['"]?(.*?)['"]?\s*\)/i)?.[1] ?? '';
-    const verdict = checkAo3ImageUrl(inner);
-    if (!verdict.ok) {
-      return {
-        kind: 'banned_value_for_property',
-        subject: property,
-        message: `${verdict.problem} ${verdict.fix}`,
-      };
-    }
-    return null;
-  }
-
-  // Everything else meets the value grammar. AO3 tokenises on spaces and
-  // commas and sanitises each token, so we do the same; a value is legal only
-  // if every token is.
-  const bad = tokenizeValue(v).find(token => !isLegalToken(token));
-
-  if (bad !== undefined) {
+  // The url() gate. A value merely *mentioning* url() on a property that does
+  // not take one is dropped before the grammar runs at all.
+  if (/\burl\b/i.test(v) && !AO3_URL_PROPERTIES.includes(property)) {
     return {
       kind: 'banned_value_for_property',
       subject: property,
-      message: `"${bad}" is not a value AO3 can parse. Each token must be a hex/rgb()/hsl() colour, a bare keyword, or a number with an optional unit.`,
+      message: `url() is only allowed on ${AO3_URL_PROPERTIES.join(', ')} — not on ${property}.`,
     };
   }
 
-  return null;
+  // Shorthand and custom properties take the token path, where gradients are
+  // legal; everything else is matched whole, where they are not. This is the
+  // split that makes `background-image: linear-gradient(…)` work and
+  // `color: linear-gradient(…)` fail, and it is AO3's, not a choice of ours.
+  //
+  // The address inside a url() is validated by URL_FUNCTION_REGEX as part of
+  // the grammar, which is what makes the export dialog the last line of
+  // defence: a banner AO3 would refuse cannot be copied out of this app.
+  const legal =
+    isShorthandProperty(property) || isCustomProperty(property)
+      ? areTokensLegal(v)
+      : isLegalValue(v);
+
+  return legal ? null : diagnoseValue(property, v);
+}
+
+/**
+ * Reached only once the grammar has already decided AO3 drops the declaration.
+ * The grammar answers *whether*; this answers *why*, most specific cause first.
+ *
+ * Keeping the two apart is deliberate. Every diagnostic that also acted as a
+ * refusal — the blanket `font` rejection is the one §17 caught — is a place
+ * where a helpful message quietly became a rule stricter than the archive.
+ */
+function diagnoseValue(property: string, value: string): Violation {
+  const violation = (message: string): Violation => ({
+    kind: 'banned_value_for_property',
+    subject: property,
+    message,
+  });
+
+  if (/\bcolor-mix\s*\(/i.test(value)) {
+    return violation(
+      `color-mix() is not in AO3's value grammar. Resolve it to a literal colour before emitting (see colors.ts mixHex).`
+    );
+  }
+
+  if (/\burl\s*\(/i.test(value)) {
+    const inner = value.match(/url\(\s*['"]?(.*?)['"]?\s*\)/i)?.[1] ?? '';
+    const verdict = checkAo3ImageUrl(inner);
+    if (!verdict.ok) return violation(`${verdict.problem} ${verdict.fix}`);
+  }
+
+  if (property === 'font') {
+    // The shorthand is no longer refused on sight — `font: Georgia, serif`
+    // tokenises cleanly and AO3 keeps it (§17, Correction 8). It reaches this
+    // message only when a token actually fails, which for a font stack is
+    // almost always a quoted family name: the shorthand misses
+    // sanitize_css_font, so quotes have nowhere legal to be.
+    return violation(
+      'The `font` shorthand misses AO3\'s font-family branch and is tokenised instead, which rejects any quoted family name. Emit font-family, font-size and font-style separately.'
+    );
+  }
+
+  const bad = tokenizeValue(value).find(token => !isLegalToken(token));
+  return violation(
+    bad !== undefined
+      ? `"${bad}" is not a value AO3 can parse. Each token must be a hex/rgb()/hsl() colour, a gradient, a bare keyword, or a number with an optional unit.`
+      : `"${value}" is not a value AO3 can parse.`
+  );
 }
 
 /**

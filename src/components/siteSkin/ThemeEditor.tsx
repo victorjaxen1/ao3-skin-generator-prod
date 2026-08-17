@@ -8,8 +8,10 @@ import {
   BANNER_HEIGHTS,
   BANNER_HOST_HINT,
   HEADER_TEXT_COLORS,
+  HEADER_GRADIENTS,
   TagStyle,
   HeaderTextColor,
+  HeaderGradient,
 } from '../../lib/siteSkin/theme';
 import { ReadabilityIssue } from '../../lib/siteSkin/colors';
 import { checkAo3ImageUrl } from '../../lib/siteSkin/ao3Css';
@@ -238,6 +240,16 @@ export const ThemeEditor: React.FC<Props> = ({ theme, onChange, issues, onFix })
       />
 
       <SectionDivider label="Header" />
+      {/* First in the group on purpose. This is the header you get without
+          finding an image, hosting it anywhere, or hoping the host outlives
+          the skin — it is two literal colours the theme already implies. The
+          banner below is the bring-your-own option; we ship no images. */}
+      <SegmentRow
+        label="Header fade"
+        value={theme.header.gradient}
+        options={HEADER_GRADIENTS}
+        onChange={(v: HeaderGradient) => onChange('header', { ...theme.header, gradient: v })}
+      />
       <BannerRow
         value={theme.header.bannerUrl}
         onChange={v => onChange('header', { ...theme.header, bannerUrl: v })}
@@ -279,6 +291,19 @@ export const ThemeEditor: React.FC<Props> = ({ theme, onChange, issues, onFix })
         sublabel="Removes the roundel next to the site title"
         checked={theme.header.hideLogo}
         onChange={v => onChange('header', { ...theme.header, hideLogo: v })}
+      />
+
+      <SectionDivider label="Reading" />
+      {/* The one control here that makes AO3 easier to use rather than nicer
+          to look at. The words are already in AO3's markup — it hides them and
+          paints an icon over the top — so this un-hides them rather than
+          inventing anything, which is why the sublabel says "show" and not
+          "replace". Visible in the Browse preview. */}
+      <ToggleRow
+        label="Required tags as words"
+        sublabel="Rating, warnings, category and status spelled out instead of icons"
+        checked={theme.reading.requiredTagsAsText}
+        onChange={v => onChange('reading', { ...theme.reading, requiredTagsAsText: v })}
       />
 
       <SectionDivider label="Details" />

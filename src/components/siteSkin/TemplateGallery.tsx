@@ -40,6 +40,11 @@ const Thumbnail: React.FC<{ theme: SiteSkinTheme }> = ({ theme }) => {
         className="flex items-center gap-1.5 px-2.5 h-8 flex-shrink-0 text-[10px] font-bold"
         style={{
           backgroundColor: d.accent,
+          // The same layer the compiler emits, from the same derived string —
+          // ten of the sixteen ship one, and a card showing a flat accent
+          // where the editor shows a fade is the drift this thumbnail sharing
+          // `derive()` exists to prevent.
+          backgroundImage: d.headerGradient || undefined,
           color: d.headerFg,
           fontFamily: theme.typography.headingFont,
           borderBottom: `2px solid ${d.headerDeep}`,
