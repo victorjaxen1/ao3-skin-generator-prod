@@ -8,24 +8,30 @@ architecture with ours.
 
 > ## Start here
 >
-> **Revision 9 — 17 Aug 2026.** The product is built and deployed. **Everything
-> on the roadmap that could reasonably go in before the release gate has now
-> gone in, and the gate is the only thing left at the top of the list.** It has
-> been open since the product shipped; it is now holding back sixteen templates
-> that carry two things no archive has ever seen from us.
+> **Revision 11 — 17 Aug 2026, evening.** The product is built, deployed, and
+> **has now been through the release gate.** Five skins were saved on a real AO3
+> account, applied, and read back: **448 of 448 declarations survived, and ten of
+> fifteen probes pass.** Phase 7 was the thing blocking the roadmap for four
+> revisions; it is not any more.
 >
-> **§23 is the current handoff.** Read it, then §21b and §20b/§20d (the earlier
-> learnings and product decisions, all still true), then §15 — which still owns
-> the file map, the five invariants and the traps. The handoffs supersede only
-> its ordering.
+> **§26 is the current handoff.** Read it, then §15 — which still owns the file
+> map, the five invariants and the traps, and is unchanged. The handoffs
+> supersede only its ordering.
 >
-> **Starting cold? §21f is five steps and will save you an hour**, most of it in
-> local file permissions and a route that takes 70 seconds to compile.
+> **Starting cold? §26f is six steps**, and its item 6 is twenty minutes of AO3
+> clicking that closes three of the five remaining probes.
 >
-> If you read nothing else, read **§23c**. The short version: a property our lint
-> permits is not a property the archive has accepted, and we shipped sixteen
-> templates on the difference. Then **§23e**, which is the order of work, and
-> whose first item is the gate.
+> If you read nothing else, read **§26c.1**. The short version: **a mock can be
+> complete in what it renders and unrepresentative in how.** The drop cap was
+> styled, previewed and tested, and it was wrong on real works for two days,
+> because the mock happened to open its chapter with a paragraph long enough to
+> hide the bug. Ask not only *does the mock contain this element* but *does it
+> contain the hard case of it*. Then **§26e**, which is the order of work.
+>
+> **§23c is still worth reading and is now half-answered.** It said a property
+> our lint permits is not a property the archive has accepted, and that we had
+> shipped sixteen templates on the difference. The gate has since accepted every
+> one of them — but the lesson stands for the *next* capability, not this one.
 >
 > **§22 is the region audit and it is now built** (§22e, 17 Aug 2026) — with
 > three corrections to its own spec, in §23b. Read §22 for the method, which is
@@ -33,10 +39,12 @@ architecture with ours.
 > missing from the mock is invisible and invisible looks exactly like finished.
 >
 > **A second product document now exists: `MAGIC-PICKER-IMPLEMENTATION.md`** —
-> paste a link, get a skin built from its colours. Its Phase A (the font bank,
-> §19f) shipped 17 Aug 2026; Phases B and C are specified for a developer and are
-> **not built**. If you are about to touch fonts, read its §2a first: **no skin
-> can ever supply a font file**, and the reasons are permanent.
+> paste a link, get a skin built from its colours. **Phases A and B shipped
+> 17 Aug 2026**; Phase C (the URL front door) is specified for a developer and is
+> not built. If you are about to touch fonts, read its §2a first: **no skin can
+> ever supply a font file**, and the reasons are permanent — and its §5f, which
+> is four defects found in that document's own plan by reading the functions it
+> named.
 >
 > **§16–§18 are revision 5** and they change the roadmap. We read 115 published
 > site skins from two prolific authors and diffed every declaration in them
@@ -1304,7 +1312,7 @@ claim has a longer story, the section number is the story.
 | Phases 0–6, 8, 9, 10 | ✅ complete |
 | Phase 7 — **saved on real AO3** | ⚠️ **opened 17 Aug 2026.** 5 of 16 templates, **10 of 15 probes — P2, P5, P6, P7, P8, P9, P10, P12, P13, P15** — all passing, **448/448 declarations kept** (§24b-bis). P1 and P14 partial, P3 still open. **The gate has now found and fixed its first defect** (§24c) |
 | Templates | 16, all lint clean, all round-tripping through storage. **Ten carry a header gradient as of 17 Aug 2026** (§21a) |
-| Tests | **520 unit** (`--project=unit`), **29 browser** — counts as of 17 Aug 2026, after the Magic Picker (§24) and the form region (§25) |
+| Tests | **525 unit** (`--project=unit`), **29 browser** — counts as of 17 Aug 2026 evening, after the Magic Picker (§24), the form region (§25) and the drop cap fix (§26) |
 | Fonts | ✅ **24 stacks, grouped and role-split** (§19f). **Append-only** — the original seven are pinned byte for byte, because `validateTheme` matches the literal string a stored theme holds |
 | Mobile preview | ⚠️ scrolls sideways instead of scaling. Known, deliberate |
 | Marketing copy | ⚠️ correct about site skins; still silent on the work-skin export |
@@ -1455,6 +1463,20 @@ both specs. If you cannot see it in the preview, stop — invariant 4.
   `:where()` or `:not()` with an argument list in a work skin, save one and read
   it back** — the site-skin evidence does not transfer, because the two paths
   differ in exactly the step that would break it.
+- **The mock can contain an element and still not contain its HARD CASE.** The
+  drop cap was styled, previewed and tested, and it indented the paragraph after
+  it on any chapter opening with a short line — because `mockPage.ts` happened to
+  open with three full lines, which contains the float by accident. §22d's rule
+  says a missing region is invisible; this is the same failure one level down.
+  When adding anything, ask what shape breaks it — short paragraph, long title,
+  one-item list, empty optional block — and put *that* in the mock (§26c.1).
+- **AO3 re-serialises stored CSS and splits selector lists on commas without
+  respecting parentheses.** Observed, not guessed: `.wrapper:has(> table,
+  > .meta)` comes back wrapped across two lines. Harmless for a site skin, since
+  a newline after a comma is whitespace. **Not necessarily harmless for a work
+  skin**, where AO3 prefixes each selector with `#workskin` — split halves would
+  both be invalid and the rule would die. The work skin emits no such selector
+  today; probe before adding one (§26b).
 - **AO3 accepts far more garbage than it rejects.** `border: d4836e` (a hex code
   missing its `#`) is stored happily, as `d` + `4836` + `e`. Our lint is not a
   correctness checker and must not become one — it exists to predict *refusal*,
@@ -3134,8 +3156,13 @@ card *will* touch it, and will find the same missing generator.
 
 ## 24. Handoff — 17 Aug 2026, later still (revision 10)
 
-**The current handoff.** §15 still owns the file map, the five invariants and
-the traps. §20b, §20d, §21b and §23b–c are still true and are not restated.
+> **Superseded by §26 (revision 11).** §24a and §24b are still accurate and are
+> the build record for the Magic Picker; §24b-bis is the *first* three templates
+> only and §26b carries the finished gate run. §24c and §24d are out of date —
+> use §26c and §26d.
+
+**§15 still owns the file map, the five invariants and the traps.** §20b, §20d,
+§21b and §23b–c are still true and are not restated.
 
 ### 24a. What landed
 
@@ -3389,6 +3416,163 @@ Worth recording, because both would have been plausible bugs to "fix":
 Both were settled by measuring rather than by looking: the first by reading
 AO3's source, the second by reading `getComputedStyle` in the preview iframe. **A
 screenshot is good at finding a defect and bad at confirming one.**
+
+---
+
+## 26. Handoff — 17 Aug 2026, evening (revision 11)
+
+**The current handoff, and the one to read first.** §15 still owns the file map,
+the five invariants and the traps, and nothing there has changed. §20b, §20d,
+§21b, §23b–c and §24a–b are still true and are not restated. This section is
+what moved, what is now *observed* rather than predicted, and what to pick up.
+
+**The headline: Phase 7 is no longer the open gate.** It ran, on a real account,
+and it did what a gate is supposed to do — it confirmed most of the model, and it
+found a defect no test in this repository could have.
+
+### 26a. What landed
+
+| | Status |
+| --- | --- |
+| **The release gate ran** | ✅ 5 templates saved, applied and read back; **10 of 15 probes pass**; **448 of 448 declarations kept**, nothing dropped and no value rewritten. §26b |
+| **The form region** (§25) | ✅ `#main fieldset`, `#main form dl` and the nested pair. Found in a screenshot, confirmed on the archive hours later |
+| **The drop cap defect** | ✅ Found by P2 on a real chapter, fixed with `overflow: hidden` on the paragraph. §26c.1 |
+| **Magic Picker Phase B** | ✅ Landed earlier the same day — the build record is §24a and `MAGIC-PICKER-IMPLEMENTATION.md` §5/§11 |
+| Tests | **525 unit** (was 518), **29 browser**. `tsc --noEmit` clean |
+| Branch | `feat/magic-picker-phase-b`, five commits ahead of `main` |
+
+### 26b. The gate, in one place
+
+Five skins through a real AO3 account, each **diffed mechanically** against
+`compile()`'s output rather than read by eye — which is the only way to notice
+one missing declaration in a hundred and twenty-one.
+
+| Skin | Declarations | What it carried that nothing else did |
+| --- | --- | --- |
+| Moonlit Library | 97/97 | gradient, divider, drop cap, tag colours, scrollbar |
+| Paper & Ink | 76/76 | the *no-gradient* header branch |
+| Lavender Cloud | 79/79 | vertical fade, tag colours without a drop cap |
+| Neon Terminal **+ two fonts** | 75/75 | **P15** — a five-name stack; `plain` tags; `hideLogo`; §25's fieldset rules |
+| Sun-Bleached Western **+ banner** | 121/121 | **P5, P6, P12, P13** — `url()`, the layered form, 125% type, required-tags-as-words |
+
+**Ten probes pass: P2, P5, P6, P7, P8, P9, P10, P12, P13, P15.** Everything that
+was model-only that morning and is now observation:
+
+- `linear-gradient()` — §17 Correction 5, unproven since it landed
+- `box-shadow` — §23c's worry, carried by all sixteen templates
+- `url()`, **and `url(), linear-gradient()` in one declaration**, which was the
+  single largest unknown: AO3 routes anything containing `gradient` to
+  `sanitize_css_gradient`, and a value holding *both* had never been near it
+- Font stacks **five names deep with quotes**, whole — the 24-stack bank is safe
+- `:has()`, `:nth-of-type(even)`, `::-webkit-scrollbar`, `::first-letter`,
+  `content: "❦"`, `input[type="submit"]`, `border: 0`, `display: none`,
+  `font-size: 125%`, and the eleven required-tags-as-words rules
+- **A dead banner degrades to the gradient**, not to white — §4b and §19b-bis's
+  central design claim, watched happening for the first time
+
+**Two of the five were customised themes, not catalog templates.** That matters
+more than the count: it proves *what a user builds* survives, not only the
+sixteen we hand-checked. Which is also what makes the Magic Picker safe to ship.
+
+**The one anomaly, and it is benign.** AO3 re-serialises the CSS it stores, and
+it splits selector lists on commas **without respecting parentheses** — so
+`.wrapper:has(> table, > .meta)` comes back wrapped across two lines. A newline
+after a comma is whitespace, so it parses identically and nothing is lost. It is
+the *only* byte that differs in any of the five readbacks, which is what makes
+the diff method worth keeping: everything else matched exactly.
+
+> **It is also a latent trap for the other product.** For a *work* skin AO3
+> prefixes every selector with `#workskin`. If it splits a comma inside
+> `:has(…)` and prefixes each half, both halves are invalid and the whole rule
+> dies. **The work skin currently emits no comma-inside-parens selector**, so
+> nothing is broken — checked. Before anyone adds one, probe it.
+
+### 26c. The learnings
+
+**1. A mock can be complete in what it renders and unrepresentative in how.**
+
+This is the important one, and it is §22d's rule one level down.
+
+§22d taught that a region missing from `mockPage.ts` is invisible, and invisible
+looks exactly like finished. The drop cap defect is the same failure wearing a
+different face: the region was *there*, styled, previewed and tested — and the
+mock opened its chapter with a **three-line paragraph**, which contains the drop
+cap's float by accident. A one-line opening paragraph, which is an entirely
+ordinary way to start a chapter, lets the float overhang and indents the
+paragraph below it.
+
+Every preview, every screenshot and every test agreed the drop cap was correct,
+because not one of them had ever rendered the shape that breaks it.
+
+> **So the question is not only "does the mock contain this element?" but "does
+> it contain the hard case of this element?"** Short paragraphs, long titles,
+> empty lists, one-item lists, missing optional blocks. The mock now opens with a
+> one-line paragraph and a test fails if anyone lengthens it.
+
+**2. Diff the readback; do not read it.** Five skins, 448 declarations, and the
+only difference in any of them was one selector re-wrap. Reading for that by eye
+is not a task a person does reliably, and a *missing* declaration is exactly the
+failure that looks like nothing. Dump `compile()` to a file, paste AO3's box into
+another, `diff`. Two minutes, and it is the difference between "looked fine" and
+"121 of 121".
+
+**3. The gate earns its keep on the rendering probes, not the acceptance ones.**
+The acceptance half — will AO3 store this — confirmed the model completely, five
+times out of five. Every defect the gate found came from *looking at a page*: the
+grey form container (§25), the run-on required tags, the drop cap float. That is
+worth knowing for how to spend the remaining probes: **P11 is the last acceptance
+question and it is nearly free; P1, P3, P4 and P14 are the ones that will find
+something.**
+
+### 26d. What is NOT proven
+
+- **P3 — the divider has never been seen on a real work.** The work read had no
+  author `<hr>` in its body; the lines between chapters are AO3's own structural
+  rules and correctly carry no glyph. Needs a work whose *text* contains one.
+- **P1 — the single-chapter branch.** Only a multi-chapter work was read, so the
+  bare `.userstuff` path is inferred from the selector rather than seen.
+- **P4 — the header dropdown**, and it is eight selectors that only exist for a
+  signed-in reader with the menu open.
+- **P11 — the capability probe.** The last acceptance question, and much narrower
+  than when it was written: the five saves already answered what it was going to
+  ask about `box-shadow`, gradients and `url()`.
+- **P14 on a dark template.** Everything seen was right, but it was a light theme,
+  and Profile and Collections were not opened.
+- **The remaining eleven templates.** §19c's exemption applies — they introduce no
+  declaration shape the five did not carry, so they want a spot-check, not a row
+  each. **Record that decision in the checklist when you take it.**
+- **The drop cap fix itself is not on the archive.** It compiles and it is tested,
+  but it reaches AO3 only on the next paste. Chapter 2 of the work read is a
+  ready-made before-and-after.
+
+### 26e. What to do next, in order
+
+| # | Work | Why here |
+| --- | --- | --- |
+| 1 | **§18c-3 and §18c-4 — tag labels and the separator** | Queued on judgement before; queued on **evidence** now. Required-tags-as-words renders as a run-on on a real listing (§24b-bis) — the feature works and the typography does not. They share a ten-rule adjacency list, so building either alone means building it twice. Cheapest visible win left |
+| 2 | **Re-save one skin and close P1, P3, P4** | Twenty minutes with an AO3 tab open. Export fresh (the drop cap fix rides along), open a one-shot for P1, any work with an `<hr>` in its text for P3, and open the user menu for P4 |
+| 3 | **P11**, then **P14 on a dark template** | The last acceptance question, and the rendering pass on the polarity nobody looked at |
+| 4 | **§19c's fandom-shaped palettes** | Unblocked, data only, an afternoon, highest demand-per-effort on the roadmap. Mood names only — "House Colours", not "Gryffindor" |
+| 5 | **Magic Picker Phase C** | The URL front door. `MAGIC-PICKER-IMPLEMENTATION.md` §6. Needs its own security review; ~2 days, down from 2½ because Phase B built the UI, both entry points and the quantizer |
+| 6 | **§18b** depth | Blocked on §22e's ownership of `box-shadow` — card elevation must extend those rules, not add new ones, or invariant 1 breaks |
+| 7 | The `bannerSet` analytics line (§20d) | Still one line, still unwritten |
+
+### 26f. If you are starting cold, do this
+
+1. **Read §15 first** — the file map, the five invariants, the traps. All of it is
+   current. Then §26b, for what the archive has actually confirmed.
+2. `npm run dev` → `localhost:3000/site-skin`. Click a template, then click
+   **Take these from a picture** in the Colours group and paste any image address.
+   That is the newest feature and it exercises most of the stack.
+3. `npx playwright test --project=unit` — 525 tests, no browser, no server.
+4. **Before changing `ao3Css.ts`, run `scripts/ao3-corpus-differential.mjs`.** The
+   bar is 0 false accepts and 0 false rejects. Being stricter than AO3 is the
+   failure this codebase keeps having.
+5. **Adding a control is a five-file change** and §15d has the order. If you cannot
+   see it in the preview, stop — invariant 4. And now also ask §26c.1's question:
+   does the mock render the *hard case*, or only the easy one?
+6. **If you have an AO3 account, §26e item 2 is twenty minutes and closes three
+   probes.** The checklist tells you exactly what to click.
 
 ---
 
