@@ -177,6 +177,36 @@ export function quantize(pixels: ArrayLike<number>): Swatch[] {
     .sort((a, b) => b.weight - a.weight);
 }
 
+/**
+ * Weighted colours → swatches, for a source that was never pixels.
+ *
+ * The adapter Phase C needs and the reason it needs nothing else: a stylesheet
+ * yields *declared* colours with a judgement about how much of the page each
+ * one covers, which is the same shape a quantized photograph produces. Feeding
+ * them through here means `colorsFromSwatches` — and therefore the contrast
+ * floor, the accent repair and the readability proof — applies to a website
+ * without one line of new colour maths.
+ *
+ * Weights are normalised to sum to 1, because `imageCast` and the 2%
+ * deliberateness floor in `pickAccent` both read them as shares.
+ */
+export function swatchesFromColors(colors: readonly { hex: string; weight: number }[]): Swatch[] {
+  const usable = colors.filter(c => c.weight > 0);
+  const total = usable.reduce((sum, c) => sum + c.weight, 0);
+  if (total <= 0) return [];
+  return usable
+    .map(({ hex, weight }) => {
+      const [r, g, b] = rgbOf(hex);
+      return {
+        hex: normalizeHex(hex),
+        weight: weight / total,
+        chroma: (Math.max(r, g, b) - Math.min(r, g, b)) / 255,
+        lightness: (0.299 * r + 0.587 * g + 0.114 * b) / 255,
+      };
+    })
+    .sort((a, b) => b.weight - a.weight);
+}
+
 /* ── The mapping ──────────────────────────────────────────────────────────── */
 
 /**

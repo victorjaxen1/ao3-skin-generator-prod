@@ -263,7 +263,7 @@ export const ThemeEditor: React.FC<Props> = ({ theme, onChange, issues, onFix, o
             <circle cx="8.5" cy="8.5" r="1.5" />
             <path d="M21 15l-5-5L5 21" />
           </svg>
-          Take these from a picture
+          Take these from a picture or a site
         </button>
       </div>
 

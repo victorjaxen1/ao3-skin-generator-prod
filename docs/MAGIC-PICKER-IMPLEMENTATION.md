@@ -5,9 +5,10 @@
 and §19 (the fandom question). This document is the full build; §19b and §19a
 over there are its history and are partly superseded here — see §7.
 
-**Status: Phases A and B are built.** Phase A landed 17 Aug 2026; Phase B
-landed 17 Aug 2026 (§11 records what it cost and what it corrected). Phase C is
-specified, not written.
+**Status: all three phases are built.** Phase A landed 17 Aug 2026; Phase B the
+same day (§11 records what it cost and what it corrected); Phase C — the URL
+picker — landed 17 Aug 2026 (§12). The release gate closed first, as §8 required,
+and P15 passed, so §6d's mapping targets stand as written.
 
 > ## Start here
 >
@@ -20,9 +21,9 @@ specified, not written.
 > everyone who uses it.
 >
 > **Read in this order:** §1 (why), §2 (the wall), §3 (what it must promise),
-> then §5 (Phase B) — which is built, and whose §5f records four things the
-> first draft of this plan got wrong. §6 (Phase C) is the headline feature and
-> the one with real risk in it.
+> then §5 (Phase B), whose §5f records four things the first draft of this plan
+> got wrong. §6 is Phase C — the headline feature and the one with real risk in
+> it — and §12 is what building it actually cost and corrected.
 >
 > **The invariant that keeps this cheap is §8.** The output is a
 > `SiteSkinTheme` and nothing else. If you find yourself editing `compile.ts`,
@@ -151,9 +152,11 @@ string. **The bank is append-only.** Deepening `'Georgia, serif'` into a longer
 chain would silently reset every saved theme that chose it. A test pins the
 original seven byte for byte.
 
-**Not yet proven:** P15 in `SITE-SKIN-AO3-CHECKLIST.md`. `sanitize_css_font` is
-our model of AO3's rule and no five-name stack has ever been through a real save.
-One bad name drops the entire declaration.
+**Proven since:** P15 in `SITE-SKIN-AO3-CHECKLIST.md` passed on 17 Aug 2026. A
+five-name, three-quote stack was saved to AO3 and read back **whole**, in all
+three places the compiler emits it, single quotes byte for byte. So
+`sanitize_css_font` behaves as our port models it and the 24-stack bank is safe
+as shipped.
 
 ---
 
@@ -339,10 +342,11 @@ protects.
 
 ---
 
-## 6. Phase C — the URL picker
+## 6. Phase C — the URL picker ✅ built 17 Aug 2026
 
-The headline feature, and the one with real risk. **Phase B works now**, which is
-the precondition: the right design is a thin fetcher in front of Phase B's
+The headline feature, and the one with real risk. §12 records what shipped; this
+section is the design it was built to, and it held. **Phase B works now**, which
+is the precondition: the right design is a thin fetcher in front of Phase B's
 quantizer rather than a second extraction system. `paletteFromPixels` and
 `colorsFromSwatches` are already exported and already tested; Phase C should call
 them and add nothing to them.
@@ -489,11 +493,11 @@ covered because the lint permitted it. Nothing here is new to the compiler.
 | # | Work | Blocked by | Est. |
 | --- | --- | --- | --- |
 | A | Font bank + picker UI | — | ✅ done |
-| — | **Phase 7 release gate**, incl. P15 | a human with an AO3 account | — |
 | B | `palette.ts` + image extraction + the contrast-floor test | — | ✅ done, ~1 day |
-| C1 | Font classification lookup + `classifyFont()` | A | ~½ day |
-| C2 | `/api/site-palette` + security review | — | ~1 day |
-| C3 | Picker UI, both polarities, the "what we did" explanation | B, C1, C2 | ~½ day — B built the UI, C3 re-points it |
+| — | **Phase 7 release gate**, incl. P15 | a human with an AO3 account | ✅ closed, P15 passed |
+| C1 | Font classification lookup + `classifyFont()` | A | ✅ done |
+| C2 | `/api/site-palette` + security review | — | ✅ done |
+| C3 | Picker UI, both polarities, the "what we did" explanation | B, C1, C2 | ✅ done |
 
 C3 shrank because Phase B's `PaletteFromImage` already owns the input, the
 loading state, the error surface, the two-polarity result and both entry points.
@@ -503,10 +507,15 @@ Phase C adds a source toggle and a "what we did" line to a component that exists
 
 ## 10. Open questions
 
-- **Does a five-name font stack survive AO3's save?** P15. Blocks nothing here,
-  but if the answer is no, §6d's mapping targets shrink.
-- **How often is `og:image` genuinely representative?** Untested. Cheapest answer
-  is to run twenty real sites through a throwaway script before building C3.
+- ~~**Does a five-name font stack survive AO3's save?**~~ **Answered: yes.** P15
+  passed on 17 Aug 2026 — both stacks came back whole, quotes byte for byte. §6d's
+  mapping targets do not shrink.
+- **How often is `og:image` genuinely representative?** Still untested at scale.
+  Five sites were run through the real endpoint while building C (§12) and the
+  *stylesheet* answer was good on all five; the card was never compared against
+  it, because comparing them needs a canvas and the probe had none. That is the
+  measurement to make next, and it is now one throwaway script rather than a
+  build.
 - **Is the URL or the image the better front door?** The instinct in this
   document is that a URL is lower friction — pasting a link beats finding an
   image, hosting it, and satisfying `checkAo3ImageUrl`. That is a belief, not a
@@ -580,3 +589,125 @@ and is backwards in TypeScript. The cheapest defence is the one that caught it
 here — before writing a line, open every function the plan names and read its
 signature and its comment, especially where the plan is quoting itself from an
 earlier section.
+
+
+---
+
+## 12. What Phase C cost, and what it touched
+
+**Landed 17 Aug 2026.** C1, C2 and C3 in one pass, close to the ~2 days §9
+costed. The gate closed first, which is what §8 asked for.
+
+| File | Change |
+| --- | --- |
+| `src/lib/siteSkin/fontClassify.ts` | **new.** ~200 faces → 19 characters → a literal `FONT_STACKS` value, plus the sentence that explains the substitution. No network, no DOM |
+| `src/lib/siteSkin/siteStyle.ts` | **new.** HTML and CSS *text* → colours with weights, two font declarations, a radius, `og:image`, the site's own polarity. Regex, not a DOM parser, and no headless browser (§6c) |
+| `src/lib/server/siteFetch.ts` | **new.** The only file that opens a page. Host checks, redirect loop and byte cap are all `imageSecurity.ts`'s, unchanged |
+| `src/pages/api/site-palette.ts` | **new.** Origin check and per-IP window copied from `/api/image-proxy`; 20/minute rather than 60, because this is a person pasting a link |
+| `src/lib/siteSkin/sitePaletteClient.ts` | **new.** Field-by-field validation of the response |
+| `src/lib/siteSkin/siteTheme.ts` | **new.** The merge: which signal wins, and the "what we did" lines |
+| `src/lib/siteSkin/palette.ts` | one addition — `swatchesFromColors`, the adapter that lets declared colours enter Phase B's mapping. The quantizer and the contrast floor are untouched |
+| `src/components/siteSkin/PaletteFromImage.tsx` | a source toggle, the notes list, and a second privacy sentence. As §9 predicted, C3 was re-pointing rather than building |
+| `src/components/siteSkin/ThemeEditor.tsx` | one button label |
+| `public/privacy-policy.html` | one clause and a TL;DR phrase — a pasted *website* address is a different promise from a pasted image address, and the copy in the panel says so too |
+| `tests/font-classify.unit.spec.ts` | **new**, 66 tests |
+| `tests/site-palette.unit.spec.ts` | **new**, 45 tests: parsing (including the ReDoS bound in §12c), the network refusals, and the §8 round trip |
+| `tests/site-skin.spec.ts` | two journeys: both doors exist, and each says where the reading happens |
+
+**Unchanged, and that is still the point:** `compile.ts`, `ao3Css.ts`,
+`colors.ts`, `theme.ts`, `templates.ts`, `mockPage.ts`, `storage.ts`,
+`imageSecurity.ts`, `/api/image-proxy.ts`. **No new property reaches AO3** — a
+website chooses different values in rules the gate has already proved.
+
+### 12a. What the code corrected in the plan, and what five real sites corrected
+
+**`og:image` is primary in the design and second in the code path, deliberately.**
+§6a is right that a social card is a better summary than a stylesheet full of
+greys — but the card can only be *read* through a canvas, and it fails often
+(SVG cards, hosts the proxy refuses). So the client tries the card first and
+falls back to the declared colours without losing the extraction, and
+`themesFromSite` reports which one it used so the copy cannot claim the wrong
+source.
+
+**A bank face must be matched by the stack that *leads* with it.** The first
+version mapped "Verdana" to the Trebuchet stack, because Trebuchet's stack names
+Verdana second and came first in the catalog. That answers a request for one face
+with a different one — and it looked correct in every test that only asked
+whether the result was a legal stack. Fixed with a leading-name pass before the
+containing-name pass.
+
+**Five real sites through the live endpoint, and they are why two things
+changed.** mozilla.org, archiveofourown.org, smashingmagazine.com, example.com
+and vercel.com. The colour answers were good on all five — Mozilla's blue,
+Smashing's red, AO3's own `#990000` — and nothing produced a readability warning.
+But example.com produced *"This site only asks for a interface sans"*, which is
+the kind of slip that makes a reader trust the rest of the sentence less than
+they should; the article is now computed, and a test walks every known face
+looking for `a` before a vowel. The same probe is what showed the stylesheet path
+is strong enough that §10's `og:image` question is about *how much better*, not
+about whether the fallback works.
+
+**The unanswerable half of that probe.** The card was never compared against the
+stylesheet on those five sites, because sampling it needs a canvas and the probe
+was a unit test. That comparison is the next cheap measurement, and
+`palette_applied` already carries `source`, so the production version of the
+question is a query.
+
+### 12b. The learning
+
+**§11b said a plan that names an existing helper has not checked that helper's
+contract. Phase C's version is smaller and the same shape:** a lookup table that
+returns *a* legal answer will pass every test that asks whether the answer is
+legal. The Verdana bug was invisible to `expect(FONT_STACKS).toContain(result)`
+and obvious the moment a test asked whether the answer was the *right* one. When
+the output space is an allowlist, test membership **and** identity — membership
+alone is the assertion that always passes.
+
+### 12c. The security review §6b asked for
+
+Done against the diff, on the endpoint and everything it calls. **One finding,
+and it was not SSRF.**
+
+**Found and fixed: a denial of service in the CSS parser, not the network code.**
+The first version of `readCssRules` was the obvious one regex —
+`/([^{}]+)\{([^{}]*)\}/g`. On text containing no braces, `[^{}]+` runs to the
+end of the string, fails to find `{`, backtracks one character at a time, and
+then the engine advances the start position and repeats: quadratic. Measured:
+**236 seconds on 200 KB**, against a function that is handed up to a megabyte
+fetched from an address a stranger typed, four times per request. Any host
+serving `text/css` that is not CSS — a minified JSON blob, a padded response
+written for this purpose — would have pinned a serverless function until its
+timeout, twenty times a minute per IP. It is now an `indexOf` scan: 1 MB returns
+in under a millisecond, and a test asserts the bound rather than the shape.
+
+The lesson is narrower than "avoid regex". The dangerous input did not come from
+the user — it came from **the third party the user's input pointed at**, which is
+the part of this feature that had no threat model before it was written.
+
+**Checked and found sound:**
+
+- **Every redirect hop re-validates.** A 302 to `169.254.169.254` fails on the
+  second hop, not the first, and a test drives exactly that.
+- **The body never leaves the server.** The handler enumerates its response
+  field by field rather than spreading the parsed object, so a future extractor
+  cannot widen the endpoint by accident. `title` is parsed and deliberately not
+  returned — it is the page's *content* rather than a measurement of it, and
+  nothing consumes it.
+- **A hostile response cannot reach a style attribute.** Every colour crosses
+  `normalizeHex`, which fails closed to `#000000`; the client re-validates the
+  response field by field before any of it becomes a theme.
+- **`og:image` from a hostile page is not trusted.** It goes back through
+  `/api/image-proxy`, which applies the same host rules and a magic-bytes check,
+  and through `checkAo3ImageUrl` before it can become a banner.
+- **Amplification is bounded:** one request in, four out, each capped at 1 MB,
+  each host-validated, twenty requests per IP per minute.
+
+**Known and accepted, both inherited rather than new:**
+
+- **DNS rebinding.** `validateRemoteImageUrl` resolves the hostname and then
+  `fetch` resolves it again; a record that changes between the two is not caught.
+  This is the existing image proxy's posture, and closing it means pinning the
+  resolved address into the connection, which is an agent-level change to make
+  once for both endpoints rather than twice by halves.
+- **The rate limit is per instance and in memory**, so it counts per serverless
+  container rather than globally — the same as `/api/image-proxy`.

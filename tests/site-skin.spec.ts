@@ -718,11 +718,45 @@ test('the gallery offers a way out of the sixteen', async ({ page }) => {
   // §3 is a product decision, not copy: we promise colours and never a match,
   // because "match" sets up a comparison we lose on every single use.
   const body = await page.locator('body').innerText();
-  expect(body).toContain('We read its colours');
+  expect(body).toContain('We read the colours');
   expect(body.toLowerCase()).not.toContain('match this');
 
   // And it says what a skin cannot carry, in the same breath.
-  await expect(page.getByText(/A skin can carry colours, not layout or fonts/)).toBeVisible();
+  await expect(page.getByText(/A skin can carry colours, not layout/)).toBeVisible();
+});
+
+test('both doors are offered, and each says where the reading happens', async ({ page }) => {
+  await page.goto('/site-skin');
+  await page.evaluate(() => localStorage.removeItem('ao3SiteSkinTheme'));
+  await page.reload();
+
+  // The picture door is the default: it is the one that needs no server.
+  await expect(page.getByLabel('Image address')).toBeVisible();
+  await expect(page.getByText(/read in your browser/)).toBeVisible();
+
+  await page.getByRole('button', { name: 'A website' }).click();
+
+  // A different promise, because it is a materially different thing to do with
+  // somebody's address — §6b sends it to our server, and the copy must say so.
+  await expect(page.getByLabel('Website address')).toBeVisible();
+  await expect(page.getByText(/sent to our server/)).toBeVisible();
+});
+
+test('a website address needs no scheme, but nonsense is still refused here', async ({ page }) => {
+  await page.goto('/site-skin');
+  await page.evaluate(() => localStorage.removeItem('ao3SiteSkinTheme'));
+  await page.reload();
+
+  await page.getByRole('button', { name: 'A website' }).click();
+
+  // Nobody types the scheme, so "example.com" must not be an error — it reaches
+  // the endpoint (which is allowed to fail; this test never asserts a result).
+  // What must fail *here* is a string that is not an address at all.
+  await page.getByLabel('Website address').fill('not a website');
+  await page.getByRole('button', { name: 'Get the colours' }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'web address' })).toBeVisible();
+
+  await expect(page.getByRole('heading', { name: 'Make AO3 feel like yours' })).toBeVisible();
 });
 
 test('a paste that is not an address is refused without a round trip', async ({ page }) => {
@@ -744,7 +778,7 @@ test('a paste that is not an address is refused without a round trip', async ({ 
 test('the editor carries the same picker, beside the colours it sets', async ({ page }) => {
   await openEditor(page);
 
-  await page.getByRole('button', { name: 'Take these from a picture' }).click();
+  await page.getByRole('button', { name: 'Take these from a picture or a site' }).click();
   const dialog = page.getByRole('dialog', { name: 'Build colours from a picture' });
   await expect(dialog).toBeVisible();
 

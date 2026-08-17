@@ -151,7 +151,7 @@ h2 { margin-top: 2rem; }
           </div>
 
           <div class="info-box">
-            <p><strong>TL;DR:</strong> No account is required. Editable text and settings stay in this browser. Pasted image addresses may use our proxy during export, and hosted image features upload content only when you choose them. Audio, video and link cards are stored as addresses and never copied by us — your readers' browsers fetch them from whoever hosts them. Content-free analytics measures tool usage, not story content.</p>
+            <p><strong>TL;DR:</strong> No account is required. Editable text and settings stay in this browser. Pasted image addresses may use our proxy during export, a website address you paste into the skin builder is read once by our server for its colours, and hosted image features upload content only when you choose them. Audio, video and link cards are stored as addresses and never copied by us — your readers' browsers fetch them from whoever hosts them. Content-free analytics measures tool usage, not story content.</p>
           </div>
 
           <h2>1. Introduction</h2>
@@ -165,6 +165,7 @@ h2 { margin-top: 2rem; }
           <p><strong>Images You Upload:</strong> If you upload a file, that file is sent to our image-upload service and ImgBB. Images hosted there are publicly accessible to anyone with the link.</p>
           <p><strong>Hosted AO3 Image Code:</strong> If you choose “Get AO3 image code,” the finished rendered scene — including any visible story text — is uploaded to ImgBB so it has a public image address.</p>
           <p><strong>Image Addresses You Paste:</strong> Pasted image addresses are requested from their host for preview, and may be sent to our image proxy when an export needs them or when you ask the site skin builder to read a picture's colours. In the site skin builder the picture is fetched once, its colours are measured in your browser, and neither the picture nor the palette is stored on our servers. The proxy does not intentionally retain the address or image after the request.</p>
+          <p><strong>Website Addresses You Paste:</strong> If you ask the site skin builder to build colours from a website, that address is sent to our server, which requests the page once — along with up to three of its stylesheets and its social-card image — and reads only its colours, its font names and its corner rounding. The page itself is never returned to your browser and never stored, and neither is the address.</p>
           <p><strong>Media Addresses You Paste:</strong> Link cards, voice messages, and videos are stored as web addresses. AO3 Skin Generator never downloads, copies, or re-hosts those files.</p>
 
           <h3>2.2 What Your Readers' Browsers Request</h3>
