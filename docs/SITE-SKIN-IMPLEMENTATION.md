@@ -1439,6 +1439,17 @@ both specs. If you cannot see it in the preview, stop — invariant 4.
   ours, not Google's, not any library's. Three separate people will propose
   webfonts; the answer is in `MAGIC-PICKER-IMPLEMENTATION.md` §2a with the
   citation.
+- **AO3 re-wraps selector lists at every comma — including a comma inside
+  parentheses.** Observed in the 17 Aug 2026 gate readback: we emit
+  `.wrapper:has(> table, > .meta)` and AO3 returns it split across two lines. For
+  a **site** skin that is whitespace and nothing else. For a **work** skin it is
+  not, because AO3 prefixes every work-skin selector with `#workskin` — and a
+  comma-naive split would produce `#workskin .foo:has(> a` and `#workskin > b)`,
+  two invalid selectors, killing the whole rule silently. We emit no such
+  selector in the work-skin product today. **Before shipping `:has()`, `:is()`,
+  `:where()` or `:not()` with an argument list in a work skin, save one and read
+  it back** — the site-skin evidence does not transfer, because the two paths
+  differ in exactly the step that would break it.
 - **AO3 accepts far more garbage than it rejects.** `border: d4836e` (a hex code
   missing its `#`) is stored happily, as `d` + `4836` + `e`. Our lint is not a
   correctness checker and must not become one — it exists to predict *refusal*,
@@ -3168,12 +3179,49 @@ pixels below it. It is now `aria-label="Use the dark version"`. The strict-mode
 violation that exposed it was a *test* problem; the ambiguity underneath it was a
 *product* problem, and only the first one was ever going to complain.
 
+### 24b-bis. The gate opened — the first three templates are on the archive
+
+**Run 17 Aug 2026, after the picker landed.** `moonlit`, `paper` and `lavender`
+saved on a real AO3 account, applied, and read back out of AO3's editor. The
+readback was **diffed mechanically** against `compile()`'s output rather than
+read, which is the only way to notice one missing declaration in ninety-seven.
+
+**252 of 252 declarations survived. Nothing dropped, no value rewritten.** The
+full record is in `docs/SITE-SKIN-AO3-CHECKLIST.md`; what it changes here:
+
+- **§23c's worry is answered.** `box-shadow` — the property all sixteen templates
+  gained without the gate having proven it — is kept. So is `linear-gradient()`
+  (§17 Correction 5, unproven since it landed), `:has()`, `:nth-of-type(even)`,
+  `content: "❦"`, `::first-letter` and `input[type="submit"]`.
+- **P8 passes.** All four `::-webkit-scrollbar` rules came back whole. *"AO3
+  validates declarations, never selectors"* is now an observation rather than a
+  reading of `css_cleaner.rb`.
+- **P10 passes, and it is the one §15f said to do first.** A generator-built work
+  — Twitter card, WhatsApp thread, four-image grid, quote post — read under all
+  three site skins renders **identically in all three**. The author's design is
+  untouched, and exactly one drop cap appears per page, at the first direct child
+  of `.userstuff`. §14 is confirmed fixed *on the archive*, not merely in the
+  mock, and `:first-of-type`'s child combinator with it.
+- **Our model of `clean_css_code` made no wrong prediction.** After nine
+  corrections written from reading the source, the first contact with the
+  authority produced zero more. That is the strongest evidence this file has that
+  the model is right rather than merely careful.
+- **One new trap**, now in §15e: AO3 re-wraps selector lists at every comma,
+  including inside `:has()`. Harmless for a site skin; a latent hazard for a work
+  skin, which AO3 prefixes.
+
+The claim in the UI is no longer purely a prediction — **for the declaration
+shapes these three carry**, which is most of them. It still is for the font bank
+(P15), for banners (P5/P6/P12) and for required-tags-as-words (P13).
+
 ### 24c. What is NOT proven
 
-- **Phase 7 is still the open gate**, unchanged, and now the only thing in front
-  of everything else. Phase B does not add to it: it emits no property the
+- **Phase 7 is open but no longer empty** — 3 of 16 templates and 2 of 15 probes,
+  all passing (§24b-bis). Phase B adds nothing to it: it emits no property the
   sixteen templates do not already emit, which is the precise test §23c says to
-  apply — applied deliberately this time rather than assumed.
+  apply — applied deliberately this time rather than assumed. **The unproven half
+  is now specific rather than total**: the font bank (P15), banners (P5/P6/P12),
+  required-tags-as-words (P13), and P11's capability probe.
 - **The 2% "deliberate" floor is taste, tuned on synthetic fixtures.** Two real
   images agree with it. Twenty would be evidence; two is a smoke test.
 - **`readBannerBrightness`'s 0.18 threshold has never been looked at on a real
@@ -3186,7 +3234,7 @@ violation that exposed it was a *test* problem; the ambiguity underneath it was 
 
 | # | Work | Why here |
 | --- | --- | --- |
-| 1 | **Phase 7 + P11–P15 on real AO3** | The gate. Nothing should go in ahead of it. **Do P10 first** (§15f) |
+| 1 | **Finish Phase 7** — P15, then P5/P6/P12 on a banner-ready template, then P11 | The gate, now 3/16 and 2/15 done (§24b-bis). **P10 is passed**, so the highest-risk probe is behind us. P15 is next: the 24-stack font bank is where a *silent* loss is likeliest, because `sanitize_css_font` drops a whole declaration for one bad name |
 | 2 | **Whatever the gate finds.** Assume it finds something | |
 | 3 | **§18c-3 and §18c-4 together** | They share the same ten-rule adjacency list |
 | 4 | **§18c-5, then §18c-6** | 18c-6 needs §18c-0's third cascade mode |

@@ -41,9 +41,9 @@ the reopened editor still contains every rule we emitted.
 
 | # | Template | id | Saved | Applied | Readback clean | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Moonlit Library | `moonlit` | ⬜ | ⬜ | ⬜ | |
-| 2 | Paper & Ink | `paper` | ⬜ | ⬜ | ⬜ | |
-| 3 | Lavender Cloud | `lavender` | ⬜ | ⬜ | ⬜ | |
+| 1 | Moonlit Library | `moonlit` | ✅ | ✅ | ✅ | 17 Aug 2026. **97/97 declarations kept.** Diffed mechanically — see "The first three" below |
+| 2 | Paper & Ink | `paper` | ✅ | ✅ | ✅ | 17 Aug 2026. **76/76 declarations kept** |
+| 3 | Lavender Cloud | `lavender` | ✅ | ✅ | ✅ | 17 Aug 2026. **79/79 declarations kept** |
 | 4 | Crimson Archive | `crimson` | ⬜ | ⬜ | ⬜ | |
 | 5 | Forest Study | `forest` | ⬜ | ⬜ | ⬜ | |
 | 6 | Ocean Glass | `ocean` | ⬜ | ⬜ | ⬜ | |
@@ -110,9 +110,9 @@ real page.
 | P5 | **A banner from imgur** | the one `url()` we emit, and the one thing AO3 can refuse on address grounds alone | ⬜ |
 | P6 | **A banner that 404s** | the accent must still be underneath it (§4b), so a dead image degrades to the theme rather than to white | ⬜ |
 | P7 | **Tag colours on a real listing and a real work page** | `li.warnings a.tag` vs `dd.warning a.tag` — two markups, and only the listing one is common | ⬜ |
-| P8 | **Themed scrollbar in Chrome, and Firefox unharmed** | `::-webkit-scrollbar` is a selector AO3 has no opinion about; confirm it survives the save and that Firefox simply ignores it | ⬜ |
+| P8 | **Themed scrollbar in Chrome, and Firefox unharmed** | `::-webkit-scrollbar` is a selector AO3 has no opinion about; confirm it survives the save and that Firefox simply ignores it | ✅ **17 Aug 2026.** All four scrollbar rules came back whole in all three readbacks. "AO3 validates declarations, never selectors" is now an observation. Firefox behaviour not separately checked |
 | P9 | **Footer and system messages** | AO3's red tile and `.notice`'s pale blue, on one dark and one light theme (§4.6, §4.8) | ⬜ |
-| P10 | **A work that has its own work skin** — read it with a site skin on | The bug that shipped on 13 Aug 2026 (§14): the drop cap landed on every chat bubble in the work. Confirm one capital at the top of the chapter and none inside the author's markup, that the author's own `<hr>` keeps its own styling, and that their fonts and backgrounds survive. Use a work made with this app's conversation generator | ⬜ |
+| P10 | **A work that has its own work skin** — read it with a site skin on | The bug that shipped on 13 Aug 2026 (§14): the drop cap landed on every chat bubble in the work. Confirm one capital at the top of the chapter and none inside the author's markup, that the author's own `<hr>` keeps its own styling, and that their fonts and backgrounds survive. Use a work made with this app's conversation generator | ✅ **17 Aug 2026, and this was the one that mattered.** A generator-built work (Twitter card, WhatsApp thread, four-image grid, quote post) read under all three site skins: the author's design is **identical across all three**. Exactly one drop cap per page, at the first direct child of `.userstuff`, none inside the author's markup. §14 confirmed fixed on the archive, not just in the mock |
 | P11 | **The §17 capability probe** — a scratch skin, not a template | Settles plan §17 against the only authority. See below | ⬜ |
 | P12 | **A header fade, alone and under a banner** | The first gradient we actually *ship* (§18b's header-gradient row, built 16 Aug 2026). **As of 17 Aug 2026 ten templates carry one by default**, so the first half of this probe now happens on its own the moment you save Moonlit Library — what still needs doing by hand is the **layered** form: add a banner to Midnight Academia and save. That emits `background-image: url("…"), linear-gradient(…)`, a different shape from P11's bare gradient and the one a user will really produce. Confirm both survive the readback, that the header reads as one continuous fade rather than two bands, and that AO3's navigation strip does not reappear in its own colour | ⬜ |
 | P14 | **The four page types the mock could not render** — Profile, Collections, Own works, and the filter sidebar, on **one dark template** | Added 17 Aug 2026 from the §22 audit, and **rewritten the same day, because §22e landed**: this is no longer "record how wrong it looks", it is the confirmation that the region pass worked. All four are built from `.listbox`, which AO3 paints `#ddd` with a `#fff` inner panel, a white 1px ring *outside* the box and an inset grey bevel *inside* the panel. Confirm on each page that **the outer box and the inner panel are different colours** (the polarity — outer takes the page colour, inner the card colour, and painting both alike is the failure that looks correct in a diff), that **neither keeps a light edge** (the two `box-shadow: none` declarations are what remove the ring and the bevel, and a background colour alone cannot), and that headings on them are legible. Then glance at a work's metadata table (`dl.meta`'s border, and the grey halo on the `.wrapper` AO3 always puts around it), the statistics page's zebra rows, and — §22c — **any listing at all**, where every relationship tag should have lost its pale grey chip while still painting on hover | ⬜ |
@@ -180,6 +180,89 @@ line probes, so the two can fail independently: **if `p11-shadow` is refused,
 add `.p11-shadow-none { box-shadow: none; }` and save again before concluding
 anything**, because that is the form sixteen templates actually depend on.
 
+## The first three — run 17 Aug 2026, and what they settled
+
+Three templates saved on real AO3, applied, and read back out of the editor. The
+readback was diffed **mechanically** against `compile()`'s output rather than by
+eye, which is the only way to notice a single missing declaration in ninety-seven.
+
+**Result: 252 of 252 declarations survived, across all three. Nothing was
+dropped, and no value was rewritten.** The entire diff, for every template, is
+one line — and that line is the finding below rather than a loss.
+
+Do it the same way. Save the skin, reopen it in AO3's editor, copy the box, and
+diff it against the app's own export. Do not read it.
+
+### What this proves, that was model-only that morning
+
+Each of these was a *prediction* from our port of `css_cleaner.rb`. All are now
+observations:
+
+| Capability | Was | Now |
+| --- | --- | --- |
+| `linear-gradient()` on `#header` | §17 Correction 5, unproven since | ✅ kept, both `135deg` and `180deg` |
+| `box-shadow: none` | §23c — the property all sixteen templates gained without the gate having proven it | ✅ kept |
+| `:has(> table, > .meta)` | a selector shape AO3's own stylesheets never use | ✅ kept — but see below |
+| `:nth-of-type(even)` | same | ✅ kept |
+| `::-webkit-scrollbar`, `-track`, `-thumb`, `-thumb:hover` | **P8**, the reading that AO3 never validates a selector | ✅ kept. **P8 passes** |
+| `content: "❦"` — a non-ASCII quoted string | never tested | ✅ kept, glyph intact |
+| `::first-letter`, `::after` | | ✅ kept |
+| `input[type="submit"]` — an attribute selector with quotes | | ✅ kept |
+| `transparent` as a colour keyword | | ✅ kept |
+
+**P10 also passes, and it is the one that mattered most.** All three screenshots
+are of a work carrying its own work skin — a conversation built with this app's
+generator. The Twitter card, the WhatsApp thread, the four-image grid and the
+quote post render **identically under all three site skins**. The author's design
+is untouched. That is the §14 defect confirmed fixed on the real archive rather
+than in the mock, and `:first-of-type`'s child combinator confirmed with it:
+exactly **one** drop cap appears per page, at the first direct child of
+`.userstuff`, and none inside the author's markup.
+
+### The one difference in the diff, and why it is worth writing down
+
+AO3 re-emits the stylesheet, and it re-wraps selector lists at every comma —
+**including a comma inside parentheses**:
+
+```css
+ours:   .wrapper:has(> table, > .meta) {
+AO3:    .wrapper:has(> table,
+        > .meta) {
+```
+
+**Harmless here**, and that is not luck about the parse — a newline after a comma
+is whitespace, so the two forms are identical to a browser. It is luck about
+*what AO3 does next*.
+
+**A site skin is stored as written. A work skin is prefixed.** AO3 scopes every
+work-skin selector with `#workskin`. If that prefixing walks the same
+comma-split list, a work skin containing `:has(a, b)` would come back as
+`#workskin .foo:has(> table` and `#workskin > .meta)` — two invalid selectors,
+and an invalid selector anywhere in a list kills the whole rule. Silently.
+
+We are not exposed today: the work-skin product emits **no** selector with a
+comma inside parentheses (checked across `workSkin.ts` and `generator.ts`), and
+the site skin's single case is unprefixed. But this is now a trap with evidence
+behind it rather than a hypothetical, so:
+
+> **Before shipping `:has()`, `:is()`, `:where()` or `:not()` with an argument
+> list in a WORK skin, save one and read it back.** The site-skin evidence does
+> not transfer, because the two paths differ in exactly the step that would break
+> it.
+
+### Still not proven by this run
+
+- **P15** — both templates here use two- and three-name stacks. The 24-stack bank
+  ships chains up to four names with quotes, and `sanitize_css_font` drops the
+  whole declaration for one bad name. Untouched by this run.
+- **P5, P6, P12's layered form** — no banner was in play, so `url()` and the
+  `url(), linear-gradient()` layering are still unproven.
+- **P13** — required-tags-as-words is off in every template.
+- **The remaining thirteen templates**, though §19c's reasoning applies: they
+  introduce no declaration shape these three did not carry, so they want a
+  spot-check rather than a row each. The four banner-ready ones are the
+  exception, because P5/P6/P12 live there.
+
 ## Known open risks, to confirm or clear while you are in there
 
 - **8-digit hex** (plan §11, §17 Correction 7). Our lint refuses `#89797925`
@@ -197,11 +280,36 @@ anything**, because that is the form sixteen templates actually depend on.
 
 ## Outcome
 
-Fill this in when the table is complete.
+**Partial — first run 17 Aug 2026.** Three of sixteen templates, and two of the
+fifteen probes. The gate is no longer empty, and the claim in the UI is no longer
+purely a prediction for the shapes these three carry.
 
-- Date run:
-- AO3 account used (not the password):
-- Templates that failed to save:
-- Rules the readback showed missing:
-- Corrections written back into `SITE-SKIN-IMPLEMENTATION.md` §7:
-- P11 result, and any correction to §17 / the §18b roadmap:
+- **Date run:** 17 Aug 2026
+- **Templates saved:** 3 of 16 — `moonlit`, `paper`, `lavender`. All accepted on
+  first submit, all applied, all read back clean
+- **Templates that failed to save:** none
+- **Rules the readback showed missing:** **none.** 252 of 252 declarations
+  survived. Verified by mechanical diff, not by reading
+- **Values AO3 rewrote:** none. Every hex, length, keyword and quoted string came
+  back byte-identical
+- **Corrections written back into `SITE-SKIN-IMPLEMENTATION.md` §7:** none needed
+  — our model of `clean_css_code` made no wrong prediction on these three. **This
+  is the first evidence the model is right rather than merely careful**
+- **Probes passed:** P8 (scrollbar), P10 (work skin under a site skin — the
+  highest-priority one, §15f)
+- **New trap found:** AO3 re-wraps selector lists at every comma including inside
+  `:has()`. Harmless for a site skin, potentially destructive for a **work** skin,
+  which AO3 prefixes. Written up above and in plan §15e
+- **P11 result:** not run. Still the item that unblocks §18b
+
+### What still has to happen
+
+1. **P15** — the 24-stack font bank is untouched by this run and is the one place
+   a *silent* loss is likely, because `sanitize_css_font` drops a whole
+   declaration for one bad name.
+2. **P5, P6, P12's layered form** — the four banner-ready templates, where the
+   only `url()` we emit lives.
+3. **P11** — the capability probe, which is what §18b is waiting on.
+4. **The remaining thirteen templates**, spot-checked rather than one row each:
+   they introduce no declaration shape these three did not carry. §19c's
+   reasoning, applied. The four banner-ready ones are the exception.
