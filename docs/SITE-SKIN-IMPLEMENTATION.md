@@ -1302,7 +1302,7 @@ claim has a longer story, the section number is the story.
 | --- | --- |
 | Deployed | ✅ `main` → Netlify, at `/site-skin`. Commits `f2bc76c` (Phase 9) and `5c47eda` (the §14 fix) |
 | Phases 0–6, 8, 9, 10 | ✅ complete |
-| Phase 7 — **saved on real AO3** | ⚠️ **opened 17 Aug 2026.** 5 of 16 templates, **7 of 15 probes — P5, P6, P8, P10, P12, P13, P15** — all passing, **448/448 declarations kept** (§24b-bis). **Every probe a save could answer is answered.** What is left is rendering, not acceptance |
+| Phase 7 — **saved on real AO3** | ⚠️ **opened 17 Aug 2026.** 5 of 16 templates, **9 of 15 probes — P5, P6, P7, P8, P9, P10, P12, P13, P15** — all passing, **448/448 declarations kept**, plus a four-page rendering pass with nothing broken (§24b-bis). P14 is partial. **Only P11 and the three work-body probes are untouched** |
 | Templates | 16, all lint clean, all round-tripping through storage. **Ten carry a header gradient as of 17 Aug 2026** (§21a) |
 | Tests | **520 unit** (`--project=unit`), **29 browser** — counts as of 17 Aug 2026, after the Magic Picker (§24) and the form region (§25) |
 | Fonts | ✅ **24 stacks, grouped and role-split** (§19f). **Append-only** — the original seven are pinned byte for byte, because `validateTheme` matches the literal string a stored theme holds |
@@ -3114,7 +3114,7 @@ an observation for `::-webkit-scrollbar`. Both are now called out there.
 | --- | --- | --- |
 | 1 | **Phase 7 + P11 + P12 + P13 + P14 on real AO3** | The gate, and nothing should go in ahead of it now. Ten templates carry gradients and all sixteen carry a `box-shadow`; both are model-only until this runs. **Do P10 first** (§15f) |
 | 2 | **Whatever the gate finds.** Assume it finds something | |
-| 3 | **§18c-3 and §18c-4 together** | Tag labels and the separator share the same ten-rule adjacency list; building either alone means building it twice. Neither needs the third cascade mode |
+| — | ~~§18c-3 and §18c-4~~ | Promoted to item 1 above |
 | 4 | **§18c-5, then §18c-6** | Stat icons are self-contained. 18c-6 is the one that needs §18c-0's third cascade mode and its test, so it wants a clear run |
 | 5 | **§18b** depth | Blocked on the gate. **And now on §22e**: `.listbox`, `.listbox .index` and `.wrapper:has(…)` already own `box-shadow`, so card elevation must extend *those* rules rather than adding new ones, or invariant 1 breaks the moment both ship |
 | 6 | The `bannerSet` analytics line from §20d | Still one line, still unwritten |
@@ -3258,8 +3258,8 @@ different and much less dangerous class of unknown.
 
 ### 24c. What is NOT proven
 
-- **Phase 7 is open but no longer empty** — 5 of 16 templates and **7 of 15
-  probes**, all passing (§24b-bis). Phase B adds nothing to it: it emits no property the
+- **Phase 7 is open but no longer empty** — 5 of 16 templates and **9 of 15
+  probes**, all passing, with P14 partial (§24b-bis). Phase B adds nothing to it: it emits no property the
   sixteen templates do not already emit, which is the precise test §23c says to
   apply — applied deliberately this time rather than assumed. **The character of what is left has changed**: banners, fonts, gradients,
   required-tags and the layered `background-image` are all settled, so nothing
@@ -3278,7 +3278,8 @@ different and much less dangerous class of unknown.
 
 | # | Work | Why here |
 | --- | --- | --- |
-| 1 | **Finish Phase 7** — P11, then the rendering probes P1–P4, P7, P9, P14 | The gate, now 5/16 and **7/15** (§24b-bis). Every probe a *save* could answer is answered; what is left is what a *page* answers. None of it blocks a release the way the acceptance questions did |
+| 1 | **§18c-3 and §18c-4 — the tag labels and the separator** | Promoted from item 3. It was queued on judgement; it is now queued on **evidence** — required-tags-as-words renders as a run-on on a real listing (§24b-bis). The feature works and the typography does not, which is the cheapest visible win left |
+| 2 | **Finish Phase 7** — P11, then P1/P2/P3 on a real work, then P14 on a dark template | The gate, now 5/16 and **9/15** (§24b-bis). Nothing outstanding is about acceptance. P1–P3 are the drop cap and the divider, which have never been seen in a real chapter |
 | 2 | **Whatever the gate finds.** Assume it finds something | |
 | 3 | **§18c-3 and §18c-4 together** | They share the same ten-rule adjacency list |
 | 4 | **§18c-5, then §18c-6** | 18c-6 needs §18c-0's third cascade mode |
