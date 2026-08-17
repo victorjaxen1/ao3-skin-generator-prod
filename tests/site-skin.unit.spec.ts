@@ -1074,13 +1074,68 @@ test.describe('listboxes, indexes and meta tables', () => {
     // and a background colour reaches neither. This is the first box-shadow the
     // compiler emits — §18b's card elevation must extend these two rules rather
     // than adding new ones, or invariant 1 breaks the moment both ship.
-    for (const selector of ['.listbox', '.listbox .index', '.wrapper:has(> table, > .meta)']) {
+    // `#main fieldset` joined these on 17 Aug 2026 (§25): AO3 bevels every form
+    // container with `inset 1px 0 5px #999` from the same instinct.
+    const shadowed = ['.listbox', '.listbox .index', '.wrapper:has(> table, > .meta)', '#main fieldset'];
+    for (const selector of shadowed) {
       const rule = compileRules(DARK).find(r => r.selectors.includes(selector));
       expect(rule, `${selector} is unowned`).toBeDefined();
       expect(rule!.decls, selector).toContainEqual(['box-shadow', 'none']);
     }
+    // Enumerated rather than counted. The old assertion pinned the *number* of
+    // box-shadow rules at three, which is a proxy for the thing it cares about
+    // and broke the moment a fourth AO3 shadow was legitimately killed. Assert
+    // the set, so adding one is a deliberate edit here and removing one still
+    // fails.
     const shadows = compileRules(DARK).filter(r => r.decls.some(([p]) => p === 'box-shadow'));
-    expect(shadows).toHaveLength(3);
+    expect(shadows.flatMap(r => r.selectors).filter(s => shadowed.includes(s)).sort())
+      .toEqual([...shadowed].sort());
+    expect(shadows).toHaveLength(shadowed.length);
+  });
+
+  test('the form container is repainted, and never outside #main', () => {
+    // §25. AO3 paints every fieldset #ddd with a cream border and an inset grey
+    // bevel, so the comment form under every work was a light slab on every dark
+    // theme. The mock could not show it: it carried a reconstructed `fieldset`
+    // rule with no background, which is §21b's trap.
+    const rules = compileRules(DARK);
+    const d = derive(DARK);
+
+    const outer = rules.find(r => r.selectors.includes('#main fieldset'))!;
+    expect(outer.decls).toContainEqual(['background-color', d.background]);
+    expect(outer.decls).toContainEqual(['border-color', d.border]);
+
+    const inner = rules.find(r => r.selectors.includes('#main fieldset fieldset'))!;
+    expect(inner.decls).toContainEqual(['background-color', d.surface]);
+    expect(d.background).not.toBe(d.surface);
+  });
+
+  test('no fieldset rule is emitted unscoped, because AO3 exempts its own header', () => {
+    /**
+     * The fourth bug with this root, caught before it shipped.
+     *
+     * AO3 carves its header out of its own form cascade with
+     * `#header a, #header fieldset, #header form, … { background: transparent }`
+     * — a quiet (1,0,1) carrying no `!important`. Every declaration we emit
+     * carries one, so a bare `fieldset` selector from us at (0,0,1) still beats
+     * it, and the login dropdown inside the header we already own would be
+     * repainted with the page colour.
+     *
+     * §14b, §18a and §20b are the same mistake. The rule is: before emitting a
+     * bare element or class selector, check whether AO3 exempts something from
+     * it with an ID.
+     */
+    for (const template of TEMPLATES) {
+      for (const rule of compileRules(template)) {
+        for (const selector of rule.selectors) {
+          if (!/(^|\s)fieldset\b/.test(selector)) continue;
+          expect(
+            selector.startsWith('#main '),
+            `"${selector}" (${template.meta.name}) reaches #header fieldset`
+          ).toBe(true);
+        }
+      }
+    }
   });
 
   test('the listbox heading is deliberately unowned, and this is why', () => {

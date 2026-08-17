@@ -1302,14 +1302,15 @@ claim has a longer story, the section number is the story.
 | --- | --- |
 | Deployed | ✅ `main` → Netlify, at `/site-skin`. Commits `f2bc76c` (Phase 9) and `5c47eda` (the §14 fix) |
 | Phases 0–6, 8, 9, 10 | ✅ complete |
-| Phase 7 — **saved on real AO3** | ❌ **never done.** The one open gate |
+| Phase 7 — **saved on real AO3** | ⚠️ **opened 17 Aug 2026.** 3 of 16 templates, 2 of 15 probes, **all passing — 252/252 declarations kept** (§24b-bis). Still the gate for the rest |
 | Templates | 16, all lint clean, all round-tripping through storage. **Ten carry a header gradient as of 17 Aug 2026** (§21a) |
-| Tests | 492 unit (`--project=unit`), 26 browser (`tests/site-skin.spec.ts`) — counts as of 17 Aug 2026, after §22e and the font bank |
+| Tests | **520 unit** (`--project=unit`), **29 browser** — counts as of 17 Aug 2026, after the Magic Picker (§24) and the form region (§25) |
 | Fonts | ✅ **24 stacks, grouped and role-split** (§19f). **Append-only** — the original seven are pinned byte for byte, because `validateTheme` matches the literal string a stored theme holds |
 | Mobile preview | ⚠️ scrolls sideways instead of scaling. Known, deliberate |
 | Marketing copy | ⚠️ correct about site skins; still silent on the work-skin export |
 | `ao3Css.ts` vs AO3 | ✅ **0 false accepts, 0 false rejects** over 4,418 corpus declarations — §17's corrections landed 16 Aug 2026 |
-| Regions styled | ⚠️ **~18 of ~25.** §18a landed 16 Aug 2026 — buttons, fields, pagination, comments and autocomplete — `.required-tags` followed on 17 Aug 2026 (§18c-2, only when a reader turns it on), and **§22e landed the same day**: `.listbox`, `.listbox .index`, `dl.meta`, `dl.index dd`, `.statistics`, the meta halo, and §22c's chip. That closes the four page types the audit found bare. **Still unowned: the tag cloud** (`a.cloud1…8`, deferred — the mock renders no Tags page, §22e), and §22f's list. `.splash` turns out to need nothing |
+| Regions styled | ⚠️ **~18 of ~25.** §18a landed 16 Aug 2026 — buttons, fields, pagination, comments and autocomplete — `.required-tags` followed on 17 Aug 2026 (§18c-2, only when a reader turns it on), and **§22e landed the same day**: `.listbox`, `.listbox .index`, `dl.meta`, `dl.index dd`, `.statistics`, the meta halo, and §22c's chip. That closes the four page types the audit found bare. **`#main fieldset` followed on 17 Aug 2026 (§25) — the form container, which is the comment form under every work.** **Still unowned: the tag cloud** (`a.cloud1…8`, deferred — the mock renders no Tags page, §22e), and §22f's list. `.splash` turns out to need nothing |
+| Magic Picker | ✅ **Phases A and B built** (§24, `MAGIC-PICKER-IMPLEMENTATION.md`). Paste a picture → a theme, from the gallery or the editor. Phase C (a website URL) is specified, needs a security review |
 | Fandom demand | ⚠️ **unserved.** All 16 templates are moods; what readers ask for is Harry Potter, Spider-Man, Iron Man — §19, added 16 Aug 2026 |
 
 **What "not saved on real AO3" means, precisely.** Our lint is a faithful port of
@@ -1331,9 +1332,13 @@ it needs a human with an account, not a test.**
 | `src/lib/siteSkin/ao3Properties.ts` | AO3's 181 properties, 20 shorthands, 270 TLDs, copied verbatim and dated | re-verifying against upstream |
 | `src/lib/siteSkin/mockPage.ts` | the preview's DOM in AO3's markup, AO3's base CSS, and an author's work skin — three stylesheets in AO3's real order (§14c) | adding a control that must be previewable |
 | `src/lib/siteSkin/templates.ts` | the 16-template catalog, descriptions, `cloneTheme` | adding a theme or a field |
+| `src/lib/siteSkin/palette.ts` | **the Magic Picker's engine.** Pixels → swatches → a `SiteSkinTheme`, with the contrast floor built in. No DOM, no URLs — which is what makes it testable and what keeps Phase C a thin fetcher in front of it | changing extraction, or building Phase C |
+| `src/lib/siteSkin/imageSample.ts` | proxy → `<img>` → 64px canvas → RGBA bytes. The only file here that knows what a canvas is | never, ideally |
+| `src/components/siteSkin/ThemeThumbnail.tsx` | the theme illustration, shared by the gallery cards and the picker's result cards. Uses `derive()` | changing what a card shows |
 | `src/lib/siteSkin/storage.ts` | key `ao3SiteSkinTheme`, `PersistResult` discipline | never, ideally |
-| `src/components/siteSkin/*` | `TemplateGallery`, `ThemeEditor`, `SkinPreview`, `ExportSkinDialog` | UI |
+| `src/components/siteSkin/*` | `TemplateGallery`, `ThemeEditor`, `SkinPreview`, `ExportSkinDialog`, `PaletteFromImage` | UI |
 | `tests/site-skin.unit.spec.ts` | the compiler's contract: ownership, cascade, contrast floors, validation | always, alongside the change |
+| `tests/palette.unit.spec.ts` | the extractor's contract, incl. the floor over 210 synthetic images and the analytics-id guard | with `palette.ts` |
 | `tests/site-skin.spec.ts` | the journey, and every assertion checks the **compiled CSS**, not that a control moved | always |
 | `tests/ao3-css.unit.spec.ts` | the sanitizer model's pinned rules | with `ao3Css.ts` |
 | `docs/SITE-SKIN-AO3-CHECKLIST.md` | the Phase 7 gate, unfilled | when you have an AO3 account open |
@@ -3243,6 +3248,106 @@ shapes these three carry**, which is most of them. It still is for the font bank
 | 7 | The `bannerSet` analytics line from §20d | Still one line, still unwritten |
 
 §19c's palettes remain unblocked and outside this order.
+
+---
+
+## 25. The form region — found in a screenshot of the real archive
+
+**17 Aug 2026.** The gate run (§24b-bis) produced three screenshots of real AO3
+pages. The CSS diff was clean; the *pictures* were not. On Moonlit Library, the
+comment form at the bottom of the work was a **light-grey slab with a cream
+border** on a dark navy page — the largest unstyled block on the page, under
+every work on the archive.
+
+### 25a. What AO3 does, and what we were doing
+
+`public/stylesheets/site/2.0/07-interactions.css`:
+
+```css
+fieldset, form dl, fieldset dl dl, fieldset fieldset fieldset,
+fieldset fieldset dl dl, dd.hideme, form blockquote.userstuff {
+  background: #ddd;
+  border: 2px solid #f3efec;
+  box-shadow: inset 1px 0 5px #999;
+}
+fieldset fieldset, fieldset dl dl, form blockquote.userstuff { background: #fff; }
+```
+
+**Every fieldset on the archive**, which is the comment form, search,
+preferences, and the whole posting flow. We owned `#main fieldset legend` and
+`li.comment` — the label and the posted comments — and never the container they
+sit in.
+
+Now emitted, following `.listbox`'s polarity (§22e) and AO3's own darker-outer
+relationship:
+
+| Selector | Takes |
+| --- | --- |
+| `#main fieldset`, `#main form dl` | `background`, `border` colour, and `box-shadow: none` to kill the bevel |
+| `#main fieldset fieldset`, `#main fieldset dl dl` | `surface` |
+
+Like the listbox pair, the polarity is a judgement rather than a measurement. The
+border is what keeps the form legible as a block once its fill matches the page.
+
+### 25b. Why the preview could not show it — and it is §21b, exactly
+
+`mockPage.ts` carried this:
+
+```css
+fieldset { border: 1px solid #ccc; margin: 0 0 1em; padding: 0.75em; }
+```
+
+No background at all. That is a **reconstruction** of AO3's rule rather than a
+transcription of it, which is the trap §21b names in one line: *"Transcribe AO3's
+rule into `mockPage.ts`, not the part of it we override. Fetch the real
+stylesheet; do not reconstruct it from a table of what we intend to undo."*
+
+The consequence was not cosmetic. The mock rendered the comment form correctly
+themed, so the preview said the region was finished — §22d's rule
+(*"invisible looks exactly like finished"*) in its second form: **a region the
+mock renders *wrongly* is worse than one it omits**, because omission at least
+leaves a hole someone might notice. This one looked right for a month.
+
+The mock now carries all three of AO3's rules verbatim, in source order.
+
+### 25c. The fourth bug with the `!important` root, caught before it shipped
+
+AO3 exempts its own header from its own form cascade:
+
+```css
+#header a, #header fieldset, #header form, #header p, #header li,
+#header h1, #small_login dl { background: transparent; border: none; box-shadow: none; }
+```
+
+A silent **(1,0,1)**, carrying no `!important`. Every declaration we emit carries
+one, so a bare `fieldset` selector from us at **(0,0,1)** would still have beaten
+it — and repainted the login dropdown inside the header we already own, with the
+page colour.
+
+§14b, §18a and §20b are the same mistake. This is the fourth, and the only reason
+it is a paragraph here rather than a bug report is that §15e's trap list said to
+check. **Scoping to `#main` is load-bearing, not tidiness**, and a test now walks
+every emitted selector to assert no unscoped `fieldset` rule can return.
+
+> The trap list works. It cost one grep to avoid a defect that has shipped three
+> times.
+
+### 25d. Two things looked wrong and were not
+
+Worth recording, because both would have been plausible bugs to "fix":
+
+- **`#main fieldset legend` is not a dead declaration.** AO3 hides bare
+  `legend` (`height: 0; width: 0; font-size: 0; opacity: 0`) — so painting it
+  looked like §23b.1's dead-rule mistake. It is not: `form.verbose legend` and
+  `form.single legend` both restore it, and both sit inside a fieldset, so our
+  rule reaches the legends AO3 actually shows.
+- **The pale strips in the Subscriptions list are not pale.** They read as light
+  bars in a downscaled screenshot; the computed style is `rgb(34, 44, 64)` —
+  `commentAlt`, correctly themed. A 7px empty `dd` beside a floated `ul.actions`.
+
+Both were settled by measuring rather than by looking: the first by reading
+AO3's source, the second by reading `getComputedStyle` in the preview iframe. **A
+screenshot is good at finding a defect and bad at confirming one.**
 
 ---
 

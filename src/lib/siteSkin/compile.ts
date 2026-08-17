@@ -651,6 +651,44 @@ function buildRules(theme: SiteSkinTheme): Rule[] {
     ],
   });
 
+  /**
+   * The form container itself, which AO3 paints `#ddd` with a `2px solid
+   * #f3efec` border and an `inset 1px 0 5px #999` bevel (07-interactions.css).
+   *
+   * **This was the largest unstyled block on the archive.** Every fieldset gets
+   * it — the comment form under every work, search, preferences, posting — so a
+   * reader on a dark theme met a light-grey slab with a cream edge at the bottom
+   * of every page they read. It was invisible to us because `mockPage.ts`
+   * carried a *reconstructed* `fieldset` rule with no background at all, which
+   * is §21b's trap and §22d's rule in one: a region the mock renders wrongly is
+   * worse than one it omits, because it looks finished.
+   *
+   * **`#main` is load-bearing, not tidiness.** AO3 exempts its own header with
+   * `#header fieldset { background: transparent }` — a silent (1,0,1). A bare
+   * `fieldset` from us, shouted, would beat that and repaint the login dropdown
+   * inside the header we already own. Three bugs share that root (§14b, §18a,
+   * §20b); scoping here is what stops this being the fourth.
+   *
+   * The polarity follows `.listbox` (§22e) and AO3's own relationship: the outer
+   * container takes the page colour, the panel nested inside it takes the card
+   * colour. Like the listbox pair it is a judgement rather than a measurement —
+   * the border is what keeps the form legible as a block once its fill matches
+   * the page.
+   */
+  rules.push({
+    selectors: ['#main fieldset', '#main form dl'],
+    decls: [
+      ['background-color', d.background],
+      ['border-color', d.border],
+      ['box-shadow', 'none'],
+    ],
+  });
+
+  rules.push({
+    selectors: ['#main fieldset fieldset', '#main fieldset dl dl'],
+    decls: [['background-color', d.surface]],
+  });
+
   // ── Comments ────────────────────────────────────────────────────────────
   rules.push({
     selectors: ['li.comment', 'div.comment'],

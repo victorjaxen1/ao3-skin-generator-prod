@@ -98,7 +98,23 @@ input, textarea, select {
 }
 /* The cream flash on focus, which is at its worst on a black theme. */
 input:focus, textarea:focus, select:focus { background: #f3efec; }
-fieldset { border: 1px solid #ccc; margin: 0 0 1em; padding: 0.75em; }
+/* AO3 paints EVERY fieldset #ddd, with a cream border and an inset grey bevel,
+   and the panel nested inside it #fff. Transcribed from
+   public/stylesheets/site/2.0/07-interactions.css.
+
+   What this file used to carry — "border: 1px solid #ccc", no background at all
+   — was a reconstruction rather than a transcription, and it is exactly the trap
+   §21b names. The consequence was not cosmetic: the comment form under every
+   work is a fieldset, so the largest interactive block on the archive was
+   painted grey for every reader on a dark theme, and our preview showed it
+   correctly themed. It was invisible here until a screenshot of the real page
+   arrived (§25). */
+fieldset, form dl, fieldset dl dl, fieldset fieldset fieldset, fieldset fieldset dl dl, dd.hideme, form blockquote.userstuff {
+  display: block; background: #ddd; border: 2px solid #f3efec;
+  margin: 0.643em; padding: 0.643em; box-shadow: inset 1px 0 5px #999;
+}
+fieldset dl, fieldset.actions, fieldset dl fieldset dl { background: transparent; border: none; clear: right; box-shadow: none; }
+fieldset fieldset, fieldset dl dl, form blockquote.userstuff { background: #fff; clear: right; }
 fieldset legend { background: #eee; color: #444; padding: 0.15em 0.5em; border: 1px solid #ccc; }
 .filters dt { background: #eee; color: #444; padding: 0.15em 0.5em; }
 
