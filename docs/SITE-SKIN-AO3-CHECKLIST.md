@@ -55,7 +55,7 @@ the reopened editor still contains every rule we emitted.
 | 12 | Clean Slate | `clean` | ⬜ | ⬜ | ⬜ | |
 | 13 | Midnight Academia | `academia` | ⬜ | ⬜ | ⬜ | banner-ready |
 | 14 | Soft Shoujo | `shoujo` | ⬜ | ⬜ | ⬜ | banner-ready |
-| 15 | Neon Terminal | `neon` | ⬜ | ⬜ | ⬜ | banner-ready |
+| 15 | Neon Terminal | `neon` | ✅ | ✅ | ✅ | 17 Aug 2026, **with both fonts changed** — this is P15's carrier. **75/75 declarations kept.** banner-ready, but saved without a banner |
 | 16 | Sun-Bleached Western | `western` | ⬜ | ⬜ | ⬜ | banner-ready |
 
 Between them the sixteen cover every branch the compiler has except the banner
@@ -85,9 +85,9 @@ Between them the sixteen cover every branch the compiler has except the banner
   `.listbox .index`, `.wrapper:has(> table, > .meta)`.
 - **Font stacks up to five names deep, as of 17 Aug 2026.** The bank grew from
   7 stacks to 24 so that every choice names a Windows face, a macOS counterpart
-  and a generic. The sixteen templates in the table above still use only the
-  original five stacks, so **nothing here reaches the new ones** — P15 is what
-  covers them, and it is the only probe that does.
+  and a generic. No *stock* template reaches the new stacks, so **P15 is the only
+  probe that covers them — and it passed on 17 Aug 2026.** A five-name stack with
+  three quoted names came back whole. The bank is safe as shipped.
 - **Two selector shapes AO3's sanitizer has never seen from us**, both also new
   on 17 Aug 2026: `:has()` and `:nth-of-type(even)`. Neither should matter —
   `clean_css_code` validates declarations and refuses only `@font-face` in a
@@ -118,7 +118,7 @@ real page.
 | P14 | **The four page types the mock could not render** — Profile, Collections, Own works, and the filter sidebar, on **one dark template** | Added 17 Aug 2026 from the §22 audit, and **rewritten the same day, because §22e landed**: this is no longer "record how wrong it looks", it is the confirmation that the region pass worked. All four are built from `.listbox`, which AO3 paints `#ddd` with a `#fff` inner panel, a white 1px ring *outside* the box and an inset grey bevel *inside* the panel. Confirm on each page that **the outer box and the inner panel are different colours** (the polarity — outer takes the page colour, inner the card colour, and painting both alike is the failure that looks correct in a diff), that **neither keeps a light edge** (the two `box-shadow: none` declarations are what remove the ring and the bevel, and a background colour alone cannot), and that headings on them are legible. Then glance at a work's metadata table (`dl.meta`'s border, and the grey halo on the `.wrapper` AO3 always puts around it), the statistics page's zebra rows, and — §22c — **any listing at all**, where every relationship tag should have lost its pale grey chip while still painting on hover | ⬜ |
 | P13 | **Required tags as words, on a real listing** | Off in every template (§18c-2), so nothing in the table above reaches it. Turn "Required tags as words" on, save, and open a works listing. Nine declarations across eight selectors, all of them undoing AO3's own `13-group-blurb.css` — which is the risk: our mock reproduces that stylesheet from a transcription, and the live page is the only place the **cascade** is real. Confirm the four phrases are legible and in the flow, that no sprite remains behind them, that the 65px gutter is reclaimed, and — the one our mock cannot show — that a **bookmark** blurb and a **series** blurb are not left broken by the same rules. `.bookmark .short .header` has a `min-height` of its own | ⬜ |
 
-| P15 | **A multi-name font stack, saved and read back** | Added 17 Aug 2026, when the font bank grew from 7 stacks to 24. `sanitize_css_font` is its own branch of the sanitizer — it never reaches `VALUE_REGEX` — and it splits on commas and checks **each name** against `[a-z0-9\- ]` after downcasing and stripping `!important`. **One bad name drops the whole declaration**, so a five-name stack is five chances to lose the font entirely, where the old three-name stacks were three. Set Headings to *Snell — formal script* (`'Snell Roundhand', 'Palace Script MT', 'Edwardian Script ITC', cursive` — the longest and most quote-heavy stack we ship) and Body to *Baskerville — elegant*, save, then **reopen the skin in AO3's editor** and confirm both `font-family` declarations came back **whole, with every name present**. A stack that returns truncated is a correction to write into §3's font branch. Also confirm the quoting survived: we emit single quotes, and AO3's regex permits them | ⬜ |
+| P15 | **A multi-name font stack, saved and read back** | Added 17 Aug 2026, when the font bank grew from 7 stacks to 24. `sanitize_css_font` is its own branch of the sanitizer — it never reaches `VALUE_REGEX` — and it splits on commas and checks **each name** against `[a-z0-9\- ]` after downcasing and stripping `!important`. **One bad name drops the whole declaration**, so a five-name stack is five chances to lose the font entirely, where the old three-name stacks were three. Set Headings to *Snell — formal script* (`'Snell Roundhand', 'Palace Script MT', 'Edwardian Script ITC', cursive` — the longest and most quote-heavy stack we ship) and Body to *Baskerville — elegant*, save, then **reopen the skin in AO3's editor** and confirm both `font-family` declarations came back **whole, with every name present**. A stack that returns truncated is a correction to write into §3's font branch. Also confirm the quoting survived: we emit single quotes, and AO3's regex permits them | ✅ **17 Aug 2026 — passes.** Both stacks came back **whole**, in all three places they are emitted. `Baskerville, 'Baskerville Old Face', 'Hoefler Text', Georgia, serif` — **five names, three quoted** — and `'Snell Roundhand', 'Palace Script MT', 'Edwardian Script ITC', cursive` — **four names, three quoted**. Single quotes preserved byte for byte. `sanitize_css_font` neither truncated a stack nor dropped a declaration, so the 24-stack bank is safe as shipped and §6d's mapping targets in MAGIC-PICKER do not shrink |
 
 ### P11 in detail — do this one first, it unblocks the roadmap
 
@@ -250,13 +250,40 @@ behind it rather than a hypothetical, so:
 > not transfer, because the two paths differ in exactly the step that would break
 > it.
 
+### The fourth save — P15, and the first customised theme
+
+**Neon Terminal with both fonts changed**, saved the same day. 75/75
+declarations kept, same single `:has()` re-wrap, nothing else.
+
+**P15 passes.** Both stacks came back whole, in all three places the compiler
+emits them:
+
+| Emitted | Names | Returned |
+| --- | --- | --- |
+| `Baskerville, 'Baskerville Old Face', 'Hoefler Text', Georgia, serif` | **5**, three quoted | whole, quotes byte-identical |
+| `'Snell Roundhand', 'Palace Script MT', 'Edwardian Script ITC', cursive` | **4**, three quoted | whole, quotes byte-identical |
+
+`sanitize_css_font` neither truncated a stack nor dropped a declaration. **The
+24-stack bank is safe as shipped**, and §6d's mapping targets in
+`MAGIC-PICKER-IMPLEMENTATION.md` do not shrink.
+
+Three things came with it for free, none of which the first three covered:
+
+- **The `plain` tag style** — `border: 0` and `padding: 0`, bare zeroes with no
+  unit, both kept.
+- **`display: none`** on `#header .logo`, the `hideLogo` branch.
+- **`#main fieldset` and its nested pair** — §25's fix, landed hours earlier,
+  confirmed on the archive rather than only in the preview.
+
+And it is **the first save of a theme the editor produced rather than the catalog
+shipped**, which is a different claim: it proves the *editor's* output survives,
+not just the sixteen we hand-checked.
+
 ### Still not proven by this run
 
-- **P15** — both templates here use two- and three-name stacks. The 24-stack bank
-  ships chains up to four names with quotes, and `sanitize_css_font` drops the
-  whole declaration for one bad name. Untouched by this run.
 - **P5, P6, P12's layered form** — no banner was in play, so `url()` and the
-  `url(), linear-gradient()` layering are still unproven.
+  `url(), linear-gradient()` layering are still unproven. `neon` is banner-ready
+  and was saved without one.
 - **P13** — required-tags-as-words is off in every template.
 - **The remaining thirteen templates**, though §19c's reasoning applies: they
   introduce no declaration shape these three did not carry, so they want a
@@ -285,18 +312,19 @@ fifteen probes. The gate is no longer empty, and the claim in the UI is no longe
 purely a prediction for the shapes these three carry.
 
 - **Date run:** 17 Aug 2026
-- **Templates saved:** 3 of 16 — `moonlit`, `paper`, `lavender`. All accepted on
-  first submit, all applied, all read back clean
+- **Templates saved:** 4 of 16 — `moonlit`, `paper`, `lavender`, and `neon` with
+  both fonts changed. All accepted on first submit, all applied, all read back
+  clean
 - **Templates that failed to save:** none
-- **Rules the readback showed missing:** **none.** 252 of 252 declarations
-  survived. Verified by mechanical diff, not by reading
+- **Rules the readback showed missing:** **none.** 327 of 327 declarations
+  survived across the four. Verified by mechanical diff, not by reading
 - **Values AO3 rewrote:** none. Every hex, length, keyword and quoted string came
   back byte-identical
 - **Corrections written back into `SITE-SKIN-IMPLEMENTATION.md` §7:** none needed
   — our model of `clean_css_code` made no wrong prediction on these three. **This
   is the first evidence the model is right rather than merely careful**
 - **Probes passed:** P8 (scrollbar), P10 (work skin under a site skin — the
-  highest-priority one, §15f)
+  highest-priority one, §15f), **P15 (the font bank)**
 - **New trap found:** AO3 re-wraps selector lists at every comma including inside
   `:has()`. Harmless for a site skin, potentially destructive for a **work** skin,
   which AO3 prefixes. Written up above and in plan §15e
@@ -304,12 +332,11 @@ purely a prediction for the shapes these three carry.
 
 ### What still has to happen
 
-1. **P15** — the 24-stack font bank is untouched by this run and is the one place
-   a *silent* loss is likely, because `sanitize_css_font` drops a whole
-   declaration for one bad name.
-2. **P5, P6, P12's layered form** — the four banner-ready templates, where the
-   only `url()` we emit lives.
-3. **P11** — the capability probe, which is what §18b is waiting on.
-4. **The remaining thirteen templates**, spot-checked rather than one row each:
+1. **P5, P6, P12's layered form** — the four banner-ready templates, where the
+   only `url()` we emit lives. **This is now the largest unproven surface**, and
+   `neon` is already banner-ready: add an imgur address and re-save.
+2. **P11** — the capability probe, which is what §18b is waiting on.
+3. **P13** — required-tags-as-words, off in every template.
+4. **The remaining twelve templates**, spot-checked rather than one row each:
    they introduce no declaration shape these three did not carry. §19c's
    reasoning, applied. The four banner-ready ones are the exception.
