@@ -933,7 +933,32 @@ about the outside world, the test that would falsify it is part of the build, no
 part of the follow-up.** The probe cost an hour and it was an hour available at
 any point in the previous three days.
 
-### 14e. What is still not measured
+### 14e. The security re-review, because §14c touched the file §12c reviewed
+
+§13c step 1 asks for a second pair of eyes on `siteFetch.ts` before merge, and
+§14c changed it — so the review was re-run against the branch, with the
+truncation, the budget and the abort race named as the things to attack.
+**No findings.** What it checked and found sound, beyond §12c's list:
+
+- **Truncation weakens no control.** It runs *after* host validation, redirect
+  re-validation and the content-type allowlist, and it holds strictly less: the
+  copy clamps with `subarray` into a buffer sized `min(total, maxBytes)`.
+- **A cut-off page cannot invent a fetch.** A truncated `<link …` does not match
+  the tag pattern, so truncation can only *lose* stylesheet links. Every link
+  that does survive is re-validated as a fresh host anyway.
+- **An exhausted budget produces a 1 ms timeout, not a skipped check.** `within()`
+  clamps to ≥ 1, so the failure mode is a refusal rather than an unvalidated
+  request.
+- **Nothing extracted reaches CSS or the DOM unvalidated**, re-checked end to
+  end: hexes fail closed through `normalizeHex` twice, fonts can only be literal
+  `FONT_STACKS` members, and `og:image` reaches `url("…")` only through
+  `checkAo3ImageUrl`, whose anchored character class excludes `"`, `)` and `;`.
+
+The two accepted risks in §12c are unchanged and still accepted: DNS rebinding
+between resolution and connection, inherited from the image proxy, and the
+in-memory per-instance rate limit.
+
+### 14f. What is still not measured
 
 - **`palette_applied` in production**, which is §13c step 3 and unchanged: is a
   URL a lower-friction front door than an image? Nothing here touches that, and
