@@ -103,9 +103,9 @@ real page.
 
 | # | Probe | Why it cannot be tested here | Result |
 | --- | --- | --- | --- |
-| P1 | **Drop cap on a single-chapter work** | `#chapters .userstuff` — the single-chapter path renders a bare `.userstuff`, the multi-chapter one `.userstuff.module`. §4.1 | ⬜ |
-| P2 | **Drop cap on a multi-chapter work** | same selector, other branch. Confirm **one** capital per chapter and **none** on the summary or notes — the defect the prototype shipped | ⬜ |
-| P3 | **Divider on both work shapes** | `hr::after` glyph and the three border longhands | ⬜ |
+| P1 | **Drop cap on a single-chapter work** | `#chapters .userstuff` — the single-chapter path renders a bare `.userstuff`, the multi-chapter one `.userstuff.module`. §4.1 | ⚠️ **17 Aug 2026 — the multi-chapter path is proven and the single-chapter one is not.** The work read was multi-chapter, so the bare `.userstuff` branch is still inferred rather than seen. Cheap to close: open any one-shot |
+| P2 | **Drop cap on a multi-chapter work** | same selector, other branch. Confirm **one** capital per chapter and **none** on the summary or notes — the defect the prototype shipped | ✅ **17 Aug 2026 — passes, and found a defect.** Exactly **one capital per chapter**, in per-chapter view and in Entire Work view, and **none on the summary** — the defect the prototype shipped. But see below: the float overhangs a short opening paragraph, which is fixed in `overflow: hidden` on the paragraph |
+| P3 | **Divider on both work shapes** | `hr::after` glyph and the three border longhands | ⬜ **still open — the work read had no author `<hr>` in its body.** The lines visible between chapters are AO3's own structural rules, not `#chapters .userstuff > hr`, and correctly carry no glyph. Needs a work whose text contains a horizontal rule |
 | P4 | **Header dropdown, logged in** | `#header .menu`, `#small_login` and the four hover/open selectors only exist for a signed-in reader | ⬜ |
 | P5 | **A banner from imgur** | the one `url()` we emit, and the one thing AO3 can refuse on address grounds alone | ✅ **17 Aug 2026 — passes**, on `user-images.githubusercontent.com` rather than imgur. `url("https://…-fe7c-11ea-8512-69f90cb65e48.gif")` came back **whole**, double quotes intact, a 100-character path of digits and hyphens untouched. `URI_REGEX` took it |
 | P6 | **A banner that 404s** | the accent must still be underneath it (§4b), so a dead image degrades to the theme rather than to white | ✅ **17 Aug 2026 — passes, and this is the one worth having watched.** One letter was removed from the address on purpose. The header **degraded to the gradient**: still 22em tall, no layout shift, `#9c4a21 → #753819` fading cleanly, the title still legible in white over it and `.primary` still transparent. Not white, not a flat fill — exactly the claim §4b and §19b-bis make, now observed instead of designed |
@@ -332,6 +332,34 @@ three probes closed.
   the alphabet buttons, the alternating rows — is fully themed. That whole pass
   was built against a mock; this is the first time it has been seen on a real
   page of the kind it was written for.
+
+#### The defect the gate was for
+
+**The drop cap's float overhangs a short opening paragraph.** P2 found it, and
+nothing in this repository could have.
+
+The capital is `4em` at `line-height: 0.8` — about **three lines** of body text.
+When the first paragraph is *longer* than that the float is contained and it
+looks perfect, which is what every screenshot, every preview and every test had
+ever shown. When the first paragraph is **one line** — an ordinary way to open a
+chapter — the float overhangs the end of its own paragraph and **the next
+paragraph wraps around it**, arriving indented by the width of the capital for no
+reason a reader can see. Chapter 2 of the work read shows it plainly; Chapter 1,
+which opens with three full lines, does not.
+
+**Fixed** by `overflow: hidden` on `#chapters .userstuff > p:first-of-type`,
+which makes that paragraph a block formatting context and contains its own float.
+Emitted only with the drop cap, and **quiet** — it lands inside somebody's work,
+so §14b applies and an author must keep the power to take their paragraph back.
+`overflow` rather than `display: flow-root`, which would also work: clipping
+degrades a decoration, whereas overriding `display` could collapse an author's
+flex or grid layout outright.
+
+**And the mock now opens with a one-line paragraph**, which is the part that
+matters for next time. This was invisible in the preview because the mock happened
+to open with three lines and contained the float *by accident*. That is §22d's
+rule in a new shape — not a missing region but a missing **shape** — and it is
+now pinned by a test that fails if anyone lengthens that paragraph.
 
 #### One thing to fix, and it is already on the roadmap
 

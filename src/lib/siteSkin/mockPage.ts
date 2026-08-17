@@ -770,9 +770,16 @@ const READING = `
           <div class="chapter preface group"><h3 class="title">Chapter 1: The Tuesday Problem</h3></div>
           <div class="userstuff module" role="article">
             <h3 class="landmark heading">Chapter Text</h3>
-            <p>The map began lying on a Tuesday, which Mara felt was typical of it. Tuesdays were
-            for inventory and for the slow accumulation of small regrets, and now, apparently,
-            for cartographic insurrection.</p>
+            <!-- A SHORT opening paragraph, deliberately, and it is load-bearing.
+                 The drop cap floats about three body lines tall, so a first
+                 paragraph shorter than that lets the float overhang into the
+                 paragraph below and indent it. Every version of this mock before
+                 17 Aug 2026 opened with three full lines, which contains the
+                 float by accident — so the defect was invisible here and showed
+                 up immediately on a real work (P1/P2). Keep this to one line. -->
+            <p>The map began lying on a Tuesday.</p>
+            <p>Mara felt that was typical of it. Tuesdays were for inventory and for the slow
+            accumulation of small regrets, and now, apparently, for cartographic insurrection.</p>
             <p>She had bought it for two coins from a man who would not meet her eyes.</p>
             <hr />
             <p>By noon the palace messenger had arrived, and the map, with what Mara could only

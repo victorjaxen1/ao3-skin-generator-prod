@@ -937,6 +937,37 @@ function buildRules(theme: SiteSkinTheme): Rule[] {
   }
 
   if (theme.details.dropCap) {
+    /**
+     * Contain the drop cap's float inside its own paragraph.
+     *
+     * **Found on real AO3, 17 Aug 2026 (P1/P2), and invisible in the preview
+     * until the mock was changed to show it.** The cap is `4em × 0.8` ≈ 3.2em
+     * tall, or about three lines of body text. When the opening paragraph is
+     * *shorter* than that — one line, which is an extremely common way to open a
+     * chapter — the float overhangs the end of its own paragraph and the NEXT
+     * paragraph wraps around it, arriving indented by the width of the capital
+     * for no reason the reader can see.
+     *
+     * `overflow: hidden` makes this paragraph a block formatting context, which
+     * contains the float. Nothing changes when the first paragraph is already
+     * tall enough, which is why every mock and every screenshot before this one
+     * looked correct.
+     *
+     * A separate rule rather than a declaration on the `::first-letter` above,
+     * because it applies to a different element — and therefore a different
+     * selector, so invariant 1 is untouched.
+     *
+     * **`overflow` rather than `display: flow-root`**, which would also work and
+     * would not clip. The choice is about which failure is worse inside somebody
+     * else's work: clipping degrades a decoration, whereas overriding `display`
+     * could collapse an author's flex or grid layout outright. §14b is the
+     * standing lesson that we are a guest in there.
+     */
+    rules.push({
+      selectors: ['#chapters .userstuff > p:first-of-type'],
+      decls: [['overflow', 'hidden']],
+      authorWins: true,
+    });
     rules.push({
       selectors: ['#chapters .userstuff > p:first-of-type::first-letter'],
       decls: [

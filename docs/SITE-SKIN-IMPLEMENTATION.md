@@ -1302,7 +1302,7 @@ claim has a longer story, the section number is the story.
 | --- | --- |
 | Deployed | ✅ `main` → Netlify, at `/site-skin`. Commits `f2bc76c` (Phase 9) and `5c47eda` (the §14 fix) |
 | Phases 0–6, 8, 9, 10 | ✅ complete |
-| Phase 7 — **saved on real AO3** | ⚠️ **opened 17 Aug 2026.** 5 of 16 templates, **9 of 15 probes — P5, P6, P7, P8, P9, P10, P12, P13, P15** — all passing, **448/448 declarations kept**, plus a four-page rendering pass with nothing broken (§24b-bis). P14 is partial. **Only P11 and the three work-body probes are untouched** |
+| Phase 7 — **saved on real AO3** | ⚠️ **opened 17 Aug 2026.** 5 of 16 templates, **10 of 15 probes — P2, P5, P6, P7, P8, P9, P10, P12, P13, P15** — all passing, **448/448 declarations kept** (§24b-bis). P1 and P14 partial, P3 still open. **The gate has now found and fixed its first defect** (§24c) |
 | Templates | 16, all lint clean, all round-tripping through storage. **Ten carry a header gradient as of 17 Aug 2026** (§21a) |
 | Tests | **520 unit** (`--project=unit`), **29 browser** — counts as of 17 Aug 2026, after the Magic Picker (§24) and the form region (§25) |
 | Fonts | ✅ **24 stacks, grouped and role-split** (§19f). **Append-only** — the original seven are pinned byte for byte, because `validateTheme` matches the literal string a stored theme holds |
@@ -3258,8 +3258,9 @@ different and much less dangerous class of unknown.
 
 ### 24c. What is NOT proven
 
-- **Phase 7 is open but no longer empty** — 5 of 16 templates and **9 of 15
-  probes**, all passing, with P14 partial (§24b-bis). Phase B adds nothing to it: it emits no property the
+- **Phase 7 is open but no longer empty** — 5 of 16 templates and **10 of 15
+  probes**, all passing, with P1 and P14 partial (§24b-bis). **It has earned its
+  keep**: P2 found a real rendering defect that no test here could have (§24c). Phase B adds nothing to it: it emits no property the
   sixteen templates do not already emit, which is the precise test §23c says to
   apply — applied deliberately this time rather than assumed. **The character of what is left has changed**: banners, fonts, gradients,
   required-tags and the layered `background-image` are all settled, so nothing

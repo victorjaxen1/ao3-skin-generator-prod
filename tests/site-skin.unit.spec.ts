@@ -757,7 +757,7 @@ test.describe('region ownership', () => {
     // inside somebody's story (plan §14). A work skin is rendered in the body,
     // after our stylesheet, and scoped to #workskin — so `!important` is the
     // only thing that would let a reader's theme rewrite an author's layout.
-    // Enumerated here, so adding a sixth is a deliberate act with a test to
+    // Enumerated here, so adding a seventh is a deliberate act with a test to
     // change rather than a quiet omission.
     const AUTHOR_WINS = [
       'blockquote',
@@ -765,6 +765,7 @@ test.describe('region ownership', () => {
       '#workskin',
       '#chapters .userstuff > hr',
       '#chapters .userstuff > hr::after',
+      '#chapters .userstuff > p:first-of-type',
       '#chapters .userstuff > p:first-of-type::first-letter',
     ];
 
@@ -816,6 +817,7 @@ test.describe('region ownership', () => {
     for (const selector of [
       '#workskin',
       '#chapters .userstuff > hr',
+      '#chapters .userstuff > p:first-of-type',
       '#chapters .userstuff > p:first-of-type::first-letter',
     ]) {
       expect(ruleFor(selector), selector).toBeDefined();
@@ -1515,4 +1517,67 @@ test.describe('preview and export cannot disagree', () => {
 test('findTemplate resolves catalog ids', () => {
   expect(findTemplate('moonlit')?.meta.name).toBe('Moonlit Library');
   expect(findTemplate('nope')).toBeUndefined();
+});
+
+/**
+ * The drop cap's float, contained.
+ *
+ * Found on real AO3 (P1/P2) and invisible in every preview before it, because
+ * the mock opened with a three-line paragraph — tall enough to contain the float
+ * by accident. A one-line opening paragraph is an ordinary way to start a
+ * chapter, and it let the capital overhang into the paragraph below.
+ */
+test.describe('the drop cap does not indent the paragraph after it', () => {
+  const withCap = { ...SAMPLE, details: { ...SAMPLE.details, dropCap: true } };
+  const without = { ...SAMPLE, details: { ...SAMPLE.details, dropCap: false } };
+
+  test('the containing paragraph gets a block formatting context', () => {
+    const rule = compileRules(withCap).find(
+      r => r.selectors.length === 1 && r.selectors[0] === '#chapters .userstuff > p:first-of-type'
+    );
+    expect(rule, 'the drop cap paragraph rule is missing').toBeDefined();
+    expect(rule!.decls).toEqual([['overflow', 'hidden']]);
+  });
+
+  test('and it is quiet, because it lands inside an author work', () => {
+    // Same argument as the ::first-letter rule it accompanies (§14b). An author
+    // who wants their own opening paragraph back must be able to take it.
+    const block = compile(withCap)
+      .split('\n\n')
+      .find(b => b.startsWith('#chapters .userstuff > p:first-of-type {'))!;
+    expect(block).toBeDefined();
+    expect(block).not.toContain('!important');
+  });
+
+  test('nothing is emitted when the drop cap is off', () => {
+    expect(compile(without)).not.toContain('#chapters .userstuff > p:first-of-type {');
+  });
+
+  test('it is a different selector from the letter, so invariant 1 holds', () => {
+    // `p:first-of-type` and `p:first-of-type::first-letter` style different
+    // elements. Neither shares a property with the other, and the paragraph rule
+    // must not have swallowed the letter's.
+    const rules = compileRules(withCap);
+    const para = rules.find(r => r.selectors[0] === '#chapters .userstuff > p:first-of-type')!;
+    const letter = rules.find(
+      r => r.selectors[0] === '#chapters .userstuff > p:first-of-type::first-letter'
+    )!;
+    expect(letter).toBeDefined();
+    const shared = para.decls
+      .map(([property]) => property)
+      .filter(property => letter.decls.some(([other]) => other === property));
+    expect(shared).toEqual([]);
+    expect(letter.decls.map(([property]) => property)).toContain('float');
+  });
+
+  test('the reading mock still opens with a short paragraph', () => {
+    // The whole reason this defect was invisible. If someone lengthens this
+    // paragraph the preview stops showing the case the rule exists for, and the
+    // next person will find it on AO3 again rather than here (invariant 4).
+    const opening = mockDocument('reading', compile(withCap)).match(
+      /<div class="userstuff module"[^>]*>[\s\S]*?<p>([^<]*)<\/p>/
+    );
+    expect(opening, 'the chapter body no longer starts with a paragraph').toBeTruthy();
+    expect(opening![1].trim().length).toBeLessThan(60);
+  });
 });
