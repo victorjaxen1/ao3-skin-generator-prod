@@ -200,11 +200,23 @@ export function swatchesFromColors(colors: readonly { hex: string; weight: numbe
       return {
         hex: normalizeHex(hex),
         weight: weight / total,
-        chroma: (Math.max(r, g, b) - Math.min(r, g, b)) / 255,
+        chroma: chromaOf(hex),
         lightness: (0.299 * r + 0.587 * g + 0.114 * b) / 255,
       };
     })
     .sort((a, b) => b.weight - a.weight);
+}
+
+/**
+ * How much colour a hex actually carries — `Swatch.chroma`, for a lone colour.
+ *
+ * Exported because `siteTheme.ts` has to answer "did this stylesheet declare a
+ * hue, or only greys?" before it decides which source wins, and the answer must
+ * be the same measure the accent picker ranks by.
+ */
+export function chromaOf(hex: string): number {
+  const [r, g, b] = rgbOf(hex);
+  return (Math.max(r, g, b) - Math.min(r, g, b)) / 255;
 }
 
 /* ── The mapping ──────────────────────────────────────────────────────────── */

@@ -6,11 +6,18 @@
  * judgement is C1's, and this file only decides *which* input wins and what to
  * say about it.
  *
- * **`og:image` is the primary signal, not a secondary one** (§6a). A site's
- * social card is a deliberate, designed summary of its look, and it is usually a
- * better answer than its CSS — which is mostly greys, and on a JavaScript-
- * rendered site is mostly absent. When there is no card, the declared colours
- * are the fallback rather than the plan.
+ * **The stylesheet wins when it has a hue to offer; the card is what rescues a
+ * page that does not** (§14). This is the reverse of the plan's §6a, and it was
+ * measured rather than argued: over twenty real sites, quantizing the social
+ * card returned a muddy neutral — `#838080` for Notion, `#7b8386` for Apple,
+ * `#725964` for Goodreads — while the stylesheet returned the brand colour those
+ * companies actually publish. The reason is structural. A card is a photograph
+ * or a screenshot with a logo on it, so its *dominant* colours are the
+ * photograph; a `--brand` custom property is a designer naming the answer.
+ *
+ * §6a's real case survives as the fallback, and it is the one it was written
+ * for: a JavaScript-rendered page whose HTML is an empty `<div id="root">`
+ * declares no colour at all, and there the card is the only signal there is.
  *
  * No I/O here either. Pixels arrive already sampled and the site style arrives
  * already parsed, so every judgement below is testable from two plain values.
@@ -19,7 +26,10 @@
 import { SiteSkinTheme } from './theme';
 import {
   Polarity,
+  Swatch,
+  chromaOf,
   colorsFromSwatches,
+  pickAccent,
   quantize,
   swatchesFromColors,
   themeFromPalette,
@@ -65,6 +75,29 @@ export function siteLabel(url: string): string {
 }
 
 /**
+ * Below this, the colour the accent picker would choose is a grey.
+ *
+ * `chromaOf` is `(max − min) / 255`, so this is a low bar cleared by anything a
+ * person would call a colour: Firefox blue `#0060df` reads 0.87, AO3's own
+ * `#990000` reads 0.6, and a muted clay `#6b5b4a` still reads 0.13. The greys
+ * the twenty-site probe caught cards producing — `#838080`, `#7b8386` — read
+ * 0.01 and 0.04. There is a wide empty gap between the two populations, which
+ * is why a single threshold can stand here without being fussy.
+ */
+const DECLARED_HUE = 0.12;
+
+/**
+ * Did this stylesheet name a colour, or only shades of paper and ink?
+ *
+ * Asked of the accent the mapping *would* pick rather than of the swatch list,
+ * because that is the only colour the decision changes. A page of greys with one
+ * red button passes; a page of greys does not.
+ */
+function declaresHue(swatches: readonly Swatch[]): boolean {
+  return swatches.length > 0 && chromaOf(pickAccent(swatches)) >= DECLARED_HUE;
+}
+
+/**
  * Everything a page gave us → two themes and the sentences that explain them.
  *
  * `pixels` is the social card, already sampled; pass `null` when there was no
@@ -78,8 +111,8 @@ export function themesFromSite(
   pixels: ArrayLike<number> | null,
   pageUrl: string
 ): SiteExtraction {
-  const fromImage = pixels ? quantize(pixels) : [];
   const fromCss = swatchesFromColors(meaningfulColors(style.colors));
+  const fromImage = declaresHue(fromCss) || !pixels ? [] : quantize(pixels);
   const swatches = fromImage.length > 0 ? fromImage : fromCss;
 
   const source: ColorSource =
@@ -121,7 +154,10 @@ export function themesFromSite(
 }
 
 const SOURCE_NOTES: Record<ColorSource, string> = {
-  'og-image': "These colours come from that site's own social image — the picture it shows when somebody shares a link.",
+  // Only reachable when the stylesheet had no hue in it, so the sentence says
+  // that: it explains why we went looking somewhere else, and it is the truth
+  // about the page rather than a boast about the method.
+  'og-image': "That page declares almost no colour of its own, so these come from its social image — the picture it shows when somebody shares a link.",
   stylesheet: 'These colours come from that site’s stylesheet.',
   'theme-color': 'That page renders itself in JavaScript, so the only colour it declares up front is its browser theme colour. Everything else here is built around it.',
 };

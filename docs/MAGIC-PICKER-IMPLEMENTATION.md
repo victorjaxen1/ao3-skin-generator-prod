@@ -5,10 +5,16 @@
 and §19 (the fandom question). This document is the full build; §19b and §19a
 over there are its history and are partly superseded here — see §7.
 
-**Status: all three phases are built.** Phase A landed 17 Aug 2026; Phase B the
-same day (§11 records what it cost and what it corrected); Phase C — the URL
-picker — landed 17 Aug 2026 (§12). The release gate closed first, as §8 required,
-and P15 passed, so §6d's mapping targets stand as written.
+**Status: all three phases are built, and the measurement they were waiting on
+has been made.** Phase A landed 17 Aug 2026; Phase B the same day (§11 records
+what it cost and what it corrected); Phase C — the URL picker — landed 17 Aug
+2026 (§12). The release gate closed first, as §8 required, and P15 passed, so
+§6d's mapping targets stand as written.
+
+**§14 is the newest section and it reverses this document's central bet.** Twenty
+real sites say `og:image` is *not* the better colour signal — it is the worse one
+on two thirds of them. Read §14 before §6a, which is now wrong where it is
+emphatic.
 
 > ## Start here
 >
@@ -361,6 +367,13 @@ URL → /api/site-palette → { colors[], fonts[], radius, ogImage }
                     merge → SiteSkinTheme → existing preview + export
 ```
 
+> **⚠️ Superseded by §14, which measured it.** The paragraph below is the bet
+> this document made, and twenty sites overturned it: quantizing a social card
+> returns a grey on ten of sixteen, where the stylesheet returns a grey on one.
+> The stylesheet now wins whenever it names a hue at all; the card is the
+> fallback for a page that names none. Kept here because §14 only makes sense
+> against what it replaced.
+
 **`og:image` is the primary signal, not a secondary one.** §19a objected to "a
 second fetch for `og:image`"; making it the main input is what dissolves that
 objection. A site's social card is a deliberate, designed summary of its look —
@@ -510,12 +523,10 @@ Phase C adds a source toggle and a "what we did" line to a component that exists
 - ~~**Does a five-name font stack survive AO3's save?**~~ **Answered: yes.** P15
   passed on 17 Aug 2026 — both stacks came back whole, quotes byte for byte. §6d's
   mapping targets do not shrink.
-- **How often is `og:image` genuinely representative?** Still untested at scale.
-  Five sites were run through the real endpoint while building C (§12) and the
-  *stylesheet* answer was good on all five; the card was never compared against
-  it, because comparing them needs a canvas and the probe had none. That is the
-  measurement to make next, and it is now one throwaway script rather than a
-  build.
+- ~~**How often is `og:image` genuinely representative?**~~ **Answered, and the
+  answer was no** — §14. Twenty sites through the real endpoint and a real
+  canvas: the card produced a grey accent on ten of the sixteen it could be read
+  from, the stylesheet on one. Precedence reversed the same day.
 - **Is the URL or the image the better front door?** The instinct in this
   document is that a URL is lower friction — pasting a link beats finding an
   image, hosting it, and satisfying `checkAo3ImageUrl`. That is a belief, not a
@@ -622,6 +633,8 @@ website chooses different values in rules the gate has already proved.
 ### 12a. What the code corrected in the plan, and what five real sites corrected
 
 **`og:image` is primary in the design and second in the code path, deliberately.**
+*(§14 later made it second in the design too, for a different reason than the one
+below — the card is not merely harder to read, it is usually worse.)*
 §6a is right that a social card is a better summary than a stylesheet full of
 greys — but the card can only be *read* through a canvas, and it fails often
 (SVG cards, hosts the proxy refuses). So the client tries the card first and
@@ -716,6 +729,10 @@ the part of this feature that had no threat model before it was written.
 
 ## 13. Handoff — 17 Aug 2026, after Phase C
 
+> **§14 has since overtaken parts of this section.** Step 2 of §13c is done and
+> it changed the product; the test counts in §13a are out of date by the tests
+> §14 added. Everything else here still holds.
+
 **Where this stands: the feature is finished and it is not deployed.** All three
 phases are built, tested and committed; production is still running the commit
 before them. That gap is deliberate and §13c is the decision waiting for you.
@@ -727,7 +744,7 @@ before them. That gap is deliberate and §13c is the decision waiting for you.
 | Branch | `feat/magic-picker-phase-b`, pushed to `origin`. Head `dbd34c2` |
 | Production | `main` at `4e476a6`, Netlify deploy `6a82f20a`, 17 Aug 11:35 UTC. **Neither Phase B nor Phase C is live** |
 | Merged to `main`? | **No.** No PR opened. Nothing in §12 has run anywhere but a developer's machine and a dev server |
-| Tests | 636 unit (`npm run test:unit`), 31 site-skin journeys. `tsc` clean, `npm run build` clean |
+| Tests | 636 unit (`npm run test:unit`), 31 site-skin journeys. `tsc` clean, `npm run build` clean. **§14 took this to 640 unit**, and the 31 journeys still pass against a local server |
 | Release gate | ✅ closed before Phase C, as §8 required. P15 passed, so §6d's targets stand |
 
 **What is live today** is the font bank (Phase A) and nothing else from this
@@ -740,7 +757,7 @@ document. A reader on the site right now cannot paste anything.
 | `src/lib/siteSkin/palette.ts` | pixels → swatches → four colours, and **the contrast floor**. Phase B's engine, and Phase C's too via `swatchesFromColors` | changing how colours are chosen |
 | `src/lib/siteSkin/siteStyle.ts` | HTML and CSS *text* → colours, fonts, radius, `og:image`, polarity. **No I/O** | changing what a page yields |
 | `src/lib/siteSkin/fontClassify.ts` | ~200 faces → 19 characters → a `FONT_STACKS` value, plus the sentence | the classifier is wrong about a font |
-| `src/lib/siteSkin/siteTheme.ts` | the merge: which signal wins, and what we say about it | changing precedence or the notes |
+| `src/lib/siteSkin/siteTheme.ts` | the merge: which signal wins (`declaresHue`, §14b), and what we say about it | changing precedence or the notes |
 | `src/lib/server/siteFetch.ts` | the only file that opens a page. Security lives here | anything about fetching |
 | `src/pages/api/site-palette.ts` | the endpoint: origin check, rate limit, **field-by-field response** | changing what crosses to the client |
 | `src/components/siteSkin/PaletteFromImage.tsx` | both doors, both polarities, the notes, the banner offer | anything the user sees |
@@ -758,12 +775,9 @@ The endpoint is new outbound attack surface. §12c is the review; it found and
 fixed one real defect and lists two accepted risks. A second pair of eyes on
 `siteFetch.ts` before merge is cheap and proportionate.
 
-**2. Answer §10's remaining question with twenty sites, not five.** Whether
-`og:image` is genuinely better than the stylesheet is still unmeasured — the
-five-site probe compared nothing, because sampling a social card needs a canvas
-and the probe was a unit test. Do it in a Playwright *browser* test that drives
-`extractFromSite` both ways and puts the two palettes side by side. It is an
-hour, and it decides whether §6a's "primary signal" claim survives.
+**2. ~~Answer §10's remaining question with twenty sites, not five.~~ ✅ Done —
+§14.** It cost the hour it was costed at, `§6a`'s claim did **not** survive, and
+the reversal plus two endpoint fixes are in the same commit as the probe.
 
 **3. Watch `palette_applied`.** It carries `source` (`image` | `site`),
 `polarity` and `placement`, and it is the instrument for the question this whole
@@ -798,10 +812,11 @@ likely to be wrong:
   `/api/image-proxy` for that reason as much as for SSRF. Dropping it works on
   your test image and fails on most real ones.
 
-### 13e. What is deliberately not built
+### 13e. What is deliberately not built (as of Phase C; §14 changed the first line)
 
 - **No headless browser.** A React shell yields `theme-color` and `og:image`;
-  §6c says accept that, and `og:image` is primary precisely because it survives.
+  §6c says accept that, and the card is what rescues exactly that page — which
+  after §14 is the *only* case it is used for, rather than the primary one.
 - **No second extraction system.** Phase C adds a fetcher and a merge, and
   reuses Phase B's quantizer, floor and repair whole.
 - **No fonts or radius applied in the editor path.** The editor replaces four
@@ -810,3 +825,114 @@ likely to be wrong:
   worse than silence.
 - **No images shipped by us, ever.** SITE-SKIN §19b-bis, unchanged. A gradient
   costs zero bytes and cannot expire.
+
+---
+
+## 14. The measurement — twenty sites, and the bet it lost
+
+**17 Aug 2026.** §13c step 2, which was the last thing §10 owed. It took an hour,
+as costed, and it changed three files of product code rather than none.
+
+### 14a. What was run
+
+`tests/site-palette-probe.spec.ts` — a browser test, because the thing that could
+not be measured before was the *card*, and sampling a card needs a canvas. It
+drives both halves of the real extraction over twenty real sites: the live
+`/api/site-palette` for the stylesheet, and `/api/image-proxy` plus a canvas for
+`og:image`, then runs each through the same `colorsFromSwatches` the product
+uses. It is skipped unless `PROBE_SITES` is set, because it talks to twenty
+strangers' servers and its output is a table for a human, not a pass or a fail.
+
+```bash
+npm run dev
+PROBE_SITES=1 UX_BASE_URL=http://localhost:3000 \
+  npx playwright test --project=desktop tests/site-palette-probe.spec.ts
+```
+
+### 14b. The answer, which is not the one §6a expected
+
+**On the sixteen sites where both sources could be read, the card returned a
+*grey* accent on ten. The stylesheet returned one** — linear.app, which really is
+a black-and-white site.
+
+| Site | Stylesheet | Card |
+| --- | --- | --- |
+| notion.so | `#e32d14` | `#838080` |
+| apple.com | `#0071e3` | `#7b8386` |
+| anthropic.com | `#3081c9` | `#838180` |
+| nytimes.com | `#ff1493` | `#7a7a7a` |
+| wikipedia.org | `#f54739` | `#7c7d7f` |
+| bbc.co.uk | `#0071f1` | `#717171` |
+| mozilla.org | `#0060df` | `#009522` |
+
+The reason is structural, which is why twenty sites are enough and two hundred
+would say the same thing. **A social card is a photograph or a screenshot with a
+logo on it.** Its dominant colours are the photograph, and quantizing a
+photograph averages toward mud — that is the same fact §5c's `fixAccent` row
+exists for. **A `--brand` custom property is a designer naming the answer.** The
+plan reasoned about what a card is *for* (a designed summary) and not about what
+a card is *made of*.
+
+§6a's genuine case survives untouched and is now the fallback it should always
+have been: a JavaScript-rendered page whose HTML is an empty `<div id="root">`
+declares no colour, and there the card is the only signal there is.
+
+### 14c. What changed in the product
+
+| File | Change |
+| --- | --- |
+| `src/lib/siteSkin/siteTheme.ts` | **Precedence reversed.** `declaresHue()` — the stylesheet wins when the accent it would pick has chroma ≥ 0.12; the card is quantized only when it does not. The `og-image` note now says *"that page declares almost no colour of its own"*, which is the truth about the page rather than a boast about the method |
+| `src/lib/siteSkin/palette.ts` | `chromaOf` exported, so the precedence test and the accent picker rank by one measure |
+| `src/lib/server/siteFetch.ts` | Two fixes below |
+| `tests/site-palette.unit.spec.ts` | The old *"the social card outranks the stylesheet"* test is now a **pair** — a stylesheet with a hue wins, a page of greys falls through — plus the truncation, the endless-body cap and the budget |
+| `tests/site-palette-probe.spec.ts` | **new.** The probe itself, gated on `PROBE_SITES` |
+
+**A page over 1 MB was refused outright, and that was wrong.** nytimes.com
+(1.24 MB), linear.app (1.26 MB) and figma.com all returned *"that page is too
+large to read"* to somebody pasting an ordinary link. `readResponseBytes` throws
+`TOO_LARGE`, which is correct for an image — half a PNG is not a picture — and
+incorrect for a page, whose signals are meta tags near the top. `siteFetch.ts`
+now has its own `readTextBytes` that **truncates at the cap** instead, and
+cancels the stream rather than downloading a body in order to reject it. The cap
+is unchanged, so what a hostile host can make us hold is unchanged.
+
+**The endpoint's worst case did not fit in a serverless function.** Each hop
+carried its own 8-second timeout and there are four hops, so a slow site could
+run 32 seconds against Netlify's 10-second limit — and a function killed
+mid-sentence does not return the polite error we wrote, it returns whatever the
+platform says. `fetchSiteStyle` now holds **one 9-second budget** for the whole
+extraction and drops stylesheets when it runs short, which is the right thing to
+sacrifice because they were already optional.
+
+### 14d. The learning, and it is the third one of the same shape
+
+§11b: *a plan that names an existing helper has not checked that helper's
+contract.* §12b: *when the output space is an allowlist, test identity and not
+just membership.* This one:
+
+**A claim about the world does not become true by being load-bearing.** §6a's
+"primary signal" was stated three times, designed around, built, shipped and
+documented — and it was never once checked, because checking it needed a canvas
+and every test that could have checked it was a unit test. The plan even *knew*
+it was unmeasured: §10 carried the question from the first draft to the last, and
+§12a admitted the five-site probe "compared nothing". An open question that stays
+open long enough starts reading like a settled one.
+
+The cheap defence is the one that worked here: **when a design rests on a claim
+about the outside world, the test that would falsify it is part of the build, not
+part of the follow-up.** The probe cost an hour and it was an hour available at
+any point in the previous three days.
+
+### 14e. What is still not measured
+
+- **`palette_applied` in production**, which is §13c step 3 and unchanged: is a
+  URL a lower-friction front door than an image? Nothing here touches that, and
+  nothing can until it ships.
+- **`MIN_DELIBERATE` (2%) against real fan art**, §10's last open question. The
+  probe exercised it on twenty *websites*, which is not the same population — a
+  logo-sized splash on a muted photograph is still the case that could go wrong
+  in either direction.
+- **The `#ff1493` in the nytimes row.** The stylesheet's answer beat the card
+  there, but deep pink is not the New York Times. The weights in `siteStyle.ts`
+  are a coarse three-tier proxy for area (§13c step 4) and that row is what one
+  of their failures looks like. It is a tuning question, not a design one.

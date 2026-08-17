@@ -234,12 +234,45 @@ test.describe('the fetcher refuses what it must', () => {
     ).rejects.toMatchObject({ code: 'UNSUPPORTED_TYPE' });
   });
 
-  test('an oversized page is cut off rather than read', async () => {
+  // Reversed deliberately, and §14 is why: refusing a big page failed on
+  // nytimes.com and linear.app, which are ordinary links to paste. Half a page
+  // still carries the head, so the cap truncates.
+  test('an oversized page is truncated to the cap, not refused', async () => {
     const fetchImpl = (async () =>
       textResponse('x'.repeat(5000), 'text/html', 200, { 'content-length': '5000' })) as unknown as typeof fetch;
-    await expect(
-      fetchValidatedText('https://example.com/', { kind: 'html', maxBytes: 1000, fetchImpl, resolver: publicDns })
-    ).rejects.toMatchObject({ code: 'TOO_LARGE' });
+    const result = await fetchValidatedText('https://example.com/', {
+      kind: 'html',
+      maxBytes: 1000,
+      fetchImpl,
+      resolver: publicDns,
+    });
+    expect(result.text.length).toBeLessThanOrEqual(1000);
+    expect(result.text.length).toBeGreaterThan(0);
+  });
+
+  test('the head of a truncated page still yields its signals', async () => {
+    const head = `<html><head><meta name="theme-color" content="#c2410c"></head><body>`;
+    const fetchImpl = (async () =>
+      textResponse(head + '<p>x</p>'.repeat(40_000), 'text/html')) as unknown as typeof fetch;
+    const result = await fetchSiteStyle('https://example.com/', { fetchImpl, resolver: publicDns });
+    expect(result.style.themeColor).toBe('#c2410c');
+  });
+
+  // The cap is what a hostile host is held to, and truncating must not have
+  // loosened it: a server that streams for ever still gives us one megabyte.
+  test('an endless body is still capped', async () => {
+    const endless = new ReadableStream<Uint8Array>({
+      pull(controller) { controller.enqueue(new Uint8Array(64 * 1024)); },
+    });
+    const fetchImpl = (async () =>
+      new Response(endless, { status: 200, headers: { 'content-type': 'text/html' } })) as unknown as typeof fetch;
+    const result = await fetchValidatedText('https://example.com/', {
+      kind: 'html',
+      maxBytes: 1000,
+      fetchImpl,
+      resolver: publicDns,
+    });
+    expect(result.text.length).toBe(1000);
   });
 
   test('a redirect chain terminates', async () => {
@@ -271,6 +304,30 @@ test.describe('fetchSiteStyle', () => {
     const result = await fetchSiteStyle('https://example.com/', { fetchImpl: serve, resolver: publicDns });
     expect(result.stylesheetsRead).toBe(1);
     expect(result.style.polarity).toBe('dark');
+  });
+
+  // The whole extraction has to fit inside a serverless function's 10 seconds.
+  // Per-hop timeouts alone did not bound it: a page plus three stylesheets was
+  // 32 seconds in the worst case, and a function killed mid-sentence returns
+  // something we never wrote. The sheets are what gets dropped.
+  test('a slow page spends the budget and the stylesheets are skipped', async () => {
+    const slow = (async (input: any) => {
+      await new Promise(done => setTimeout(done, 300));
+      const url = String(input);
+      if (url.endsWith('.css')) return textResponse('body{background:#101014}', 'text/css');
+      return textResponse(page);
+    }) as unknown as typeof fetch;
+
+    const result = await fetchSiteStyle('https://example.com/', {
+      fetchImpl: slow,
+      resolver: publicDns,
+      budgetMs: 400,
+    });
+
+    expect(result.stylesheetsRead).toBe(0);
+    // And the page's own signals still came back, which is the point of
+    // sacrificing the sheets rather than failing.
+    expect(result.style.ogImage).toBe('https://example.com/card.png');
   });
 
   test('og:image comes back absolute — it is what Phase B is handed', async () => {
@@ -312,22 +369,50 @@ test.describe('a website becomes a theme that the rest of the product already ha
     expect(swatches[0].weight).toBeCloseTo(0.75, 10);
   });
 
-  test('the social card outranks the stylesheet — §6a', () => {
-    // A green card against a page whose CSS is entirely grey. If the card wins,
-    // the accent is green; if the CSS wins, there is no hue to find at all.
+  /**
+   * §14 reversed §6a here, on twenty sites' evidence: a social card quantizes to
+   * the average of a photograph, and Notion's card gave `#838080` where its
+   * stylesheet gave `#e32d14`. So these two tests are a pair, and the pair is
+   * the rule — neither source always wins, the *hue* decides.
+   */
+  const greenCard = () => {
     const card = new Uint8ClampedArray(400 * 4);
     for (let i = 0; i < 400; i++) {
       card[i * 4] = 24; card[i * 4 + 1] = 160; card[i * 4 + 2] = 90; card[i * 4 + 3] = 255;
     }
+    return card;
+  };
+
+  test('a stylesheet that names a colour outranks the social card — §14', () => {
+    const style = {
+      ...EMPTY_SITE_STYLE,
+      colors: [{ hex: '#f5f5f5', weight: 5 }, { hex: '#e32d14', weight: 3 }],
+    };
+    const withCard = themesFromSite(style, greenCard(), 'https://example.com/');
+    const withoutCard = themesFromSite(style, null, 'https://example.com/');
+
+    expect(withCard.source).toBe('stylesheet');
+    // Identity, not membership — §12b. A green card must not have moved the red.
+    expect(withCard.themes.light.colors.accent).toBe(withoutCard.themes.light.colors.accent);
+    expect(withCard.themes.light.colors.accent).toMatch(/^#[a-f0-9]{6}$/);
+  });
+
+  test('a page of greys falls through to the card — §6a\'s real case', () => {
+    // The JavaScript shell: an empty `<div id="root">` declares no hue, and the
+    // card is then the only signal there is.
     const style = {
       ...EMPTY_SITE_STYLE,
       colors: [{ hex: '#f5f5f5', weight: 5 }, { hex: '#333333', weight: 3 }],
     };
-    const withCard = themesFromSite(style, card, 'https://example.com/');
+    const withCard = themesFromSite(style, greenCard(), 'https://example.com/');
     const withoutCard = themesFromSite(style, null, 'https://example.com/');
+
     expect(withCard.source).toBe('og-image');
     expect(withoutCard.source).toBe('stylesheet');
     expect(withCard.themes.light.colors.accent).not.toBe(withoutCard.themes.light.colors.accent);
+    // And it says why it went looking elsewhere, rather than claiming the card
+    // was the better answer.
+    expect(withCard.notes[0].text).toContain('declares almost no colour of its own');
   });
 
   test('a page that gave us nothing still yields two editable themes', () => {

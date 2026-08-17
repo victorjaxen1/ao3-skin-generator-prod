@@ -32,6 +32,21 @@ exercise `image-proxy.spec.ts`, which needs the `/api/image-proxy` route.
 
 **Instrumentation** — the rest. See below.
 
+**A probe** — `site-palette-probe.spec.ts`, which is neither. It runs twenty real
+websites through the Magic Picker's two colour sources and prints them side by
+side; its output is a table for a human to read, not a verdict. It is **skipped
+unless `PROBE_SITES` is set**, and it needs a local server:
+
+```bash
+npm run dev
+PROBE_SITES=1 UX_BASE_URL=http://localhost:3000 \
+  npx playwright test --project=desktop tests/site-palette-probe.spec.ts
+```
+
+It earned its place once already: `docs/MAGIC-PICKER-IMPLEMENTATION.md` §14 is
+what it found, and it reversed a design decision that three days of green tests
+had never touched.
+
 ## What the instrumentation specs are
 
 Instrumentation. They measure steps-to-goal, missing affordances, unlabeled

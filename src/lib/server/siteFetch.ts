@@ -14,7 +14,9 @@
  *  - **The redirect loop is manual and re-validates each hop.** A redirect to
  *    `169.254.169.254` is the classic bypass and `fetch`'s default
  *    `redirect: 'follow'` is how it lands.
- *  - **`readResponseBytes` caps the body** before it is a string.
+ *  - **`readTextBytes` caps the body** before it is a string. Text differs from
+ *    an image in one way that matters: the cap *truncates* rather than refusing,
+ *    because half a page still carries its meta tags — see the comment there.
  *
  * What is new here, and it is the rule that keeps this from being a general
  * purpose proxy: **the fetched body never reaches the client.** `/api/site-palette`
@@ -23,12 +25,7 @@
  * reading any page our server can reach, with our IP and our egress.
  */
 
-import {
-  DnsResolver,
-  RemoteImageError,
-  readResponseBytes,
-  validateRemoteImageUrl,
-} from './imageSecurity';
+import { DnsResolver, RemoteImageError, validateRemoteImageUrl } from './imageSecurity';
 import {
   SiteStyle,
   absoluteImageUrl,
@@ -112,14 +109,58 @@ export async function fetchValidatedText(
         throw new RemoteImageError('UNSUPPORTED_TYPE', 422);
       }
 
-      const bytes = await readResponseBytes(response, options.maxBytes);
+      const bytes = await readTextBytes(response, options.maxBytes);
       if (bytes.length === 0) throw new RemoteImageError('EMPTY_RESPONSE', 502);
+      // `fatal: false` on purpose — the cap can land mid-character, and one
+      // replacement glyph in a document we only ever regex over is not a fault.
       return { text: new TextDecoder('utf-8').decode(bytes), url: url.toString() };
     }
     throw new RemoteImageError('TOO_MANY_REDIRECTS', 502);
   } finally {
     clearTimeout(timeout);
   }
+}
+
+/**
+ * The cap, applied by **stopping** rather than by refusing.
+ *
+ * `readResponseBytes` throws `TOO_LARGE`, which is right for an image — half a
+ * PNG is not a picture. It is wrong for a page. The signals we want are meta
+ * tags and declarations, the ones that matter are near the top, and a document
+ * cut off at a megabyte still yields all of them. The measured cost of the
+ * strict version was total: nytimes.com (1.24 MB), linear.app (1.26 MB) and
+ * figma.com all returned *"that page is too large to read"* to a person who
+ * pasted a perfectly ordinary link, and every one of them parses fine truncated.
+ *
+ * Cancelling the stream at the cap also spends less time and less memory than
+ * downloading a body in order to reject it, which is the other half of why
+ * those sites were failing — see §14 in the plan.
+ *
+ * The cap itself is unchanged, so the bound a hostile host is held to is
+ * unchanged: it can still never make us hold more than `maxBytes`.
+ */
+async function readTextBytes(response: Response, maxBytes: number): Promise<Uint8Array> {
+  if (!response.body) throw new RemoteImageError('EMPTY_RESPONSE', 502);
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (total < maxBytes) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    total += value.byteLength;
+  }
+  await reader.cancel().catch(() => undefined);
+
+  const bytes = new Uint8Array(Math.min(total, maxBytes));
+  let offset = 0;
+  for (const chunk of chunks) {
+    if (offset >= bytes.length) break;
+    bytes.set(chunk.subarray(0, bytes.length - offset), offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
 }
 
 /**
@@ -132,6 +173,25 @@ export async function fetchValidatedText(
 const MAX_STYLESHEETS = 3;
 const HTML_BYTES = 1024 * 1024;
 const CSS_BYTES = 1024 * 1024;
+
+/**
+ * One deadline for the whole extraction, and it is not a nicety.
+ *
+ * Each fetch used to carry its own 8-second timeout, so the worst case was a
+ * page plus three stylesheets — **32 seconds**, against a Netlify function that
+ * is killed at 10. A slow site did not produce "that site took too long"; it
+ * produced whatever a platform returns when it stops a function mid-sentence,
+ * which is not a sentence we wrote.
+ *
+ * 9 seconds leaves a moment to serialise the answer inside that 10. The
+ * stylesheets are the right thing to sacrifice when it runs short: they are
+ * already optional (a page that yields only meta tags is a smaller result, not
+ * a failure), and the head has usually paid for itself by then.
+ */
+const TOTAL_BUDGET_MS = 9_000;
+
+/** Under this there is no point starting another sheet; spend it on the answer. */
+const MIN_SHEET_MS = 1_200;
 
 export interface SiteStyleResult {
   style: SiteStyle;
@@ -151,12 +211,24 @@ export interface SiteStyleResult {
  */
 export async function fetchSiteStyle(
   rawUrl: string,
-  options: { fetchImpl?: typeof fetch; resolver?: DnsResolver; timeoutMs?: number } = {}
+  options: {
+    fetchImpl?: typeof fetch;
+    resolver?: DnsResolver;
+    timeoutMs?: number;
+    /** The whole extraction's budget. See `TOTAL_BUDGET_MS`. */
+    budgetMs?: number;
+  } = {}
 ): Promise<SiteStyleResult> {
+  const deadline = Date.now() + (options.budgetMs ?? TOTAL_BUDGET_MS);
+  const left = () => deadline - Date.now();
+  // An explicit per-fetch timeout still caps a single hop; the budget caps them
+  // all, and the smaller of the two always wins.
+  const within = (ms: number) => Math.max(1, Math.min(options.timeoutMs ?? Infinity, ms));
+
   const page = await fetchValidatedText(rawUrl, {
     kind: 'html',
     maxBytes: HTML_BYTES,
-    timeoutMs: options.timeoutMs,
+    timeoutMs: within(left()),
     fetchImpl: options.fetchImpl,
     resolver: options.resolver,
   });
@@ -164,11 +236,12 @@ export async function fetchSiteStyle(
   const links = readStylesheetLinks(page.text, page.url).slice(0, MAX_STYLESHEETS);
   const sheets: string[] = [];
   for (const link of links) {
+    if (left() < MIN_SHEET_MS) break;
     try {
       const sheet = await fetchValidatedText(link, {
         kind: 'css',
         maxBytes: CSS_BYTES,
-        timeoutMs: options.timeoutMs,
+        timeoutMs: within(left()),
         fetchImpl: options.fetchImpl,
         resolver: options.resolver,
       });
