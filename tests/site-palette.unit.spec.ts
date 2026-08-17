@@ -258,6 +258,27 @@ test.describe('the fetcher refuses what it must', () => {
     expect(result.style.themeColor).toBe('#c2410c');
   });
 
+  test('a body that trickles past the deadline is a timeout, not "unreachable"', async () => {
+    const trickle = new ReadableStream<Uint8Array>({
+      async pull(controller) {
+        await new Promise(done => setTimeout(done, 60));
+        controller.enqueue(new Uint8Array(8));
+      },
+    });
+    const fetchImpl = (async () =>
+      new Response(trickle, { status: 200, headers: { 'content-type': 'text/html' } })) as unknown as typeof fetch;
+
+    await expect(
+      fetchValidatedText('https://example.com/', {
+        kind: 'html',
+        maxBytes: 1024 * 1024,
+        timeoutMs: 250,
+        fetchImpl,
+        resolver: publicDns,
+      })
+    ).rejects.toMatchObject({ code: 'TIMEOUT' });
+  });
+
   // The cap is what a hostile host is held to, and truncating must not have
   // loosened it: a server that streams for ever still gives us one megabyte.
   test('an endless body is still capped', async () => {

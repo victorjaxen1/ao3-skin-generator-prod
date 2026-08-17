@@ -109,7 +109,19 @@ export async function fetchValidatedText(
         throw new RemoteImageError('UNSUPPORTED_TYPE', 422);
       }
 
-      const bytes = await readTextBytes(response, options.maxBytes);
+      // The deadline covers the body too, and a slow trickle is the likeliest
+      // way to meet it — so the abort has to be caught *here* as well as around
+      // the request. Without this the user is told "could not reach that site"
+      // about a site we reached and read half of.
+      let bytes: Uint8Array;
+      try {
+        bytes = await readTextBytes(response, options.maxBytes, controller.signal);
+      } catch (error) {
+        if (error instanceof RemoteImageError) throw error;
+        throw controller.signal.aborted
+          ? new RemoteImageError('TIMEOUT', 504)
+          : new RemoteImageError('UPSTREAM_ERROR', 502);
+      }
       if (bytes.length === 0) throw new RemoteImageError('EMPTY_RESPONSE', 502);
       // `fatal: false` on purpose — the cap can land mid-character, and one
       // replacement glyph in a document we only ever regex over is not a fault.
@@ -138,18 +150,39 @@ export async function fetchValidatedText(
  *
  * The cap itself is unchanged, so the bound a hostile host is held to is
  * unchanged: it can still never make us hold more than `maxBytes`.
+ *
+ * **Two bounds, because a byte cap is only one of them.** A host that sends
+ * eight bytes every sixty milliseconds never reaches a megabyte and never
+ * finishes either, and bytes are the wrong unit for that attack. `fetch`'s abort
+ * does error a real body stream, so in production the deadline already bites —
+ * but this file's whole posture is that the thing on the other end is hostile,
+ * and "the platform will cancel it for us" is a promise about someone else's
+ * code. The read is raced against the signal instead. A test drives the trickle.
  */
-async function readTextBytes(response: Response, maxBytes: number): Promise<Uint8Array> {
+async function readTextBytes(
+  response: Response,
+  maxBytes: number,
+  signal: AbortSignal
+): Promise<Uint8Array> {
   if (!response.body) throw new RemoteImageError('EMPTY_RESPONSE', 502);
+
+  const stopped = new Promise<'aborted'>(resolve => {
+    if (signal.aborted) return resolve('aborted');
+    signal.addEventListener('abort', () => resolve('aborted'), { once: true });
+  });
 
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
   let total = 0;
   while (total < maxBytes) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value);
-    total += value.byteLength;
+    const next = await Promise.race([reader.read(), stopped]);
+    if (next === 'aborted') {
+      await reader.cancel().catch(() => undefined);
+      throw new RemoteImageError('TIMEOUT', 504);
+    }
+    if (next.done) break;
+    chunks.push(next.value);
+    total += next.value.byteLength;
   }
   await reader.cancel().catch(() => undefined);
 

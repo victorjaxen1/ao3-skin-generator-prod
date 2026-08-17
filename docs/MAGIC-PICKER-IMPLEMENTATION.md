@@ -904,6 +904,16 @@ platform says. `fetchSiteStyle` now holds **one 9-second budget** for the whole
 extraction and drops stylesheets when it runs short, which is the right thing to
 sacrifice because they were already optional.
 
+**And writing that budget exposed a third thing, which the byte cap never
+covered.** A host that sends eight bytes every sixty milliseconds never reaches
+a megabyte and never finishes: bytes are the wrong unit for a slowloris. The
+deadline did technically bite, because `fetch`'s abort errors a real body
+stream — but that is a promise about the platform's code, in the one file whose
+posture is that the other end is hostile. `readTextBytes` now races each read
+against the signal and owns the bound itself. It surfaced as a *test* that hung
+rather than failed, which is the same shape as §11a: the synthetic stream
+ignored the abort, and only the honest version of the code could stop it.
+
 ### 14d. The learning, and it is the third one of the same shape
 
 §11b: *a plan that names an existing helper has not checked that helper's
