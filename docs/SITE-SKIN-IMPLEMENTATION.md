@@ -8,23 +8,29 @@ architecture with ours.
 
 > ## Start here
 >
-> **Revision 13 — 18 Aug 2026.** The product is built, deployed, through the
-> release gate, and **the Magic Picker is now live with it.** Five skins were
-> saved on a real AO3 account, applied and read back: **448 of 448 declarations
-> survived, and ten of fifteen probes pass.** Phase 7 blocked the roadmap for
-> four revisions; it has not since 17 August.
+> **Revision 15 — 18 Aug 2026.** The product is built, deployed, through the
+> release gate, and **the Magic Picker is live with it.** Five skins were saved
+> on a real AO3 account, applied and read back: **448 of 448 declarations
+> survived, and ten of sixteen probes pass** (P16 was added by §29). Phase 7
+> blocked the roadmap for four revisions; it has not since 17 August.
 >
-> **§28 is the current handoff.** Production is `main` at `5eb7cbd`. Phases B and
-> C of the picker — paste a picture, paste a website — went live 18 Aug 2026,
-> which is the first time this product has fetched a non-image page from an
-> address a stranger typed.
+> **§30 is the current handoff.** §18c-3, §18c-4 and §18c-5 — tag group labels,
+> the tag separator and stat icons — landed 18 Aug 2026 and are the first
+> roadmap work since the picker shipped. They are **not deployed**: production
+> is still `main` at `5eb7cbd`. **§30b is the one to read**: the spec for stat
+> icons contained the defect it warns about, and what caught it was a saved copy
+> of a real AO3 page sitting in `tmp/` rather than anything in our own preview.
+>
+> **§28 is the picker's handoff.** Phases B and C — paste a picture, paste a
+> website — went live 18 Aug 2026, which is the first time this product has
+> fetched a non-image page from an address a stranger typed.
 >
 > **§26 is the current handoff.** Read it, then §15 — which still owns the file
 > map, the five invariants and the traps, and is unchanged. The handoffs
 > supersede only its ordering.
 >
 > **Starting cold? §26f is six steps**, and its item 6 is twenty minutes of AO3
-> clicking that closes three of the five remaining probes.
+> clicking that closes three of the six remaining probes.
 >
 > If you read nothing else, read **§26c.1**. The short version: **a mock can be
 > complete in what it renders and unrepresentative in how.** The drop cap was
@@ -751,7 +757,7 @@ Always emit a fallback stack, and keep every family name inside
 | 10 | **Fix:** details rules scoped to direct children, `!important` withdrawn from six selectors, work skin added to the preview | ✅ 13 Aug 2026 — a defect found on a live page; see §14 |
 | 11 | **`ao3Css.ts` corrections 5–9** — gradients, the repeating number grammar, long hex, the `font` shorthand, `aspect-ratio`. Acceptance: `scripts/ao3-corpus-differential.mjs` at **0 false accepts / 0 false rejects** | ✅ 16 Aug 2026 — 0/0 over 4,418 declarations; see §17 |
 | 12 | **Chrome regions** — buttons, form fields, pagination, comments, autocomplete. Four derived colours, eleven ownership rows, no new theme field | ✅ 16 Aug 2026 — with two corrections to §18a's spec; see the note there |
-| 13 | **Reading controls** — required tags as text, tag labels, separators, stat icons, and the three author-overriding controls. Needs the third cascade mode (§18c-0) | 🟨 **§18c-2 landed 17 Aug 2026** — the `reading` group exists, off in all 16. 18c-3…18c-6 remain, and the third cascade mode is still unbuilt because 18c-2 does not need it |
+| 13 | **Reading controls** — required tags as text, tag labels, separators, stat icons, and the three author-overriding controls. Needs the third cascade mode (§18c-0) | 🟨 **§18c-2 landed 17 Aug; §18c-3, §18c-4 and §18c-5 on 18 Aug 2026** — the `reading` group now carries four controls, all off in all 16, and two of them are already confirmed on the archive (P16, P17). **Only §18c-6 remains**, and it is the one that finally needs the third cascade mode. See §30 |
 | 14 | **Depth** — card elevation, page wash, header gradient, glow, `border-image` frames, texture | ⬜ §18b, blocked on 11 and on Phase 7 |
 | 15 | **Theme from the banner image** — quantize the picture the user already pasted, derive all four colours from it, and stop guessing the header foreground | ⬜ §19b |
 | 16 | **Palettes that read as fandoms** — ~12 more templates, mood-named as always | ⬜ §19c |
@@ -2137,6 +2143,22 @@ rather than being a snippet — **nobody else's version is theme-aware.**
 
 #### 18c-3. Tag group labels
 
+> ## Built 18 Aug 2026, with 18c-4 — and the ten rules below are right
+>
+> The enumeration is correct as specified and the code emits exactly these ten,
+> from one function that both controls call. Two notes for anyone reading the
+> spec rather than the code:
+>
+> **The selectors carry `ul.tags` on every arm.** The list below drops the
+> prefix on the six adjacency rules, which as CSS would match `li.relationships`
+> anywhere on the page. Harmless in practice and wrong in principle.
+>
+> **A comma still sits between the last tag of one group and the next group's
+> label** when the separator is `comma` — "Mara, Additional Tags: Slow Burn",
+> which reads as if the label were a tag. It cannot be suppressed: the comma
+> belongs to the *previous* `li` and CSS has no previous-sibling combinator. The
+> editor points readers at `line` instead. §29c.
+
 **The markup fact that decides the whole design.** `tags_helper.rb#blurb_tag_block`
 emits **one `<li>` per tag**, every tag in a group sharing the group's class:
 
@@ -2177,6 +2199,24 @@ reader with warnings hidden seeing no labels at all.
 
 #### 18c-4. Tag separator
 
+> ## Built 18 Aug 2026 — and the table below is missing two rules
+>
+> **`.commas li::after` is the wrong owner, and `!important` is why.** AO3 ends
+> its own list with `.commas li:last-child:after { content: none }`. Ours shouts,
+> so the bare selector beats that suppression and hangs a bullet off the end of
+> every tag list. Shipped as `ul.tags.commas li:not(:last-child)::after` — also
+> scoped, because `.commas` is worn by lists of listboxes too.
+>
+> **`line` needs `overflow: hidden` on `ul.tags`**, which is not in the table. A
+> `ul` whose every child floats has no height, and the summary below it is then
+> laid out on top of the tags. §26c.1 again, in a second place: right on a blurb
+> whose tags fit on one line, wrong the moment they wrap.
+>
+> One addition on evidence rather than on grammar: `padding-right: 0.75em` on
+> the floated `li`. With the comma gone, AO3's own 0.25em is too tight to read
+> two multi-word tags apart — visible only on the `plain` tag shape, and only in
+> a screenshot. §29c.
+
 AO3 puts the comma in CSS, on `.commas li:after`, so all three options are one
 owned selector:
 
@@ -2190,6 +2230,31 @@ owned selector:
 build them together or `line` will drift.
 
 #### 18c-5. Stat icons — and a correction to the add-on
+
+> ## Built 18 Aug 2026 — and this section's own rule had the defect it warns about
+>
+> §18c-5 is right that `display: none` is the wrong way to hide the label, and
+> then hides **every `dt` in `dl.stats`** with the right technique. That is the
+> same mistake one level down.
+>
+> `dl.stats` is rendered in **two** contexts. A listing's rows are language,
+> words, chapters, collections, comments, kudos, bookmarks, hits; a work page's
+> are **published** — plus status and updated on a work in progress — and then
+> words through hits. Seven of those get a glyph. Hiding every `dt` leaves
+> "Published:" gone and `2021-11-04` standing on its own, on every work on the
+> archive, and this section already knew the argument: it makes it about
+> `dd.language` two paragraphs down and does not carry it to the `dt`.
+>
+> Shipped as **seven named selectors** — `dl.stats dt.words`, `…dt.kudos`, and
+> so on — so `published`, `status`, `updated` and `language` keep their words.
+> **Confirmed on the archive the same day** (P17): a real work page reads
+> "Stats: Published: 2021-11-04 ✍️ 1,859 📄 1/1 💬 6 ❤️ 278 🔖 17
+> 👀 7,408".
+>
+> One thing this section does not mention and should: **a colour emoji cannot
+> be themed.** `color` does nothing to it, so unlike the divider's ❦ these seven
+> are the same on every palette. Taken knowingly — there is no monochrome glyph
+> a reader decodes as "hits".
 
 The corpus version does `dl.stats dt { display: none }`. **Do not copy that.**
 `display: none` removes the label from the accessibility tree, so a screen reader
@@ -3716,6 +3781,183 @@ door than an image?* — and after four revisions of argument it is now a query.
 Everything else in this file's roadmap is unchanged: Phase 13 (§18c-3…6), Phase
 14 (depth, §18b) and Phase 16 (fandom palettes, §19c) are the open work, in that
 order.
+
+---
+
+## 29. Handoff — 18 Aug 2026, later (revision 14)
+
+**What happened: the first roadmap work since the picker shipped.** §26e's item
+1 — tag group labels and the tag separator — is built, previewed, tested and
+read on screen. It is **not deployed**; production is still `main` at `5eb7cbd`.
+
+### 29a. What landed
+
+| | Status |
+| --- | --- |
+| **§18c-3 tag group labels** | ✅ Ten selectors — four `:first-child`, six adjacency — built from one function, off in all 16 |
+| **§18c-4 tag separator** | ✅ `comma` (AO3's own, emits nothing) / `bullet` / `line`. One owned selector for the glyph, three rules for `line` |
+| **The mock** | ✅ AO3's `.commas` rules transcribed at last, plus three blurbs so all ten label rules have somewhere to land |
+| Tests | **652 unit** (was 644), **32 site-skin journeys** (was 31), all passing against a dev server. `tsc --noEmit` clean |
+| Probes | **P16 added to the checklist.** Ten of sixteen now pass |
+| Branch | `feat/magic-picker-phase-b` — unchanged from §28, one commit ahead |
+
+Neither control needs §18c-0's third cascade mode. Both land on `ul.tags` in a
+listing, which is AO3's own markup and never inside a work, so both are ordinary
+chrome rules and shout in the ordinary way. **The third mode is still unbuilt,
+and §18c-6 is still the thing that will need it.**
+
+### 29b. Three decisions that departed from §18c's spec, and why
+
+**1. The separator is `:not(:last-child)`, not the bare `.commas li::after` the
+spec names.** AO3 suppresses its own separator after the final tag —
+`.commas li:last-child:after { content: none }` in 09-roles-states.css — and
+ours carries `!important`, so the bare selector would have beaten that
+suppression and hung a bullet off the end of every tag list. It shows at the end
+of a line, which is exactly where a reader is looking.
+
+**2. It is scoped to `ul.tags`, not to every `.commas` list on the archive.**
+`.commas` is also worn by lists of listboxes, where 11-group-listbox.css
+suppresses the comma deliberately. The control says "tags in a listing" and now
+means it. The work-page meta table is untouched, which is correct — it is
+already one group per row.
+
+**3. `line` mode needs a fourth rule the spec does not list: `overflow: hidden`
+on `ul.tags`.** A `ul` whose every child floats has no height, so the summary
+below it is laid out at the top of the tag block and the tags land on somebody's
+paragraph. This is the drop cap defect (§26c.1) in a second place, and it has
+the same shape: **correct on a blurb whose tags fit on one line, wrong the moment
+they wrap** — which is every popular work.
+
+### 29c. The learning, and it is §28c's rule applied on purpose rather than in hindsight
+
+§28c said green tests certify the machinery and do not read the product. This
+change was built the other way round: the browser test asserts *geometry* — that
+the tag list still has a height, that the second group sits below the first, that
+the summary starts below the tags — and then five screenshots were read by eye
+across four combinations of the two controls and both tag shapes.
+
+Two things came out of the reading that no assertion had asked for:
+
+- **With labels on and `comma` selected, a comma sits between the last tag of a
+  group and the next group's label** — "Mara, Additional Tags: Slow Burn". It
+  reads as if the label were another tag. CSS cannot suppress it (the comma
+  belongs to the *previous* `li`, and there is no previous-sibling combinator),
+  so it is left standing and the editor copy points readers at `line` instead.
+  **Known, not missed.**
+- **`line` with `plain` tags and labels off** — the borderless shape, no glyph,
+  no label — is the combination where tags could have run together. AO3's own
+  0.25em was too tight; `padding-right: 0.75em` on the floated `li` is why it
+  reads. That declaration exists because of a screenshot, not a test.
+
+### 29d. What is NOT proven
+
+- **P16.** Nothing here has been near the archive. Three specific unknowns, all
+  in the checklist row: `content: ""` is an *empty* quoted string and no skin we
+  have saved has ever stored one; the ten label selectors carry `:first-child`
+  and `+`, and §26b showed AO3 re-serialises selector lists; and a **wrapping**
+  tag list is the hard case for the float containment.
+- **A label on the wrong group still looks finished.** The unit test pins all
+  five distinct wordings against their selectors for that reason, but the only
+  authority on which `li` AO3 actually gives a class to is a real listing.
+- **Nothing was checked on a light theme at a small viewport**, where the
+  0.75em and the bold label are doing the most work.
+
+### 29e. What to do next, in order
+
+§26e's list, minus the item this section closes:
+
+| # | Work | Why here |
+| --- | --- | --- |
+| 1 | **Re-save one skin and close P1, P3, P4, and now P16** | Still twenty minutes with an AO3 tab open, and it now closes four probes rather than three. P16 wants a listing filtered to a popular fandom, so the tag lists wrap |
+| 2 | **§18c-5 stat icons** | The next reading control, and the one with an accessibility trap already identified: `display: none` on `dl.stats dt` takes the label out of the accessibility tree, so use AO3's own `clip: rect(0,0,0,0)`. Needs `dl.stats` in the mock to grow kudos and hits |
+| 3 | **P11**, then **P14 on a dark template** | Unchanged from §26e |
+| 4 | **§19c's fandom-shaped palettes** | Unchanged — data only, an afternoon, highest demand-per-effort |
+| 5 | **§18c-6 and the third cascade mode** | The three author-overriding controls. This is where §18c-0 finally has to be built, and where invariant 2's test has to learn a third category rather than be loosened |
+| 6 | **§18b** depth | Still blocked on §22e's ownership of `box-shadow` |
+| 7 | The `bannerSet` analytics line (§20d) | Still one line, still unwritten |
+
+---
+
+## 30. Handoff — 18 Aug 2026, evening (revision 15)
+
+**What happened: §18c-5 was built, and the archive answered three questions
+while it was being built rather than after.** For the first time on this
+roadmap, a control was tested on real AO3 *by a second person* in the same hour
+it was written — with the skin exported from a dev build rather than from
+production — and the screenshots settled a design decision that had been made on
+reasoning an hour earlier.
+
+### 30a. What landed
+
+| | Status |
+| --- | --- |
+| **§18c-5 stat icons** | ✅ Seven glyphs, seven named labels clipped rather than removed, off in all 16 |
+| **The mock** | ✅ The blurb's stats grew from two rows to seven; the work page gained the `dl.stats` block it never had, plus AO3's `.meta .stats dl` rules |
+| Tests | **657 unit** (was 652), **33 site-skin journeys** (was 32). `tsc --noEmit` clean |
+| Probes | **P17 added and already ✅. P16 half-answered. P4 upgraded to 🟨** |
+| Branch | `feat/magic-picker-phase-b`, still undeployed |
+
+### 30b. The correction, and why it is the interesting part
+
+§18c-5's spec says `dl.stats dt { … }` — hide every label in the list. That is
+wrong, and the section had already made the argument against itself:
+
+> *"Leave `dd.language` alone: a language name with no label is ambiguous, and
+> there is no obvious glyph for it."*
+
+Exactly so — and `dl.stats` on a **work page** opens with "Published:" and a
+date. The spec's own rule would have left `2021-11-04` standing alone on every
+work on the archive. Shipped as seven named selectors instead.
+
+**This was reasoned from a real work page's markup before it was screenshotted,
+which is the only reason it was caught.** The mock did not render a work-page
+stats block at all — §22d's failure, one control further on — so nothing in the
+preview, the tests or the browser could have shown it. What found it was reading
+`tmp/ao3-work-28934610.html`, a real page saved during an earlier probe, and
+noticing that its `dl.stats` had a row the listing's did not.
+
+> **A saved copy of a real page is worth more than the mock, and this repository
+> has one sitting in `tmp/`.** It is the difference between "our transcription of
+> AO3" and AO3. Read it before specifying any selector that depends on which
+> elements exist.
+
+### 30c. What the archive said, the same hour
+
+Screenshots from a signed-in account, control **off** and then **on**, with the
+CSS taken from a dev build:
+
+- **P17 passes on both contexts.** A listing keeps "Language: English" and turns
+  the other seven into glyphs; a work page keeps "Published: 2021-11-04" and
+  does the same. The correction above is now observation rather than reasoning.
+- **P16's label half passes.** All four group names render bold on real blurbs,
+  on the right runs, on a tag list four lines deep.
+- **The comma-before-label artifact is real.** "Rape/Non-Con**,** Relationships:"
+  — §29c predicted this exactly, and it reads as slightly worse on the archive
+  than it did in the preview, because real tag lists are long enough that the
+  comma and the label often land on different lines.
+- **P4 is most of the way closed.** The Fandoms menu was seen open and taking
+  the header's colour rather than AO3's grey. `#small_login` and the hover
+  states are still unexercised.
+- **Still untouched: the separator.** Neither `bullet` nor `line` has been on
+  the archive, which means §18c-4's float containment has never met a real
+  wrapping tag list — the one hard case it exists for.
+
+### 30d. What to do next, in order
+
+| # | Work | Why here |
+| --- | --- | --- |
+| 1 | **Finish P16** — save with the separator on `line`, open a listing with long tag lists | The float containment is the only rule in the last two controls that has never met its hard case. Ten minutes, and it is the highest-value ten minutes on this list |
+| 2 | **Close P4** — open the *user* menu, hover a row | Three of the eight selectors are still inferred |
+| 3 | **P1, P3** | Unchanged from §29e, and still twenty minutes |
+| 4 | **§19c's fandom-shaped palettes** | Unchanged — data only, an afternoon, highest demand-per-effort on the roadmap |
+| 5 | **§18c-6 and the third cascade mode** | The last of Phase 13, and the one that finally needs §18c-0. Invariant 2's test learns a third category rather than being loosened |
+| 6 | **§18b** depth | Still blocked on §22e's ownership of `box-shadow` |
+| 7 | The `bannerSet` analytics line (§20d) | Still one line, still unwritten |
+
+**And the standing question, now four controls old: none of Phase 13 is
+deployed.** Production is `main` at `5eb7cbd`. Three reading controls and a
+separator sit on a branch, all off by default, all lint-clean, two of them
+already seen working on the archive.
 
 ---
 
