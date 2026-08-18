@@ -14,7 +14,10 @@ architecture with ours.
 > survived, and ten of sixteen probes pass** (P16 was added by §29). Phase 7
 > blocked the roadmap for four revisions; it has not since 17 August.
 >
-> **§31 is the current handoff, and §31b is the one to read** — a defect this
+> **§31 is the current handoff. §31f is the newest thing in it** — a reader put
+> every control this product has on a real AO3 account the same afternoon and the
+> readback diffed **38 of 38 byte-identical**, closing P16 and P18 at once.
+> **§31b is still the one to read** — a defect this
 > file shipped in the morning and caught in the afternoon, on a page type the
 > mock had never rendered. The rule it earns: **a selector that names an AO3
 > class is a claim about every page that class appears on.** Then **§32**, which
@@ -4041,12 +4044,59 @@ a picture that no longer matches the theme.
 
 ### 31d. What is NOT proven
 
-- **None of §31a has been on the archive.** `border-image`, `font-variant`,
-  `letter-spacing` and `text-transform` are probe-legal and lint-clean, and that
-  is §23c's "our lint permits it" — not "the archive accepted it".
-- **`:has()` on old Firefox.** The degradation is reasoned, not observed.
+> **Mostly answered within the hour — see §31f.** A reader saved the whole stack
+> to a real account and the readback diffed clean, so the first bullet below is
+> struck. It is left standing because it was the right thing to have written
+> down: the gap between "probe-legal" and "the archive stored it" is real, and it
+> closed here by someone going and looking rather than by anything we ran.
+
+- ~~**None of §31a has been on the archive.**~~ `border-image`, `font-variant`,
+  `letter-spacing` and `text-transform` were probe-legal and lint-clean, which is
+  §23c's "our lint permits it" — not "the archive accepted it". **All but
+  `border-image` and `text-transform` are now observed** (§31f); those two are
+  the `ribbon` and `uppercase` branches, still unseen.
+- **`:has()` on old Firefox.** The degradation is reasoned, not observed. What
+  *is* now observed is that AO3 **stores** `:has()` used as a scope.
 - **The gutter fix reaches a reader only on their next paste**, exactly like the
   drop cap. Anyone running the broken skin stays broken until they re-export.
+
+### 31f. The Daredevil readback — 38 of 38, and what it closes
+
+**18 Aug 2026, hours after §31a was written**, a reader built a theme carrying
+*every* control this file has shipped — chevron texture, glow, double-rule frame,
+small caps, the ❖ ornament, all four reading controls, banner, drop cap, divider,
+scrollbar — saved it to a real AO3 account and pasted the stored CSS back.
+
+**Diffed, not read** (§26c.2). Thirty-eight sampled declarations, thirty-eight
+byte-identical. The only difference anywhere in the stylesheet is AO3 re-wrapping
+`.wrapper:has(> table, > .meta)` across two lines at the comma inside the
+parentheses — §26b's anomaly, now seen a **second** time, which upgrades it from
+an observation to a reliable behaviour. **The standing warning it implies is
+unchanged and now better evidenced: a *work* skin must never emit a comma inside
+`:has()`, because AO3 prefixes each half and both halves die.**
+
+What the four screenshots settle:
+
+- **P18 passes** — `font-variant`, `letter-spacing`, `border-style: double` and a
+  `content` string on `#main > .heading::before` all stored and rendering. Small
+  caps reach the site title as well as the page headings, which was the half of
+  §31a's heading control that a `#main`-only rule would have missed.
+- **P16 closes** — `line` on a Sherlock listing with *Relationships* over three
+  lines and *Characters* over two. The float containment met the wrapping list it
+  was written for, and the summary stayed below the tags.
+- **The gutter fix is confirmed on the page type that broke it.** AO3 stored
+  `.blurb .header:has(ul.required-tags)` and the titles are whole.
+- **A dead banner degraded to the gradient for the third time** (§4b). The
+  reader's image was not loading and the header is 22em of vertical fade rather
+  than 22em of white.
+
+> **The generalisable part, and it is §28c again with a better example.** The
+> capability probe said all of this was legal and the probe was right — but the
+> probe models `sanitize_css_declaration_value`, and what it cannot model is
+> whether css_parser will *store the selector*. `:has()` used as a scope was the
+> new shape here, and no amount of declaration-level probing would have answered
+> it. **When a control introduces a selector shape rather than a property, the
+> probe is not the authority — the archive is.**
 
 ### 31e. What to do next
 
