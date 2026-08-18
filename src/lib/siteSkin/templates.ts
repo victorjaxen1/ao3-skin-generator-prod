@@ -85,6 +85,15 @@ export function gradientFor(moods: readonly SiteSkinTheme['meta']['moods'][numbe
  */
 const READING_DEFAULTS: SiteSkinTheme['reading'] = {
   requiredTagsAsText: false,
+  // Same argument, one control along. Group labels rewrite every listing on the
+  // archive — "Relationships:" where there was nothing — and a reader who
+  // picked a palette did not ask for that either.
+  tagLabels: false,
+  // AO3's own separator, which emits no CSS at all.
+  tagSeparator: 'comma',
+  // The third of the same argument: icons where words were is a change to what
+  // every listing says, and a palette does not get to make it.
+  statIcons: false,
 };
 
 /** The original twelve are pure colour themes; the banner slot starts empty. */

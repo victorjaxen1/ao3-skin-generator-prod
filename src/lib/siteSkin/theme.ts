@@ -14,6 +14,7 @@ export type Mood = 'dark' | 'light' | 'minimal' | 'decorative';
 export type TagStyle = 'pill' | 'label' | 'plain';
 export type HeaderTextColor = 'auto' | 'light' | 'dark';
 export type HeaderGradient = 'none' | 'vertical' | 'diagonal';
+export type TagSeparator = 'comma' | 'bullet' | 'line';
 
 export interface SiteSkinTheme {
   schemaVersion: 1;
@@ -115,6 +116,48 @@ export interface SiteSkinTheme {
      * that.
      */
     requiredTagsAsText: boolean;
+    /**
+     * Print the tag group's name — "Relationships:", "Characters:" — before the
+     * first tag of each group in a listing.
+     *
+     * AO3 emits one `<li>` per tag, every tag in a group carrying the group's
+     * class and nothing marking where a group starts (`tags_helper.rb#blurb_tag_block`).
+     * So a "group" is a run of same-class siblings, and the label belongs on the
+     * first `li` of each run — which CSS can only express by enumerating the
+     * ways one group can follow another. See compile.ts for the ten rules.
+     *
+     * Off in every shipped template, for `requiredTagsAsText`'s reason: it
+     * changes what every listing on the archive says.
+     */
+    tagLabels: boolean;
+    /**
+     * How tags in a listing are separated from one another.
+     *
+     * AO3 puts the comma in CSS rather than in the markup — `.commas li:after
+     * { content: ", " }` in 09-roles-states.css — so all three options are one
+     * owned selector and `comma` is the archive's own default, emitted as
+     * nothing at all.
+     *
+     * `line` is the one readers ask for: one tag group per line, which is the
+     * whole reason the adjacency list above is worth building.
+     */
+    tagSeparator: TagSeparator;
+    /**
+     * Replace the stat labels a listing repeats on every row — "Words:",
+     * "Kudos:", "Hits:" — with one icon each.
+     *
+     * **The label is hidden, not removed.** The corpus add-on does
+     * `dl.stats dt { display: none }`, which takes it out of the accessibility
+     * tree and leaves a screen reader reading a bare number. Ours uses AO3's
+     * own visually-hidden technique, so the word is still announced and only
+     * the pixels go.
+     *
+     * Only the seven stats that get an icon are hidden. A work page also
+     * carries "Published:" and a date, and a listing carries "Language:" —
+     * neither has an obvious glyph, and a date with no label at all is worse
+     * than a date with one.
+     */
+    statIcons: boolean;
   };
   details: {
     divider: boolean;
@@ -259,6 +302,19 @@ export const TAG_STYLES: readonly { value: TagStyle; label: string }[] = [
   { value: 'plain', label: 'Plain' },
 ];
 
+/**
+ * The separator between tags in a listing.
+ *
+ * `comma` is AO3's own and emits no CSS, which is what makes it a safe default:
+ * a theme that never touched this control produces byte-identical output to one
+ * saved before the control existed.
+ */
+export const TAG_SEPARATORS: readonly { value: TagSeparator; label: string }[] = [
+  { value: 'comma', label: 'Commas' },
+  { value: 'bullet', label: 'Bullets' },
+  { value: 'line', label: 'One group per line' },
+];
+
 export const HEADER_TEXT_COLORS: readonly { value: HeaderTextColor; label: string }[] = [
   { value: 'auto', label: 'Auto' },
   { value: 'light', label: 'Light' },
@@ -379,6 +435,17 @@ export function validateTheme(input: unknown, fallback: SiteSkinTheme): SiteSkin
         typeof reading.requiredTagsAsText === 'boolean'
           ? reading.requiredTagsAsText
           : fallback.reading.requiredTagsAsText,
+      tagLabels:
+        typeof reading.tagLabels === 'boolean' ? reading.tagLabels : fallback.reading.tagLabels,
+      // Membership, not a string check: the value reaches a `content` string and
+      // a `float`, so a stored theme that carried anything else would be writing
+      // CSS. Falls back to the template's own rather than to 'comma', so a
+      // half-corrupt theme keeps the separator its owner chose.
+      tagSeparator: TAG_SEPARATORS.some(t => t.value === reading.tagSeparator)
+        ? reading.tagSeparator
+        : fallback.reading.tagSeparator,
+      statIcons:
+        typeof reading.statIcons === 'boolean' ? reading.statIcons : fallback.reading.statIcons,
     },
     details: {
       divider: typeof details.divider === 'boolean' ? details.divider : fallback.details.divider,

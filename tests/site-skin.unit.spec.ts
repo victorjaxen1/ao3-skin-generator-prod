@@ -7,6 +7,7 @@ import {
   fontStacksFor,
   validateTheme,
   SiteSkinTheme,
+  TAG_SEPARATORS,
 } from '../src/lib/siteSkin/theme';
 import { lintAo3Css, isLegalFontStack, checkAo3ImageUrl, stripCssComments } from '../src/lib/siteSkin/ao3Css';
 import {
@@ -58,15 +59,24 @@ test.describe('every launch template compiles to CSS AO3 accepts', () => {
         for (const scrollbar of [true, false]) {
           for (const tagColors of [true, false]) {
             for (const requiredTagsAsText of [true, false]) {
-              for (const tagStyle of ['pill', 'label', 'plain'] as const) {
-                const theme: SiteSkinTheme = {
-                  ...SAMPLE,
-                  shape: { ...SAMPLE.shape, tagStyle, tagColors },
-                  reading: { requiredTagsAsText },
-                  details: { divider, dropCap, scrollbar },
-                };
-                const label = `${tagStyle}/${tagColors}/${divider}/${dropCap}/${scrollbar}/${requiredTagsAsText}`;
-                expect(lintAo3Css(compile(theme)), label).toEqual([]);
+              for (const tagLabels of [true, false]) {
+                for (const tagSeparator of TAG_SEPARATORS) {
+                  for (const tagStyle of ['pill', 'label', 'plain'] as const) {
+                    const theme: SiteSkinTheme = {
+                      ...SAMPLE,
+                      shape: { ...SAMPLE.shape, tagStyle, tagColors },
+                      reading: {
+                        requiredTagsAsText,
+                        tagLabels,
+                        tagSeparator: tagSeparator.value,
+                        statIcons: requiredTagsAsText,
+                      },
+                      details: { divider, dropCap, scrollbar },
+                    };
+                    const label = `${tagStyle}/${tagColors}/${divider}/${dropCap}/${scrollbar}/${requiredTagsAsText}/${tagLabels}/${tagSeparator.value}`;
+                    expect(lintAo3Css(compile(theme)), label).toEqual([]);
+                  }
+                }
               }
             }
           }
@@ -484,7 +494,7 @@ test.describe('required tags as words', () => {
   const withWords = (requiredTagsAsText: boolean, tagColors = SAMPLE.shape.tagColors) => ({
     ...SAMPLE,
     shape: { ...SAMPLE.shape, tagColors },
-    reading: { requiredTagsAsText },
+    reading: { ...SAMPLE.reading, requiredTagsAsText },
   });
 
   test('off in every shipped template, and off emits nothing at all', () => {
@@ -638,16 +648,286 @@ test.describe('required tags as words', () => {
 
   test('a stored theme cannot smuggle anything through the reading group', () => {
     const restored = validateTheme(
-      { ...SAMPLE, reading: { requiredTagsAsText: 'yes please' } },
+      { ...SAMPLE, reading: { requiredTagsAsText: 'yes please', tagLabels: 1 } },
       SAMPLE
     );
     expect(restored.reading.requiredTagsAsText).toBe(SAMPLE.reading.requiredTagsAsText);
+    expect(restored.reading.tagLabels).toBe(SAMPLE.reading.tagLabels);
 
     const missing = validateTheme({ ...SAMPLE, reading: undefined }, SAMPLE);
     expect(missing.reading.requiredTagsAsText).toBe(SAMPLE.reading.requiredTagsAsText);
+    expect(missing.reading.tagSeparator).toBe(SAMPLE.reading.tagSeparator);
 
-    const kept = validateTheme({ ...SAMPLE, reading: { requiredTagsAsText: true } }, SAMPLE);
+    const kept = validateTheme(
+      { ...SAMPLE, reading: { requiredTagsAsText: true, tagLabels: true, tagSeparator: 'line' } },
+      SAMPLE
+    );
     expect(kept.reading.requiredTagsAsText).toBe(true);
+    expect(kept.reading.tagLabels).toBe(true);
+    expect(kept.reading.tagSeparator).toBe('line');
+
+    // The separator reaches a `content` string and a `float`, so a stored value
+    // that is not one of the three is a stored theme writing CSS.
+    const forged = validateTheme(
+      { ...SAMPLE, reading: { ...SAMPLE.reading, tagSeparator: '"; float: right; content: "' } },
+      SAMPLE
+    );
+    expect(forged.reading.tagSeparator).toBe(SAMPLE.reading.tagSeparator);
+  });
+});
+
+test.describe('tag group labels and the separator', () => {
+  const withTags = (reading: Partial<SiteSkinTheme['reading']>): SiteSkinTheme => ({
+    ...SAMPLE,
+    reading: { ...SAMPLE.reading, ...reading },
+  });
+
+  /**
+   * The ten selectors, written out rather than generated.
+   *
+   * The compiler builds them from a loop, so a test that built them the same
+   * way would pass on a loop that had lost a group. Four `:first-child`,
+   * because `hide_warnings?` and `hide_freeform?` mean any group can be first;
+   * six adjacency, because a group can follow any group that precedes it in
+   * AO3's order rather than only the one immediately before it.
+   */
+  const GROUP_STARTS = [
+    'ul.tags li.warnings:first-child',
+    'ul.tags li.relationships:first-child',
+    'ul.tags li.warnings + li.relationships',
+    'ul.tags li.characters:first-child',
+    'ul.tags li.warnings + li.characters',
+    'ul.tags li.relationships + li.characters',
+    'ul.tags li.freeforms:first-child',
+    'ul.tags li.warnings + li.freeforms',
+    'ul.tags li.relationships + li.freeforms',
+    'ul.tags li.characters + li.freeforms',
+  ];
+
+  test('off in every shipped template, and off emits nothing at all', () => {
+    for (const template of TEMPLATES) {
+      expect(template.reading.tagLabels, template.meta.name).toBe(false);
+      expect(template.reading.tagSeparator, template.meta.name).toBe('comma');
+    }
+    // 'comma' is AO3's own separator, so the correct output is no rule at all:
+    // a theme saved before this control existed still compiles byte-identically.
+    const css = compile(withTags({}));
+    expect(css).not.toContain('ul.tags');
+    expect(css).not.toContain(':not(:last-child)');
+  });
+
+  test('every way a tag group can start carries its label', () => {
+    const rules = compileRules(withTags({ tagLabels: true }));
+    const emitted = rules.flatMap(r => r.selectors).filter(s => s.endsWith('::before'));
+    expect(emitted.sort()).toEqual(GROUP_STARTS.map(s => `${s}::before`).sort());
+  });
+
+  test('each label is AO3s own wording, on the group it names', () => {
+    const rules = compileRules(withTags({ tagLabels: true }));
+    const contentFor = (selector: string) =>
+      rules
+        .find(r => r.selectors.includes(`${selector}::before`))!
+        .decls.find(([property]) => property === 'content')![1];
+
+    // A label on the wrong run is the one defect this control can have that
+    // still looks finished: every group is labelled, and one of them lies.
+    expect(contentFor('ul.tags li.warnings:first-child')).toBe('"Archive Warnings: "');
+    expect(contentFor('ul.tags li.warnings + li.relationships')).toBe('"Relationships: "');
+    expect(contentFor('ul.tags li.relationships + li.characters')).toBe('"Characters: "');
+    expect(contentFor('ul.tags li.characters + li.freeforms')).toBe('"Additional Tags: "');
+    expect(contentFor('ul.tags li.warnings + li.freeforms')).toBe('"Additional Tags: "');
+  });
+
+  test('the separator never overrides AO3s suppression on the last tag', () => {
+    // AO3 ends its own list with `.commas li:last-child:after { content: none }`.
+    // Ours carries !important, so a bare `.commas li::after` would beat that and
+    // hang a bullet off the end of every tag list - visible at the end of a
+    // line, which is exactly where a reader is looking.
+    for (const tagSeparator of ['bullet', 'line'] as const) {
+      const rules = compileRules(withTags({ tagSeparator }));
+      const separators = rules.filter(r =>
+        r.selectors.some(s => s.startsWith('ul.tags') && s.includes('::after'))
+      );
+      expect(separators, tagSeparator).toHaveLength(1);
+      expect(separators[0].selectors, tagSeparator).toEqual([
+        'ul.tags.commas li:not(:last-child)::after',
+      ]);
+    }
+  });
+
+  test('bullets replace the comma; lines remove it', () => {
+    const contentOf = (theme: SiteSkinTheme) =>
+      compileRules(theme)
+        .find(r => r.selectors[0] === 'ul.tags.commas li:not(:last-child)::after')!
+        .decls.find(([property]) => property === 'content')![1];
+
+    expect(contentOf(withTags({ tagSeparator: 'bullet' }))).toBe('" • "');
+    // A comma before a line break is the artifact this option exists to avoid.
+    expect(contentOf(withTags({ tagSeparator: 'line' }))).toBe('""');
+  });
+
+  test('one group per line clears on the same ten selectors as the labels', () => {
+    // The two controls share one list, and the way a second copy of it would
+    // drift is a group quietly sharing a line with the one before it.
+    const rules = compileRules(withTags({ tagSeparator: 'line' }));
+    const clearing = rules.find(r => r.decls.some(([property]) => property === 'clear'))!;
+    expect(clearing.selectors.sort()).toEqual([...GROUP_STARTS].sort());
+  });
+
+  test('the floated tag list is contained, or it lands on the summary', () => {
+    // §26c.1, in a second place. A `ul` whose every child floats has no height,
+    // so the blockquote below it is laid out at the top of the tag block and the
+    // tags overlap somebody's summary. Correct on a short tag list; wrong the
+    // moment it wraps, which is every popular work.
+    const rules = compileRules(withTags({ tagSeparator: 'line' }));
+    const container = rules.find(r => r.selectors.includes('ul.tags'))!;
+    expect(container.decls).toEqual([['overflow', 'hidden']]);
+
+    const tagRules = (all: ReturnType<typeof compileRules>) =>
+      all.filter(r => r.selectors.every(s => s.startsWith('ul.tags')));
+    const floated = tagRules(rules).find(r =>
+      r.decls.some(([property]) => property === 'float')
+    )!;
+    expect(floated.selectors).toEqual([
+      'ul.tags li.warnings',
+      'ul.tags li.relationships',
+      'ul.tags li.characters',
+      'ul.tags li.freeforms',
+    ]);
+
+    // Bullets float nothing, so nothing needs containing.
+    const bullets = tagRules(compileRules(withTags({ tagSeparator: 'bullet' })));
+    expect(bullets.some(r => r.decls.some(([property]) => property === 'float'))).toBe(false);
+    expect(bullets.some(r => r.selectors.includes('ul.tags'))).toBe(false);
+  });
+
+  test('the mock exercises all ten, and AO3s comma is in it to be replaced', () => {
+    // Invariant 4: a rule that cannot be watched ships unverified. Three of the
+    // ten had no blurb to land on until the mock gained two - a listing that
+    // starts with characters, and one that jumps warnings to additional tags.
+    const groupsOf = (html: string) =>
+      [...html.matchAll(/<ul class="tags commas">([\s\S]*?)<\/ul>/g)].map(m =>
+        [...m[1].matchAll(/<li class="(\w+)"/g)].map(li => li[1])
+      );
+
+    const runs = [...groupsOf(mockBody('browse')), ...groupsOf(mockBody('dashboard'))];
+    const seen = new Set<string>();
+    for (const groups of runs) {
+      groups.forEach((group, i) => {
+        if (i === 0) seen.add(`ul.tags li.${group}:first-child`);
+        else if (groups[i - 1] !== group) seen.add(`ul.tags li.${groups[i - 1]} + li.${group}`);
+      });
+    }
+    expect([...seen].sort()).toEqual([...GROUP_STARTS].sort());
+
+    // And the thing the separator replaces is actually rendered. Without AO3's
+    // own rule in the base CSS the preview shows tags separated by nothing, and
+    // "Commas" looks identical to "Bullets" with the bullets missing.
+    expect(AO3_BASE_CSS).toContain('.commas li:after { content: ", "; }');
+    expect(AO3_BASE_CSS).toContain('.commas li:last-child:after');
+  });
+});
+
+test.describe('stats as icons', () => {
+  const withIcons = (statIcons: boolean): SiteSkinTheme => ({
+    ...SAMPLE,
+    reading: { ...SAMPLE.reading, statIcons },
+  });
+
+  /** The seven that get a glyph, and the four that keep their word. */
+  const ICONED = ['words', 'chapters', 'comments', 'kudos', 'bookmarks', 'hits', 'collections'];
+  const LABELLED = ['published', 'status', 'updated', 'language'];
+
+  test('off in every shipped template, and off emits nothing at all', () => {
+    for (const template of TEMPLATES) {
+      expect(template.reading.statIcons, template.meta.name).toBe(false);
+    }
+    expect(compile(withIcons(false))).not.toContain('dl.stats');
+  });
+
+  test('the label is hidden the way AO3 hides its own, not removed', () => {
+    // The corpus add-on uses `display: none`, which takes "Kudos" out of the
+    // accessibility tree and leaves a screen reader reading a bare number. The
+    // whole argument for §18c-2 was that we are the version that gets this
+    // right, so this assertion is the one that would make this control a
+    // contradiction if it ever failed.
+    const rules = compileRules(withIcons(true));
+    const hiding = rules.find(r => r.selectors.includes('dl.stats dt.kudos'))!;
+    const properties = hiding.decls.map(([property]) => property);
+    expect(properties).not.toContain('display');
+    expect(properties).not.toContain('visibility');
+    expect(hiding.decls).toEqual([
+      ['clip', 'rect(0, 0, 0, 0)'],
+      ['height', '1px'],
+      ['overflow', 'hidden'],
+      ['position', 'absolute'],
+      ['width', '1px'],
+    ]);
+
+    // `clip-path` is refused by AO3's sanitizer outright and `clip` is not,
+    // which is why the deprecated property is the correct one here.
+    expect(compile(withIcons(true))).not.toContain('clip-path');
+  });
+
+  test('only the labels that gain an icon lose their word', () => {
+    // A work page's stats open with "Published: 2026-08-06". Hiding every `dt`
+    // in `dl.stats` — which is what §18c-5's spec literally says — leaves that
+    // date as a number with no label and no glyph, on every work on the archive.
+    const rules = compileRules(withIcons(true));
+    const hidden = rules
+      .filter(r => r.selectors.some(s => s.includes('dl.stats dt')))
+      .flatMap(r => r.selectors);
+
+    expect(hidden.sort()).toEqual(ICONED.map(stat => `dl.stats dt.${stat}`).sort());
+    for (const stat of LABELLED) {
+      expect(hidden, stat).not.toContain(`dl.stats dt.${stat}`);
+    }
+  });
+
+  test('every hidden label is replaced by exactly one glyph', () => {
+    // A label hidden with no icon to take its place is a stat the reader can no
+    // longer identify, and the two halves live in two different rules — so
+    // nothing but this test keeps them in step.
+    const rules = compileRules(withIcons(true));
+    const iconed = rules
+      .filter(r => r.selectors.some(s => s.startsWith('dl.stats dd.')))
+      .map(r => {
+        expect(r.selectors).toHaveLength(1);
+        expect(r.decls).toHaveLength(1);
+        return r.selectors[0];
+      });
+
+    expect(iconed.sort()).toEqual(ICONED.map(stat => `dl.stats dd.${stat}::before`).sort());
+
+    for (const rule of rules) {
+      for (const [property, value] of rule.decls) {
+        if (property !== 'content' || !rule.selectors[0].startsWith('dl.stats')) continue;
+        // Fully quoted, and not empty — an icon rule that lost its glyph would
+        // hide a label and put nothing in its place.
+        expect(value.startsWith('"') && value.endsWith('"'), rule.selectors[0]).toBe(true);
+        expect(value.length, rule.selectors[0]).toBeGreaterThan(3);
+      }
+    }
+  });
+
+  test('the mock renders both places AO3 puts a stats list', () => {
+    // Invariant 4, and the reason the "only seven" rule above is watchable:
+    // the listing's stats and the work page's stats are different rows, and the
+    // work page is the one that carries a date.
+    const browse = mockBody('browse');
+    for (const stat of ICONED.filter(s => s !== 'collections')) {
+      expect(browse, stat).toContain(`<dd class="${stat}"`);
+    }
+    expect(browse).toContain('<dt class="language">');
+
+    const reading = mockBody('reading');
+    expect(reading).toContain('<dd class="stats">');
+    expect(reading).toContain('<dt class="published">');
+    expect(reading).toContain('<dd class="kudos">');
+
+    // AO3's own rules for that second context, or the preview lays the row out
+    // in a way the real page never would.
+    expect(AO3_BASE_CSS).toContain('.meta .stats dl');
   });
 });
 
@@ -666,11 +946,23 @@ test.describe('region ownership', () => {
     const themes: [string, SiteSkinTheme][] = [
       ['as shipped', SAMPLE],
       [
-        'every control on',
+        'every control on, one group per line',
         {
           ...SAMPLE,
           shape: { ...SAMPLE.shape, tagColors: true },
-          reading: { requiredTagsAsText: true },
+          reading: { requiredTagsAsText: true, tagLabels: true, tagSeparator: 'line', statIcons: true },
+          details: { divider: true, dropCap: true, scrollbar: true },
+        },
+      ],
+      // The separator is the one control with three states rather than two, and
+      // `bullet` emits a different rule set from `line` — so a duplicate owner
+      // introduced by one of them would hide behind the other.
+      [
+        'every control on, bullets',
+        {
+          ...SAMPLE,
+          shape: { ...SAMPLE.shape, tagColors: true },
+          reading: { requiredTagsAsText: true, tagLabels: true, tagSeparator: 'bullet', statIcons: true },
           details: { divider: true, dropCap: true, scrollbar: true },
         },
       ],
@@ -774,7 +1066,12 @@ test.describe('region ownership', () => {
     // inside a work, so it belongs on the loud side of this test.
     const themed = {
       ...SAMPLE,
-      reading: { requiredTagsAsText: true },
+      reading: {
+        requiredTagsAsText: true,
+        tagLabels: true,
+        tagSeparator: 'line' as const,
+        statIcons: true,
+      },
       details: { ...SAMPLE.details, divider: true, dropCap: true },
     };
     let counted = 0;

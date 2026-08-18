@@ -334,6 +334,152 @@ test('required tags become words a reader can actually read', async ({ page }) =
 });
 
 /**
+ * §18c-3 and §18c-4. AO3 emits one `li` per tag with the group's class on it
+ * and nothing marking where a group begins, so both of these controls turn on
+ * the same question: which `li` starts a run.
+ *
+ * Read from the browser, because the two failures worth catching are both
+ * geometric. A label on the wrong `li` still renders a labelled listing, and a
+ * floated tag list with nothing containing it still emits every rule this test
+ * could have asserted on the string.
+ */
+test('tag groups can be named, and put one to a line', async ({ page }) => {
+  await openEditor(page); // Moonlit Library — both controls ship off.
+  const frame = page.frameLocator('iframe[title="Site skin preview"]');
+  await page.getByRole('tab', { name: 'Browse' }).click();
+
+  // The blurb that starts with characters rather than warnings. It exists for
+  // the `:first-child` half of the rule set: a reader with hide_warnings? set
+  // sees every listing look like this, and adjacency rules alone would label
+  // none of it.
+  const charactersFirst = frame.locator('#work_4 ul.tags li.characters').first();
+  const labelOf = (tag: typeof charactersFirst) =>
+    tag.evaluate(el => getComputedStyle(el, '::before').content);
+
+  expect(await labelOf(charactersFirst)).toBe('none');
+
+  await page.getByRole('switch', { name: 'Name each tag group' }).click();
+  await expect.poll(() => labelOf(charactersFirst)).toBe('"Characters: "');
+
+  // And the second tag of the same run is NOT labelled, which is the whole
+  // difference between naming a group and repeating a word.
+  const secondCharacter = frame.locator('#work_4 ul.tags li.characters').nth(1);
+  expect(await labelOf(secondCharacter)).toBe('none');
+
+  // Warnings straight to additional tags: the adjacency pair that only exists
+  // because a group may follow any group before it, not just the last one.
+  const skipped = frame.locator('#work_5 ul.tags li.freeforms').first();
+  expect(await labelOf(skipped)).toBe('"Additional Tags: "');
+
+  // ── The separator ──────────────────────────────────────────────────────
+  const firstTag = frame.locator('#work_1 ul.tags li').first();
+  const lastTag = frame.locator('#work_1 ul.tags li').last();
+  const separatorOf = (tag: typeof firstTag) =>
+    tag.evaluate(el => getComputedStyle(el, '::after').content);
+
+  // AO3's own comma, from the base stylesheet — and its own suppression of the
+  // comma after the final tag. Both have to be in the preview or the control
+  // has nothing to replace and no trap to avoid.
+  expect(await separatorOf(firstTag)).toBe('", "');
+  expect(await separatorOf(lastTag)).toBe('none');
+
+  await page.getByRole('button', { name: 'Bullets' }).click();
+  await expect.poll(() => separatorOf(firstTag)).toBe('" • "');
+  // The one this control gets wrong if it overrides `.commas li:after` bare:
+  // a bullet hanging off the end of every tag list.
+  expect(await separatorOf(lastTag)).toBe('none');
+
+  await page.getByRole('button', { name: 'One group per line' }).click();
+
+  // Each group starts a new line, and the tag list still has a height — the
+  // §26c.1 failure in a second place. A `ul` whose children all float collapses
+  // to nothing and the summary is laid out on top of the tags.
+  const geometry = await frame.locator('#work_1').evaluate(blurb => {
+    const box = (selector: string) => blurb.querySelector(selector)!.getBoundingClientRect();
+    return {
+      list: box('ul.tags').height,
+      relationships: box('li.relationships').top,
+      characters: box('li.characters').top,
+      summary: box('blockquote.summary').top,
+      tagsBottom: box('ul.tags').bottom,
+    };
+  });
+  expect(geometry.list).toBeGreaterThan(20);
+  expect(geometry.characters).toBeGreaterThan(geometry.relationships);
+  expect(geometry.summary).toBeGreaterThanOrEqual(geometry.tagsBottom);
+
+  const css = await exportedCss(page);
+  expect(css).toContain('ul.tags li.warnings + li.freeforms::before');
+  expect(css).toContain('ul.tags.commas li:not(:last-child)::after');
+  expect(css).toContain('clear: left');
+});
+
+/**
+ * §18c-5. AO3 repeats "Words: … Chapters: … Comments: … Kudos: … Hits: …" on
+ * every row of every listing. The numbers are the information; the words are a
+ * heading the reader learned on the first row.
+ *
+ * Read from the browser because both halves of this control are invisible to
+ * the compiled string. "The label is hidden" and "the label is still announced"
+ * are the same rule to a text assertion and different rules to a person using a
+ * screen reader — and the second one is the entire reason this control is ours
+ * rather than a snippet.
+ */
+test('stats become icons without taking their labels off the page', async ({ page }) => {
+  await openEditor(page); // Moonlit Library — ships with the control off.
+  const frame = page.frameLocator('iframe[title="Site skin preview"]');
+  await page.getByRole('tab', { name: 'Browse' }).click();
+
+  const kudosLabel = frame.locator('#work_1 dl.stats dt.kudos');
+  const kudosValue = frame.locator('#work_1 dl.stats dd.kudos');
+  const box = (l: typeof kudosLabel) => l.evaluate(el => el.getBoundingClientRect().width);
+  const glyph = (l: typeof kudosValue) =>
+    l.evaluate(el => getComputedStyle(el, '::before').content);
+
+  expect(await box(kudosLabel)).toBeGreaterThan(20);
+  expect(await glyph(kudosValue)).toBe('none');
+
+  await page.getByRole('switch', { name: 'Stats as icons' }).click();
+
+  // Under 10px rather than under 1: the box is a 1px content area plus AO3's
+  // own 0.25em of padding, and neither matters because the rule takes the
+  // element out of flow and clips it to nothing. What is being asserted is that
+  // the word no longer occupies the row.
+  await expect.poll(() => box(kudosLabel)).toBeLessThan(10);
+  expect(await glyph(kudosValue)).toContain('❤️');
+  expect(await kudosLabel.evaluate(el => getComputedStyle(el).clip)).toBe('rect(0px, 0px, 0px, 0px)');
+
+  // Hidden, not removed. `display: none` and `visibility: hidden` both take the
+  // word out of the accessibility tree; clipping does not, and a screen reader
+  // still announces "Kudos" before the number.
+  const announced = await kudosLabel.evaluate(el => {
+    const s = getComputedStyle(el);
+    return { display: s.display, visibility: s.visibility, text: el.textContent };
+  });
+  expect(announced.display).not.toBe('none');
+  expect(announced.visibility).toBe('visible');
+  expect(announced.text).toBe('Kudos:');
+
+  // The label with no glyph keeps its word — otherwise a listing reads
+  // "English" with nothing to say what English is.
+  expect(await box(frame.locator('#work_1 dl.stats dt.language'))).toBeGreaterThan(20);
+
+  // And the work page, which is the second place AO3 renders `dl.stats` and the
+  // only one that carries a date. "Published:" losing its word would leave a
+  // bare 2026-08-06 on every work on the archive.
+  await page.getByRole('tab', { name: 'Reading' }).click();
+  const published = frame.locator('.meta dd.stats dt.published');
+  expect(await box(published)).toBeGreaterThan(20);
+  expect(await glyph(frame.locator('.meta dd.stats dd.hits'))).toContain('👀');
+
+  const css = await exportedCss(page);
+  expect(css).toContain('dl.stats dt.kudos');
+  expect(css).toContain('clip: rect(0, 0, 0, 0)');
+  expect(css).not.toContain('dl.stats dt.published');
+  expect(css).not.toContain('clip-path');
+});
+
+/**
  * §18a. Until these rules landed, a reader could install a black theme and find
  * every button, pagination number, form field and comment byline still wearing
  * AO3's 2010 grey. It read as the skin being half-finished, because it was.

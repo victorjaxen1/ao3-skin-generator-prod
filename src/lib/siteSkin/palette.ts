@@ -404,7 +404,15 @@ export function themeFromPalette(
       // accent block. Costs no bytes and no host — SITE-SKIN §19b-bis.
       gradient: 'vertical',
     },
-    reading: { requiredTagsAsText: false },
+    // Every reading control off, for the same reason the sixteen templates have
+    // them off: a generated theme is a palette, and a palette does not get to
+    // decide what a listing says.
+    reading: {
+      requiredTagsAsText: false,
+      tagLabels: false,
+      tagSeparator: 'comma',
+      statIcons: false,
+    },
     details: { divider: false, dropCap: false, scrollbar: true },
   };
 }

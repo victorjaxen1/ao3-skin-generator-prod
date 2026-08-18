@@ -12,7 +12,9 @@ import {
   BANNER_HOST_HINT,
   HEADER_TEXT_COLORS,
   HEADER_GRADIENTS,
+  TAG_SEPARATORS,
   TagStyle,
+  TagSeparator,
   HeaderTextColor,
   HeaderGradient,
 } from '../../lib/siteSkin/theme';
@@ -415,6 +417,37 @@ export const ThemeEditor: React.FC<Props> = ({ theme, onChange, issues, onFix, o
         checked={theme.reading.requiredTagsAsText}
         onChange={v => onChange('reading', { ...theme.reading, requiredTagsAsText: v })}
       />
+      {/* AO3 marks each tag with its group's class and prints the group's name
+          nowhere, so a listing is one undifferentiated run of tags. This is the
+          label the work page already gives you, moved to the listing. */}
+      <ToggleRow
+        label="Name each tag group"
+        sublabel={'"Relationships:", "Characters:" before the tags they belong to'}
+        checked={theme.reading.tagLabels}
+        onChange={v => onChange('reading', { ...theme.reading, tagLabels: v })}
+      />
+      <SegmentRow
+        label="Tag separator"
+        value={theme.reading.tagSeparator}
+        options={TAG_SEPARATORS}
+        onChange={(v: TagSeparator) =>
+          onChange('reading', { ...theme.reading, tagSeparator: v })
+        }
+      />
+      {/* The label is hidden the way AO3 hides its own — clipped, not removed —
+          so a screen reader still says "Kudos" and only the pixels go. The
+          sublabel says which labels stay, because "Published: 2026-08-06"
+          losing its word is the version of this control that reads as a bug. */}
+      <ToggleRow
+        label="Stats as icons"
+        sublabel="Words, kudos and hits get a symbol; language and dates keep their labels"
+        checked={theme.reading.statIcons}
+        onChange={v => onChange('reading', { ...theme.reading, statIcons: v })}
+      />
+      <p className="text-xs text-stone-400 py-3 leading-relaxed">
+        All four appear in the Browse preview. "One group per line" is easiest
+        to read on a work with many tags, and it pairs with the group names.
+      </p>
 
       <SectionDivider label="Details" />
       <ToggleRow

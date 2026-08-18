@@ -215,6 +215,21 @@ ul, ol { margin: 0; padding: 0; }
 #footer .module { max-width: 20%; padding: 0 2%; }
 #footer .heading { display: block; color: #fff; }
 
+/* 09-roles-states — the comma between tags, which AO3 puts in CSS rather than
+   in the markup. Missing from this subset until the tag separator control
+   landed, and its absence was the same failure as every other one on this
+   page: the preview showed tags separated by nothing, the archive showed them
+   separated by commas, and a control whose whole job is to replace that comma
+   had nothing to replace.
+
+   All three rules, in AO3's order — the last-child pair is the load-bearing
+   half (§26c.1). AO3 suppresses the separator after the final tag, so a
+   control that overrides ".commas li:after" without noticing leaves a bullet
+   dangling at the end of every list. */
+.commas li:after { content: ", "; }
+.commas li { display: inline; }
+.commas li:last-child:after, .commas li:only-child:after { content: none; }
+
 /* 10-types-groups */
 a.tag { color: #111; line-height: 1.5; text-decoration: none; padding: 0; border-bottom: 1px dotted; }
 .tags li { display: inline; padding-left: 0; padding-right: 0.25em; }
@@ -272,6 +287,17 @@ dl.meta { border: 1px solid #ccc; padding: 0.75em; margin: 0 0 1em; }
 dl.meta dt { float: left; clear: left; margin: 0 0.25em 0 0; font-weight: bold; }
 dl.meta dd { margin: 0 0 0.25em; padding: 0 0 0 12em; }
 dl.meta ul.commas li { display: inline; padding-right: 0.25em; }
+/* The stats row at the foot of every work's metadata table. A second context
+   for dl.stats, and the one that carries "Published:" and a date - which is
+   why the stat-icon control hides seven named labels rather than every dt it
+   can reach. Transcribed from 12-group-meta.css. */
+.meta .stats dl { float: left; margin-top: 0; }
+.meta .stats dl, .meta .stats dl dt, .meta .stats dl dd { padding-inline-start: 0; }
+.meta .stats dl dt, .meta .stats dl dd {
+  margin-block: 0 auto; margin-inline: 0 0.375em; padding-inline-end: 0.25em;
+  width: auto; min-width: 0; clear: none; float: left;
+}
+.meta .stats dl dd { padding-inline-end: 0.75em; }
 
 /* 13-group-blurb */
 li.blurb { display: block; position: relative; clear: left; padding: 0.429em 0.75em; overflow: visible; }
@@ -466,6 +492,26 @@ function requiredTags(r: MockRequired): string {
     </ul>`;
 }
 
+/**
+ * The rest of AO3's stat row.
+ *
+ * Present because the stat-icon control replaces seven labels and the mock used
+ * to render two of them. Five rules with nowhere to land look exactly like five
+ * rules that work — §22d, one control further on.
+ *
+ * `bookmarks` is a link on the real page and a bare number everywhere else,
+ * which is why it is marked up as one here: an `::before` on the `dd` has to
+ * land outside the anchor, not inside it.
+ */
+type MockStats = { comments: string; kudos: string; bookmarks: string; hits: string };
+
+const DEFAULT_STATS: MockStats = {
+  comments: '48',
+  kudos: '1,204',
+  bookmarks: '96',
+  hits: '18,733',
+};
+
 function blurb(
   id: string,
   title: string,
@@ -474,7 +520,8 @@ function blurb(
   summary: string,
   words: string,
   chapters: string,
-  required: MockRequired = DEFAULT_REQUIRED
+  required: MockRequired = DEFAULT_REQUIRED,
+  stats: MockStats = DEFAULT_STATS
 ): string {
   return `
   <li id="work_${id}" class="work blurb group" role="article">
@@ -494,8 +541,13 @@ function blurb(
     </ul>
     <blockquote class="userstuff summary"><p>${summary}</p></blockquote>
     <dl class="stats">
+      <dt class="language">Language:</dt><dd class="language">English</dd>
       <dt class="words">Words:</dt><dd class="words">${words}</dd>
       <dt class="chapters">Chapters:</dt><dd class="chapters">${chapters}</dd>
+      <dt class="comments">Comments:</dt><dd class="comments">${stats.comments}</dd>
+      <dt class="kudos">Kudos:</dt><dd class="kudos">${stats.kudos}</dd>
+      <dt class="bookmarks">Bookmarks:</dt><dd class="bookmarks"><a href="#">${stats.bookmarks}</a></dd>
+      <dt class="hits">Hits:</dt><dd class="hits">${stats.hits}</dd>
     </dl>
   </li>`;
 }
@@ -545,7 +597,7 @@ const BROWSE_PAGINATION = `
 const BROWSE = `
 <h2 class="heading">Works in Original Work</h2>
 <div class="notice" role="status">
-  <p>Your filters have been applied. 3 works found.</p>
+  <p>Your filters have been applied. 5 works found.</p>
 </div>
 ${BROWSE_CONTROLS}
 <ol class="work index group">
@@ -606,6 +658,52 @@ ${blurb(
     warnings: ['warning-choosenotto', 'Creator Chose Not To Use Archive Warnings'],
     category: ['category-femslash', 'F/F'],
     status: ['complete-no', 'Work in Progress'],
+  }
+)}
+${blurb(
+  '4',
+  'The Lamplighter’s Apprentice',
+  'saltandcopper',
+  // No warnings and no relationships, so this is where a run STARTS with
+  // characters — one of the four ways a group can be first, and one no other
+  // blurb on this page shows. A reader with hide_warnings? set sees every
+  // listing look like this, which is why the label rules cannot be adjacency
+  // rules alone.
+  [
+    { type: 'characters', label: 'Wren' },
+    { type: 'characters', label: 'The Lamplighter' },
+    { type: 'freeforms', label: 'Worldbuilding' },
+  ],
+  'Wren is nine, the lamps are older than the city, and somebody has to climb.',
+  '8,410',
+  '3/3',
+  {
+    rating: ['rating-general-audience', 'General Audiences'],
+    warnings: ['warning-no', 'No Archive Warnings Apply'],
+    category: ['category-gen', 'Gen'],
+    status: ['complete-yes', 'Complete Work'],
+  }
+)}
+${blurb(
+  '5',
+  'Salt Harbour, Six Winters',
+  'quietharbour',
+  // Warnings straight to additional tags, skipping both middle groups. The
+  // adjacency rules are six because a group may follow any group before it,
+  // not only the one immediately before it — and this is the pair that would
+  // have gone unnoticed.
+  [
+    { type: 'warnings', label: 'Major Character Death' },
+    { type: 'freeforms', label: 'Grief/Mourning' },
+  ],
+  'The harbour freezes every year. Every year he waits for it to thaw.',
+  '2,006',
+  '1/1',
+  {
+    rating: ['rating-mature', 'Mature'],
+    warnings: ['warning-yes', 'Major Character Death'],
+    category: ['category-none', 'No category'],
+    status: ['complete-yes', 'Complete Work'],
   }
 )}
 </ol>
@@ -702,6 +800,18 @@ const WORK_META = `
     <dd class="character tags"><ul class="commas"><li><a class="tag" href="#">Mara</a></li><li><a class="tag" href="#">The Messenger</a></li></ul></dd>
     <dt class="freeform tags">Additional Tags:</dt>
     <dd class="freeform tags"><ul class="commas"><li><a class="tag" href="#">Slow Burn</a></li><li><a class="tag" href="#">Mutual Pining</a></li></ul></dd>
+    <dt class="stats">Stats:</dt>
+    <dd class="stats">
+      <dl class="stats">
+        <dt class="published">Published:</dt><dd class="published">2026-08-06</dd>
+        <dt class="words">Words:</dt><dd class="words">12,842</dd>
+        <dt class="chapters">Chapters:</dt><dd class="chapters">4/4</dd>
+        <dt class="comments">Comments:</dt><dd class="comments">48</dd>
+        <dt class="kudos">Kudos:</dt><dd class="kudos">1,204</dd>
+        <dt class="bookmarks">Bookmarks:</dt><dd class="bookmarks"><a href="#">96</a></dd>
+        <dt class="hits">Hits:</dt><dd class="hits">18,733</dd>
+      </dl>
+    </dd>
   </dl>
   </div>`;
 
@@ -831,7 +941,7 @@ const DASHBOARD_LISTBOXES = `
   <h3 class="heading">Recent works</h3>
   <ul class="index group">
 ${blurb(
-  '4',
+  '6',
   'Nine Letters, Unsent',
   'inkandstarlight',
   [
@@ -840,6 +950,22 @@ ${blurb(
   ],
   'He wrote them all. He sent none.',
   '3,104',
+  '1/1'
+)}
+${blurb(
+  '7',
+  'Tide Tables',
+  'inkandstarlight',
+  // Additional tags and nothing else — the last of the four ways a run can
+  // start, and the only blurb in the mock that shows it. Common in practice: a
+  // work with no named characters, or a reader with hide_freeform? off and
+  // hide_warnings? on.
+  [
+    { type: 'freeforms', label: 'Poetry' },
+    { type: 'freeforms', label: 'Sea Imagery' },
+  ],
+  'Twelve tides, twelve poems, one harbour.',
+  '900',
   '1/1'
 )}
   </ul>

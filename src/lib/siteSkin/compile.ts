@@ -63,6 +63,67 @@ const TAG_SHAPE: Record<SiteSkinTheme['shape']['tagStyle'], { radius: string; bo
   plain: { radius: '0px', border: false },
 };
 
+/**
+ * AO3's tag groups, in the order `tags_helper.rb` emits them.
+ *
+ * The order is what makes the "first `li` of a run" question answerable at all:
+ * a group can only ever follow a group that comes before it in this list, so
+ * the six adjacency pairs below are the complete set rather than a sample.
+ */
+const TAG_GROUPS = ['warnings', 'relationships', 'characters', 'freeforms'] as const;
+
+type TagGroup = (typeof TAG_GROUPS)[number];
+
+/** AO3's own wording, from the labels it prints on a work's metadata table. */
+const TAG_GROUP_LABELS: Record<TagGroup, string> = {
+  warnings: 'Archive Warnings: ',
+  relationships: 'Relationships: ',
+  characters: 'Characters: ',
+  freeforms: 'Additional Tags: ',
+};
+
+/**
+ * Every way a run of `group` can begin: first in the list, or immediately after
+ * a tag of each group that can precede it.
+ *
+ * Ten selectors across the four groups — four `:first-child` and six
+ * adjacency — and both reading controls that care about where a group starts
+ * are built from this one function.
+ */
+function tagGroupStarts(group: TagGroup): string[] {
+  const before = TAG_GROUPS.slice(0, TAG_GROUPS.indexOf(group));
+  return [
+    `ul.tags li.${group}:first-child`,
+    ...before.map(previous => `ul.tags li.${previous} + li.${group}`),
+  ];
+}
+
+/**
+ * The stats that get an icon, and the ones that deliberately do not.
+ *
+ * Verified against a real work page (`/works/28934610`) rather than against a
+ * helper: `dl.stats` carries the class on **both** the `dt` and the `dd`, and
+ * it appears in two contexts with different rows in each. A listing's stats are
+ * language, words, chapters, collections, comments, kudos, bookmarks and hits;
+ * a work page's are published — plus status and updated on a work in progress —
+ * and then words through hits.
+ *
+ * **The ones missing from this list are the reason it is a list.** A date with
+ * no label reads as a number nobody asked for, and there is no glyph for
+ * "Published" or "Language" that a reader would decode. So `published`,
+ * `status`, `updated` and `language` keep their words, and only the seven below
+ * trade theirs for a picture.
+ */
+const STAT_ICONS: [stat: string, icon: string][] = [
+  ['words', '✍️ '],
+  ['chapters', '📄 '],
+  ['comments', '💬 '],
+  ['kudos', '❤️ '],
+  ['bookmarks', '🔖 '],
+  ['hits', '👀 '],
+  ['collections', '🗂️ '],
+];
+
 /** Everything the theme implies but does not literally contain. */
 export function derive(theme: SiteSkinTheme) {
   const accent = normalizeHex(theme.colors.accent);
@@ -538,6 +599,151 @@ function buildRules(theme: SiteSkinTheme): Rule[] {
       for (const [selector, color] of REQUIRED_TAG_COLORS) {
         rules.push({ selectors: [selector], decls: [['color', color]] });
       }
+    }
+  }
+
+  // ── Reading: tag group labels, and the separator ─────────────────
+  //
+  // These two controls are one block because they share one list. AO3 emits
+  // **one `li` per tag**, every tag in a group carrying the group's class and
+  // nothing at all marking where a group begins (`tags_helper.rb#blurb_tag_block`):
+  //
+  //     <li class="warnings">…</li>
+  //     <li class="relationships">…</li>
+  //     <li class="relationships">…</li>
+  //
+  // So a group is a **run of same-class siblings**, and both controls need the
+  // same thing from it: the label goes on the first `li` of a run, and in
+  // `line` mode so does the `clear`. CSS cannot say "the previous sibling is
+  // not a `.relationships`", so the runs are enumerated instead — which is
+  // tractable only because AO3's group order is fixed.
+  //
+  // `:first-child` is not enough on its own and `+` is not either.
+  // `hide_warnings?` and `hide_freeform?` are real reader preferences in
+  // `tags_helper.rb`, so any of the four groups can be the first one present —
+  // drop the `:first-child` half and a reader who hides warnings sees no labels
+  // at all.
+  if (theme.reading.tagLabels) {
+    for (const group of TAG_GROUPS) {
+      rules.push({
+        selectors: tagGroupStarts(group).map(selector => `${selector}::before`),
+        decls: [
+          ['color', d.text],
+          // A fully-quoted string, which is all `sanitize_css_content` asks for
+          // — AO3 branches on `content` before the value grammar runs.
+          ['content', `"${TAG_GROUP_LABELS[group]}"`],
+          ['font-weight', 'bold'],
+        ],
+      });
+    }
+  }
+
+  // The separator lives on one selector for all three options, because AO3 puts
+  // the comma in CSS rather than in the markup — `.commas li:after { content:
+  // ", " }` in 09-roles-states.css. `comma` therefore emits nothing at all: it
+  // is the archive's own default, and a theme that never touched this control
+  // compiles byte-identically to one saved before the control existed.
+  //
+  // **`:not(:last-child)`, not the bare `.commas li` the plan specified.** AO3
+  // suppresses its own separator after the final tag
+  // (`.commas li:last-child:after { content: none }`), and ours carries
+  // `!important`, so a bare selector would beat that suppression and leave a
+  // bullet dangling at the end of every tag list. The one place it shows is the
+  // end of a line, which is exactly where a reader looks.
+  //
+  // **Scoped to `ul.tags`**, not to every `.commas` list on the archive. The
+  // control says "tags in a listing" and `.commas` is also worn by lists of
+  // listboxes, where 11-group-listbox.css suppresses the comma on purpose.
+  if (theme.reading.tagSeparator !== 'comma') {
+    rules.push({
+      selectors: ['ul.tags.commas li:not(:last-child)::after'],
+      decls: [['content', theme.reading.tagSeparator === 'bullet' ? '" • "' : '""']],
+    });
+  }
+
+  // `line` — one tag group per line, which is the option readers actually ask
+  // for. Three rules, and the first of them is the one a preview would not have
+  // caught.
+  if (theme.reading.tagSeparator === 'line') {
+    // **Contain the floats.** A `ul` whose every child floats has no height, so
+    // the summary below it would be laid out at the top of the tag block and
+    // the tags would overlap somebody's paragraph. This is the drop cap defect
+    // (§26c.1) in a second place: correct on a blurb with a short tag list,
+    // wrong the moment the list wraps to two lines.
+    //
+    // `overflow: hidden` rather than `display: flow-root` for the same reason
+    // the drop cap chose it — nothing here is inside an author's markup, but
+    // the failure mode of a clipped tag is smaller than that of a collapsed
+    // layout.
+    rules.push({
+      selectors: ['ul.tags'],
+      decls: [['overflow', 'hidden']],
+    });
+
+    // Every tag floats; only the first of each run clears. `padding-right`
+    // rather than a separator glyph: with the comma gone (above), AO3's own
+    // 0.25em is too tight to read two multi-word tags apart.
+    rules.push({
+      selectors: TAG_GROUPS.map(group => `ul.tags li.${group}`),
+      decls: [
+        ['float', 'left'],
+        ['padding-right', '0.75em'],
+      ],
+    });
+
+    // The same ten selectors as the labels, without the `::before`. This is the
+    // reason the two controls were built together: two copies of this list
+    // would drift, and the way they would drift is one group silently sharing a
+    // line with the one before it.
+    rules.push({
+      selectors: TAG_GROUPS.flatMap(group => tagGroupStarts(group)),
+      decls: [['clear', 'left']],
+    });
+  }
+
+  // ── Reading: stat icons ────────────────────────────────────
+  //
+  // AO3 prints "Words: 35,576 Chapters: 1/1 Comments: 434 Kudos: 745
+  // Bookmarks: 1,030 Hits: 85,527" on every row of every listing. The numbers
+  // are the information and the words are six repetitions of a heading the
+  // reader learned on the first row.
+  //
+  // **The label is hidden, never removed, and that distinction is the whole
+  // reason this control belongs to us.** The corpus add-on does
+  // `dl.stats dt { display: none }`, which takes the label out of the
+  // accessibility tree: a screen reader then reads "745" with no idea what 745
+  // is. §18c-2 exists to make the archive more readable, and contradicting it
+  // two controls later is not something we get to do.
+  //
+  // So: AO3's own visually-hidden technique. `clip: rect()` is legal (`clip` is
+  // on the property list, and `rect()` reaches VALUE_REGEX through
+  // SHAPE_FUNCTION_REGEX) where `clip-path` is not — the sanitizer refuses that
+  // one outright, which is why the deprecated property is the right one here.
+  // No `top` or `left`, so the `dt` stays at its static position and the row
+  // does not reflow around an element pinned to the page corner.
+  if (theme.reading.statIcons) {
+    rules.push({
+      selectors: STAT_ICONS.map(([stat]) => `dl.stats dt.${stat}`),
+      decls: [
+        ['clip', 'rect(0, 0, 0, 0)'],
+        ['height', '1px'],
+        ['overflow', 'hidden'],
+        ['position', 'absolute'],
+        ['width', '1px'],
+      ],
+    });
+
+    // One rule per stat, because each carries a different glyph. Emoji rather
+    // than the dingbats the divider uses (❦, which takes the accent colour):
+    // there is no monochrome glyph a reader reliably decodes as "hits" or
+    // "bookmarks", and a picture nobody can read is worse than a word. The cost
+    // is that these cannot be themed — a colour emoji ignores `color` — which
+    // is a trade this control makes knowingly and the divider does not.
+    for (const [stat, icon] of STAT_ICONS) {
+      rules.push({
+        selectors: [`dl.stats dd.${stat}::before`],
+        decls: [['content', `"${icon}"`]],
+      });
     }
   }
 
