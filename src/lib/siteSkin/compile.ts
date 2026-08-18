@@ -1,4 +1,11 @@
-import { SiteSkinTheme, PageTexture, CardElevation } from './theme';
+import {
+  SiteSkinTheme,
+  PageTexture,
+  CardElevation,
+  CardFrame,
+  HeadingStyle,
+  ORNAMENTS,
+} from './theme';
 import { mixHex, normalizeHex, readableOn, tagTypeColors, TAG_TYPES } from './colors';
 
 /**
@@ -201,6 +208,49 @@ function cardShadow(surface: SiteSkinTheme['surface'], shadow: string, accent: s
   return layers.length ? layers.join(', ') : 'none';
 }
 
+/**
+ * `border-image` is how the 283-star medieval skin gets its entire identity,
+ * and it feeds it a hosted PNG. We feed it a gradient the theme already
+ * implies: no image, no host, nothing to expire — §19b-bis, unchanged.
+ *
+ * `double` needs no image at all. Three pixels of border split into two rules
+ * is the oldest ornament in printed matter, and AO3's own `border-style` is
+ * already whatever we say it is.
+ */
+function cardFrame(frame: CardFrame, accent: string, deep: string): [string, string][] {
+  if (frame === 'double') {
+    // 4px, because `double` divides its width into three and a 3px border
+    // leaves each rule sub-pixel on a non-retina screen.
+    return [
+      ['border-style', 'double'],
+      ['border-width', '4px'],
+    ];
+  }
+  if (frame === 'ribbon') {
+    return [
+      // Slice 1: the gradient has no edges to preserve, so one pixel of it is
+      // stretched around the whole box. A larger slice would band it.
+      ['border-image', `linear-gradient(135deg, ${accent}, ${deep}) 1`],
+      ['border-style', 'solid'],
+      ['border-width', '3px'],
+    ];
+  }
+  return [];
+}
+
+/** Set once, used on the page headings and on the site title. */
+const HEADING_DECLS: Record<HeadingStyle, [string, string][]> = {
+  normal: [],
+  smallCaps: [
+    ['font-variant', 'small-caps'],
+    ['letter-spacing', '0.04em'],
+  ],
+  uppercase: [
+    ['letter-spacing', '0.12em'],
+    ['text-transform', 'uppercase'],
+  ],
+};
+
 /** Everything the theme implies but does not literally contain. */
 export function derive(theme: SiteSkinTheme) {
   const accent = normalizeHex(theme.colors.accent);
@@ -319,6 +369,19 @@ export function derive(theme: SiteSkinTheme) {
      */
     cardShadow: cardShadow(theme.surface, mixHex(text, background, 0.72), accent),
     /**
+     * The card's decorative edge, as declarations rather than a keyword.
+     *
+     * Returned from `derive` so the two card rules stay each other's copy —
+     * `li.blurb` and `#workskin` are described in two places and must not
+     * drift, which is the same reason `cardShadow` lives here.
+     *
+     * **`ribbon` squares the corners.** `border-image` is painted into the
+     * border box and ignores `border-radius` entirely; that is CSS's rule, not
+     * a choice we get to make, and the editor says so out loud rather than
+     * letting a reader wonder why Pillowy stopped working.
+     */
+    cardFrame: cardFrame(theme.surface.frame, accent, mixHex(accent, '#000000', 0.75)),
+    /**
      * A halo on the headings, for the themes that want the card glow.
      *
      * Text only, and the same hue as the heading it sits behind — the accent is
@@ -326,6 +389,15 @@ export function derive(theme: SiteSkinTheme) {
      * rather than a second one arriving.
      */
     headingGlow: theme.surface.glow ? `0 0 10px ${accent}66` : '',
+    /**
+     * How a heading is set. Two declarations at most, and neither costs a byte
+     * on the wire or asks the reader's device for a font it may not have.
+     *
+     * The letter-spacing is not decoration: capitals set at their natural
+     * tracking read as cramped, which is why every specimen book widens them.
+     * Small caps get less of it than full caps because they are shorter.
+     */
+    headingStyle: HEADING_DECLS[theme.typography.headingStyle],
   };
 }
 
@@ -523,6 +595,10 @@ function buildRules(theme: SiteSkinTheme): Rule[] {
       // gives a blurb a border and no shadow, so `flat` has nothing to undo and
       // `box-shadow: none` here would be a declaration that does nothing.
       ...(d.cardShadow === 'none' ? [] : ([['box-shadow', d.cardShadow]] as [string, string][])),
+      // Extends this rule for `cardShadow`'s reason: the card is described
+      // here, so its edge is described here too rather than by a second owner
+      // of `border-style`.
+      ...d.cardFrame,
     ],
   });
 
@@ -542,6 +618,10 @@ function buildRules(theme: SiteSkinTheme): Rule[] {
       // the container an author's work sits in, and the author keeps the power
       // to say otherwise — §14b, unchanged.
       ...(d.cardShadow === 'none' ? [] : ([['box-shadow', d.cardShadow]] as [string, string][])),
+      // The frame reaches the work container too, and quietly for the same
+      // reason. AO3 gives `#workskin` no border at all, so this adds one rather
+      // than repainting one — and an author who drew their own still wins.
+      ...d.cardFrame,
     ],
     authorWins: true,
   });
@@ -581,8 +661,49 @@ function buildRules(theme: SiteSkinTheme): Rule[] {
       // never become a second owner. Emitted only when it is on — an unglowing
       // `text-shadow: none` would be a declaration with nothing to undo.
       ...(d.headingGlow ? ([['text-shadow', d.headingGlow]] as [string, string][]) : []),
+      // Same rule again rather than a second owner. Heading colour, glow and
+      // setting are three answers to "what does a heading look like", and they
+      // belong in one place.
+      ...d.headingStyle,
     ],
   });
+
+  // The site title, which is the one heading `#main` cannot reach and the one
+  // a reader looks at on every page. A separate rule because `#header .heading`
+  // already has two owners for two other properties (its colour, and its height
+  // when a banner is set) — this adds a third property, not a third opinion.
+  if (d.headingStyle.length) {
+    rules.push({
+      selectors: ['#header .heading'],
+      decls: d.headingStyle,
+    });
+  }
+
+  // ── Ornament ────────────────────────────────────────────────────────────
+  //
+  // A printer's flower either side of the page heading — the part of an ornate
+  // skin that needs no picture.
+  //
+  // Every glyph is a single BMP code point, deliberately. §30's stat icons had
+  // to accept that a colour emoji ignores `color`; an ornament has no such
+  // excuse, so these are dingbats and they take the theme's accent exactly as
+  // the divider's ❦ does. One `content` string, no host, nothing to expire.
+  //
+  // `#main > .heading` and not `.heading`: a blurb title is a heading too, and
+  // a flower on all fifteen of them is wallpaper rather than ornament. The
+  // direct child is the page's own title — "Works in Original Work", a
+  // username, a collection name — which is the one a frontispiece would carry.
+  if (theme.details.ornament !== 'none') {
+    const glyph = ORNAMENTS.find(o => o.value === theme.details.ornament)!.glyph;
+    rules.push({
+      selectors: ['#main > .heading::before'],
+      decls: [['content', `"${glyph}  "`]],
+    });
+    rules.push({
+      selectors: ['#main > .heading::after'],
+      decls: [['content', `"  ${glyph}"`]],
+    });
+  }
 
   rules.push({
     selectors: ['a.tag'],

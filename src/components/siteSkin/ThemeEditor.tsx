@@ -15,10 +15,16 @@ import {
   TAG_SEPARATORS,
   PAGE_TEXTURES,
   CARD_ELEVATIONS,
+  CARD_FRAMES,
+  HEADING_STYLES,
+  ORNAMENTS,
   TagStyle,
   TagSeparator,
   PageTexture,
   CardElevation,
+  CardFrame,
+  HeadingStyle,
+  Ornament,
   HeaderTextColor,
   HeaderGradient,
 } from '../../lib/siteSkin/theme';
@@ -326,6 +332,18 @@ export const ThemeEditor: React.FC<Props> = ({ theme, onChange, issues, onFix, o
         options={FONT_SCALES}
         onChange={v => onChange('typography', { ...theme.typography, baseFontScale: v })}
       />
+      {/* The cheapest way to change a theme's period, and the one that needs no
+          font file: small caps and wide tracking are what separate a broadsheet
+          from a blog. It reaches the site title as well as the page headings,
+          which is the one a reader sees on every page. */}
+      <SegmentRow
+        label="Heading style"
+        value={theme.typography.headingStyle}
+        options={HEADING_STYLES}
+        onChange={(v: HeadingStyle) =>
+          onChange('typography', { ...theme.typography, headingStyle: v })
+        }
+      />
       {/* The honesty line, and it is load-bearing rather than a disclaimer.
           AO3 rejects @font-face, so we can never send a reader a font file —
           a font-family is a suggestion their device either can or cannot
@@ -439,10 +457,31 @@ export const ThemeEditor: React.FC<Props> = ({ theme, onChange, issues, onFix, o
         checked={theme.surface.glow}
         onChange={v => onChange('surface', { ...theme.surface, glow: v })}
       />
+      {/* `border-image` is the technique the most-starred skin in the corpus is
+          built out of; it feeds it a hosted PNG and we feed it the accent
+          gradient. The corner warning is not a disclaimer — it is CSS's actual
+          behaviour, and a reader who picked Pillowy and then Ribbon would
+          otherwise think one of the two controls was broken. */}
+      <SegmentRow
+        label="Card edge"
+        value={theme.surface.frame}
+        options={CARD_FRAMES}
+        onChange={(v: CardFrame) => onChange('surface', { ...theme.surface, frame: v })}
+      />
       <p className="text-xs text-stone-400 py-3 leading-relaxed">
         The pattern is drawn from your Page colour, so it can&apos;t clash with
         the palette. It costs nothing to load and can never break — unlike the
         hosted wallpapers most decorative skins rely on.
+        {theme.surface.frame === 'ribbon' && (
+          <>
+            {' '}
+            <span className="text-stone-500">
+              Ribbon paints the accent into the border itself, which squares the
+              corners — that&apos;s a CSS rule, so Card corners won&apos;t apply
+              while it&apos;s on.
+            </span>
+          </>
+        )}
       </p>
 
       <SectionDivider label="Reading" />
@@ -490,6 +529,15 @@ export const ThemeEditor: React.FC<Props> = ({ theme, onChange, issues, onFix, o
       </p>
 
       <SectionDivider label="Details" />
+      {/* Single code points, not emoji — so unlike the stat icons these take
+          the theme's accent. It lands on the page's own title only: a flower on
+          every blurb heading would be wallpaper rather than ornament. */}
+      <SegmentRow
+        label="Heading ornament"
+        value={theme.details.ornament}
+        options={ORNAMENTS}
+        onChange={(v: Ornament) => onChange('details', { ...theme.details, ornament: v })}
+      />
       <ToggleRow
         label="Decorative divider"
         sublabel="Replaces the line between scenes with an ornament"

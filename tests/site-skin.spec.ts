@@ -485,6 +485,78 @@ test('stats become icons without taking their labels off the page', async ({ pag
 });
 
 /**
+ * §18b's ornament half — the image-free way to make a theme look built rather
+ * than recoloured.
+ *
+ * Read from the browser because two of the three claims are geometric and the
+ * third is a promise the editor makes in words: that Ribbon squares the
+ * corners. If that sentence is ever wrong it is worse than absent, because a
+ * reader will trust it over what they can see.
+ */
+test('frames, heading setting and a flower all reach the page', async ({ page }) => {
+  await openEditor(page, 'Paper & Ink');
+  const frame = page.frameLocator('iframe[title="Site skin preview"]');
+  await page.getByRole('tab', { name: 'Browse' }).click();
+
+  const card = frame.locator('li.blurb').first();
+  const heading = frame.locator('#main > .heading').first();
+  const box = () =>
+    card.evaluate(el => {
+      const s = getComputedStyle(el);
+      return { style: s.borderTopStyle, width: s.borderTopWidth, radius: s.borderTopLeftRadius };
+    });
+  const flower = () => heading.evaluate(el => getComputedStyle(el, '::before').content);
+
+  const plain = await box();
+  expect(plain.style).toBe('solid');
+  expect(await flower()).toBe('none');
+
+  // ── Double rule: an edge that keeps the corners ────────────────────────
+  await page.getByRole('button', { name: 'Card edge: Double rule' }).click();
+  await expect.poll(async () => (await box()).style).toBe('double');
+  const doubled = await box();
+  expect(doubled.width).toBe('4px');
+  // The radius still applies, which is the difference from Ribbon.
+  expect(parseFloat(doubled.radius)).toBeGreaterThan(0);
+
+  // ── Ribbon: the corner promise the editor makes ────────────────────────
+  await page.getByRole('button', { name: 'Card edge: Ribbon' }).click();
+  await expect
+    .poll(() => card.evaluate(el => getComputedStyle(el).borderImageSource))
+    .toContain('linear-gradient');
+  // The editor says this out loud, so the sentence has to be true.
+  await expect(page.getByText(/squares the corners/)).toBeVisible();
+  const ribboned = await card.evaluate(el => {
+    const s = getComputedStyle(el);
+    // border-image paints over the radius: the slice is what proves it is the
+    // image drawing the edge rather than the border-color underneath.
+    return { slice: s.borderImageSlice, source: s.borderImageSource };
+  });
+  expect(ribboned.slice).toContain('1');
+  expect(ribboned.source).not.toContain('url');
+
+  // ── Heading setting, on the page title AND the site title ──────────────
+  await page.getByRole('button', { name: 'Heading style: Small caps' }).click();
+  await expect.poll(() => heading.evaluate(el => getComputedStyle(el).fontVariantCaps)).toBe(
+    'small-caps'
+  );
+  const title = frame.locator('#header .heading').first();
+  expect(await title.evaluate(el => getComputedStyle(el).fontVariantCaps)).toBe('small-caps');
+
+  // ── The flower, and only on the page's own heading ─────────────────────
+  await page.getByRole('button', { name: 'Heading ornament: Fleuron' }).click();
+  await expect.poll(flower).toContain('❦');
+  // Not on a blurb title, which wears `.heading` too.
+  const blurbTitle = frame.locator('li.blurb .heading').first();
+  expect(await blurbTitle.evaluate(el => getComputedStyle(el, '::before').content)).toBe('none');
+
+  const css = await exportedCss(page);
+  expect(css).toContain('border-image: linear-gradient(');
+  expect(css).toContain('#main > .heading::before');
+  expect(css).toContain('font-variant: small-caps');
+});
+
+/**
  * §18a. Until these rules landed, a reader could install a black theme and find
  * every button, pagination number, form field and comment byline still wearing
  * AO3's 2010 grey. It read as the skin being half-finished, because it was.

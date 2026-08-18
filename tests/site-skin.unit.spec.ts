@@ -10,6 +10,7 @@ import {
   TAG_SEPARATORS,
   PAGE_TEXTURES,
   CARD_ELEVATIONS,
+  ORNAMENTS,
 } from '../src/lib/siteSkin/theme';
 import { lintAo3Css, isLegalFontStack, checkAo3ImageUrl, stripCssComments } from '../src/lib/siteSkin/ao3Css';
 import {
@@ -1130,6 +1131,155 @@ test.describe('depth — texture, elevation and glow', () => {
   });
 });
 
+test.describe('ornament — frames, heading setting and printers flowers', () => {
+  const ornate = (over: {
+    frame?: SiteSkinTheme['surface']['frame'];
+    headingStyle?: SiteSkinTheme['typography']['headingStyle'];
+    ornament?: SiteSkinTheme['details']['ornament'];
+  }): SiteSkinTheme => ({
+    ...SAMPLE,
+    surface: { ...SAMPLE.surface, frame: over.frame ?? 'none' },
+    typography: { ...SAMPLE.typography, headingStyle: over.headingStyle ?? 'normal' },
+    details: { ...SAMPLE.details, ornament: over.ornament ?? 'none' },
+  });
+
+  test('off in every shipped template, and off emits nothing at all', () => {
+    for (const template of TEMPLATES) {
+      expect(template.surface.frame, template.meta.name).toBe('none');
+      expect(template.typography.headingStyle, template.meta.name).toBe('normal');
+      expect(template.details.ornament, template.meta.name).toBe('none');
+    }
+    const css = compile(ornate({}));
+    expect(css).not.toContain('border-image');
+    expect(css).not.toContain('font-variant');
+    expect(css).not.toContain('text-transform');
+    expect(css).not.toContain('> .heading::');
+  });
+
+  test('a frame extends the card rules rather than opening a second owner', () => {
+    // §4.2's defect is a property described in two places. A card's colour,
+    // radius, shadow and edge are four answers to "what does a card look like",
+    // and the moment the edge gets its own rule the radius and the border-style
+    // start disagreeing about which card they mean.
+    for (const frame of ['double', 'ribbon'] as const) {
+      const rules = compileRules(ornate({ frame }));
+      // Matched on the frame's own border-width rather than on `border-style`:
+      // the divider sets a border too (`#chapters .userstuff > hr`), and a test
+      // that cannot tell an ornament from an ornament is not testing much.
+      const width = frame === 'double' ? '4px' : '3px';
+      const edges = rules.filter(r =>
+        r.decls.some(([property, value]) => property === 'border-width' && value === width)
+      );
+      // The two card rules and nothing else — no third rule inventing an edge.
+      const selectors = edges.flatMap(r => r.selectors).sort();
+      expect(selectors, frame).toEqual(['#dashboard', '#workskin', 'li.blurb'].sort());
+
+      // And each edge sits in the rule that already owns the card's colour.
+      for (const rule of edges) {
+        expect(rule.decls.map(([p]) => p), frame).toContain('background-color');
+      }
+    }
+  });
+
+  test('the work container keeps its frame quiet, so an author still wins', () => {
+    // §14b. A reader's edge reaches the box an author's work sits in; it must
+    // not shout at an author who drew their own.
+    const css = compile(ornate({ frame: 'ribbon' }));
+    const workskin = css.split('\n\n').find(b => b.startsWith('#workskin {'))!;
+    expect(workskin).toContain('border-image');
+    expect(workskin).not.toContain('!important');
+  });
+
+  test('ribbon feeds border-image a gradient, never a url', () => {
+    // §19b-bis. `border-image` is how the corpus's most-starred skin gets its
+    // identity and it hotlinks a PNG to do it. Ours costs no bytes and has no
+    // host that can expire.
+    const css = compile(ornate({ frame: 'ribbon' }));
+    expect(css).toContain('border-image: linear-gradient(');
+    expect(css).not.toContain('border-image: url');
+  });
+
+  test('heading setting reaches the page headings and the site title', () => {
+    // The title is the one heading `#main` cannot reach and the one a reader
+    // sees on every page — a period style that skips it is half-applied.
+    for (const [headingStyle, property, value] of [
+      ['smallCaps', 'font-variant', 'small-caps'],
+      ['uppercase', 'text-transform', 'uppercase'],
+    ] as const) {
+      const rules = compileRules(ornate({ headingStyle }));
+      const carriers = rules.filter(r => r.decls.some(([p, v]) => p === property && v === value));
+      const selectors = carriers.flatMap(r => r.selectors);
+      expect(selectors, headingStyle).toContain('#main .heading');
+      expect(selectors, headingStyle).toContain('#header .heading');
+      // Tracking travels with it: capitals set at their natural spacing read as
+      // cramped, which is the whole reason a specimen book widens them.
+      for (const rule of carriers) {
+        expect(rule.decls.map(([p]) => p), headingStyle).toContain('letter-spacing');
+      }
+    }
+  });
+
+  test('the site title gets no rule at all when the setting is normal', () => {
+    // An empty rule is one AO3 reports as an error (WORK-SKIN §13), and a
+    // selector emitted with nothing in it is how that starts.
+    const rules = compileRules(ornate({ headingStyle: 'normal' }));
+    const title = rules.filter(r => r.selectors.length === 1 && r.selectors[0] === '#header .heading');
+    for (const rule of title) expect(rule.decls.length).toBeGreaterThan(0);
+    for (const rule of rules) expect(rule.decls.length).toBeGreaterThan(0);
+  });
+
+  test('every ornament is one code point, so it takes the accent', () => {
+    // §30 had to give this up for the stat icons: a colour emoji ignores
+    // `color`. An ornament has no such excuse, so these are dingbats and they
+    // inherit the theme's accent exactly as the divider's ❦ does.
+    for (const { value, glyph } of ORNAMENTS) {
+      if (value === 'none') continue;
+      expect([...glyph], value).toHaveLength(1);
+      // No variation selector: U+FE0F is what turns a dingbat into an emoji.
+      expect(glyph.codePointAt(0), value).toBeLessThan(0xfe00);
+    }
+  });
+
+  test('a flower lands on the page title only, never on every blurb', () => {
+    // `.heading` is worn by every blurb title too. Fifteen flowers down a
+    // listing is wallpaper, not ornament — the direct child is the page's own
+    // title, which is the one a frontispiece would carry.
+    const rules = compileRules(ornate({ ornament: 'fleuron' }));
+    // `.heading::`, not any pseudo-element: the divider's ornament is an
+    // `::after` too, and it is a different control entirely.
+    const flowers = rules.filter(r => r.selectors.some(sel => sel.includes('.heading::')));
+    expect(flowers.flatMap(r => r.selectors).sort()).toEqual([
+      '#main > .heading::after',
+      '#main > .heading::before',
+    ]);
+    for (const rule of flowers) {
+      const [[property, value]] = rule.decls;
+      expect(property).toBe('content');
+      expect(value.startsWith('"') && value.endsWith('"')).toBe(true);
+    }
+  });
+
+  test('every ornament combination still passes the lint', () => {
+    for (const frame of ['none', 'double', 'ribbon'] as const) {
+      for (const headingStyle of ['normal', 'smallCaps', 'uppercase'] as const) {
+        for (const { value: ornament } of ORNAMENTS) {
+          const label = `${frame}/${headingStyle}/${ornament}`;
+          expect(lintAo3Css(compile(ornate({ frame, headingStyle, ornament }))), label).toEqual([]);
+        }
+      }
+    }
+  });
+
+  test('the mock has a page heading for the flower to land on', () => {
+    // Invariant 4, and `> ` makes it a structural claim rather than a class
+    // one: the heading has to be a DIRECT child of #main or the rule matches
+    // nothing and the control looks broken.
+    for (const state of ['browse', 'dashboard'] as const) {
+      expect(mockBody(state), state).toMatch(/<div id="main"[^>]*>\s*<h2 class="heading">/);
+    }
+  });
+});
+
 // ── Ownership: the §4 defects, as regressions ─────────────────────────────
 
 test.describe('region ownership', () => {
@@ -1154,9 +1304,10 @@ test.describe('region ownership', () => {
           // four `box-shadow` rules are a third claimant. If any of the three
           // ever emits its own rule instead of composing, this is where it
           // shows.
-          surface: { texture: 'gingham', elevation: 'lifted', glow: true, frame: 'none' },
+          surface: { texture: 'gingham', elevation: 'lifted', glow: true, frame: 'ribbon' },
+          typography: { ...SAMPLE.typography, headingStyle: 'smallCaps' },
           reading: { requiredTagsAsText: true, tagLabels: true, tagSeparator: 'line', statIcons: true },
-          details: { ornament: 'none', divider: true, dropCap: true, scrollbar: true },
+          details: { ornament: 'fleuron', divider: true, dropCap: true, scrollbar: true },
         },
       ],
       // The separator is the one control with three states rather than two, and
@@ -1170,9 +1321,13 @@ test.describe('region ownership', () => {
           // Elevation without glow, so the composed value has one layer rather
           // than two — the case where a naive implementation emits `none` and a
           // shadow from two different places.
-          surface: { texture: 'dots', elevation: 'soft', glow: false, frame: 'none' },
+          // `double` is the other frame, and it touches the same two properties
+          // `ribbon` does — so a second owner introduced by one hides behind
+          // the other exactly as the separators do.
+          surface: { texture: 'dots', elevation: 'soft', glow: false, frame: 'double' },
+          typography: { ...SAMPLE.typography, headingStyle: 'uppercase' },
           reading: { requiredTagsAsText: true, tagLabels: true, tagSeparator: 'bullet', statIcons: true },
-          details: { ornament: 'none', divider: true, dropCap: true, scrollbar: true },
+          details: { ornament: 'star', divider: true, dropCap: true, scrollbar: true },
         },
       ],
       [

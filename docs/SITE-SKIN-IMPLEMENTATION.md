@@ -8,13 +8,19 @@ architecture with ours.
 
 > ## Start here
 >
-> **Revision 15 — 18 Aug 2026.** The product is built, deployed, through the
+> **Revision 16 — 18 Aug 2026.** The product is built, deployed, through the
 > release gate, and **the Magic Picker is live with it.** Five skins were saved
 > on a real AO3 account, applied and read back: **448 of 448 declarations
 > survived, and ten of sixteen probes pass** (P16 was added by §29). Phase 7
 > blocked the roadmap for four revisions; it has not since 17 August.
 >
-> **§30 is the current handoff.** §18c-3, §18c-4 and §18c-5 — tag group labels,
+> **§31 is the current handoff, and §31b is the one to read** — a defect this
+> file shipped in the morning and caught in the afternoon, on a page type the
+> mock had never rendered. The rule it earns: **a selector that names an AO3
+> class is a claim about every page that class appears on.** Then **§32**, which
+> is the structural gap and the one standing decision it asks to reopen.
+>
+> **§30 is the previous handoff.** §18c-3, §18c-4 and §18c-5 — tag group labels,
 > the tag separator and stat icons — landed 18 Aug 2026 and are the first
 > roadmap work since the picker shipped. They are **not deployed**: production
 > is still `main` at `5eb7cbd`. **§30b is the one to read**: the spec for stat
@@ -758,7 +764,7 @@ Always emit a fallback stack, and keep every family name inside
 | 11 | **`ao3Css.ts` corrections 5–9** — gradients, the repeating number grammar, long hex, the `font` shorthand, `aspect-ratio`. Acceptance: `scripts/ao3-corpus-differential.mjs` at **0 false accepts / 0 false rejects** | ✅ 16 Aug 2026 — 0/0 over 4,418 declarations; see §17 |
 | 12 | **Chrome regions** — buttons, form fields, pagination, comments, autocomplete. Four derived colours, eleven ownership rows, no new theme field | ✅ 16 Aug 2026 — with two corrections to §18a's spec; see the note there |
 | 13 | **Reading controls** — required tags as text, tag labels, separators, stat icons, and the three author-overriding controls. Needs the third cascade mode (§18c-0) | 🟨 **§18c-2 landed 17 Aug; §18c-3, §18c-4 and §18c-5 on 18 Aug 2026** — the `reading` group now carries four controls, all off in all 16, and two of them are already confirmed on the archive (P16, P17). **Only §18c-6 remains**, and it is the one that finally needs the third cascade mode. See §30 |
-| 14 | **Depth** — card elevation, page wash, header gradient, glow, `border-image` frames, texture | ⬜ §18b, blocked on 11 and on Phase 7 |
+| 14 | **Depth** — card elevation, page wash, header gradient, glow, `border-image` frames, texture | ✅ **18 Aug 2026.** Texture, elevation and glow shipped with §30's commit; frames, heading setting and heading ornaments with §31. All off in all sixteen. The one row not built is a **page wash**, which `texture` supersedes |
 | 15 | **Theme from the banner image** — quantize the picture the user already pasted, derive all four colours from it, and stop guessing the header foreground | ⬜ §19b |
 | 16 | **Palettes that read as fandoms** — ~12 more templates, mood-named as always | ⬜ §19c |
 | 17 | **Regions: listboxes, indexes, meta tables** — the §22 audit's build spec, plus §22c's chip. Four of the nine page types a real skin author screenshots. Acceptance: differential and capability probe **unmoved** | ✅ 17 Aug 2026 — 0/0 and no divergences; landed *before* the gate, on §18a's argument. Two rows of §22e's table were dropped on evidence and one was added; see §23b |
@@ -1983,7 +1989,7 @@ one-owner-per-selector spec:
 | **Page wash** — flat / vertical / radial | `linear-gradient` or `radial-gradient` on `body` | Correction 5 |
 | ~~**Header gradient** — accent → `headerDeep`~~ | `background-image` on `#header`, *under* any banner | ✅ **built 16 Aug 2026** — `header.gradient`, off in all 16 templates. Pulled forward out of §18b order; see §19b-bis |
 | **Glow** (dark themes) | `box-shadow` + `text-shadow` on accent elements | Corrections 5, 7 |
-| **Ornament frames** | `border-image` with a user-supplied address, validated by §3a | already legal |
+| ~~**Ornament frames**~~ | `border-image` — **and no address at all** | ✅ **18 Aug 2026.** The spec assumed a user-supplied image. `border-image` takes a *gradient*, which the capability probe confirms AO3 accepts, so the frame costs no bytes and has no host to expire. `double` needs nothing but `border-style`. See §31 |
 | **Texture** | `repeating-linear-gradient` stripes/plaid on `body` | Correction 5 |
 
 `border-image` deserves its own note: it is how the 283-star medieval skin gets
@@ -3958,6 +3964,136 @@ CSS taken from a dev build:
 deployed.** Production is `main` at `5eb7cbd`. Three reading controls and a
 separator sit on a branch, all off by default, all lint-clean, two of them
 already seen working on the archive.
+
+---
+
+## 31. Handoff — 18 Aug 2026, late (revision 16)
+
+**What happened: the ornament half of §18b, and a defect this file shipped and
+then caught in four hours.** Read §31b first — it is the third instance of one
+failure and the rule has now earned its own line.
+
+### 31a. What landed
+
+| | Status |
+| --- | --- |
+| **Card frames** | ✅ `double` and `ribbon`. `ribbon` is `border-image` fed a **gradient**, not the hosted PNG §18b assumed |
+| **Heading setting** | ✅ small caps / uppercase with tracking, on `#main` headings **and the site title** |
+| **Heading ornaments** | ✅ ❦ ❖ ✦ either side of the page's own heading, single code points so they take the accent |
+| **The gutter defect** | ✅ Fixed and deployed the same day — §31b |
+| Tests | **677 unit** (was 667), **34 site-skin journeys** (was 33) |
+| Probe | `clip: rect()`, `border-image: linear-gradient()`, `content` emoji and empty-string all confirmed legal; **0 gaps** |
+
+### 31b. The defect, and the rule it finally earns
+
+"Required tags as words" clears the 65px AO3 reserves at the left of a blurb
+header. On a work blurb that gutter holds the four icons and is dead space once
+they are words. **`.blurb` is not only a work.** 13-group-blurb.css carries a
+`PICTURE` modification whose own comment reads *"use this along with 'index' and
+'blurb' for indices where we have icon pictures, eg collections, users, skins,
+instead of the 4-icon list"* — and it puts a **55px absolutely-positioned icon**
+in that same gutter.
+
+Clear the margin there and the title slides underneath the icon. On the
+reporter's own Skins page three titles read **"on Archieve"**, **"it Library
+ao3skingen"** and **"nan skin 1"**. The first 65px of each was gone.
+
+Scoped now with `:has(ul.required-tags)`, which asks the question literally.
+Where `:has()` is unsupported the rule drops whole and the gutter stays — words
+indented, nothing hidden, which is the correct direction to fail in.
+
+> **This is the third time, and the rule is now this: a selector that names an
+> AO3 *class* is a claim about every page that class appears on.** §22d said a
+> region missing from the mock is invisible. §26c.1 said a region can be present
+> and still not contain its hard case. This one is neither — the region was
+> present and the hard case was a *different page type wearing the same class*.
+>
+> The mock renders work blurbs. `.blurb` is worn by works, bookmarks, series,
+> collections, users, skins, tags and tag sets. Before overriding an AO3 rule,
+> grep its stylesheet for the modifications AO3 applies to the same class — they
+> are commented, they say who they are for, and 13-group-blurb.css told us
+> exactly this in plain English forty lines below the rule we were undoing.
+
+The mock now renders a `PICTURE` blurb, and a test fails if any gutter rule is
+emitted without its `:has()`.
+
+### 31c. Three corrections to §18b's own spec
+
+**1. `border-image` needs no address.** §18b's row reads *"`border-image` with a
+user-supplied address, validated by §3a"* — the medieval skin's technique,
+copied along with its dependency on a hosted PNG. `border-image` takes a
+**gradient**, which the probe confirms AO3 accepts, so `ribbon` paints the
+accent into the border for zero bytes and no host. The §19b-bis rule was never in
+tension with this; the spec just did not notice.
+
+**2. `ribbon` squares the corners, and that is CSS.** `border-image` ignores
+`border-radius` entirely. A reader who picks Pillowy corners and then Ribbon has
+made two choices that cannot both hold, so **the editor says so** — and the
+browser journey asserts that the sentence is true, because a promise the reader
+trusts over their own eyes is worse than no promise.
+
+**3. Ornaments are dingbats, not emoji.** §30 had to accept that a colour emoji
+ignores `color`; stat icons had no monochrome alternative that reads as "hits".
+An ornament does. Every glyph here is a single BMP code point with no variation
+selector, so it takes the theme's accent exactly as the divider's ❦ does — and a
+test pins that, because adding U+FE0F to any of them would silently turn it into
+a picture that no longer matches the theme.
+
+### 31d. What is NOT proven
+
+- **None of §31a has been on the archive.** `border-image`, `font-variant`,
+  `letter-spacing` and `text-transform` are probe-legal and lint-clean, and that
+  is §23c's "our lint permits it" — not "the archive accepted it".
+- **`:has()` on old Firefox.** The degradation is reasoned, not observed.
+- **The gutter fix reaches a reader only on their next paste**, exactly like the
+  drop cap. Anyone running the broken skin stays broken until they re-export.
+
+### 31e. What to do next
+
+| # | Work | Why here |
+| --- | --- | --- |
+| 1 | **Re-save and re-paste**, then P16's separator half, P1, P3, P4's hover states — and now the §31a controls | One AO3 session closes six probes and the ornament question at once |
+| 2 | **Structure, not ornament** — §32 below | The thing the screenshots are actually made of |
+| 3 | **§18c-6 and the third cascade mode** | The last of Phase 13 |
+| 4 | **§19c's fandom-shaped palettes** | Unchanged |
+
+---
+
+## 32. The structural gap — what a decorative skin is actually made of
+
+**Opened 18 Aug 2026, from a reader's question and a corpus re-read.** Not a
+build spec yet; the evidence and the one decision it needs.
+
+**Every skin in `Ao3SiteSkins/Original-skins` is 434–541 lines, 56–73 rules, and
+1–6 `url()`s.** Median two. The flagship "Romantic" is 507 lines and 70 rules,
+and its entire wallpapered, gilt-framed identity is **two addresses** — a tiled
+JPG on `body` and a layered PNG on `#header`. Everything else is colour, radius,
+4–10 `box-shadow`s, and — this is worth noting — **the same ten hand-written tag
+label rules §18c-3 now generates**.
+
+We emit 42–48 rules per template. The gap is not craft. It is:
+
+| | |
+| --- | --- |
+| **Images** | 1–6 per skin, all hotlinked, mostly to livejournal and tumblr. We ship none and will host none (§19b-bis). `bannerUrl` covers the header; **nothing covers the page** |
+| **Structure** | The header as an inset panel, the nav as a detached pill, `#main` as a slab with the page showing down both sides |
+
+The second is the one worth building, and it needs a standing decision reopened.
+
+> **§4.2 says `#main` is never given a background**, because AO3 sets none, so
+> body showing through *is* the Page colour — and painting `#main` is how the
+> Page control stops meaning anything. There is a test enforcing it.
+>
+> **The invariant is right and too broad.** It assumes `#main` is full-bleed.
+> Inset it, and painting it stops eating the Page control and starts *framing*
+> it: the page becomes the margin, which is exactly what the wallpapered skins
+> do. The fix is to parameterise the decision, not to add a second owner
+> alongside it — the same shape as `cardShadow` and `cardFrame`.
+
+One control — a page frame — that insets `#main`, paints it `surface`, rounds
+it, and lets the texture become a margin; off, and today's behaviour is
+byte-identical. Whoever builds it must change §4.2's test to say *"`#main` is
+painted only when the frame is on"* rather than delete it.
 
 ---
 
