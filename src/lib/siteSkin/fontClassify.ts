@@ -523,7 +523,11 @@ export interface FontMatch {
   group: FontGroup;
   /** The source family this was decided from, as written on the site. */
   matchedName: string | null;
-  /** True when the source names a face our own stack already contains. */
+  /**
+   * True when our stack **leads** with the face the source named, so a reader
+   * who has it genuinely gets it. Containing the name is not enough — see
+   * `sameFace`.
+   */
   exact: boolean;
   /** Decided from the generic at the end of the stack rather than from a name. */
   fromGeneric: boolean;
@@ -564,20 +568,50 @@ const CSS_WIDE = new Set(['inherit', 'initial', 'unset', 'revert', 'revert-layer
  * name answers "Verdana" with Trebuchet — a different face, offered as though
  * it were the one asked for.
  */
-const BANK_FACES: ReadonlyMap<string, string> = (() => {
-  const map = new Map<string, string>();
+interface BankFace {
+  stack: string;
+  /** The face that stack actually *asks for first*. */
+  lead: string;
+}
+
+const BANK_FACES: ReadonlyMap<string, BankFace> = (() => {
+  const map = new Map<string, BankFace>();
   for (const stack of FONT_STACKS) {
     const lead = parseFontStack(stack.value)[0];
-    if (lead && !GENERICS[lead] && !map.has(lead)) map.set(lead, stack.value);
+    if (lead && !GENERICS[lead] && !map.has(lead)) map.set(lead, { stack: stack.value, lead });
   }
   for (const stack of FONT_STACKS) {
+    const lead = parseFontStack(stack.value)[0];
     for (const name of parseFontStack(stack.value)) {
       if (GENERICS[name]) continue;
-      if (!map.has(name)) map.set(name, stack.value);
+      if (!map.has(name)) map.set(name, { stack: stack.value, lead });
     }
   }
   return map;
 })();
+
+/**
+ * Is the face the site asked for the one a reader will actually get?
+ *
+ * **Only if our stack leads with it.** A stack that merely *contains* the name
+ * hands the reader whatever comes first: `Arial, Helvetica, sans-serif` answers
+ * a request for Helvetica with Arial on every machine that has Arial, which is
+ * all of them — and the machines that also have Helvetica are no exception,
+ * because CSS takes the first family that exists, not the best one.
+ *
+ * This is the Verdana bug of §12a in a third costume, and the same lesson as
+ * §12b: the containing-name pass returns a *legal* answer, so every test that
+ * asked whether the answer was legal passed. The claim `exact` makes is about
+ * identity, so it has to be decided on identity.
+ *
+ * The one relation that still counts as the same face is a vendor's longer name
+ * for it — Palatino and 'Palatino Linotype', Times and 'Times New Roman',
+ * Baskerville and 'Baskerville Old Face'. A shared leading word is the whole
+ * test, and it is enough: nothing in the bank shares one by accident.
+ */
+function sameFace(asked: string, lead: string): boolean {
+  return asked === lead || asked.startsWith(`${lead} `) || lead.startsWith(`${asked} `);
+}
 
 function legalFor(stackValue: string, role: FontRole): boolean {
   return fontStacksFor(role).some(f => f.value === stackValue);
@@ -601,14 +635,18 @@ export function classifyFont(declaration: string, role: FontRole): FontMatch | n
     // the reader's device may genuinely have it. Prefer that stack over the
     // character's nearest neighbour — but only where the role allows it, so a
     // site setting Impact on its body text still lands somewhere readable.
-    const exactStack = BANK_FACES.get(name);
-    if (exactStack && legalFor(exactStack, role)) {
+    // A stack of ours that names this face is still the best available answer —
+    // a reader without Arial really does fall through to Helvetica. What it is
+    // not, unless our stack *leads* with the face, is the face they asked for,
+    // and only `exact` claims that.
+    const known = BANK_FACES.get(name);
+    if (known && legalFor(known.stack, role)) {
       return {
-        stack: exactStack,
+        stack: known.stack,
         character,
         group: CHARACTERS[character].group,
         matchedName: name,
-        exact: true,
+        exact: sameFace(name, known.lead),
         fromGeneric: false,
       };
     }

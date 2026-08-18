@@ -169,6 +169,48 @@ test.describe('what we tell the user — §6d step 4', () => {
     expect(sentence).toContain('Georgia');
     expect(sentence).toContain('AO3 allows it');
   });
+
+  /**
+   * The guard the Verdana fix should have come with, and the reason fast.com
+   * caught this instead of a test: **`exact` is a claim about identity, and
+   * every test here only ever asked whether the answer was legal.**
+   *
+   * `Arial, Helvetica, sans-serif` contains Helvetica and leads with Arial, so
+   * a site asking for Helvetica was told "readers who have it will see it"
+   * while the editor showed Arial — and it was the editor telling the truth.
+   * CSS takes the first family that exists, so having Helvetica installed
+   * changes nothing.
+   */
+  test('“readers who have it will see it” is only said when our stack leads with it', () => {
+    for (const name of Object.keys(KNOWN_FACES)) {
+      for (const role of ROLES) {
+        const match = classifyFont(name, role);
+        if (!match?.exact) continue;
+        const lead = parseFontStack(match.stack)[0];
+        expect(
+          lead === name || lead.startsWith(`${name} `) || name.startsWith(`${lead} `),
+          `${name} was promised, but the stack asks for ${lead} first`
+        ).toBe(true);
+      }
+    }
+  });
+
+  test('a face we carry only as a fallback is offered as the substitution it is', () => {
+    const sentence = describeFontMatch(classifyFont('Helvetica, Arial, sans-serif', 'body')!);
+    expect(sentence).toContain('Helvetica');
+    expect(sentence).toContain('The closest AO3 allows is Arial');
+    expect(sentence).not.toContain('AO3 allows it');
+  });
+
+  // The other half of the rule: a vendor's longer name for the same typeface is
+  // still that typeface, and saying "the closest is Palatino" about Palatino
+  // would be its own kind of wrong.
+  test('a longer vendor name for the same face still counts as having it', () => {
+    for (const name of ['palatino', 'times', 'courier', 'baskerville old face']) {
+      const match = classifyFont(name, 'body') ?? classifyFont(name, 'heading');
+      expect(match?.exact, `${name} should read as the face it is`).toBe(true);
+    }
+  });
 });
 
 test.describe('parsing somebody else\'s stylesheet', () => {
