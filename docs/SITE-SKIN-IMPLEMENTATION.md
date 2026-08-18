@@ -8,11 +8,16 @@ architecture with ours.
 
 > ## Start here
 >
-> **Revision 11 — 17 Aug 2026, evening.** The product is built, deployed, and
-> **has now been through the release gate.** Five skins were saved on a real AO3
-> account, applied, and read back: **448 of 448 declarations survived, and ten of
-> fifteen probes pass.** Phase 7 was the thing blocking the roadmap for four
-> revisions; it is not any more.
+> **Revision 13 — 18 Aug 2026.** The product is built, deployed, through the
+> release gate, and **the Magic Picker is now live with it.** Five skins were
+> saved on a real AO3 account, applied and read back: **448 of 448 declarations
+> survived, and ten of fifteen probes pass.** Phase 7 blocked the roadmap for
+> four revisions; it has not since 17 August.
+>
+> **§28 is the current handoff.** Production is `main` at `5eb7cbd`. Phases B and
+> C of the picker — paste a picture, paste a website — went live 18 Aug 2026,
+> which is the first time this product has fetched a non-image page from an
+> address a stranger typed.
 >
 > **§26 is the current handoff.** Read it, then §15 — which still owns the file
 > map, the five invariants and the traps, and is unchanged. The handoffs
@@ -39,13 +44,13 @@ architecture with ours.
 > missing from the mock is invisible and invisible looks exactly like finished.
 >
 > **A second product document now exists: `MAGIC-PICKER-IMPLEMENTATION.md`** —
-> paste a link, get a skin built from its colours. **All three phases were built
-> 17 Aug 2026 — A (the font bank) is deployed; B (a picture) and C (a website)
-> are committed on `feat/magic-picker-phase-b` and are NOT deployed.** Its §13 is
-> the handoff. If you are about to touch fonts, read its §2a first: **no skin can
-> ever supply a font file**, and the reasons are permanent — and its §5f, which
-> is four defects found in that document's own plan by reading the functions it
-> named.
+> paste a link, get a skin built from its colours. **All three phases are built
+> and all three are live** (A the font bank, B a picture, C a website), deployed
+> 18 Aug 2026. **Its §16 is the handoff**, and its §14 and §15 are the two
+> sections where its own plan turned out to be wrong — both found by pointing
+> the code at the real world rather than by a failing test. If you are about to
+> touch fonts, read its §2a first: **no skin can ever supply a font file**, and
+> the reasons are permanent.
 >
 > **§16–§18 are revision 5** and they change the roadmap. We read 115 published
 > site skins from two prolific authors and diffed every declaration in them
@@ -752,7 +757,7 @@ Always emit a fallback stack, and keep every family name inside
 | 16 | **Palettes that read as fandoms** — ~12 more templates, mood-named as always | ⬜ §19c |
 | 17 | **Regions: listboxes, indexes, meta tables** — the §22 audit's build spec, plus §22c's chip. Four of the nine page types a real skin author screenshots. Acceptance: differential and capability probe **unmoved** | ✅ 17 Aug 2026 — 0/0 and no divergences; landed *before* the gate, on §18a's argument. Two rows of §22e's table were dropped on evidence and one was added; see §23b |
 | 18 | **The font bank** — `FONT_STACKS` 7 → 24, grouped and role-split; grouped picker with live specimens. Phase A of the Magic Picker | ✅ 17 Aug 2026 — append-only, all 16 templates unchanged; see §19f |
-| 19 | **The Magic Picker** — paste a link, get a skin from its colours. Phases B and C | ✅ **built 17 Aug 2026, and NOT deployed** — owned by `MAGIC-PICKER-IMPLEMENTATION.md`, not by this file. B (a picture) and C (a website, `/api/site-palette`) are on `feat/magic-picker-phase-b`; `main` is unchanged. The gate closed first, as §23c asked. See MAGIC-PICKER §13 |
+| 19 | **The Magic Picker** — paste a link, get a skin from its colours. Phases B and C | ✅ **built 17 Aug 2026, deployed 18 Aug 2026** — owned by `MAGIC-PICKER-IMPLEMENTATION.md`, not by this file. B (a picture) and C (a website, `/api/site-palette`) are live on `main` at `5eb7cbd`. The gate closed first, as §23c asked. See MAGIC-PICKER §16 |
 
 ### Corrections made to `ao3Css.ts` after Phase 8
 
@@ -1309,11 +1314,11 @@ claim has a longer story, the section number is the story.
 
 | | |
 | --- | --- |
-| Deployed | ✅ `main` → Netlify, at `/site-skin`. **Production is `4e476a6`, deploy `6a82f20a`, 17 Aug 11:35 UTC** — the font bank, and nothing of the picker itself |
+| Deployed | ✅ `main` → Netlify, at `/site-skin`. **Production is `5eb7cbd`, deploy `6a83ed61`, 18 Aug 05:28 UTC** — the whole Magic Picker included (§28) |
 | Phases 0–6, 8, 9, 10 | ✅ complete |
 | Phase 7 — **saved on real AO3** | ⚠️ **opened 17 Aug 2026.** 5 of 16 templates, **10 of 15 probes — P2, P5, P6, P7, P8, P9, P10, P12, P13, P15** — all passing, **448/448 declarations kept** (§24b-bis). P1 and P14 partial, P3 still open. **The gate has now found and fixed its first defect** (§24c) |
 | Templates | 16, all lint clean, all round-tripping through storage. **Ten carry a header gradient as of 17 Aug 2026** (§21a) |
-| Tests | **636 unit** (`--project=unit`), **31 browser** — counts as of 17 Aug 2026 night, after Magic Picker Phase C (§27). 525/29 was the count before it |
+| Tests | **644 unit** (`--project=unit`), **31 browser** — counts as of 18 Aug 2026, after the picker's measurement and font fixes (§28). 636/31 the night before; 525/29 before Phase C |
 | Fonts | ✅ **24 stacks, grouped and role-split** (§19f). **Append-only** — the original seven are pinned byte for byte, because `validateTheme` matches the literal string a stored theme holds |
 | Mobile preview | ⚠️ scrolls sideways instead of scaling. Known, deliberate |
 | Marketing copy | ⚠️ correct about site skins; still silent on the work-skin export |
@@ -3588,8 +3593,14 @@ own the detail; this section is only what a reader of *this* file needs.
 is `4e476a6`. Phases B and C live on `feat/magic-picker-phase-b` (head
 `dbd34c2`, pushed, no PR). What is live is the font bank and nothing else.
 
+> **⚠️ No longer true, and it was true for fourteen hours.** All of it went live
+> on 18 Aug 2026 — see §28. Left standing because the *reason* for the gap is
+> still the right one: the decision to ship was a human's to make, and the
+> section below is what it was made from.
+
 **Phase 19 of §9's table is now ✅ rather than ⬜**, and the status block above
-is corrected: 636 unit tests and 31 browser, up from 525 and 29.
+is corrected: 636 unit tests and 31 browser, up from 525 and 29. *(644 as of
+§28.)*
 
 **One new endpoint exists in the product**, and it is the first that fetches
 non-image content from an arbitrary host: `/api/site-palette`. It reuses
@@ -3611,10 +3622,100 @@ dangerous input did not come from the user — it came from the third party the
 user's input pointed at.** That is a threat surface this product did not have
 before and now permanently does.
 
-**What the next person should read:** `MAGIC-PICKER-IMPLEMENTATION.md` §13, which
-is a handoff written for exactly that purpose — the file map, the four traps,
-and the three things worth doing next in order. The first of them is a decision
-rather than a task: whether to merge.
+**What the next person should read:** `MAGIC-PICKER-IMPLEMENTATION.md` **§16**,
+which supersedes the §13 this section originally pointed at — the file map, the
+traps, and what to do next now that the answer to "whether to merge" is yes.
+
+---
+
+## 28. Handoff — 18 Aug 2026 (revision 13)
+
+**What happened: the picker shipped — and on the way, two of its own claims
+turned out to be false and its page fetcher turned out to have three defects
+that only real sites could show.** `MAGIC-PICKER-IMPLEMENTATION.md` §14, §15 and
+§16 own the detail. This section is what a reader of *this* file needs.
+
+### 28a. What is live
+
+`main` at `5eb7cbd`, Netlify deploy `6a83ed61`, published 05:28 UTC, built in 39
+seconds. A reader on the site can now paste a picture **or a website address**
+and get a theme from its colours. Before this deploy they could do neither — the
+font bank was the only part of the picker in production.
+
+**Smoke-tested against production, not a dev server**, because `/api/site-palette`
+had never run on the real serverless runtime: `/site-skin` returns 200; the
+endpoint returns fast.com's real palette; and `169.254.169.254` — the cloud
+metadata address — returns **403**. The SSRF guard holds outside the test
+harness's mocked resolver.
+
+Tests stand at **644 unit** and 31 site-skin journeys, up from 636 and 31.
+
+### 28b. The three things that changed after §27 was written
+
+**1. `og:image` is not the better colour signal, and the plan had said it was
+three times.** Twenty real sites through both paths, side by side: the social
+card produced a *grey* accent on ten of the sixteen it could be read from, where
+the stylesheet produced the brand colour — Notion `#838080` against `#e32d14`,
+Apple `#7b8386` against `#0071e3`. The reason is structural rather than a
+sampling accident: **a social card is a photograph with a logo on it**, and
+quantizing a photograph averages toward mud, while a `--brand` custom property
+is a designer naming the answer. Precedence is reversed; the card is now the
+fallback for a page that declares no hue at all, which is the JavaScript-shell
+case it was always genuinely right about.
+
+**2. The page fetcher had three defects that only real sites could show.** A page
+over 1 MB was refused outright, so nytimes.com, linear.app and figma.com each
+answered *"that page is too large to read"* to an ordinary link — text now
+truncates at the cap instead, since half a page still carries its head. The
+worst case was four hops at 8 seconds each against Netlify's 10-second function
+limit, so there is now **one 9-second budget** for the whole extraction, and
+stylesheets are what it drops. And a body that trickles was bounded by nothing —
+bytes are the wrong unit for eight bytes every sixty milliseconds — so the reader
+races each read against the deadline itself rather than trusting the platform to
+cancel it.
+
+**3. The font classifier promised a face the reader would never see.** Pasting
+fast.com produced *"This site uses Helvetica — AO3 allows it, so readers who have
+it will see it"* while the editor showed Arial. The editor was right: our stack
+is `Arial, Helvetica, sans-serif`, and **CSS takes the first family that exists,
+not the best one**, so Arial wins even on a machine that has Helvetica. Thirty
+face names went through that path and six were as wrong as Helvetica.
+
+### 28c. The learning, and it is a correction to how this file measures done
+
+This file already believes §23c — *"our lint permits it" and "the archive accepts
+it" are different states.* The picker's three days add a wider version of the
+same shape, and it is worth writing here because it applies to every phase left
+in §7's table:
+
+> **Green tests, a clean build and a passed security review together certify
+> that the machinery works. None of them reads the product.**
+
+Each of the three findings above was invisible to a full suite that was passing.
+The precedence bet was never tested because testing it needed a canvas and every
+test that could have was a unit test. The 1 MB refusal was correct behaviour by
+its own contract. The Helvetica sentence was produced by a function whose 66
+tests all asked whether its answer was *legal* and none whether it was *true* —
+and that is the third time this repository has been bitten by membership-versus-
+identity, after `controlBg` and Verdana.
+
+What actually found them: **twenty real sites, and one person reading a sentence
+in the running app.** Both were an hour. Neither is covered by coverage. When a
+phase in §7's table is "done", the remaining question is not whether the tests
+pass — it is whether anyone has pointed it at the world and read what it says
+back.
+
+### 28d. What to do next
+
+The picker's own §16c is the ordered list and it is not repeated here. The one
+item that belongs in *this* file: **`palette_applied` is now live**, carrying
+`source`, `polarity` and `placement` and no addresses. It answers the question
+§19a and §19b argued about from opposite sides — *is a URL a lower-friction front
+door than an image?* — and after four revisions of argument it is now a query.
+
+Everything else in this file's roadmap is unchanged: Phase 13 (§18c-3…6), Phase
+14 (depth, §18b) and Phase 16 (fandom palettes, §19c) are the open work, in that
+order.
 
 ---
 

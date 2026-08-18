@@ -5,16 +5,21 @@
 and §19 (the fandom question). This document is the full build; §19b and §19a
 over there are its history and are partly superseded here — see §7.
 
-**Status: all three phases are built, and the measurement they were waiting on
-has been made.** Phase A landed 17 Aug 2026; Phase B the same day (§11 records
-what it cost and what it corrected); Phase C — the URL picker — landed 17 Aug
-2026 (§12). The release gate closed first, as §8 required, and P15 passed, so
-§6d's mapping targets stand as written.
+**Status: built, measured, and LIVE.** Phase A landed 17 Aug 2026; Phase B the
+same day (§11); Phase C — the URL picker — the same day again (§12). The release
+gate closed first, as §8 required, and P15 passed, so §6d's mapping targets
+stand as written. **Deployed to production 18 Aug 2026**, commit `5eb7cbd`,
+Netlify deploy `6a83ed61`. A reader on the site can now paste a link. §16 is the
+current handoff and the section to read first.
 
-**§14 is the newest section and it reverses this document's central bet.** Twenty
-real sites say `og:image` is *not* the better colour signal — it is the worse one
-on two thirds of them. Read §14 before §6a, which is now wrong where it is
-emphatic.
+**Two sections reverse things this document says confidently, and both were
+found by pointing the code at the real world rather than by a failing test:**
+
+- **§14** — twenty real sites say `og:image` is *not* the better colour signal.
+  It is the worse one on two thirds of them. Read it before §6a, which is now
+  wrong where it is most emphatic.
+- **§15** — the classifier promised a font the reader would never see. Found by
+  pasting fast.com into the running app and reading the sentence.
 
 > ## Start here
 >
@@ -26,10 +31,19 @@ emphatic.
 > wrong and you will build something that works perfectly and disappoints
 > everyone who uses it.
 >
+> **Picking this up cold? Read §16 first** — it is the current handoff: what is
+> live, where every piece lives, what to do next and what will bite you. The
+> rest of this document is why, and it is worth the hour afterwards.
+>
 > **Read in this order:** §1 (why), §2 (the wall), §3 (what it must promise),
 > then §5 (Phase B), whose §5f records four things the first draft of this plan
 > got wrong. §6 is Phase C — the headline feature and the one with real risk in
 > it — and §12 is what building it actually cost and corrected.
+>
+> **The five sections where this document was wrong** are the ones to read if you
+> are deciding how much to trust the rest of it: §5f (four errors in its own
+> first draft), §11a, §12a, §14 (its central bet, overturned by measurement) and
+> §15 (a promise the code made that the product could not keep).
 >
 > **The invariant that keeps this cheap is §8.** The output is a
 > `SiteSkinTheme` and nothing else. If you find yourself editing `compile.ts`,
@@ -530,9 +544,17 @@ Phase C adds a source toggle and a "what we did" line to a component that exists
 - **Is the URL or the image the better front door?** The instinct in this
   document is that a URL is lower friction — pasting a link beats finding an
   image, hosting it, and satisfying `checkAo3ImageUrl`. That is a belief, not a
-  measurement, and Phase B shipped early partly so it can be measured.
-  **`palette_applied` is now the instrument** (§11), and it carries `source`, so
-  when C ships the comparison is a query rather than a new build.
+  measurement. **It is now measurable and not yet measured**: `palette_applied`
+  carries `source`, and as of 18 Aug 2026 it is running in production, so the
+  answer is a query against real use rather than anything to build.
+- **Should the bank grow to cover the faces it currently substitutes?** New, out
+  of §15. A site asking for Helvetica gets Arial, because that is the only stack
+  we have that names Helvetica at all and Arial leads it. Appending
+  `Helvetica, 'Helvetica Neue', Arial, sans-serif` would give Mac readers the
+  real face and cost one dropdown row — and the same argument then applies to
+  Geneva, Calibri, Century Gothic and Menlo. Appending is *allowed* (the
+  append-only rule forbids editing existing stacks, not adding new ones). Whether
+  it is *worth it* is taste, and nobody has asked for it yet.
 - **Is the 2% "deliberate" floor right?** It is taste, tuned against synthetic
   fixtures rather than against real fan art. A logo-sized splash of saturated
   colour on a muted photograph is exactly the case it exists to catch and exactly
@@ -729,9 +751,10 @@ the part of this feature that had no threat model before it was written.
 
 ## 13. Handoff — 17 Aug 2026, after Phase C
 
-> **§14 has since overtaken parts of this section.** Step 2 of §13c is done and
-> it changed the product; the test counts in §13a are out of date by the tests
-> §14 added. Everything else here still holds.
+> **⚠️ Superseded by §16. Read that instead.** This section was written when the
+> feature was finished and unshipped, and every fact in §13a about branches,
+> deploys and test counts has since changed. §13b (the file map) and §13d (the
+> traps) are still true and are carried forward into §16 rather than repeated.
 
 **Where this stands: the feature is finished and it is not deployed.** All three
 phases are built, tested and committed; production is still running the commit
@@ -971,3 +994,200 @@ in-memory per-instance rate limit.
   there, but deep pink is not the New York Times. The weights in `siteStyle.ts`
   are a coarse three-tier proxy for area (§13c step 4) and that row is what one
   of their failures looks like. It is a tuning question, not a design one.
+
+---
+
+## 15. The font promise — the same bug in a third costume
+
+**18 Aug 2026.** Not found by a test. Found by pasting `fast.com` into the
+running app and reading what it said.
+
+### 15a. What it said, and why it was false
+
+> *"This site uses Helvetica — AO3 allows it, so readers who have it will see
+> it."*
+
+The editor, two panels away, showed **Arial**. The editor was right.
+
+Our stack is `Arial, Helvetica, sans-serif`, and **CSS takes the first family
+that exists, not the best one.** Arial is on essentially every machine, so Arial
+always wins — including on machines that have Helvetica installed, which is the
+detail that makes the sentence not merely imprecise but backwards. It promises
+the reader something the reader cannot get.
+
+The cause is one line. `classifyFont` set `exact: true` whenever a stack of ours
+*contained* the requested face, and `BANK_FACES`'s second pass maps every
+non-leading name in the bank. Thirty face names arrive that way. Some are
+harmless — `palatino` resolves to the Palatino Linotype stack, which is the same
+typeface under a longer vendor name. Six were as wrong as Helvetica:
+
+| Site asks for | We emit | Same face? |
+| --- | --- | --- |
+| Helvetica | Arial | no — a metric clone, but not it |
+| Geneva | Verdana | no |
+| Calibri | Gill Sans | no |
+| Century Gothic / Avant Garde | Futura | no |
+| Arial Black | Impact | no |
+| Menlo / Monaco | Consolas | no |
+
+### 15b. The fix, and what it deliberately does not change
+
+`exact` is decided on identity now: our stack must **lead** with the face, or
+share its leading word with it (`sameFace` in `fontClassify.ts`). Palatino still
+reads as Palatino Linotype; Helvetica reads as the substitution it is —
+*"This site uses Helvetica, a neo-grotesque sans. The closest AO3 allows is
+Arial."*
+
+**The emitted stack is unchanged.** Arial was always the best answer available
+for Helvetica — it is the metric-compatible clone, and the theme looked correct
+throughout. Only the sentence changed, from a false claim to a true one. That is
+worth being clear about, because it bounds the blast radius: no stored theme
+moved, no compiled CSS differs, and §8 is untouched.
+
+Three tests, and the shape of one of them is the point: it sweeps **every** name
+in `FACES`, and fails if `exact` is ever claimed for a stack that leads with
+something else. That test would have caught the Verdana bug of §12a too.
+
+### 15c. The learning, which is §12b's with the last excuse removed
+
+§11b: *a plan that names a helper has not checked that helper's contract.*
+§12b: *when the output space is an allowlist, test identity and not just
+membership.* §14d: *a claim about the world does not become true by being
+load-bearing.*
+
+This is §12b's, and the uncomfortable part is that **§12b was written about this
+exact function, three commits earlier, and the fix it prescribed was applied.**
+The Verdana fix added a leading-name pass so the *stack chosen* would be right.
+It never asked whether `exact` — the flag that decides what we *say* — should
+follow the same rule. Sixty-six tests passed. Every one of them asked whether
+the answer was a legal member of the bank.
+
+So the sharper version, and the one worth carrying:
+
+> **A fix that corrects a value has not corrected the claim made about that
+> value.** They are two outputs and they need two assertions. `stack` and
+> `exact` came out of the same function, from the same lookup, and one of them
+> was right for three days while the other lied.
+
+And the second half, which is about method rather than testing: **this was found
+in ten seconds by a human looking at the running product.** Nothing in the test
+suite, the security review or the twenty-site probe was ever going to catch it,
+because all three were asking whether the machinery worked. Somebody had to read
+the sentence. Budget for that; it is not covered by coverage.
+
+---
+
+## 16. Handoff — 18 Aug 2026, live in production
+
+**Where this stands: shipped.** The Magic Picker is deployed and a reader can use
+it right now. This supersedes §13, which was written the night before the deploy.
+
+### 16a. The exact state of the world
+
+| | |
+| --- | --- |
+| Production | `main` at `5eb7cbd`, Netlify deploy `6a83ed61`, published 18 Aug 2026 05:28 UTC, build 39s |
+| Live URL | https://app.ao3skingen.wordfokus.com — both doors work, `/api/site-palette` is up |
+| Branch | `feat/magic-picker-phase-b`, same commit, pushed. `main` was fast-forwarded, so there is no merge commit and no PR |
+| Tests | **644 unit** (`npm run test:unit`), 31 site-skin journeys, `tsc`, `eslint` and `npm run build` all clean |
+| Release gate | closed before Phase C, P15 passed |
+
+**Verified against production, not against a dev server** — this matters because
+the endpoint had never run on the real serverless runtime before:
+
+- `/site-skin` returns 200.
+- `POST /api/site-palette` with `fast.com` returns its real palette — the
+  Netflix red, `#0092e1`, `#221f1f` — with two stylesheets read.
+- `POST /api/site-palette` with `169.254.169.254` (the cloud metadata address)
+  returns **403**. The SSRF guard works on the real runtime and not only under a
+  mocked DNS resolver.
+
+### 16b. Where the pieces live
+
+Unchanged from §13b and still accurate:
+
+| File | What it owns | Open it when |
+| --- | --- | --- |
+| `src/lib/siteSkin/palette.ts` | pixels to swatches to four colours, and **the contrast floor**. Phase B's engine, and Phase C's too via `swatchesFromColors` | changing how colours are chosen |
+| `src/lib/siteSkin/siteStyle.ts` | HTML and CSS *text* to colours, fonts, radius, `og:image`, polarity. **No I/O** | changing what a page yields |
+| `src/lib/siteSkin/fontClassify.ts` | ~200 faces to 19 characters to a `FONT_STACKS` value, plus the sentence. `sameFace` decides what we may promise (§15) | the classifier is wrong about a font |
+| `src/lib/siteSkin/siteTheme.ts` | the merge: `declaresHue` decides which signal wins (§14b), and what we say about it | changing precedence or the notes |
+| `src/lib/server/siteFetch.ts` | the only file that opens a page. Security, the byte cap, the 9-second budget | anything about fetching |
+| `src/pages/api/site-palette.ts` | the endpoint: origin check, rate limit, **field-by-field response** | changing what crosses to the client |
+| `src/components/siteSkin/PaletteFromImage.tsx` | both doors, both polarities, the notes, the banner offer | anything the user sees |
+| `tests/site-palette-probe.spec.ts` | the twenty-site measurement (§14). Skipped unless `PROBE_SITES` is set | re-asking which source is better |
+
+**The dependency runs one way and must keep doing so:** the component knows about
+the network, `siteTheme` knows about themes, and `siteStyle`, `palette` and
+`fontClassify` know about neither. That is what makes 644 tests runnable with no
+browser and no server, and it is the property that erodes first when somebody
+needs "just one fetch" inside a pure file.
+
+### 16c. What to do next, in order
+
+**1. Watch `palette_applied`.** It is live now, and it is the instrument for the
+question this whole document is a bet on: *is a URL a lower-friction front door
+than an image?* It carries `source` (`image` | `site`), `polarity` and
+`placement`, and it is content-free by construction — no address is ever a
+parameter. Nobody knows the answer yet, and now it costs nothing to learn.
+
+**2. Read the product, out loud, in front of a real site.** §15 is the argument:
+it was found in ten seconds by a person pasting a link and reading the sentence,
+and no amount of green tests was going to find it. Paste ten sites, read every
+word the panel says, and check each claim against what the editor then shows.
+That is an hour and it is the highest-yield hour available right now.
+
+**3. Tune the taste, once there is evidence.** Three knobs, in the order they are
+likely to be wrong:
+
+- `FACES` in `fontClassify.ts` — the table *is* the feature, and it is opinion.
+- the weights in `siteStyle.ts` (`WEIGHTS`, `PAGE_SELECTOR`) — a coarse
+  three-tier proxy for "how much of the page is this colour". §14f's nytimes row
+  (`#ff1493`, which is not the New York Times) is what one of their failures
+  looks like.
+- `MIN_DELIBERATE` (2%) in `palette.ts` — still tuned against synthetic fixtures
+  rather than real fan art.
+
+**4. Decide the bank question in §10**, but only if somebody complains. A
+Helvetica-leading stack would give Mac readers the real face; it also starts an
+argument that ends with Geneva, Calibri and Century Gothic stacks.
+
+### 16d. What will bite you
+
+Carried from §13d, with two added:
+
+- **`FONT_STACKS` is append-only.** Editing an existing stack string silently
+  resets every stored theme that chose it. The classifier must emit a literal
+  member, never an index. Tests pin both.
+- **`analyticsPayload` rejects the whole event on an unknown `templateId`.** A
+  generated theme keeps `MAGIC_THEME_ID` (`from-image`) for exactly this reason,
+  website or picture. Change the id and the funnel goes silent, not wrong.
+- **The parser is fed hostile input.** `readCssRules` is an `indexOf` scan
+  because the regex version was a denial of service (§12c). If you rewrite it,
+  keep the 1 MB timing test.
+- **Never return the fetched body.** The endpoint enumerates its response field
+  by field on purpose; a spread would widen it silently the next time an
+  extractor grows a field.
+- **A cross-origin image taints a canvas.** Both doors go through
+  `/api/image-proxy` for that reason as much as for SSRF. Dropping it works on
+  your test image and fails on most real ones.
+- **The whole extraction must fit in ~10 seconds** — Netlify's function limit.
+  `fetchSiteStyle` holds one 9-second budget for the page plus three stylesheets
+  (§14c). Per-hop timeouts alone do not bound it; that was the bug.
+- **`exact` is a promise, not a lookup result** (§15). If you touch
+  `fontClassify.ts`, the sweep test that walks every face is the one to keep.
+
+### 16e. What is deliberately not built
+
+- **No headless browser.** A React shell yields `theme-color` and `og:image`, and
+  the card is what rescues exactly that page — after §14 it is the *only* case
+  the card is used for.
+- **No second extraction system.** Phase C adds a fetcher and a merge, and
+  reuses Phase B's quantizer, floor and repair whole.
+- **No fonts or radius applied in the editor path.** The editor replaces four hex
+  strings; the gallery adopts the whole theme. The font notes are filtered out in
+  the editor because explaining a substitution that will not happen is worse than
+  silence.
+- **No images shipped by us, ever.** SITE-SKIN §19b-bis, unchanged. A gradient
+  costs zero bytes and cannot expire.
+
