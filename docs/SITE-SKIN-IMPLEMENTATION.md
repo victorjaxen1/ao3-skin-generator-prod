@@ -8,102 +8,87 @@ architecture with ours.
 
 > ## Start here
 >
-> **Revision 16 — 18 Aug 2026.** The product is built, deployed, through the
-> release gate, and **the Magic Picker is live with it.** Five skins were saved
-> on a real AO3 account, applied and read back: **448 of 448 declarations
-> survived, and ten of sixteen probes pass** (P16 was added by §29). Phase 7
-> blocked the roadmap for four revisions; it has not since 17 August.
+> **Revision 17 — 18 Aug 2026.** The product is built, deployed, through the
+> release gate, and everything on this page that says otherwise has been
+> superseded. **Production is `main` at `678dd5a`.**
 >
-> **§31 is the current handoff. §31f is the newest thing in it** — a reader put
-> every control this product has on a real AO3 account the same afternoon and the
-> readback diffed **38 of 38 byte-identical**, closing P16 and P18 at once.
-> **§31b is still the one to read** — a defect this
-> file shipped in the morning and caught in the afternoon, on a page type the
-> mock had never rendered. The rule it earns: **a selector that names an AO3
-> class is a claim about every page that class appears on.** Then **§32**, which
-> is the structural gap and the one standing decision it asks to reopen.
+> **§33 is the handoff. It is the only one you need**, and it consolidates §26
+> through §32 — five sections that each called themselves "the current handoff"
+> on the same day. They are kept for their reasoning; §33 owns the state.
 >
-> **§30 is the previous handoff.** §18c-3, §18c-4 and §18c-5 — tag group labels,
-> the tag separator and stat icons — landed 18 Aug 2026 and are the first
-> roadmap work since the picker shipped. They are **not deployed**: production
-> is still `main` at `5eb7cbd`. **§30b is the one to read**: the spec for stat
-> icons contained the defect it warns about, and what caught it was a saved copy
-> of a real AO3 page sitting in `tmp/` rather than anything in our own preview.
+> **Then read §15**, which still owns the file map, the five invariants and the
+> traps, and is unchanged by any of it.
 >
-> **§28 is the picker's handoff.** Phases B and C — paste a picture, paste a
-> website — went live 18 Aug 2026, which is the first time this product has
-> fetched a non-image page from an address a stranger typed.
+> ### The four lessons, in the order they were learned
 >
-> **§26 is the current handoff.** Read it, then §15 — which still owns the file
-> map, the five invariants and the traps, and is unchanged. The handoffs
-> supersede only its ordering.
+> Each one cost a shipped defect. They are the same failure at four depths, and
+> together they are the most useful thing in this document.
 >
-> **Starting cold? §26f is six steps**, and its item 6 is twenty minutes of AO3
-> clicking that closes three of the six remaining probes.
+> 1. **§22d — a region missing from the mock is invisible, and invisible looks
+>    exactly like finished.** Four page types were unstyled for weeks.
+> 2. **§26c.1 — a mock can be complete in what it renders and unrepresentative
+>    in *how*.** The drop cap was styled, previewed and tested, and wrong on real
+>    works for two days, because the mock's chapter opened with a paragraph long
+>    enough to hide the bug. Ask not *does the mock contain this element* but
+>    *does it contain the hard case of it*.
+> 3. **§31b — a selector naming an AO3 class is a claim about every page that
+>    class appears on.** `.blurb` is worn by works, bookmarks, series,
+>    collections, users, skins and tags. A rule written for one hid the title of
+>    every skin on the reader's own Skins page.
+> 4. **§31f — when a control introduces a selector *shape* rather than a
+>    property, the capability probe is not the authority; the archive is.** The
+>    probe models `sanitize_css_declaration_value`. It cannot tell you whether
+>    css_parser will store the selector.
 >
-> If you read nothing else, read **§26c.1**. The short version: **a mock can be
-> complete in what it renders and unrepresentative in how.** The drop cap was
-> styled, previewed and tested, and it was wrong on real works for two days,
-> because the mock happened to open its chapter with a paragraph long enough to
-> hide the bug. Ask not only *does the mock contain this element* but *does it
-> contain the hard case of it*. Then **§26e**, which is the order of work.
+> And the rule that sits over all four, from §28c: **green tests, a clean build
+> and a passed security review together certify that the machinery works. None
+> of them reads the product.**
 >
-> **§23c is still worth reading and is now half-answered.** It said a property
-> our lint permits is not a property the archive has accepted, and that we had
-> shipped sixteen templates on the difference. The gate has since accepted every
-> one of them — but the lesson stands for the *next* capability, not this one.
+> ### The other documents, and what each is for
 >
-> **§22 is the region audit and it is now built** (§22e, 17 Aug 2026) — with
-> three corrections to its own spec, in §23b. Read §22 for the method, which is
-> the reusable part: *read AO3's stylesheet, not our preview*, because a region
-> missing from the mock is invisible and invisible looks exactly like finished.
+> - **`MAGIC-PICKER-IMPLEMENTATION.md`** — paste a picture or a website address,
+>   get a skin from its colours. All three phases are built and live. **Its §16
+>   is that document's handoff**, and its §14 and §15 are where its own plan
+>   turned out to be wrong, both found by pointing the code at the real world.
+>   **If you are about to touch fonts, read its §2a first:** no skin can ever
+>   supply a font file, and the reasons are permanent.
+> - **`SITE-SKIN-AO3-CHECKLIST.md`** — the eighteen probes and what each one
+>   proved. Fourteen pass. It tells you exactly what to click.
+> - **§15 of this file** — the file map, the five invariants, the traps.
+>   Unchanged since revision 8 and still correct.
 >
-> **A second product document now exists: `MAGIC-PICKER-IMPLEMENTATION.md`** —
-> paste a link, get a skin built from its colours. **All three phases are built
-> and all three are live** (A the font bank, B a picture, C a website), deployed
-> 18 Aug 2026. **Its §16 is the handoff**, and its §14 and §15 are the two
-> sections where its own plan turned out to be wrong — both found by pointing
-> the code at the real world rather than by a failing test. If you are about to
-> touch fonts, read its §2a first: **no skin can ever supply a font file**, and
-> the reasons are permanent.
+> ### The reference sections, still worth reading before you build
 >
-> **§16–§18 are revision 5** and they change the roadmap. We read 115 published
-> site skins from two prolific authors and diffed every declaration in them
-> against both AO3's real sanitizer and our model of it. Two findings:
->
-> - **§17 — `ao3Css.ts` blocked CSS AO3 accepts, in five classes.** Chief among
->   them: **AO3 has a dedicated gradient sanitizer we never modelled.** Zero false
->   accepts, 34 false rejects. **Fixed 16 Aug 2026 (Phase 11); the differential
->   now runs 0/0 and `box-shadow`, gradients and `border-image` are available to
->   the compiler.**
-> - **§18 — the 10x plan, written to be built from.** We style 5 regions of AO3;
->   the corpus styles ~25. The missing ones are the ones that look *broken* on a
->   dark theme: every button, every form field, every comment byline keeps AO3's
->   light grey.
->
-> **If you are the developer picking up the 10x work, read §18d first** — it is
-> the ordered table of what to build, what each item is blocked by, and which
-> three can run in parallel. Then §18a (chrome, an afternoon plus mock work),
-> §18c (the reading controls, the largest piece), §18b (depth, blocked on §17 and
-> on the release gate). Phases 11–14 in §7 are the same work in that table's
-> canonical place. Every selector and declaration in §18 was verified against
-> both AO3's sanitizer and our lint — re-run
-> `npx tsx scripts/ao3-capability-probe.mjs` if you change a value.
+> - **§16** — the 115-skin corpus. What real skins do that we do not, by
+>   frequency. **§32** is its sharpest conclusion: a popular decorative skin is
+>   56–73 rules and one to six hotlinked images, and the images are the gap.
+> - **§17** — the five ways `ao3Css.ts` was *stricter* than AO3, all fixed. The
+>   method (a differential oracle) matters more than the findings; invariant 5 is
+>   the one this codebase keeps breaking.
+> - **§18** — the 10x plan. §18a chrome and §18b depth are built; §18c-6 is the
+>   only reading control left. Every declaration in it was verified against both
+>   AO3's sanitizer and our lint — re-run
+>   `npx tsx scripts/ao3-capability-probe.mjs` if you change a value.
+> - **§22** — the region audit, and the method is the reusable part: *read AO3's
+>   stylesheet, not our preview.*
+> - **§23c** — "our lint permits it" and "the archive accepted it" are different
+>   states. Now answered for everything we ship (§33c) and still true for the
+>   next thing you add.
 >
 > **§19 is revision 6, and it is the only section written from user demand
 > rather than from source.** It answers "why does this feel generic" with an
 > answer §18 does not reach: readers want their archive to feel like a *fandom*,
 > and we ship sixteen moods. Both phases in it are cheap, neither needs §17, and
 > — uniquely on this roadmap — **neither emits a declaration shape the release
-> gate does not already cover.** If you want the largest visible return for the
-> least risk, start there, not at §18.
+> gate does not already cover.** Still true, and it is item 4 in §33f rather
+> than the first thing to do — §32 overtook it.
 >
 > If you are about to touch the compiler, read **§4b** (who owns which selector)
 > and **§14** (why not every declaration may shout) before you write a rule.
 > If you are about to touch `ao3Css.ts`, read **§3**, the corrections in §7, and
 > **§17** — and note that the work-skin product depends on that file too.
 >
-> Reading order for a cold start: §0 → §15 → §3 → §4b → §14 → §5 → §18.
+> Reading order for a cold start: **§33** → §15 → §3 → §4b → §14 → §18.
 
 **Revision 3 — 6 Aug 2026.** Every rule below was re-verified against
 otwarchive `master`, including AO3's *own default stylesheets*, not just its
@@ -760,7 +745,7 @@ Always emit a fallback stack, and keep every family name inside
 | 4 | `ThemeEditor.tsx`, four control groups + contrast | ✅ two readability checks, each with its own fix |
 | 5 | `TemplateGallery.tsx` | ✅ mood chips, thumbnails share `derive()` with the compiler |
 | 6 | `ExportSkinDialog.tsx` + picker card + route | ✅ copy blocked while the lint fails |
-| 7 | A11y, tests, **manual AO3 save of every template** | ⬜ **the remaining gate** — see §8 |
+| 7 | A11y, tests, **manual AO3 save of every template** | ✅ **closed 17–18 Aug 2026.** Five templates saved and diffed (448/448), then every control at once in the Daredevil readback (38/38, §31f). The remaining eleven templates take the §19c exemption — they introduce no declaration shape the gate has not seen. **Four probes stay open**: §33d |
 | 8 | Header banners, hide-logo, URL validator, 4 banner-ready presets | ✅ 16 templates; see §3a and §11 |
 | 9 | Tag colours by type, themed scrollbars, banner-hosting copy, the Phase 7 checklist file | ✅ 13 Aug 2026; see §13 |
 | 10 | **Fix:** details rules scoped to direct children, `!important` withdrawn from six selectors, work skin added to the preview | ✅ 13 Aug 2026 — a defect found on a live page; see §14 |
@@ -768,7 +753,7 @@ Always emit a fallback stack, and keep every family name inside
 | 12 | **Chrome regions** — buttons, form fields, pagination, comments, autocomplete. Four derived colours, eleven ownership rows, no new theme field | ✅ 16 Aug 2026 — with two corrections to §18a's spec; see the note there |
 | 13 | **Reading controls** — required tags as text, tag labels, separators, stat icons, and the three author-overriding controls. Needs the third cascade mode (§18c-0) | 🟨 **§18c-2 landed 17 Aug; §18c-3, §18c-4 and §18c-5 on 18 Aug 2026** — the `reading` group now carries four controls, all off in all 16, and two of them are already confirmed on the archive (P16, P17). **Only §18c-6 remains**, and it is the one that finally needs the third cascade mode. See §30 |
 | 14 | **Depth** — card elevation, page wash, header gradient, glow, `border-image` frames, texture | ✅ **18 Aug 2026.** Texture, elevation and glow shipped with §30's commit; frames, heading setting and heading ornaments with §31. All off in all sixteen. The one row not built is a **page wash**, which `texture` supersedes |
-| 15 | **Theme from the banner image** — quantize the picture the user already pasted, derive all four colours from it, and stop guessing the header foreground | ⬜ §19b |
+| 15 | **Theme from the banner image** — quantize the picture the user already pasted, derive all four colours from it, and stop guessing the header foreground | ✅ **superseded and delivered by Phase 19.** The Magic Picker quantizes *any* pasted picture, not only a banner, and adds a second door (a website). Nothing in §19b is left to build |
 | 16 | **Palettes that read as fandoms** — ~12 more templates, mood-named as always | ⬜ §19c |
 | 17 | **Regions: listboxes, indexes, meta tables** — the §22 audit's build spec, plus §22c's chip. Four of the nine page types a real skin author screenshots. Acceptance: differential and capability probe **unmoved** | ✅ 17 Aug 2026 — 0/0 and no divergences; landed *before* the gate, on §18a's argument. Two rows of §22e's table were dropped on evidence and one was added; see §23b |
 | 18 | **The font bank** — `FONT_STACKS` 7 → 24, grouped and role-split; grouped picker with live specimens. Phase A of the Magic Picker | ✅ 17 Aug 2026 — append-only, all 16 templates unchanged; see §19f |
@@ -1329,11 +1314,11 @@ claim has a longer story, the section number is the story.
 
 | | |
 | --- | --- |
-| Deployed | ✅ `main` → Netlify, at `/site-skin`. **Production is `5eb7cbd`, deploy `6a83ed61`, 18 Aug 05:28 UTC** — the whole Magic Picker included (§28) |
+| Deployed | ✅ `main` → Netlify, at `/site-skin`. **Production is `678dd5a`** (https://app.ao3skingen.wordfokus.com). Everything in §33b is live, and every optional control is off in all sixteen templates |
 | Phases 0–6, 8, 9, 10 | ✅ complete |
-| Phase 7 — **saved on real AO3** | ⚠️ **opened 17 Aug 2026.** 5 of 16 templates, **10 of 15 probes — P2, P5, P6, P7, P8, P9, P10, P12, P13, P15** — all passing, **448/448 declarations kept** (§24b-bis). P1 and P14 partial, P3 still open. **The gate has now found and fixed its first defect** (§24c) |
-| Templates | 16, all lint clean, all round-tripping through storage. **Ten carry a header gradient as of 17 Aug 2026** (§21a) |
-| Tests | **644 unit** (`--project=unit`), **31 browser** — counts as of 18 Aug 2026, after the picker's measurement and font fixes (§28). 636/31 the night before; 525/29 before Phase C |
+| Phase 7 — **saved on real AO3** | ✅ **closed 17–18 Aug 2026.** The gate ran (448/448 declarations), then the Daredevil readback put every control on the archive at once (38/38 byte-identical, §31f). **Fourteen of eighteen probes pass**; the four open ones are in §33d |
+| Templates | 16, all lint clean, all round-tripping through storage. Ten carry a header gradient (§21a); **none carries a texture, frame, ornament or reading control** — those are all opt-in |
+| Tests | **677 unit** (`--project=unit`, 1 skipped), **34 site-skin journeys**. Run browser journeys with `--workers=1` — in parallel they flake at `page.goto` against a cold dev server |
 | Fonts | ✅ **24 stacks, grouped and role-split** (§19f). **Append-only** — the original seven are pinned byte for byte, because `validateTheme` matches the literal string a stored theme holds |
 | Mobile preview | ⚠️ scrolls sideways instead of scaling. Known, deliberate |
 | Marketing copy | ⚠️ correct about site skins; still silent on the work-skin export |
@@ -2817,6 +2802,8 @@ the part that will otherwise be re-litigated:
 
 ## 21. Handoff — 17 Aug 2026 (revision 8)
 
+> **Superseded by §33**, which owns the state. Kept for its reasoning.
+
 **The current handoff.** §15 still owns the file map, the five invariants and
 the traps. §20b (the two learnings) and §20d (the product decisions) are still
 true and are not restated here. This section is only what moved.
@@ -3108,6 +3095,8 @@ what readers actually look at.
 ---
 
 ## 23. Handoff — 17 Aug 2026, later (revision 9)
+
+> **Superseded by §33**, which owns the state. Kept for its reasoning.
 
 **The current handoff.** §15 still owns the file map, the five invariants and
 the traps. §20b, §20d and §21b are still true and are not restated. This section
@@ -3501,6 +3490,8 @@ screenshot is good at finding a defect and bad at confirming one.**
 
 ## 26. Handoff — 17 Aug 2026, evening (revision 11)
 
+> **Superseded by §33**, which owns the state. Kept for its reasoning.
+
 **The current handoff, and the one to read first.** §15 still owns the file map,
 the five invariants and the traps, and nothing there has changed. §20b, §20d,
 §21b, §23b–c and §24a–b are still true and are not restated. This section is
@@ -3798,6 +3789,7 @@ order.
 **What happened: the first roadmap work since the picker shipped.** §26e's item
 1 — tag group labels and the tag separator — is built, previewed, tested and
 read on screen. It is **not deployed**; production is still `main` at `5eb7cbd`.
+*(Deployed later the same day — §33a.)*
 
 ### 29a. What landed
 
@@ -3904,7 +3896,7 @@ reasoning an hour earlier.
 | **The mock** | ✅ The blurb's stats grew from two rows to seven; the work page gained the `dl.stats` block it never had, plus AO3's `.meta .stats dl` rules |
 | Tests | **657 unit** (was 652), **33 site-skin journeys** (was 32). `tsc --noEmit` clean |
 | Probes | **P17 added and already ✅. P16 half-answered. P4 upgraded to 🟨** |
-| Branch | `feat/magic-picker-phase-b`, still undeployed |
+| Branch | `feat/magic-picker-phase-b` — **deployed later the same day**; see §33 |
 
 ### 30b. The correction, and why it is the interesting part
 
@@ -3964,7 +3956,7 @@ CSS taken from a dev build:
 | 7 | The `bannerSet` analytics line (§20d) | Still one line, still unwritten |
 
 **And the standing question, now four controls old: none of Phase 13 is
-deployed.** Production is `main` at `5eb7cbd`. Three reading controls and a
+deployed.** Production is `main` at `5eb7cbd` — *all of it shipped later the same day; §33a.* Three reading controls and a
 separator sit on a branch, all off by default, all lint-clean, two of them
 already seen working on the archive.
 
@@ -4144,6 +4136,121 @@ One control — a page frame — that insets `#main`, paints it `surface`, round
 it, and lets the texture become a margin; off, and today's behaviour is
 byte-identical. Whoever builds it must change §4.2's test to say *"`#main` is
 painted only when the frame is on"* rather than delete it.
+
+---
+
+## 33. Handoff — the consolidated one (revision 17, 18 Aug 2026)
+
+**Read this instead of §26 through §32.** Those five sections each called
+themselves the current handoff, all on 18 August, and between them they are no
+longer a description of anything. They are kept because their *reasoning* is
+still the best record of why the code looks the way it does. This section owns
+the state.
+
+### 33a. Where the world is
+
+| | |
+| --- | --- |
+| **Production** | `main` at `678dd5a`, Netlify `ao3skingen`, https://app.ao3skingen.wordfokus.com |
+| **Branch** | `feat/magic-picker-phase-b`, level with `main` |
+| **Tests** | **677 unit** (1 skipped), **34 site-skin journeys**, `tsc --noEmit` clean |
+| **Differential** | 0 false accepts / 0 false rejects over 4,418 corpus declarations |
+| **Capability probe** | 0 gaps across ~80 rows |
+| **Release gate** | Passed. **Fourteen of eighteen probes** pass; the four open ones are in §33d |
+
+Everything below is live and **every optional control is off in all sixteen
+templates**. A reader who installs a theme and touches nothing gets the same
+skin they would have got a week ago.
+
+### 33b. What the product does now
+
+| Group | Controls |
+| --- | --- |
+| **Colour** | four colours, or paste a picture / a website address and have them derived (the Magic Picker, `MAGIC-PICKER-IMPLEMENTATION.md`) |
+| **Type** | 24 font stacks role-split, text size, **heading setting** (small caps / uppercase) |
+| **Shape** | card corners, tag shape, tag colours by type |
+| **Header** | banner, height, hide logo, glow, text colour, gradient |
+| **Depth** | page texture (ticking / gingham / dots / chevron), card elevation, glow, **card edge** (double / ribbon) |
+| **Reading** | required tags as words, tag group labels, tag separator (comma / bullet / line), stats as icons |
+| **Details** | **heading ornament** (❦ ❖ ✦), divider, drop cap, themed scrollbar |
+
+**Regions owned:** header, dashboard, blurbs, main, footer, buttons, form
+fields, pagination, comments, autocomplete, listboxes, indexes, meta tables,
+the form container, stats. The corpus styles about twenty-five; we are close.
+
+### 33c. What is proven on the real archive
+
+Not "our lint permits it" (§23c) — stored, applied and read back.
+
+- **The gate:** five skins, **448 of 448 declarations**, nothing dropped.
+- **The Daredevil readback (§31f):** every control at once, **38 of 38
+  byte-identical**, including `font-variant`, `letter-spacing`,
+  `border-style: double`, `clip: rect()`, emoji `content`, the ten adjacency
+  label selectors, `:not(:last-child)` and **`:has()` used as a scope**.
+- **One re-serialisation behaviour, seen twice:** AO3 splits a selector list at
+  a comma **inside parentheses** — `.wrapper:has(> table, > .meta)` comes back
+  wrapped across two lines. Harmless for a site skin. **A work skin must never
+  emit a comma inside `:has()`**, because AO3 prefixes each half with
+  `#workskin` and both halves die. Checked: it currently emits none.
+
+### 33d. What is not proven, precisely
+
+| | |
+| --- | --- |
+| **P1** | the single-chapter `.userstuff` branch — inferred from the selector, never seen |
+| **P3** | the divider on a work whose *text* contains an `<hr>` |
+| **P4** | 🟨 the menu was seen open and themed; `#small_login` and the hover states are still inferred |
+| **P11** | the last acceptance probe, now very narrow |
+| **`ribbon` and `uppercase`** | the two branches the Daredevil skin did not use |
+| **`:has()` on old Firefox** | the degradation is reasoned (rule drops, gutter stays, nothing hidden) and not observed |
+
+### 33e. Three known cosmetic defects, all deliberate
+
+None is a bug to be fixed by surprise; each was looked at and left, and the
+reasoning matters more than the verdict.
+
+1. **A comma sits before a group label** when tag labels are on and the
+   separator is `comma` — "Mara**,** Additional Tags: Slow Burn". The comma
+   belongs to the *previous* `li` and CSS has no previous-sibling combinator, so
+   it cannot be suppressed. The editor steers to `line` instead.
+2. **The drop cap is orphaned on centred prose.** A floated `::first-letter`
+   only works against left-aligned text. The author chose the centring; CSS
+   cannot test `text-align`.
+3. **Required tags run on** as one sentence — §24b-bis. The typography, not the
+   feature.
+
+### 33f. What to do next, in order
+
+| # | Work | Size | Why here |
+| --- | --- | --- | --- |
+| 1 | **One AO3 session: P1, P3, P4's hover states, P11** | 20 min | Four probes, one tab. The checklist says exactly what to click |
+| 2 | **§32 — the structural gap** | ~1 day | The largest visual return left, and the only item that asks to reopen a standing decision (§4.2). Read §32 before writing any of it |
+| 3 | **§18c-6 + the third cascade mode (§18c-0)** | ~1 day | The last of Phase 13, and the only remaining work that reaches *inside* a work. Invariant 2's test learns a third category rather than being loosened |
+| 4 | **§19c — fandom-shaped palettes** | an afternoon | Data only, highest demand-per-effort. Mood names — "House Colours", never "Gryffindor" |
+| 5 | **Watch `palette_applied`** | free | Live since 18 Aug. Answers whether a URL is a lower-friction door than an image |
+| 6 | The `bannerSet` analytics line (§20d) | one line | Still unwritten, four revisions running |
+
+### 33g. If you are starting cold
+
+1. **Read §15** — file map, five invariants, traps. Then §33b above, for what
+   the controls actually are.
+2. `npm run dev` → `localhost:3000/site-skin`. Click a template, then work down
+   the editor: every group has something in it now.
+3. `npx playwright test --project=unit` — 677 tests, no browser, no server.
+   Browser journeys need `UX_BASE_URL` pointed at your dev server, and **run
+   them with `--workers=1`**: in parallel they flake at `page.goto` against a
+   cold dev server, which looks like a failure and is not.
+4. **Before changing `ao3Css.ts`, run `scripts/ao3-corpus-differential.mjs`.**
+   The bar is 0/0. Being stricter than AO3 is the failure this codebase keeps
+   having.
+5. **Adding a control is a five-file change** and §15d has the order. Then ask
+   the four questions from the Start-here block — they are four different ways
+   of asking *have I actually looked at this on a real page*.
+6. **`tmp/` holds the evidence, and it is not checked in.** A saved real AO3
+   work page (`tmp/ao3-work-28934610.html`), AO3's own stylesheets
+   (`tmp/ao3css/`) and the 115-skin corpus (`tmp/ao3corpus/`). §30b and §31b
+   were both found by reading those rather than our own preview. Re-fetch with
+   `scripts/ao3-fetch-corpus.mjs` if they are gone.
 
 ---
 
