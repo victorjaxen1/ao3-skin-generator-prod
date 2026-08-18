@@ -13,8 +13,12 @@ import {
   HEADER_TEXT_COLORS,
   HEADER_GRADIENTS,
   TAG_SEPARATORS,
+  PAGE_TEXTURES,
+  CARD_ELEVATIONS,
   TagStyle,
   TagSeparator,
+  PageTexture,
+  CardElevation,
   HeaderTextColor,
   HeaderGradient,
 } from '../../lib/siteSkin/theme';
@@ -84,6 +88,12 @@ function SegmentRow<T extends string | number>({
           <button
             key={String(opt.value)}
             type="button"
+            // Named with its group, because the visible word is not unique in
+            // this panel: "Soft" is a corner and a depth, "Flat" is a depth and
+            // a header fade. Sighted users disambiguate from the row heading;
+            // anyone listening to the buttons gets "Soft" twice and no way to
+            // tell which is which.
+            aria-label={`${label}: ${opt.label}`}
             aria-pressed={value === opt.value}
             onClick={() => onChange(opt.value)}
             className={`flex-1 px-2 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
@@ -404,6 +414,36 @@ export const ThemeEditor: React.FC<Props> = ({ theme, onChange, issues, onFix, o
         checked={theme.header.hideLogo}
         onChange={v => onChange('header', { ...theme.header, hideLogo: v })}
       />
+
+      <SectionDivider label="Depth" />
+      {/* The image-free half of what a decorative skin does. Every popular
+          skin in the corpus tiles a hosted wallpaper; we cannot ship one and
+          will not host one, so the pattern is built from two colours the theme
+          already has. Stripes are not roses — but at page scale they do most
+          of what a wallpaper does, for zero bytes and no host to expire. */}
+      <SegmentRow
+        label="Page pattern"
+        value={theme.surface.texture}
+        options={PAGE_TEXTURES}
+        onChange={(v: PageTexture) => onChange('surface', { ...theme.surface, texture: v })}
+      />
+      <SegmentRow
+        label="Card depth"
+        value={theme.surface.elevation}
+        options={CARD_ELEVATIONS}
+        onChange={(v: CardElevation) => onChange('surface', { ...theme.surface, elevation: v })}
+      />
+      <ToggleRow
+        label="Glow"
+        sublabel="A halo on headings and cards — made for dark themes"
+        checked={theme.surface.glow}
+        onChange={v => onChange('surface', { ...theme.surface, glow: v })}
+      />
+      <p className="text-xs text-stone-400 py-3 leading-relaxed">
+        The pattern is drawn from your Page colour, so it can&apos;t clash with
+        the palette. It costs nothing to load and can never break — unlike the
+        hosted wallpapers most decorative skins rely on.
+      </p>
 
       <SectionDivider label="Reading" />
       {/* The one control here that makes AO3 easier to use rather than nicer

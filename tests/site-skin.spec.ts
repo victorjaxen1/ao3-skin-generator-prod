@@ -142,7 +142,12 @@ test('a colour change reaches the compiled CSS and the preview together', async 
 
 test('the text size control changes the compiled scale, once', async ({ page }) => {
   await openEditor(page);
-  await page.getByRole('button', { name: 'Largest', exact: true }).click();
+  // "Text size: Largest", not "Largest" — every segmented button is now named
+  // with its group, because the visible word is not unique in this panel:
+  // "Soft" is a card corner and a card depth, "Flat" is a depth and a header
+  // fade. Sighted users disambiguate from the row heading; anyone listening to
+  // the buttons heard "Soft" twice with no way to tell which was which.
+  await page.getByRole('button', { name: 'Text size: Largest', exact: true }).click();
 
   const css = await exportedCss(page);
   expect(css).toContain('font-size: 125%');

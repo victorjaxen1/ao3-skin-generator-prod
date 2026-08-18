@@ -392,6 +392,7 @@ export function themeFromPalette(
       headingFont: 'Georgia, serif',
       bodyFont: 'Georgia, serif',
       baseFontScale: 1,
+      headingStyle: 'normal',
     },
     shape: { cardRadius: '10px', tagStyle: 'pill', tagColors: true },
     header: {
@@ -407,13 +408,17 @@ export function themeFromPalette(
     // Every reading control off, for the same reason the sixteen templates have
     // them off: a generated theme is a palette, and a palette does not get to
     // decide what a listing says.
+    // A generated theme is a palette read out of a picture. Depth is a
+    // decision about materials, and nothing in an image says which one its
+    // owner wanted.
+    surface: { texture: 'none', elevation: 'flat', glow: false, frame: 'none' },
     reading: {
       requiredTagsAsText: false,
       tagLabels: false,
       tagSeparator: 'comma',
       statIcons: false,
     },
-    details: { divider: false, dropCap: false, scrollbar: true },
+    details: { ornament: 'none', divider: false, dropCap: false, scrollbar: true },
   };
 }
 

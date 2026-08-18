@@ -351,6 +351,20 @@ li.blurb { display: block; position: relative; clear: left; padding: 0.429em 0.7
 .blurb dl.stats dt, .blurb dl.stats dd { display: inline; margin: 0; padding-left: 0.25em; }
 .datetime { font-family: monospace; }
 
+/* 13-group-blurb, PICTURE modification. AO3's own comment: "use this along
+   with 'index' and 'blurb' for indices where we have icon pictures, eg
+   collections, users, skins, instead of the 4-icon list". The icon is 55px and
+   absolutely positioned, and the 65px gutter on .blurb .header .heading is what
+   makes room for it - which is why the "required tags as words" control must
+   not clear that gutter on a blurb that has no required tags. Added 18 Aug
+   2026, after an unscoped version of that control hid the first 65px of every
+   title on the real Skins page. */
+.picture .header { border-bottom: 1px solid #ccc; }
+.picture .icon img, .index .picture .icon {
+  position: absolute; top: 0; height: 55px; width: 55px;
+  background-repeat: no-repeat; background-color: #ddd; border-radius: 3px;
+}
+
 /* 14-group-preface */
 div.preface { margin: 1.5em 3em; padding: 0.643em 0.643em 0; }
 div.preface .module { margin: 0; padding: 0 0 0.643em; }
@@ -968,6 +982,23 @@ ${blurb(
   '900',
   '1/1'
 )}
+  </ul>
+</div>
+<div class="skins listbox group" id="user-skins">
+  <h3 class="heading">Site skins</h3>
+  <ul class="index group">
+    <!-- A PICTURE blurb: an icon in the gutter instead of the four required-tag
+         symbols. This is what a Skins, Collections, Users or Tags listing is
+         made of, and it is the shape that caught the unscoped gutter reset on
+         18 Aug 2026 — the whole first 65px of every title, hidden behind the
+         icon, on a page the mock had never rendered. -->
+    <li class="skins picture blurb group" role="article">
+      <div class="header module">
+        <span class="icon"><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="" width="55" height="55"></span>
+        <h4 class="heading"><a href="#">Moonlit Library ao3skingen</a> by <a rel="author" href="#">inkandstarlight</a></h4>
+      </div>
+      <blockquote class="userstuff summary"><p>(No Description Provided)</p></blockquote>
+    </li>
   </ul>
 </div>`;
 

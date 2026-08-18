@@ -15,6 +15,11 @@ export type TagStyle = 'pill' | 'label' | 'plain';
 export type HeaderTextColor = 'auto' | 'light' | 'dark';
 export type HeaderGradient = 'none' | 'vertical' | 'diagonal';
 export type TagSeparator = 'comma' | 'bullet' | 'line';
+export type PageTexture = 'none' | 'stripes' | 'gingham' | 'dots' | 'chevron';
+export type CardElevation = 'flat' | 'soft' | 'lifted';
+export type CardFrame = 'none' | 'double' | 'ribbon';
+export type HeadingStyle = 'normal' | 'smallCaps' | 'uppercase';
+export type Ornament = 'none' | 'fleuron' | 'diamond' | 'star';
 
 export interface SiteSkinTheme {
   schemaVersion: 1;
@@ -37,6 +42,15 @@ export interface SiteSkinTheme {
     bodyFont: string;
     /** 1 = AO3's own size. Emitted once, on body, as a percentage. */
     baseFontScale: number;
+    /**
+     * How headings are set — the cheapest way to change a theme's period.
+     *
+     * Small caps and wide letter-spacing are what separate a broadsheet from a
+     * blog and a deco poster from a heading, and neither costs a byte or a
+     * font file. `font-variant: small-caps` appears 63 times in the published
+     * corpus and we emitted it zero times before this.
+     */
+    headingStyle: HeadingStyle;
   };
   shape: {
     cardRadius: string;
@@ -159,7 +173,74 @@ export interface SiteSkinTheme {
      */
     statIcons: boolean;
   };
+  /**
+   * Depth — §18b, the phase that makes a theme read as *made* rather than as a
+   * recolour.
+   *
+   * The corpus finding this exists to answer: eighteen of the most-installed
+   * site skins on AO3 run 56–73 rules and 4–10 shadows, which is what we
+   * already emit. Their whole visual identity is one to six hosted images. We
+   * ship no images (§19b-bis), so this group is the image-free half of that
+   * language: pattern from gradients, depth from shadow, ornament from
+   * borders.
+   */
+  surface: {
+    /**
+     * A pattern behind the whole page, built from repeating gradients.
+     *
+     * The substitute for the tiled wallpaper every decorative skin in the
+     * corpus hotlinks. It cannot be roses — no gradient draws a rose — but
+     * stripes, gingham, dots and chevrons are most of what a wallpaper does at
+     * page scale, and they cost zero bytes, need no host, and cannot 404.
+     *
+     * Drawn from the theme's own two page colours, so a texture can never
+     * fight the palette that chose it.
+     */
+    texture: PageTexture;
+    /**
+     * How far a card sits off the page.
+     *
+     * **This control does not add a `box-shadow` owner; it parameterises the
+     * four that already exist.** §22e emits `box-shadow: none` on `.listbox`,
+     * `.listbox .index`, the meta wrapper and the fieldset pair to kill AO3's
+     * own bevels — so `flat` *is* what ships today, byte for byte, and the
+     * other two settings replace that value rather than competing with it.
+     * Adding new rules instead is what would have broken invariant 1.
+     */
+    elevation: CardElevation;
+    /**
+     * A halo on accent-coloured text and edges.
+     *
+     * Reads as neon on a dark page and as nothing much on a light one, which
+     * is why it is a toggle a dark template turns on rather than a derived
+     * property of the palette.
+     */
+    glow: boolean;
+    /**
+     * A decorative edge on cards.
+     *
+     * `double` is two rules with a gap, which is the oldest trick in printed
+     * matter and the one that costs nothing. `ribbon` paints the accent
+     * gradient into the border itself with `border-image` — the technique the
+     * 283-star medieval skin is built almost entirely out of, except that it
+     * feeds `border-image` a hosted PNG and we feed it a gradient.
+     *
+     * **`ribbon` squares the corners**, and that is CSS's rule rather than
+     * ours: `border-image` ignores `border-radius` entirely. The editor says so
+     * rather than hiding it, because a reader who has chosen Pillowy corners and
+     * then a ribbon frame has made two choices that cannot both hold.
+     */
+    frame: CardFrame;
+  };
   details: {
+    /**
+     * A printer's flower either side of the page heading.
+     *
+     * The same argument as the divider glyph (§13): one `content` string, no
+     * image, and it takes the theme's own accent because it is text. This is
+     * the part of an ornate skin that does not need a picture.
+     */
+    ornament: Ornament;
     divider: boolean;
     dropCap: boolean;
     /**
@@ -315,6 +396,57 @@ export const TAG_SEPARATORS: readonly { value: TagSeparator; label: string }[] =
   { value: 'line', label: 'One group per line' },
 ];
 
+/**
+ * The four patterns, and why these four.
+ *
+ * Each is one `repeating-linear-gradient` or a pair of them, except `dots`,
+ * which is a `radial-gradient` tiled by `background-size`. All four were
+ * probed against the sanitiser; §17's Correction 5 is what makes any of them
+ * legal, and before it landed our own lint refused every one.
+ */
+export const PAGE_TEXTURES: readonly { value: PageTexture; label: string }[] = [
+  // 'None', not 'Plain' — the tag-shape control already offers a Plain, and
+  // two buttons with one name are told apart only by the group they sit in,
+  // which is a distinction a screen reader reading the button does not get.
+  { value: 'none', label: 'None' },
+  { value: 'stripes', label: 'Ticking' },
+  { value: 'gingham', label: 'Gingham' },
+  { value: 'dots', label: 'Dots' },
+  { value: 'chevron', label: 'Chevron' },
+];
+
+export const CARD_ELEVATIONS: readonly { value: CardElevation; label: string }[] = [
+  { value: 'flat', label: 'Flat' },
+  { value: 'soft', label: 'Soft' },
+  { value: 'lifted', label: 'Lifted' },
+];
+
+export const CARD_FRAMES: readonly { value: CardFrame; label: string }[] = [
+  { value: 'none', label: 'Plain' },
+  { value: 'double', label: 'Double rule' },
+  { value: 'ribbon', label: 'Ribbon' },
+];
+
+export const HEADING_STYLES: readonly { value: HeadingStyle; label: string }[] = [
+  { value: 'normal', label: 'Normal' },
+  { value: 'smallCaps', label: 'Small caps' },
+  { value: 'uppercase', label: 'Uppercase' },
+];
+
+/**
+ * Printer's flowers, and every one is a single BMP code point.
+ *
+ * Deliberately not emoji: these inherit `color`, so they take the theme's
+ * accent like the divider's ❦ does. §30's stat icons had to give that up
+ * because no monochrome glyph reads as "hits"; an ornament has no such excuse.
+ */
+export const ORNAMENTS: readonly { value: Ornament; label: string; glyph: string }[] = [
+  { value: 'none', label: 'None', glyph: '' },
+  { value: 'fleuron', label: 'Fleuron', glyph: '\u2766' },
+  { value: 'diamond', label: 'Diamond', glyph: '\u2756' },
+  { value: 'star', label: 'Star', glyph: '\u2726' },
+];
+
 export const HEADER_TEXT_COLORS: readonly { value: HeaderTextColor; label: string }[] = [
   { value: 'auto', label: 'Auto' },
   { value: 'light', label: 'Light' },
@@ -370,6 +502,7 @@ export function validateTheme(input: unknown, fallback: SiteSkinTheme): SiteSkin
   const typography = raw.typography ?? {};
   const shape = raw.shape ?? {};
   const header = raw.header ?? {};
+  const surface = raw.surface ?? {};
   const reading = raw.reading ?? {};
   const details = raw.details ?? {};
 
@@ -397,6 +530,9 @@ export function validateTheme(input: unknown, fallback: SiteSkinTheme): SiteSkin
       baseFontScale: FONT_SCALES.some(s => s.value === typography.baseFontScale)
         ? typography.baseFontScale
         : fallback.typography.baseFontScale,
+      headingStyle: HEADING_STYLES.some(h => h.value === typography.headingStyle)
+        ? typography.headingStyle
+        : fallback.typography.headingStyle,
     },
     shape: {
       cardRadius:
@@ -447,7 +583,24 @@ export function validateTheme(input: unknown, fallback: SiteSkinTheme): SiteSkin
       statIcons:
         typeof reading.statIcons === 'boolean' ? reading.statIcons : fallback.reading.statIcons,
     },
+    surface: {
+      texture: PAGE_TEXTURES.some(t => t.value === surface.texture)
+        ? surface.texture
+        : fallback.surface.texture,
+      elevation: CARD_ELEVATIONS.some(e => e.value === surface.elevation)
+        ? surface.elevation
+        : fallback.surface.elevation,
+      glow: typeof surface.glow === 'boolean' ? surface.glow : fallback.surface.glow,
+      frame: CARD_FRAMES.some(f => f.value === surface.frame)
+        ? surface.frame
+        : fallback.surface.frame,
+    },
     details: {
+      // Membership, not a string: the value reaches a `content` string, so
+      // anything else stored here would be a theme writing CSS.
+      ornament: ORNAMENTS.some(o => o.value === details.ornament)
+        ? details.ornament
+        : fallback.details.ornament,
       divider: typeof details.divider === 'boolean' ? details.divider : fallback.details.divider,
       dropCap: typeof details.dropCap === 'boolean' ? details.dropCap : fallback.details.dropCap,
       scrollbar:

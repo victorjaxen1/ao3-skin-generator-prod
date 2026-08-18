@@ -1,4 +1,4 @@
-import { SiteSkinTheme } from './theme';
+import { SiteSkinTheme, PageTexture, CardElevation } from './theme';
 import { mixHex, normalizeHex, readableOn, tagTypeColors, TAG_TYPES } from './colors';
 
 /**
@@ -124,6 +124,83 @@ const STAT_ICONS: [stat: string, icon: string][] = [
   ['collections', '🗂️ '],
 ];
 
+/**
+ * The four page patterns, each drawn from two colours the theme already has.
+ *
+ * `ink` is the page nudged toward the text; `page` is the page itself. Every
+ * pattern is built so that the *page* colour is the majority of the surface —
+ * a texture is something you notice second, and one that reads first is a
+ * background the reader did not choose.
+ */
+function textureImage(texture: PageTexture, page: string, ink: string): string {
+  switch (texture) {
+    // Vertical ticking, the mattress-stripe of every cottage skin in the
+    // corpus. 12px on, 12px off.
+    case 'stripes':
+      return `repeating-linear-gradient(90deg, ${ink} 0px, ${ink} 12px, ${page} 12px, ${page} 24px)`;
+    // Two ticking layers crossed — and **both must be translucent**, or this is
+    // not gingham.
+    //
+    // Real gingham has three tones: the cloth, the thread, and the darker
+    // square where two threads cross. Opaque layers give two, because the top
+    // one simply covers the crossing, and the result is an L-shaped grid that
+    // looks like a mistake rather than a check. Found by looking at it; the
+    // lint was perfectly happy.
+    //
+    // 8-digit hex is what makes the alpha legal, and it is one of the five
+    // things §17 (Correction 7) unblocked — before that our own lint refused
+    // this exact value.
+    case 'gingham':
+      return (
+        `repeating-linear-gradient(0deg, ${ink}b3 0px, ${ink}b3 14px, transparent 14px, transparent 28px), ` +
+        `repeating-linear-gradient(90deg, ${ink}b3 0px, ${ink}b3 14px, transparent 14px, transparent 28px)`
+      );
+    // A dot grid, tiled by background-size rather than by the gradient itself.
+    // `transparent` past the stop is what leaves the page showing between them.
+    case 'dots':
+      return `radial-gradient(circle at 50% 50%, ${ink} 1.6px, transparent 1.7px)`;
+    // 45°, and twice the period of the ticking so the zigzag reads at page
+    // scale rather than as moiré.
+    case 'chevron':
+      return `repeating-linear-gradient(45deg, ${ink} 0px, ${ink} 10px, ${page} 10px, ${page} 20px)`;
+    default:
+      return '';
+  }
+}
+
+/**
+ * Elevation, as a function of the shadow colour.
+ *
+ * Mixed 72% toward the text rather than being black, so a shadow on a dark
+ * theme is a *darker dark* and one on a light theme is a soft grey — the same
+ * argument `controlBg` makes about buttons. A literal black shadow on a navy
+ * page is a smudge.
+ */
+const CARD_SHADOWS: Record<CardElevation, (shadow: string) => string> = {
+  flat: () => '',
+  soft: shadow => `0 1px 3px ${shadow}33`,
+  lifted: shadow => `0 3px 10px ${shadow}44`,
+};
+
+/**
+ * Elevation and glow, as one `box-shadow` value.
+ *
+ * **They compose into a value rather than into two rules.** Same property,
+ * same selectors — a second rule would be a second owner, which is invariant 1
+ * and the exact trap §22e's comment warned §18b about.
+ *
+ * The empty case is why `flat` returns '' rather than 'none': `none, 0 0 14px …`
+ * is not a shadow list, it is a syntax error, and AO3 would store it happily
+ * while every browser dropped the declaration.
+ */
+function cardShadow(surface: SiteSkinTheme['surface'], shadow: string, accent: string): string {
+  const layers = [
+    CARD_SHADOWS[surface.elevation](shadow),
+    surface.glow ? `0 0 14px ${accent}55` : '',
+  ].filter(Boolean);
+  return layers.length ? layers.join(', ') : 'none';
+}
+
 /** Everything the theme implies but does not literally contain. */
 export function derive(theme: SiteSkinTheme) {
   const accent = normalizeHex(theme.colors.accent);
@@ -210,6 +287,45 @@ export function derive(theme: SiteSkinTheme) {
      * cannot measure.
      */
     headerShadow: headerFg === '#ffffff' ? '#000000' : '#ffffff',
+    /**
+     * The page pattern, as a `background-image` value — '' when off.
+     *
+     * **Two colours, both already in the theme**: the page itself and the page
+     * nudged 6% toward the text. That is the whole reason a texture cannot
+     * clash with the palette that chose it, and it is why the control is a
+     * shape rather than a colour. Six percent is the number that survived
+     * being looked at on all sixteen: at 10% the stripes read as a deckchair
+     * on the light templates, and below 4% they vanish on the dark ones.
+     *
+     * `gingham` is two gradients in one declaration, which is legal for the
+     * same reason the banner-over-fade stack is: AO3 sanitises the value, and a
+     * comma-separated list of gradients is still a list of gradients.
+     */
+    pageTexture: textureImage(
+      theme.surface.texture,
+      background,
+      // Gingham spends most of its ink at 70% alpha, so it needs more of it to
+      // land in the same place as the opaque patterns.
+      mixHex(text, background, theme.surface.texture === 'gingham' ? 0.1 : 0.06)
+    ),
+    /** `background-size`, which only `dots` needs — '' for every other value. */
+    pageTextureSize: theme.surface.texture === 'dots' ? '18px 18px' : '',
+    /**
+     * The card shadow, and `none` is a real value rather than an absence.
+     *
+     * §22e already emits `box-shadow: none` on four selectors to kill AO3's
+     * own bevels. This replaces that value in place, so `flat` compiles to
+     * exactly what shipped before the control existed.
+     */
+    cardShadow: cardShadow(theme.surface, mixHex(text, background, 0.72), accent),
+    /**
+     * A halo on the headings, for the themes that want the card glow.
+     *
+     * Text only, and the same hue as the heading it sits behind — the accent is
+     * already the heading's colour, so this is that colour bleeding outward
+     * rather than a second one arriving.
+     */
+    headingGlow: theme.surface.glow ? `0 0 10px ${accent}66` : '',
   };
 }
 
@@ -232,6 +348,24 @@ function buildRules(theme: SiteSkinTheme): Rule[] {
       ['font-size', `${Math.round(theme.typography.baseFontScale * 100)}%`],
     ],
   });
+
+  // The page pattern. A separate rule from `body`'s colours on purpose: this
+  // one is conditional, and folding a conditional declaration into the rule
+  // that carries the Page colour is how a control ends up owning a property it
+  // only sometimes sets.
+  //
+  // `background-image` rather than the `background` shorthand — the shorthand
+  // would reset `background-color` and take the Page control with it, which is
+  // defect §4.2 wearing a third face.
+  if (d.pageTexture) {
+    rules.push({
+      selectors: ['body'],
+      decls: [
+        ['background-image', d.pageTexture],
+        ...(d.pageTextureSize ? ([['background-size', d.pageTextureSize]] as [string, string][]) : []),
+      ],
+    });
+  }
 
   // Summaries and notes set their own font, so they need naming separately.
   // Code blocks are left alone on purpose.
@@ -383,6 +517,12 @@ function buildRules(theme: SiteSkinTheme): Rule[] {
       ['background-color', d.surface],
       ['border-color', d.border],
       ['border-radius', theme.shape.cardRadius],
+      // Extends this rule rather than adding a second owner of `box-shadow` —
+      // the §18b blocker, resolved by putting the declaration where the card is
+      // already described. Emitted only when there is a shadow to draw: AO3
+      // gives a blurb a border and no shadow, so `flat` has nothing to undo and
+      // `box-shadow: none` here would be a declaration that does nothing.
+      ...(d.cardShadow === 'none' ? [] : ([['box-shadow', d.cardShadow]] as [string, string][])),
     ],
   });
 
@@ -398,6 +538,10 @@ function buildRules(theme: SiteSkinTheme): Rule[] {
       ['background-color', d.surface],
       ['border-color', d.border],
       ['border-radius', theme.shape.cardRadius],
+      // Quiet, like everything else in this rule. A reader's elevation reaches
+      // the container an author's work sits in, and the author keeps the power
+      // to say otherwise — §14b, unchanged.
+      ...(d.cardShadow === 'none' ? [] : ([['box-shadow', d.cardShadow]] as [string, string][])),
     ],
     authorWins: true,
   });
@@ -431,7 +575,13 @@ function buildRules(theme: SiteSkinTheme): Rule[] {
 
   rules.push({
     selectors: ['#main h1', '#main h2', '#main h3', '#main h4', '#main h5', '#main h6', '#main .heading'],
-    decls: [['color', d.accent]],
+    decls: [
+      ['color', d.accent],
+      // Extends the rule that already owns the heading colour, so the glow can
+      // never become a second owner. Emitted only when it is on — an unglowing
+      // `text-shadow: none` would be a declaration with nothing to undo.
+      ...(d.headingGlow ? ([['text-shadow', d.headingGlow]] as [string, string][]) : []),
+    ],
   });
 
   rules.push({
@@ -540,8 +690,14 @@ function buildRules(theme: SiteSkinTheme): Rule[] {
 
     // Separate owner from the `display/height/width` rule above, because this
     // one is about the *text* AO3 hid rather than the box it hid it in.
+    //
+    // Scoped under `ul.required-tags` for the same reason the gutter rules now
+    // are. AO3 writes this one as a bare `.blurb span.text`, but AO3 is
+    // describing its own markup and we are overriding it on somebody else's
+    // page: a `span.text` that turns up in a blurb we have not looked at would
+    // be un-hidden by a rule that was never about it.
     rules.push({
-      selectors: ['.blurb span.text'],
+      selectors: ['.blurb ul.required-tags span.text'],
       decls: [
         ['color', 'inherit'],
         ['font-size', '1em'],
@@ -561,21 +717,43 @@ function buildRules(theme: SiteSkinTheme): Rule[] {
       decls: [['padding-right', '1em']],
     });
 
-    // AO3 reserves the left 65px of every blurb header for the icon block and
-    // gives the header a 55px floor to fit it. Both are dead space once the
-    // block is gone, and leaving them turns the control into "the icons became
-    // words and the layout stayed wrong".
+    // AO3 reserves the left 65px of every blurb header and gives the header a
+    // 55px floor to fit what sits there. Both are dead space once the icon
+    // block is words — **on a work blurb.**
     //
-    // `margin-left`, not the `margin` shorthand AO3 uses: a longhand with
-    // `!important` overrides that one component and leaves the other three
-    // alone. (It is also an allowed property — it contains `margin`, §3.)
+    // > **Shipped unscoped on 18 Aug 2026 and it broke four other kinds of
+    // > page.** `.blurb` is not only a work. 13-group-blurb.css carries a
+    // > `PICTURE` modification whose own comment reads *"use this along with
+    // > 'index' and 'blurb' for indices where we have icon pictures, eg
+    // > collections, users, skins, instead of the 4-icon list"* — and it puts a
+    // > **55px absolutely-positioned icon** in that same gutter. Kill the
+    // > margin there and the title slides underneath the icon: the first 65px
+    // > of every skin name, user name and collection name is simply gone. Seen
+    // > on a real Skins page, where three titles read "on Archieve", "it
+    // > Library ao3skingen" and "nan skin 1".
+    // >
+    // > The mock renders work blurbs and nothing else, so no preview,
+    // > screenshot or test could have shown it — §22d, for the third time.
+    //
+    // `:has()` is the scope, and it is the right tool rather than a clever one:
+    // the question is literally "does this header contain a required-tags
+    // block". It ships already on `.wrapper:has(> table, > .meta)` and survived
+    // the archive readback (§26b). Where it is unsupported the rule is dropped
+    // whole and the gutter simply stays — words indented by 65px, which is
+    // untidy and not broken. That is the correct direction to fail in.
     rules.push({
-      selectors: ['.blurb .header .heading', '.blurb .header ul'],
+      selectors: [
+        '.blurb .header:has(ul.required-tags) .heading',
+        '.blurb .header:has(ul.required-tags) ul',
+      ],
+      // `margin-left`, not the `margin` shorthand AO3 uses: a longhand with
+      // `!important` overrides that one component and leaves the other three
+      // alone. (It is also an allowed property — it contains `margin`, §3.)
       decls: [['margin-left', '0']],
     });
 
     rules.push({
-      selectors: ['.blurb .header'],
+      selectors: ['.blurb .header:has(ul.required-tags)'],
       decls: [['min-height', '0']],
     });
 
@@ -886,6 +1064,9 @@ function buildRules(theme: SiteSkinTheme): Rule[] {
     decls: [
       ['background-color', d.background],
       ['border-color', d.border],
+      // Stays `none` at every elevation, deliberately. A fieldset is a form
+      // container, not a card — lifting the search box off the page alongside
+      // the works it filters says the two are the same kind of thing.
       ['box-shadow', 'none'],
     ],
   });
@@ -947,7 +1128,7 @@ function buildRules(theme: SiteSkinTheme): Rule[] {
     decls: [
       ['background-color', d.background],
       ['border-color', d.border],
-      ['box-shadow', 'none'],
+      ['box-shadow', d.cardShadow],
     ],
   });
 
@@ -955,7 +1136,7 @@ function buildRules(theme: SiteSkinTheme): Rule[] {
     selectors: ['.listbox .index'],
     decls: [
       ['background-color', d.surface],
-      ['box-shadow', 'none'],
+      ['box-shadow', d.cardShadow],
     ],
   });
 
@@ -974,7 +1155,7 @@ function buildRules(theme: SiteSkinTheme): Rule[] {
   // on seven dark templates (§22d).
   rules.push({
     selectors: ['.wrapper:has(> table, > .meta)'],
-    decls: [['box-shadow', 'none']],
+    decls: [['box-shadow', d.cardShadow]],
   });
 
   // The work metadata table's own edge — on every work page, and on Profile,

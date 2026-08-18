@@ -8,6 +8,8 @@ import {
   validateTheme,
   SiteSkinTheme,
   TAG_SEPARATORS,
+  PAGE_TEXTURES,
+  CARD_ELEVATIONS,
 } from '../src/lib/siteSkin/theme';
 import { lintAo3Css, isLegalFontStack, checkAo3ImageUrl, stripCssComments } from '../src/lib/siteSkin/ao3Css';
 import {
@@ -53,6 +55,25 @@ test.describe('every launch template compiles to CSS AO3 accepts', () => {
     }
   });
 
+  test('every depth combination passes the lint', () => {
+    // Textures are gradients and §17's Correction 5 is the only reason any of
+    // them is legal; elevation and glow are 8-digit hex, which is Correction 7.
+    // Both were false rejects in our own lint until 16 Aug 2026, so this sweep
+    // is guarding a capability the compiler only recently got back.
+    for (const texture of PAGE_TEXTURES) {
+      for (const elevation of CARD_ELEVATIONS) {
+        for (const glow of [true, false]) {
+          const theme: SiteSkinTheme = {
+            ...SAMPLE,
+            surface: { texture: texture.value, elevation: elevation.value, glow , frame: 'none' },
+          };
+          const label = `${texture.value}/${elevation.value}/${glow}`;
+          expect(lintAo3Css(compile(theme)), label).toEqual([]);
+        }
+      }
+    }
+  });
+
   test('every detail toggle combination also passes', () => {
     for (const divider of [true, false]) {
       for (const dropCap of [true, false]) {
@@ -71,7 +92,7 @@ test.describe('every launch template compiles to CSS AO3 accepts', () => {
                         tagSeparator: tagSeparator.value,
                         statIcons: requiredTagsAsText,
                       },
-                      details: { divider, dropCap, scrollbar },
+                      details: { ornament: 'none', divider, dropCap, scrollbar },
                     };
                     const label = `${tagStyle}/${tagColors}/${divider}/${dropCap}/${scrollbar}/${requiredTagsAsText}/${tagLabels}/${tagSeparator.value}`;
                     expect(lintAo3Css(compile(theme)), label).toEqual([]);
@@ -551,7 +572,11 @@ test.describe('required tags as words', () => {
     );
 
     // height: 0; width: 0; font-size: 0.001em; color: transparent
-    expect(declsFor('.blurb span.text')).toEqual(
+    //
+    // Scoped under `ul.required-tags` since 18 Aug 2026. AO3 writes this rule
+    // as a bare `.blurb span.text`, but AO3 is describing its own markup and we
+    // are overriding it on a page we did not write.
+    expect(declsFor('.blurb ul.required-tags span.text')).toEqual(
       expect.arrayContaining([
         ['color', 'inherit'],
         ['font-size', '1em'],
@@ -564,10 +589,63 @@ test.describe('required tags as words', () => {
       'none',
     ]);
 
-    // The 65px the icon block used to occupy, and the 55px floor under it.
-    expect(declsFor('.blurb .header .heading')).toContainEqual(['margin-left', '0']);
-    expect(declsFor('.blurb .header ul')).toContainEqual(['margin-left', '0']);
-    expect(declsFor('.blurb .header')).toContainEqual(['min-height', '0']);
+    // The 65px the icon block used to occupy, and the 55px floor under it —
+    // cleared only where there IS an icon block. The unscoped version of these
+    // three shipped and hid the first 65px of every title on the Skins page;
+    // the test below is the one that pins the scoping.
+    expect(declsFor('.blurb .header:has(ul.required-tags) .heading')).toContainEqual([
+      'margin-left',
+      '0',
+    ]);
+    expect(declsFor('.blurb .header:has(ul.required-tags) ul')).toContainEqual([
+      'margin-left',
+      '0',
+    ]);
+    expect(declsFor('.blurb .header:has(ul.required-tags)')).toContainEqual(['min-height', '0']);
+  });
+
+  test('the gutter is only cleared on blurbs that have an icon block', () => {
+    // **The bug this shipped with, live for four hours on 18 Aug 2026.**
+    //
+    // `.blurb` is not only a work. 13-group-blurb.css has a PICTURE
+    // modification — its own comment says "eg collections, users, skins,
+    // instead of the 4-icon list" — which puts a 55px absolutely-positioned
+    // icon in the same left gutter. Clearing the 65px margin there slides the
+    // title underneath the icon, and the first 65px of every skin, user and
+    // collection name is gone. Seen on a real Skins page, where three titles
+    // read "on Archieve", "it Library ao3skingen" and "nan skin 1".
+    //
+    // No preview, screenshot or test could have caught it: the mock rendered
+    // work blurbs and nothing else. It does render a picture blurb now.
+    const rules = compileRules(withWords(true));
+    const gutter = rules.filter(r =>
+      r.decls.some(([property]) => property === 'margin-left' || property === 'min-height')
+    );
+    expect(gutter.length).toBeGreaterThan(0);
+
+    for (const rule of gutter) {
+      for (const selector of rule.selectors) {
+        // Every gutter rule must ask whether a required-tags block is actually
+        // there. A bare `.blurb .header` reaches four other kinds of listing.
+        expect(selector, `${selector} clears the gutter on every blurb`).toContain(
+          ':has(ul.required-tags)'
+        );
+      }
+    }
+
+    // And the un-hiding is scoped too: a `span.text` in some other blurb is
+    // not ours to reveal.
+    const text = rules.find(r => r.selectors.some(s => s.includes('span.text')))!;
+    expect(text.selectors).toEqual(['.blurb ul.required-tags span.text']);
+  });
+
+  test('the mock renders the picture blurb that caught it', () => {
+    const dashboard = mockBody('dashboard');
+    expect(dashboard).toContain('class="skins picture blurb group"');
+    expect(dashboard).toContain('<span class="icon">');
+    // AO3's own rules for that gutter, or the preview cannot show the overlap.
+    expect(AO3_BASE_CSS).toContain('.picture .icon img, .index .picture .icon');
+    expect(AO3_BASE_CSS).toContain('position: absolute');
   });
 
   test('the fourth icon needs no rule of its own', () => {
@@ -931,6 +1009,127 @@ test.describe('stats as icons', () => {
   });
 });
 
+test.describe('depth — texture, elevation and glow', () => {
+  const withDepth = (surface: Partial<SiteSkinTheme['surface']>): SiteSkinTheme => ({
+    ...SAMPLE,
+    surface: { ...SAMPLE.surface, ...surface },
+  });
+
+  test('off in every shipped template, and off changes nothing', () => {
+    for (const template of TEMPLATES) {
+      expect(template.surface.texture, template.meta.name).toBe('none');
+      expect(template.surface.elevation, template.meta.name).toBe('flat');
+      expect(template.surface.glow, template.meta.name).toBe(false);
+    }
+    // The sixteen were designed before this group existed. `flat` has to be
+    // byte-identical to what they compiled to then, or shipping the control
+    // silently restyles sixteen themes people have already saved.
+    const css = compile(withDepth({}));
+    expect(css).not.toContain('background-image: repeating-linear-gradient');
+    expect(css).not.toContain('radial-gradient');
+    expect(css).not.toContain('text-shadow');
+    // …and §22e's four are still killing AO3's bevels, which is what `flat`
+    // has always meant.
+    expect(css.match(/box-shadow: none/g)!.length).toBe(4);
+  });
+
+  test('elevation and glow compose into one value, never two rules', () => {
+    // The §18b blocker, and the reason it blocked: `box-shadow` is claimed by
+    // §22e's bevel-killers, by card elevation and by glow. Three claimants, one
+    // property — and the resolution is that only one rule per selector ever
+    // carries it.
+    for (const surface of [
+      { elevation: 'lifted' as const, glow: true },
+      { elevation: 'flat' as const, glow: true },
+      { elevation: 'soft' as const, glow: false },
+    ]) {
+      const rules = compileRules(withDepth(surface));
+      const seen = new Set<string>();
+      for (const rule of rules) {
+        for (const selector of rule.selectors) {
+          for (const [property] of rule.decls) {
+            if (property !== 'box-shadow') continue;
+            const key = selector;
+            expect(seen.has(key), `${JSON.stringify(surface)}: ${key} shadowed twice`).toBe(false);
+            seen.add(key);
+          }
+        }
+      }
+    }
+  });
+
+  test('glow with no elevation is a shadow, not the string "none, …"', () => {
+    // `none` is a keyword, not a layer. Concatenating it with a real shadow
+    // produces a value AO3 stores happily and every browser throws away — the
+    // worst of the three outcomes, because it looks like it saved.
+    const rules = compileRules(withDepth({ elevation: 'flat', glow: true }));
+    const shadows = rules
+      .flatMap(r => r.decls)
+      .filter(([property]) => property === 'box-shadow')
+      .map(([, value]) => value);
+
+    expect(shadows.length).toBeGreaterThan(0);
+    for (const value of shadows) {
+      expect(value === 'none' || !value.includes('none'), value).toBe(true);
+    }
+    expect(shadows.some(v => v.startsWith('0 0 14px'))).toBe(true);
+  });
+
+  test('the texture is drawn from the page colour, so it cannot clash', () => {
+    // The whole argument for a shape control rather than a colour one: there is
+    // no way to pick a texture that fights the palette, because the texture has
+    // no colour of its own.
+    const theme = withDepth({ texture: 'chevron' });
+    const body = compileRules(theme).find(r =>
+      r.selectors.includes('body') && r.decls.some(([p]) => p === 'background-image')
+    )!;
+    const [, image] = body.decls.find(([p]) => p === 'background-image')!;
+
+    for (const hex of image.match(/#[0-9a-f]{6}/g) ?? []) {
+      // Every colour in the pattern is the page, or the page nudged toward the
+      // text. Neither the accent nor the surface may appear.
+      expect([theme.colors.background, mixHex(theme.colors.text, theme.colors.background, 0.06)]).toContain(hex);
+    }
+  });
+
+  test('gingham is woven, not a grid — its layers are translucent', () => {
+    // Three tones or it is not gingham: cloth, thread, and the darker square
+    // where two threads cross. Opaque layers give two, because the top one
+    // covers the crossing. The lint cannot see the difference; a person can.
+    const [, image] = compileRules(withDepth({ texture: 'gingham' }))
+      .find(r => r.decls.some(([p]) => p === 'background-image'))!
+      .decls.find(([p]) => p === 'background-image')!;
+
+    expect(image.split('repeating-linear-gradient').length - 1).toBe(2);
+    expect(image).toMatch(/#[0-9a-f]{6}b3/);
+    // And the opaque patterns are still opaque — 8-digit hex everywhere would
+    // mean the fix was applied with a broom.
+    const [, stripes] = compileRules(withDepth({ texture: 'stripes' }))
+      .find(r => r.decls.some(([p]) => p === 'background-image'))!
+      .decls.find(([p]) => p === 'background-image')!;
+    expect(stripes).not.toMatch(/#[0-9a-f]{8}/);
+  });
+
+  test('the page keeps its colour — the texture never uses the shorthand', () => {
+    // `background:` would reset background-color and take the Page control with
+    // it. That is defect §4.2 for the third time, and the first two were both
+    // shipped.
+    for (const texture of PAGE_TEXTURES) {
+      const css = compile(withDepth({ texture: texture.value }));
+      expect(css, texture.value).toMatch(/body \{[^}]*background-color:/);
+      expect(css, texture.value).not.toMatch(/^ *background: /m);
+    }
+  });
+
+  test('a fieldset is not a card, at any elevation', () => {
+    // Lifting the search box alongside the works it filters says the two are
+    // the same kind of thing. They are not.
+    const rules = compileRules(withDepth({ elevation: 'lifted', glow: true }));
+    const fieldset = rules.find(r => r.selectors.includes('#main fieldset'))!;
+    expect(fieldset.decls).toContainEqual(['box-shadow', 'none']);
+  });
+});
+
 // ── Ownership: the §4 defects, as regressions ─────────────────────────────
 
 test.describe('region ownership', () => {
@@ -950,8 +1149,14 @@ test.describe('region ownership', () => {
         {
           ...SAMPLE,
           shape: { ...SAMPLE.shape, tagColors: true },
+          // Depth on, and this is the pair that matters most here: elevation
+          // and glow are the same property on the same selectors, and §22e's
+          // four `box-shadow` rules are a third claimant. If any of the three
+          // ever emits its own rule instead of composing, this is where it
+          // shows.
+          surface: { texture: 'gingham', elevation: 'lifted', glow: true, frame: 'none' },
           reading: { requiredTagsAsText: true, tagLabels: true, tagSeparator: 'line', statIcons: true },
-          details: { divider: true, dropCap: true, scrollbar: true },
+          details: { ornament: 'none', divider: true, dropCap: true, scrollbar: true },
         },
       ],
       // The separator is the one control with three states rather than two, and
@@ -962,8 +1167,19 @@ test.describe('region ownership', () => {
         {
           ...SAMPLE,
           shape: { ...SAMPLE.shape, tagColors: true },
+          // Elevation without glow, so the composed value has one layer rather
+          // than two — the case where a naive implementation emits `none` and a
+          // shadow from two different places.
+          surface: { texture: 'dots', elevation: 'soft', glow: false, frame: 'none' },
           reading: { requiredTagsAsText: true, tagLabels: true, tagSeparator: 'bullet', statIcons: true },
-          details: { divider: true, dropCap: true, scrollbar: true },
+          details: { ornament: 'none', divider: true, dropCap: true, scrollbar: true },
+        },
+      ],
+      [
+        'glow with no elevation',
+        {
+          ...SAMPLE,
+          surface: { texture: 'none', elevation: 'flat', glow: true, frame: 'none' },
         },
       ],
     ];
@@ -1733,7 +1949,7 @@ test.describe('validateTheme', () => {
         colors: { background: 'red', surface: '#FFF000', text: '#123456', accent: 'javascript:x' },
         typography: { headingFont: 'Comic Sans MS, cursive', bodyFont: 'Georgia, serif', baseFontScale: 99 },
         shape: { cardRadius: 'huge', tagStyle: 'sparkly', tagColors: 'sometimes' },
-        details: { divider: 'yes', dropCap: false, scrollbar: 1 },
+        details: { ornament: 'none', divider: 'yes', dropCap: false, scrollbar: 1 },
       },
       SAMPLE
     );
