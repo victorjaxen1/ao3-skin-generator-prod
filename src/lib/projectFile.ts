@@ -346,7 +346,8 @@ function validateWhatsAppLinkModel(value: unknown, label: string): WhatsAppLinkP
 
 function validateWhatsAppMediaModel(value: unknown, label: string): WhatsAppMedia {
   const raw = object(value, label);
-  const url = httpsUrl(raw.url, `${label} URL`, true);
+  // Same as the iOS branch above, for the same reason.
+  const url = httpsUrl(raw.url, `${label} URL`, raw.kind !== 'audio');
   if (raw.kind === 'audio') {
     if (!['audio/mpeg', 'audio/ogg', 'audio/wav', 'audio/mp4'].includes(String(raw.mimeType))) invalid(`${label} audio type is unsupported.`);
     return { kind: 'audio', url, mimeType: raw.mimeType as Extract<WhatsAppMedia, { kind: 'audio' }>['mimeType'], ...(typeof raw.duration === 'string' ? { duration: string(raw.duration, `${label} duration`, 30) } : {}), ...(typeof raw.transcript === 'string' ? { transcript: string(raw.transcript, `${label} transcript`, 10_000) } : {}) };
@@ -419,7 +420,15 @@ function validateIOSLinkModel(value: unknown, label: string): IOSLinkPreview {
  */
 function validateIOSMediaModel(value: unknown, label: string): IOSMedia {
   const raw = object(value, label);
-  const url = httpsUrl(raw.url, `${label} URL`, true);
+  // **A voice note needs no address.** `blankMedia('audio')` in the extras
+  // editor creates `url: ''`, and iosMediaHTML/whatsappMediaHTML render exactly
+  // that: no url means no `playableSource`, so the generator emits the waveform
+  // card and no player. That is the common case in a fic — an author wants a
+  // *picture* of a voice note, not a file — and requiring an address here made
+  // the export throw on a state the editor creates by default and the renderer
+  // draws correctly. Video still requires one: a card with no url has no poster
+  // and nothing to show.
+  const url = httpsUrl(raw.url, `${label} URL`, raw.kind !== 'audio');
   if (raw.kind === 'audio') {
     if (!IOS_AUDIO_MIME_TYPES.includes(String(raw.mimeType) as 'audio/mpeg')) invalid(`${label} audio type is unsupported.`);
     return {

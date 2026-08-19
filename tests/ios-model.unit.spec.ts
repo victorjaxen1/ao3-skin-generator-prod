@@ -157,6 +157,25 @@ test.describe('iOS media', () => {
       .toContain('Choose a supported audio file type.');
   });
 
+  test('a voice note with no address at all is a decorative one, not an error', () => {
+    // **The state the editor creates by default.** `blankMedia('audio')` is
+    // `{ kind: 'audio', url: '', mimeType: 'audio/mpeg' }`, and the generator
+    // draws exactly that: no url means no `playableSource`, so it emits the
+    // waveform card and instantiates no player. An author writing a scene wants
+    // a *picture* of a voice note far more often than a hosted file.
+    //
+    // Four gates disagreed about this until 18 Aug 2026 — the editor created
+    // it, the renderer drew it, localStorage silently discarded it on reload,
+    // and the project backup threw `Message N iOS media URL cannot be empty`.
+    // The rule that was actually intended is the one above: an address, if
+    // given, must be HTTPS.
+    expect(validateIOSMedia({ kind: 'audio', url: '', mimeType: 'audio/mpeg' })).toEqual([]);
+    expect(validateIOSMedia({ kind: 'audio', url: '   ', mimeType: 'audio/mpeg' })).toEqual([]);
+    // And a malformed one is still refused, which is what the test above pins.
+    expect(validateIOSMedia({ kind: 'audio', url: 'not-a-url', mimeType: 'audio/mpeg' }))
+      .toContain('Voice messages need an absolute HTTPS file address.');
+  });
+
   test('every supported YouTube address shape normalizes', () => {
     const urls = [
       'https://www.youtube.com/watch?v=XlcK4VYSWZk',

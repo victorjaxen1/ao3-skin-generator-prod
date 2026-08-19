@@ -167,7 +167,10 @@ function sanitizeStoredIOSMedia(value: unknown) {
   const raw = value as Record<string, unknown>;
   const storedUrl = sanitizeStoredHttpsUrl(raw.url);
   const url = storedUrl === LEGACY_W3_AUDIO_SAMPLE ? CORS_AUDIO_SAMPLE : storedUrl;
-  if (!url) return undefined;
+  // An audio card without an address is a real state, not a broken one: the
+  // editor creates it, the generator draws a waveform for it. Dropping the whole
+  // media object here is how a voice note silently vanished on reload.
+  if (!url && raw.kind !== 'audio') return undefined;
   const title = typeof raw.title === 'string' ? { title: sanitizeString(raw.title, 200) } : {};
   if (raw.kind === 'audio' && IOS_AUDIO_MIME_TYPES.includes(String(raw.mimeType) as 'audio/mpeg')) {
     const mimeType = storedUrl === LEGACY_W3_AUDIO_SAMPLE ? 'audio/mpeg' : raw.mimeType as 'audio/mpeg';
@@ -220,7 +223,10 @@ function sanitizeStoredWhatsAppMedia(value: unknown) {
   const raw = value as Record<string, unknown>;
   const storedUrl = sanitizeStoredHttpsUrl(raw.url);
   const url = storedUrl === LEGACY_W3_AUDIO_SAMPLE ? CORS_AUDIO_SAMPLE : storedUrl;
-  if (!url) return undefined;
+  // An audio card without an address is a real state, not a broken one: the
+  // editor creates it, the generator draws a waveform for it. Dropping the whole
+  // media object here is how a voice note silently vanished on reload.
+  if (!url && raw.kind !== 'audio') return undefined;
   if (raw.kind === 'audio' && ['audio/mpeg', 'audio/ogg', 'audio/wav', 'audio/mp4'].includes(String(raw.mimeType))) {
     const mimeType = storedUrl === LEGACY_W3_AUDIO_SAMPLE ? 'audio/mpeg' : raw.mimeType as 'audio/mpeg';
     return { kind: 'audio' as const, url, mimeType, ...(typeof raw.duration === 'string' ? { duration: sanitizeString(raw.duration, 30) } : {}), ...(typeof raw.transcript === 'string' ? { transcript: sanitizeString(raw.transcript, 10_000) } : {}) };

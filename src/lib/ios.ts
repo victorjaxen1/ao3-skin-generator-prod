@@ -153,7 +153,12 @@ export function validateIOSMedia(media: IOSMedia | undefined): string[] {
   if (!media) return [];
   const errors: string[] = [];
   if (media.kind === 'audio') {
-    if (!validHttps(media.url)) errors.push('Voice messages need an absolute HTTPS file address.');
+    // An absent address is a decorative voice note — the editor creates one
+    // (`blankMedia('audio')`) and the generator draws a waveform card with no
+    // player for it. A *malformed* address is still an error: the pinned rule
+    // in ios-model.unit.spec.ts is that `http://` is refused, not that a file
+    // must exist.
+    if (media.url.trim() && !validHttps(media.url)) errors.push('Voice messages need an absolute HTTPS file address.');
     if (!AUDIO_MIME.has(media.mimeType)) errors.push('Choose a supported audio file type.');
     return errors;
   }
