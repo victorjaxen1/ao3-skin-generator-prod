@@ -609,6 +609,35 @@ export default function HomePage() {
     ? (project.template === 'ios' ? 'Family Chat' : 'Work Team')
     : undefined;
 
+  /**
+   * The workspace is exactly one viewport tall and scrolls internally, so the
+   * document must not scroll. When it does, the whole app slides up and leaves
+   * a blank strip under it — the header stays put (sticky) and the export bar
+   * stays put (fixed), so all a reader sees is the editor scrolling away into
+   * nothing. Worst on Google, whose scene is the tallest relative to its
+   * preview column.
+   *
+   * Locking the document rather than the shell is deliberate: the overflow
+   * that starts it is not always inside our tree. Next's route announcer and
+   * the dev error-overlay portal are siblings of #__next, and a few pixels of
+   * either are enough to arm the page scroll. `overflow: hidden` on the shell
+   * cannot clip a sibling; only the document can.
+   *
+   * The lock lives on <html>, not <body>, because BottomSheet already owns
+   * body.overflow while a sheet is open and clears it on close — sharing one
+   * property would have the sheet unlock the page every time it shut.
+   *
+   * Scoped to the workspace: the platform picker returns before this runs its
+   * course, and it is a legitimately tall, scrolling page.
+   */
+  useEffect(() => {
+    if (!isLoaded || showPicker) return;
+    const root = document.documentElement;
+    const previous = root.style.overflow;
+    root.style.overflow = 'hidden';
+    return () => { root.style.overflow = previous; };
+  }, [isLoaded, showPicker]);
+
   const head = (
     <ProductHead
       title="AO3 Work Skin & Fake Screenshot Generator — AO3 SkinGen"
