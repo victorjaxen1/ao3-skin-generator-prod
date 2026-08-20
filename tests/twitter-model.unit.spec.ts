@@ -4,6 +4,7 @@ import { defaultProject, Message, SkinProject } from '../src/lib/schema';
 import {
   calculateTwitterPollPercentages,
   deriveTwitterReplyHandles,
+  generateTweetMetrics,
   getTwitterPollError,
   getTwitterDescendantIds,
   getTwitterSceneMode,
@@ -307,4 +308,25 @@ test('AO3 rendering emits only structured provider or native-media players', () 
   expect(directHtml).toContain('<source src="https://media.example.com/story.webm" type="video/webm">');
   expect(directHtml).toContain('<track src="https://media.example.com/en.vtt" kind="captions" srclang="en" label="English captions" default="default">');
   expect(directHtml).not.toContain('<iframe');
+});
+
+test('automatic tweet metrics are stable, distinct, and ordered like a real footer', () => {
+  const first = generateTweetMetrics({ id: 'm1', content: 'okay so I need to tell you all something' });
+  const again = generateTweetMetrics({ id: 'm1', content: 'okay so I need to tell you all something' });
+  const other = generateTweetMetrics({ id: 'm2', content: 'and I know you are all going to have opinions' });
+
+  // Same post, same numbers — Auto twice must not reshuffle a read scene.
+  expect(again).toEqual(first);
+  // Different posts must not all show the same figures.
+  expect(other.twitterLikes).not.toBe(first.twitterLikes);
+
+  // views > likes > retweets > replies is what makes a fake footer read real.
+  expect(first.twitterViews).toBeGreaterThan(first.twitterLikes);
+  expect(first.twitterLikes).toBeGreaterThanOrEqual(first.twitterRetweets);
+  expect(first.twitterRetweets).toBeGreaterThanOrEqual(first.twitterReplies);
+  expect(first.twitterReplies).toBeGreaterThanOrEqual(0);
+
+  // A reply is seen by fewer people than the post that started the thread.
+  const reply = generateTweetMetrics({ id: 'm1', content: 'okay so I need to tell you all something', parentId: 'root' });
+  expect(reply.twitterViews).toBeLessThan(first.twitterViews);
 });

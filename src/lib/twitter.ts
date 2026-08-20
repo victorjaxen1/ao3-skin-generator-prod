@@ -384,3 +384,45 @@ export function partitionTwitterSceneForExport(
   }
   return partitions;
 }
+
+export interface TweetMetrics {
+  twitterViews: number;
+  twitterLikes: number;
+  twitterRetweets: number;
+  twitterReplies: number;
+}
+
+/**
+ * Plausible engagement numbers for one tweet.
+ *
+ * Seeded from the tweet's own id and text so the same post always rolls the
+ * same figures — clicking Auto twice does not reshuffle a scene the author has
+ * already read, and undo/redo lands where it left. Different posts still get
+ * visibly different numbers, which is the point: four tweets all showing 847
+ * likes reads as a template, not a timeline.
+ *
+ * The ratios are the ones a real timeline shows — views dwarf likes, likes
+ * beat retweets, replies are the rarest — because getting those the wrong way
+ * round (more retweets than views) is what makes a fake screenshot look fake.
+ * Replies in a thread are scaled down: the post people saw is the first one.
+ */
+export function generateTweetMetrics(message: Pick<Message, 'id' | 'content' | 'parentId'>): TweetMetrics {
+  let hash = 2166136261;
+  const seed = `${message.id}|${(message.content || '').trim().toLowerCase()}`;
+  for (let i = 0; i < seed.length; i++) {
+    hash ^= seed.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  const positive = Math.abs(hash);
+  // Three independent-enough draws out of one hash.
+  const draw = (shift: number, span: number) => (positive >>> shift) % span;
+
+  const reach = message.parentId ? 0.18 : 1;
+  const views = Math.max(12, Math.round((4_000 + draw(0, 220_000)) * reach));
+  // 1.4%–4.4% of views like a post; the rest hang off that.
+  const likes = Math.max(1, Math.round(views * (14 + draw(9, 31)) / 1000));
+  const retweets = Math.max(0, Math.round(likes * (90 + draw(17, 220)) / 1000));
+  const replies = Math.max(0, Math.round(likes * (40 + draw(23, 120)) / 1000));
+
+  return { twitterViews: views, twitterLikes: likes, twitterRetweets: retweets, twitterReplies: replies };
+}

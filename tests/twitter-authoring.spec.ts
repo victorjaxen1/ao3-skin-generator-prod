@@ -30,8 +30,15 @@ test('authors a thread, edits its relationship, and switches modes without data 
   await expect(cards.nth(1).getByText('@user', { exact: true })).toBeVisible();
   const timestamp = cards.nth(1).getByRole('textbox', { name: 'Post timestamp' });
   await timestamp.fill('Custom time');
-  await cards.nth(1).getByRole('button', { name: 'Use automatic timestamp' }).click();
+  await cards.nth(1).getByRole('button', { name: 'Autofill post details' }).click();
   await expect(timestamp).not.toHaveValue('Custom time');
+  // Autofill is the whole footer, not just the clock — four zeroes left behind
+  // were the half of a post nobody could guess a plausible number for. Only
+  // views and likes are asserted non-zero: a quiet reply legitimately draws no
+  // retweets, and the ratios are pinned in twitter-model.unit.spec.ts.
+  for (const metric of ['Likes', 'Views']) {
+    await expect(cards.nth(1).getByRole('spinbutton', { name: metric })).not.toHaveValue('0');
+  }
 
   await page.getByRole('button', { name: 'Open settings' }).click();
   await page.getByRole('combobox', { name: 'Scene mode' }).selectOption('timeline');

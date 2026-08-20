@@ -682,6 +682,32 @@ export default function HomePage() {
         {/* Left / mobile-full: compose area */}
         <div className="flex-1 min-h-0 flex flex-col min-w-0">
           <div className="flex-1 overflow-y-auto px-3 py-2 sm:px-4 sm:py-3 pb-4">
+            {/* The query is the one thing on a Google scene that is not a
+                message, and its only control used to be the header title —
+                which reads "Google" until you have typed something, so it
+                looked like the platform's name rather than an editable field.
+                It belongs above the results for the same reason it sits above
+                them on screen. */}
+            {project.template === 'google' && (
+              <div className="mb-3 rounded-xl border border-stone-200 bg-white p-3">
+                <label
+                  htmlFor="google-search-query"
+                  className="block text-[10px] font-medium uppercase tracking-wide text-stone-500"
+                >
+                  Search query
+                </label>
+                <input
+                  id="google-search-query"
+                  value={project.settings.googleQuery || ''}
+                  onChange={(e) => handleUpdateSettings('googleQuery', e.target.value)}
+                  placeholder="What was searched for"
+                  className="mt-1 w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-violet-500"
+                />
+                <p className="mt-1.5 text-[11px] text-stone-400">
+                  Shown in the search box — and what the &ldquo;About N results&rdquo; line is derived from.
+                </p>
+              </div>
+            )}
             <MessageTimeline
               messages={project.messages}
               template={project.template}

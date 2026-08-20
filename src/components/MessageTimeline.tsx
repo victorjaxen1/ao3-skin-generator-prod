@@ -3,7 +3,7 @@ import { Message, SkinProject, SkinSettings } from '../lib/schema';
 import { IdentityTarget, resolveMessageIdentity } from '../lib/identity';
 import { MessageEmojiPicker, MessageEmojiTrigger } from './MessageEmojiPicker';
 import { automaticDeliveryStatus, nextChatTimestamp } from '../lib/messageMetadata';
-import { deriveTwitterReplyHandles, getTwitterDescendantIds, getTwitterSceneMode } from '../lib/twitter';
+import { deriveTwitterReplyHandles, generateTweetMetrics, getTwitterDescendantIds, getTwitterSceneMode } from '../lib/twitter';
 import TwitterPostExtrasEditor from './TwitterPostExtrasEditor';
 import WhatsAppMessageExtrasEditor from './WhatsAppMessageExtrasEditor';
 import IOSMessageExtrasEditor from './IOSMessageExtrasEditor';
@@ -76,6 +76,61 @@ const MessageMenu: React.FC<{
     </div>
   );
 };
+
+const TWITTER_METRIC_ICONS: Record<'replies' | 'retweets' | 'likes' | 'views', React.ReactNode> = {
+  replies: <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />,
+  retweets: <><path d="M17 1l4 4-4 4" /><path d="M3 11V9a4 4 0 0 1 4-4h14" /><path d="M7 23l-4-4 4-4" /><path d="M21 13v2a4 4 0 0 1-4 4H3" /></>,
+  likes: <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21.2l7.8-7.7 1.1-1.1a5.5 5.5 0 0 0 0-7.8z" />,
+  views: <><path d="M3 21h18" /><path d="M6 21V11" /><path d="M12 21V4" /><path d="M18 21V14" /></>,
+};
+
+/**
+ * One tweet metric, with the icon X puts next to it in the post footer.
+ *
+ * The bare number inputs these replace were labelled by `placeholder` alone —
+ * and a placeholder never shows on an input whose value defaults to 0, so in
+ * practice four identical boxes reading "0" sat there and the only way to
+ * learn which was which was to type a number and watch the preview.
+ */
+const TwitterMetricField: React.FC<{
+  metric: 'replies' | 'retweets' | 'likes' | 'views';
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+}> = ({ metric, label, value, onChange }) => (
+  <label
+    title={label}
+    className="flex min-w-0 flex-col rounded-lg border border-stone-200 bg-white px-2 py-1 focus-within:ring-2 focus-within:ring-violet-500"
+  >
+    {/* Label above the input, not beside it. Side by side, a 360px-wide phone
+        left the number about forty pixels and clipped "228" to "22". */}
+    <span className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-stone-500">
+      <svg
+        width="12"
+        height="12"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+        className="flex-shrink-0 text-stone-400"
+      >
+        {TWITTER_METRIC_ICONS[metric]}
+      </svg>
+      {label}
+    </span>
+    <input
+      type="number"
+      min={0}
+      value={value}
+      onChange={event => onChange(parseInt(event.target.value) || 0)}
+      aria-label={label}
+      className="w-full min-w-0 border-0 bg-transparent p-0 text-xs focus:outline-none focus:ring-0"
+    />
+  </label>
+);
 
 /**
  * Would this move leave a reply sitting before the message it answers?
@@ -409,11 +464,25 @@ export const MessageTimeline: React.FC<Props> = ({
                           aria-label="Post timestamp"
                           className="min-w-0 flex-1 border-0 bg-transparent px-3 py-1.5 text-xs focus:ring-2 focus:ring-violet-500"
                         />
+                        {/* Auto fills the whole row, not just the clock. A
+                            post needs a time AND four numbers before it looks
+                            like a post, and the numbers were the half nobody
+                            could guess — so this button used to leave the
+                            author staring at four zeroes. Metrics are skipped
+                            when "Show metrics" is off: the generator emits
+                            none of them, and writing values nothing renders is
+                            how a scene ends up with figures its author never
+                            saw. */}
                         <button
                           type="button"
-                          onClick={() => onUpdateMessage(msg.id, { timestamp: nextChatTimestamp(messages.slice(0, index)) })}
-                          aria-label="Use automatic timestamp"
-                          title="Use the next story time"
+                          onClick={() => onUpdateMessage(msg.id, {
+                            timestamp: nextChatTimestamp(messages.slice(0, index)),
+                            ...(settings.twitterShowMetrics !== false ? generateTweetMetrics(msg) : {}),
+                          })}
+                          aria-label="Autofill post details"
+                          title={settings.twitterShowMetrics !== false
+                            ? 'Fill the next story time and plausible replies, retweets, likes and views'
+                            : 'Use the next story time'}
                           className="border-l border-stone-200 px-2 text-[10px] font-medium text-violet-700 hover:bg-violet-50"
                         >
                           Auto
@@ -472,41 +541,32 @@ export const MessageTimeline: React.FC<Props> = ({
                           appear nowhere. */}
                       {settings.twitterShowMetrics !== false && (
                       <>
-                      <input
-                        type="number"
-                        min={0}
-                        value={msg.twitterLikes ?? 0}
-                        onChange={(e) => onUpdateMessage(msg.id, { twitterLikes: parseInt(e.target.value) || 0 })}
-                        placeholder="Likes"
-                        aria-label="Likes"
-                        className="text-xs bg-white border border-stone-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-violet-500"
-                      />
-                      <input
-                        type="number"
-                        min={0}
-                        value={msg.twitterRetweets ?? 0}
-                        onChange={(e) => onUpdateMessage(msg.id, { twitterRetweets: parseInt(e.target.value) || 0 })}
-                        placeholder="Retweets"
-                        aria-label="Retweets"
-                        className="text-xs bg-white border border-stone-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-violet-500"
-                      />
-                      <input
-                        type="number"
-                        min={0}
+                      {/* Footer order — reply, retweet, like, views — so the
+                          four boxes read in the same order as the row they
+                          feed in the preview. */}
+                      <TwitterMetricField
+                        metric="replies"
+                        label="Replies"
                         value={msg.twitterReplies ?? 0}
-                        onChange={(e) => onUpdateMessage(msg.id, { twitterReplies: parseInt(e.target.value) || 0 })}
-                        placeholder="Replies"
-                        aria-label="Replies"
-                        className="text-xs bg-white border border-stone-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-violet-500"
+                        onChange={value => onUpdateMessage(msg.id, { twitterReplies: value })}
                       />
-                      <input
-                        type="number"
-                        min={0}
+                      <TwitterMetricField
+                        metric="retweets"
+                        label="Retweets"
+                        value={msg.twitterRetweets ?? 0}
+                        onChange={value => onUpdateMessage(msg.id, { twitterRetweets: value })}
+                      />
+                      <TwitterMetricField
+                        metric="likes"
+                        label="Likes"
+                        value={msg.twitterLikes ?? 0}
+                        onChange={value => onUpdateMessage(msg.id, { twitterLikes: value })}
+                      />
+                      <TwitterMetricField
+                        metric="views"
+                        label="Views"
                         value={msg.twitterViews ?? 0}
-                        onChange={(e) => onUpdateMessage(msg.id, { twitterViews: parseInt(e.target.value) || 0 })}
-                        placeholder="Views"
-                        aria-label="Views"
-                        className="text-xs bg-white border border-stone-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-violet-500"
+                        onChange={value => onUpdateMessage(msg.id, { twitterViews: value })}
                       />
                       </>
                       )}
