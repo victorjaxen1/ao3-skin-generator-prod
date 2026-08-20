@@ -57,6 +57,13 @@ test('keeps message-body editing separate from preview identity editing', async 
 test('Google exposes result details but no identity controls', async ({ page }) => {
   await page.goto('/?platform=google');
 
+  // The query used to be reachable only through the header title, which reads
+  // "Google" until something is typed into it — so the one setting the whole
+  // platform is about looked like a label. It is a field in the editor now.
+  const query = page.getByRole('textbox', { name: 'Search query' });
+  await query.fill('whose jacket is in the wren maddox soundcheck video');
+  await expect(preview(page, '.search-text')).toHaveText('whose jacket is in the wren maddox soundcheck video');
+
   await expect(page.getByRole('button', { name: 'Add result details' })).toBeVisible();
   await expect(page.getByRole('button', { name: /Add person|Add account|Open people|Open accounts|character library/i })).toHaveCount(0);
   await expect(page.getByRole('combobox', { name: 'Posting as' })).toHaveCount(0);
@@ -76,10 +83,19 @@ test('mobile chat keeps identity, message options, send, and attachment-only mes
   await page.getByRole('button', { name: 'Close' }).click();
   await expect(page.getByRole('button', { name: 'Edit identity for Casey' })).toBeVisible();
 
+  // Attachments are behind a kind chooser now — none / images / link / audio /
+  // video — so an image address only exists once "images" is the chosen kind.
   await page.getByRole('button', { name: 'Message options' }).click();
-  await page.getByLabel('Image address for this message').fill('/assets/alex-avatar.png');
+  await page.getByRole('button', { name: 'images', exact: true }).click();
+  await page.getByLabel('Image 1 address').fill('/assets/alex-avatar.png');
+  // An undescribed image is a validation error, not a sendable message — the
+  // work skin has to survive with images off, so Send stays disabled until the
+  // picture says what it is.
+  await page.getByLabel('Image 1 description').fill('Alex smiling at the camera');
   await page.getByRole('button', { name: 'Send message' }).click();
-  const attachment = preview(page, '.message-image').last();
+  // iMessage photos are `.ios-image`; `.message-image` is the older single-
+  // image bubble the other chat platforms still render.
+  const attachment = preview(page, '.ios-image').last();
   await expect(attachment).toHaveAttribute('src', '/assets/alex-avatar.png');
   await expect(attachment).toBeVisible();
 });
@@ -113,8 +129,10 @@ test('iMessage group members stay distinct and old messages follow a rename', as
   }
 
   // Anchor each assertion to its own message rather than to list position.
+  // iMessage names its sender `.ios-group-sender`; `.group-sender` is
+  // WhatsApp's, and the two carry different type sizes and display modes.
   const senderOf = (text: string) =>
-    page.locator('#workskin:visible [data-message-id]', { hasText: text }).locator('.group-sender');
+    page.locator('#workskin:visible [data-message-id]', { hasText: text }).locator('.ios-group-sender');
   await expect(senderOf('robin speaks')).toHaveText('Robin Park');
   await expect(senderOf('devi speaks')).toHaveText('Devi Rao');
 
