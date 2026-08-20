@@ -289,398 +289,413 @@ async function renderChunk(
   mount.appendChild(captureArea);
   document.body.appendChild(mount);
 
-  // Twitter html2canvas layout fixes
-  if (project.template === 'twitter') {
-    // The verified badges are drawn in CSS now — a character centred in a blue
-    // circle — so that a published fic stops fetching them (BACKLOG 5a). The
-    // metric icons went further and became plain characters, which need
-    // nothing here: html2canvas rasterises ordinary inline text correctly, and
-    // it is only the centred-in-a-box case that it cannot do.
-    //
-    // The PNG puts the badge image back, and only the PNG. html2canvas measures
-    // boxes with the real layout engine but draws text itself, and it lands a
-    // glyph well below a small circle: the tick rasterised as white-on-white
-    // outside a plain blue disc, and the heart came out clipped at the bottom
-    // edge. Line-height centring and padding centring both failed the same
-    // way, so this is not a value to tune.
-    //
-    // Nothing is lost by swapping. The reason to drop a chrome image is that a
-    // reader fetches it from our CDN every time they open the chapter, forever
-    // — a PNG is rendered once, on the author's own machine, from assets the
-    // app already ships. This is the same trade `useCssBubbleTails` makes in
-    // workSkin.ts, in the other direction: SVG for the raster, CSS for AO3.
-    const drawnGlyphs: [selector: string, src: string, size: number][] = [
-      ['.tweet .verified-badge', PLATFORM_ASSETS.twitter.verifiedBadge, 18],
-      ['.tweet .quote-verified-badge', PLATFORM_ASSETS.twitter.verifiedBadge, 16],
-    ];
-    for (const [selector, src, size] of drawnGlyphs) {
-      clone.querySelectorAll(selector).forEach(el => {
-        const img = document.createElement('img');
-        img.src = src;
-        img.alt = '';
-        img.className = el.className;
-        // Inline, so it beats the drawn-badge rules the class still carries —
-        // otherwise the image sits on a blue disc inflated by its padding.
-        // Only what an image must not inherit is overridden: display and
-        // vertical-align are left to the class, which is what the old <img>
-        // used, so the raster lands on the same pixels.
-        img.style.cssText =
-          `width:${size}px;height:${size}px;background:none;padding:0;line-height:normal`;
-        el.replaceWith(img);
+  // Everything below runs with a full-size copy of the scene parked on the
+  // page, and every step of it can throw: two of these awaits talk to remote
+  // image hosts, and the third is html2canvas. The removal used to sit after
+  // the capture as a plain statement, so any of those failures abandoned the
+  // copy in the document for the rest of the session — carrying a <style>
+  // whose rules are written `#workskin ...`, global rather than scoped, and
+  // sitting after #__next where a tie in the cascade goes to whoever comes
+  // last. The live preview then kept the CSS from the moment of the failure
+  // and quietly ignored later settings changes until a reload.
+  //
+  // `finally` is the whole fix: the copy comes down whether the capture
+  // succeeded or blew up. `remove()` rather than `removeChild(mount)` so the
+  // cleanup cannot itself throw if the node is somehow already detached.
+  try {
+    // Twitter html2canvas layout fixes
+    if (project.template === 'twitter') {
+      // The verified badges are drawn in CSS now — a character centred in a blue
+      // circle — so that a published fic stops fetching them (BACKLOG 5a). The
+      // metric icons went further and became plain characters, which need
+      // nothing here: html2canvas rasterises ordinary inline text correctly, and
+      // it is only the centred-in-a-box case that it cannot do.
+      //
+      // The PNG puts the badge image back, and only the PNG. html2canvas measures
+      // boxes with the real layout engine but draws text itself, and it lands a
+      // glyph well below a small circle: the tick rasterised as white-on-white
+      // outside a plain blue disc, and the heart came out clipped at the bottom
+      // edge. Line-height centring and padding centring both failed the same
+      // way, so this is not a value to tune.
+      //
+      // Nothing is lost by swapping. The reason to drop a chrome image is that a
+      // reader fetches it from our CDN every time they open the chapter, forever
+      // — a PNG is rendered once, on the author's own machine, from assets the
+      // app already ships. This is the same trade `useCssBubbleTails` makes in
+      // workSkin.ts, in the other direction: SVG for the raster, CSS for AO3.
+      const drawnGlyphs: [selector: string, src: string, size: number][] = [
+        ['.tweet .verified-badge', PLATFORM_ASSETS.twitter.verifiedBadge, 18],
+        ['.tweet .quote-verified-badge', PLATFORM_ASSETS.twitter.verifiedBadge, 16],
+      ];
+      for (const [selector, src, size] of drawnGlyphs) {
+        clone.querySelectorAll(selector).forEach(el => {
+          const img = document.createElement('img');
+          img.src = src;
+          img.alt = '';
+          img.className = el.className;
+          // Inline, so it beats the drawn-badge rules the class still carries —
+          // otherwise the image sits on a blue disc inflated by its padding.
+          // Only what an image must not inherit is overridden: display and
+          // vertical-align are left to the class, which is what the old <img>
+          // used, so the raster lands on the same pixels.
+          img.style.cssText =
+            `width:${size}px;height:${size}px;background:none;padding:0;line-height:normal`;
+          el.replaceWith(img);
+        });
+      }
+
+      clone.querySelectorAll('.tweet').forEach(el => {
+        (el as HTMLElement).style.cssText += ';position:relative;box-sizing:border-box;width:100%;max-width:100%';
+      });
+      clone.querySelectorAll('.tweet img.avatar').forEach(el => {
+        (el as HTMLElement).style.cssText +=
+          ';width:40px;height:40px;min-width:40px;min-height:40px;max-width:40px;max-height:40px;border-radius:50%;object-fit:cover;flex-shrink:0;aspect-ratio:1/1';
+      });
+      clone.querySelectorAll('.tweet .name-line').forEach(el => {
+        (el as HTMLElement).style.cssText += ';display:flex;align-items:center;gap:4px;flex-wrap:nowrap';
+      });
+      // THE NAME LINE WAS BEING CUT IN HALF IN EVERY PNG THIS APP HAS EXPORTED.
+      // `.head` is only 20px tall — one line box — and html2canvas draws text a
+      // few pixels lower than the browser does, so `overflow:hidden` sliced the
+      // bottom off "Taylor Swift", the handle and "Follow" alike. It looked like
+      // a font problem and it was a clipping problem.
+      //
+      // Only the raster needs this. `.head{overflow:hidden}` is load-bearing in
+      // the stylesheet — it is the block formatting context that sits beside the
+      // avatar float, which is precisely why the float layout survives AO3's
+      // paragraph injection (WORK-SKIN §12d) — so it must not be touched there.
+      // In the clone it is redundant anyway: `.name-line` is forced to
+      // `display:flex` above, and a flex container is already a BFC, so the head
+      // still sits beside the float without it. The outer
+      // `.tweet-header{overflow:hidden}` still contains the float; removing THAT
+      // one lets the avatar overlap the body text, which is what the first
+      // attempt at this did.
+      clone.querySelectorAll('.tweet .head').forEach(el => {
+        (el as HTMLElement).style.cssText += ';overflow:visible';
+      });
+      // A header without an avatar collapses to the same 20px line box as
+      // `.head`. The outer header still clips overflow to contain the optional
+      // avatar float, so html2canvas's lower text paint was merely moved from one
+      // clipping edge to another by the fix above. Reserve five raster-only
+      // pixels inside that outer edge. Reduce its margin by the same amount so
+      // the tweet body keeps its browser/AO3 position.
+      clone.querySelectorAll('.tweet .tweet-header').forEach(el => {
+        (el as HTMLElement).style.cssText += ';padding-bottom:5px;margin-bottom:7px';
+      });
+      // html2canvas also paints a wrapped body line about 6px below Chromium's
+      // measured line box. A following rich block therefore began across the
+      // lower half of that last line even though Preview had the correct 0.75em
+      // margin. Move only raster rich blocks down by eight CSS pixels and reserve
+      // the same amount in flow so consecutive cards cannot overlap. Verified at
+      // both 1× and 2× by the real-download raster test.
+      clone
+        .querySelectorAll('.tweet .twitter-media-grid,.tweet .twitter-video-card,.tweet .quote,.tweet .twitter-poll')
+        .forEach(el => {
+          (el as HTMLElement).style.cssText += ';position:relative;top:8px;margin-bottom:8px';
+        });
+      clone
+        .querySelectorAll('.tweet .name,.tweet .handle,.tweet .follow-dot,.tweet .follow-btn')
+        .forEach(el => {
+          (el as HTMLElement).style.cssText += ';line-height:20px;white-space:nowrap;flex-shrink:0';
+        });
+      clone.querySelectorAll('.tweet .verified-container').forEach(el => {
+        (el as HTMLElement).style.cssText +=
+          ';display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;position:relative;top:7px';
+      });
+      clone.querySelectorAll('.tweet .verified-badge').forEach(el => {
+        (el as HTMLElement).style.cssText += ';width:18px;height:18px;display:block';
+      });
+      // Compact only. This nudges the logo down to sit on the name line's
+      // baseline, and it asserts `position:relative` — which as an INLINE style
+      // beats the stylesheet, so applying it to the expanded card's logo would
+      // drop it out of its absolute corner and back into flow in the PNG alone.
+      // The expanded logo needs no compensation: it is positioned from the card,
+      // not aligned against a line box.
+      clone.querySelectorAll('.tweet:not(.expanded) .twitter-logo').forEach(el => {
+        (el as HTMLElement).style.cssText +=
+          ';width:20px;height:20px;display:block;flex-shrink:0;position:relative;top:7px';
+      });
+      clone.querySelectorAll('.tweet .metrics').forEach(el => {
+        (el as HTMLElement).style.cssText += ';display:flex;align-items:center;gap:12px';
+      });
+      clone.querySelectorAll('.tweet .metric').forEach(el => {
+        (el as HTMLElement).style.cssText += ';display:inline-flex;align-items:center;gap:6px';
+      });
+      clone.querySelectorAll('.tweet .metric-icon').forEach(el => {
+        (el as HTMLElement).style.cssText += ';width:20px;height:20px;display:block;flex-shrink:0';
+      });
+      // The glyph icons take the same lift as the counts beside them. That -6px
+      // is an html2canvas nudge with no equivalent in the stylesheet, so a text
+      // icon that does not get it lands 6px below its own number — which is
+      // exactly how the first glyph raster came out.
+      clone.querySelectorAll('.tweet .glyph-icon').forEach(el => {
+        (el as HTMLElement).style.cssText += ';position:relative;top:-6px';
+      });
+      clone.querySelectorAll('.tweet .metric-count').forEach(el => {
+        (el as HTMLElement).style.cssText +=
+          ';font-size:14px;line-height:20px;position:relative;top:-6px';
       });
     }
-
-    clone.querySelectorAll('.tweet').forEach(el => {
-      (el as HTMLElement).style.cssText += ';position:relative;box-sizing:border-box;width:100%;max-width:100%';
-    });
-    clone.querySelectorAll('.tweet img.avatar').forEach(el => {
-      (el as HTMLElement).style.cssText +=
-        ';width:40px;height:40px;min-width:40px;min-height:40px;max-width:40px;max-height:40px;border-radius:50%;object-fit:cover;flex-shrink:0;aspect-ratio:1/1';
-    });
-    clone.querySelectorAll('.tweet .name-line').forEach(el => {
-      (el as HTMLElement).style.cssText += ';display:flex;align-items:center;gap:4px;flex-wrap:nowrap';
-    });
-    // THE NAME LINE WAS BEING CUT IN HALF IN EVERY PNG THIS APP HAS EXPORTED.
-    // `.head` is only 20px tall — one line box — and html2canvas draws text a
-    // few pixels lower than the browser does, so `overflow:hidden` sliced the
-    // bottom off "Taylor Swift", the handle and "Follow" alike. It looked like
-    // a font problem and it was a clipping problem.
-    //
-    // Only the raster needs this. `.head{overflow:hidden}` is load-bearing in
-    // the stylesheet — it is the block formatting context that sits beside the
-    // avatar float, which is precisely why the float layout survives AO3's
-    // paragraph injection (WORK-SKIN §12d) — so it must not be touched there.
-    // In the clone it is redundant anyway: `.name-line` is forced to
-    // `display:flex` above, and a flex container is already a BFC, so the head
-    // still sits beside the float without it. The outer
-    // `.tweet-header{overflow:hidden}` still contains the float; removing THAT
-    // one lets the avatar overlap the body text, which is what the first
-    // attempt at this did.
-    clone.querySelectorAll('.tweet .head').forEach(el => {
-      (el as HTMLElement).style.cssText += ';overflow:visible';
-    });
-    // A header without an avatar collapses to the same 20px line box as
-    // `.head`. The outer header still clips overflow to contain the optional
-    // avatar float, so html2canvas's lower text paint was merely moved from one
-    // clipping edge to another by the fix above. Reserve five raster-only
-    // pixels inside that outer edge. Reduce its margin by the same amount so
-    // the tweet body keeps its browser/AO3 position.
-    clone.querySelectorAll('.tweet .tweet-header').forEach(el => {
-      (el as HTMLElement).style.cssText += ';padding-bottom:5px;margin-bottom:7px';
-    });
-    // html2canvas also paints a wrapped body line about 6px below Chromium's
-    // measured line box. A following rich block therefore began across the
-    // lower half of that last line even though Preview had the correct 0.75em
-    // margin. Move only raster rich blocks down by eight CSS pixels and reserve
-    // the same amount in flow so consecutive cards cannot overlap. Verified at
-    // both 1× and 2× by the real-download raster test.
-    clone
-      .querySelectorAll('.tweet .twitter-media-grid,.tweet .twitter-video-card,.tweet .quote,.tweet .twitter-poll')
-      .forEach(el => {
-        (el as HTMLElement).style.cssText += ';position:relative;top:8px;margin-bottom:8px';
-      });
-    clone
-      .querySelectorAll('.tweet .name,.tweet .handle,.tweet .follow-dot,.tweet .follow-btn')
-      .forEach(el => {
-        (el as HTMLElement).style.cssText += ';line-height:20px;white-space:nowrap;flex-shrink:0';
-      });
-    clone.querySelectorAll('.tweet .verified-container').forEach(el => {
-      (el as HTMLElement).style.cssText +=
-        ';display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;position:relative;top:7px';
-    });
-    clone.querySelectorAll('.tweet .verified-badge').forEach(el => {
-      (el as HTMLElement).style.cssText += ';width:18px;height:18px;display:block';
-    });
-    // Compact only. This nudges the logo down to sit on the name line's
-    // baseline, and it asserts `position:relative` — which as an INLINE style
-    // beats the stylesheet, so applying it to the expanded card's logo would
-    // drop it out of its absolute corner and back into flow in the PNG alone.
-    // The expanded logo needs no compensation: it is positioned from the card,
-    // not aligned against a line box.
-    clone.querySelectorAll('.tweet:not(.expanded) .twitter-logo').forEach(el => {
-      (el as HTMLElement).style.cssText +=
-        ';width:20px;height:20px;display:block;flex-shrink:0;position:relative;top:7px';
-    });
-    clone.querySelectorAll('.tweet .metrics').forEach(el => {
-      (el as HTMLElement).style.cssText += ';display:flex;align-items:center;gap:12px';
-    });
-    clone.querySelectorAll('.tweet .metric').forEach(el => {
-      (el as HTMLElement).style.cssText += ';display:inline-flex;align-items:center;gap:6px';
-    });
-    clone.querySelectorAll('.tweet .metric-icon').forEach(el => {
-      (el as HTMLElement).style.cssText += ';width:20px;height:20px;display:block;flex-shrink:0';
-    });
-    // The glyph icons take the same lift as the counts beside them. That -6px
-    // is an html2canvas nudge with no equivalent in the stylesheet, so a text
-    // icon that does not get it lands 6px below its own number — which is
-    // exactly how the first glyph raster came out.
-    clone.querySelectorAll('.tweet .glyph-icon').forEach(el => {
-      (el as HTMLElement).style.cssText += ';position:relative;top:-6px';
-    });
-    clone.querySelectorAll('.tweet .metric-count').forEach(el => {
-      (el as HTMLElement).style.cssText +=
-        ';font-size:14px;line-height:20px;position:relative;top:-6px';
-    });
-  }
-  const chatMessages = clone.querySelector('.chat-messages') as HTMLElement | null;
-  if (chatMessages) {
-    chatMessages.style.height = 'auto';
-    chatMessages.style.maxHeight = 'none';
-    chatMessages.style.overflow = 'visible';
-  }
-
-  // html2canvas paints native colour emoji lower than Chromium's measured line
-  // box. Give emoji-only chat content a real layout reserve so its timestamp
-  // and the following message cannot overlap the painted glyph in PNG output.
-  // This is export-only: browsers lay out the live iMessage/WhatsApp preview
-  // correctly without the compensation.
-  if (project.template === 'ios' || project.template === 'android') {
-    clone.querySelectorAll('dd.bubble.emoji1 .emoji-content').forEach(el => {
-      (el as HTMLElement).style.cssText += ';margin-bottom:32px';
-    });
-    clone.querySelectorAll('dd.bubble.emoji2 .emoji-content').forEach(el => {
-      (el as HTMLElement).style.cssText += ';margin-bottom:14px';
-    });
-
-    // A rich block painted across the last line of the text above it.
-    //
-    // "This is what you are driving into." came out of Save PNG sliced through
-    // the middle of its second line, with the photo grid sitting on top of the
-    // lower half. The preview and the archive are both correct, so only an
-    // exported picture could show it.
-    //
-    // This is the *same defect* already fixed for Twitter a few blocks above:
-    // html2canvas paints a wrapped line about six pixels below the line box
-    // Chromium measured, so a following block starts inside it. Twitter's
-    // media grid, video card, quote and poll were compensated at the time;
-    // iMessage and WhatsApp have had the same rich blocks since the 13-14
-    // August rebuilds and were never given the same treatment.
-    //
-    // Same remedy, for the same reason it was chosen there: move the raster
-    // block down eight CSS pixels and reserve the eight back in flow, so two
-    // consecutive cards cannot be pushed into each other. Export-only —
-    // changing the stylesheet would move the preview and the archive, and
-    // neither of those is wrong.
-    clone
-      .querySelectorAll([
-        '.ios-images', '.ios-link-preview', '.ios-audio-card', '.ios-video-card',
-        '.wa-images', '.wa-link-preview', '.wa-media',
-      ].join(','))
-      .forEach(el => {
-        (el as HTMLElement).style.cssText += ';position:relative;top:8px;margin-bottom:8px';
-      });
-  }
-
-  // The iMessage header name, which no test in this repo could see.
-  //
-  // The live preview and the AO3 render both centre it correctly. html2canvas
-  // does not: with `align-items:center` the avatar and the info glyph land in
-  // the right place and only the two-line name block is pushed down, so a group
-  // name sat on the bottom border with its participant list falling outside the
-  // band. Found by exporting a PNG and looking at it, which is the only thing
-  // that finds this class of defect.
-  //
-  // Two compensations, neither of them a tuned constant:
-  //
-  //  1. top-align the block, because `align-items:center` is the specific thing
-  //     being mishandled;
-  //  2. give the band extra bottom padding, because html2canvas still paints
-  //     text a little below where Chromium measured it — the same offset that
-  //     makes emoji sit low a few blocks above. Room cannot clip, whatever that
-  //     distance turns out to be on a given font or zoom, and a marginally
-  //     taller header in a raster costs nothing.
-  //
-  // Export-only, deliberately: changing the stylesheet would move the preview
-  // and the archive, neither of which is wrong.
-  if (project.template === 'ios') {
-    const header = clone.querySelector('.ios-header') as HTMLElement | null;
-    const wrapper = clone.querySelector('.ios-header-name-wrapper') as HTMLElement | null;
-    if (header && wrapper) {
-      header.style.overflow = 'visible';
-      header.style.alignItems = 'flex-start';
-      header.style.paddingBottom = '10px';
-      wrapper.style.marginTop = '0';
-      wrapper.style.overflow = 'visible';
-      wrapper.style.height = 'auto';
-      // Roomier line boxes, which is where the clipping actually happens: the
-      // glyphs are painted low *within their own line*, so widening the band
-      // alone moved the border and left the text cut in the same place.
-      clone.querySelectorAll('.ios-header-name, .ios-header-subtitle').forEach(el => {
-        (el as HTMLElement).style.cssText += ';line-height:2;overflow:visible';
-      });
+    const chatMessages = clone.querySelector('.chat-messages') as HTMLElement | null;
+    if (chatMessages) {
+      chatMessages.style.height = 'auto';
+      chatMessages.style.maxHeight = 'none';
+      chatMessages.style.overflow = 'visible';
     }
-  }
 
-  // Google html2canvas layout fixes
-  if (project.template === 'google') {
-    // The same bug as the tweet name line, in the one place Google clips: the
-    // search query lost the bottom of its descenders in every PNG. `.search-text`
-    // is `overflow:hidden` so `text-overflow:ellipsis` can truncate a long
-    // query, and overflow clips in BOTH directions — so html2canvas drawing
-    // text a few pixels low means the glyph bottoms fall outside the box.
-    //
-    // Padding rather than `overflow:visible`, because the ellipsis has to keep
-    // working: a long query would otherwise run out of the rounded bar in the
-    // raster instead of truncating. Overflow clips at the padding edge, so
-    // 5px of padding-bottom gives the descenders room without changing what is
-    // shown. The stylesheet is untouched — the browser and AO3 never had this
-    // problem.
-    clone.querySelectorAll('.search-text').forEach(el => {
-      (el as HTMLElement).style.cssText += ';padding-bottom:5px';
-    });
-  }
+    // html2canvas paints native colour emoji lower than Chromium's measured line
+    // box. Give emoji-only chat content a real layout reserve so its timestamp
+    // and the following message cannot overlap the painted glyph in PNG output.
+    // This is export-only: browsers lay out the live iMessage/WhatsApp preview
+    // correctly without the compensation.
+    if (project.template === 'ios' || project.template === 'android') {
+      clone.querySelectorAll('dd.bubble.emoji1 .emoji-content').forEach(el => {
+        (el as HTMLElement).style.cssText += ';margin-bottom:32px';
+      });
+      clone.querySelectorAll('dd.bubble.emoji2 .emoji-content').forEach(el => {
+        (el as HTMLElement).style.cssText += ';margin-bottom:14px';
+      });
 
-  // Android html2canvas layout fixes
-  if (project.template === 'android') {
-    // The old renderer positioned header identity overlays absolutely against
-    // a background screenshot. WhatsApp v6 draws the entire header with flex;
-    // carrying those raster-only coordinates forward removed the avatar/name
-    // from the PNG. Leave the shared stylesheet in charge of header geometry.
-    clone.querySelectorAll('.android-header').forEach(el => {
-      (el as HTMLElement).style.cssText += ';position:relative';
-    });
-    clone.querySelectorAll('dd.bubble.out,dd.bubble.in').forEach(el => {
-      (el as HTMLElement).style.cssText +=
-        ';border-radius:8px;padding:7px 10px;display:inline-block;max-width:280px;box-shadow:0 1px 2px rgba(0,0,0,0.1)';
-    });
-    // NOTE: that `padding` shorthand is an INLINE style, so it beats anything
-    // `buildAndroidCSS` says about a bubble's padding. It briefly mattered: an
-    // earlier reaction chip reserved space INSIDE the bubble with padding, and
-    // this line silently deleted the reserve in the export only. The chip now
-    // sits entirely below the bubble and needs nothing from the bubble's own
-    // box, so there is nothing to re-assert — but if you ever add padding to a
-    // bubble in the stylesheet, it will not survive this line.
-    //
-    // Emoji-only bubbles are the exception. html2canvas paints a large colour
-    // emoji below the line box Chromium measured for it. Without an explicit
-    // lower reserve, the timestamp is drawn through the glyph and the next row
-    // begins against (or over) the emoji. The shared chat correction above
-    // supplies that reserve. Here we only re-apply the native transparent box
-    // after Android's generic inline bubble override.
-    clone.querySelectorAll('dd.bubble.emoji-only').forEach(el => {
-      (el as HTMLElement).style.cssText +=
-        ';background:transparent;box-shadow:none;border-radius:0;padding:2px 3px;overflow:visible';
-    });
-    clone.querySelectorAll('.row.out').forEach(el => {
-      (el as HTMLElement).style.cssText += ';display:flex;justify-content:flex-end';
-    });
-    clone.querySelectorAll('.row.in').forEach(el => {
-      (el as HTMLElement).style.cssText += ';display:flex;justify-content:flex-start';
-    });
-    // html2canvas paints the last text line lower than Chromium measures it.
-    // Give nested cards a few extra pixels before their first painted row so
-    // captions never collide with an image/link/media card in the real PNG.
-    clone.querySelectorAll('.wa-images,.wa-link-preview,.wa-media').forEach(el => {
-      (el as HTMLElement).style.cssText += ';margin-top:12px';
-    });
+      // A rich block painted across the last line of the text above it.
+      //
+      // "This is what you are driving into." came out of Save PNG sliced through
+      // the middle of its second line, with the photo grid sitting on top of the
+      // lower half. The preview and the archive are both correct, so only an
+      // exported picture could show it.
+      //
+      // This is the *same defect* already fixed for Twitter a few blocks above:
+      // html2canvas paints a wrapped line about six pixels below the line box
+      // Chromium measured, so a following block starts inside it. Twitter's
+      // media grid, video card, quote and poll were compensated at the time;
+      // iMessage and WhatsApp have had the same rich blocks since the 13-14
+      // August rebuilds and were never given the same treatment.
+      //
+      // Same remedy, for the same reason it was chosen there: move the raster
+      // block down eight CSS pixels and reserve the eight back in flow, so two
+      // consecutive cards cannot be pushed into each other. Export-only —
+      // changing the stylesheet would move the preview and the archive, and
+      // neither of those is wrong.
+      clone
+        .querySelectorAll([
+          '.ios-images', '.ios-link-preview', '.ios-audio-card', '.ios-video-card',
+          '.wa-images', '.wa-link-preview', '.wa-media',
+        ].join(','))
+        .forEach(el => {
+          (el as HTMLElement).style.cssText += ';position:relative;top:8px;margin-bottom:8px';
+        });
+    }
 
-    // The WhatsApp group header, which is the iMessage header defect a few
-    // blocks below wearing different class names. "Squad Goals" lost its
-    // descenders and the participant list under it was sliced horizontally by
-    // the band's bottom edge. `.android-header` and `.android-header-name-
-    // wrapper` are both `overflow:hidden`, and html2canvas paints text a little
-    // below the line box Chromium measured, so the overflow is cut rather than
-    // shown. Same structure, same bug — it simply never received the same
-    // treatment when iMessage did.
+    // The iMessage header name, which no test in this repo could see.
     //
-    // Deliberately NOT the iMessage remedy of `overflow:visible` on the text
-    // itself. The name and subtitle here are `white-space:nowrap` with
-    // `text-overflow:ellipsis`, and `overflow:visible` would stop a long group
-    // name truncating and run it out of the header instead. This is the
-    // `.search-text` case from the Google block: overflow clips at the PADDING
-    // edge, so padding gives the descenders room while the ellipsis keeps
-    // working. The wrapper takes `overflow:visible` because it carries no
-    // ellipsis of its own — its children each truncate themselves.
+    // The live preview and the AO3 render both centre it correctly. html2canvas
+    // does not: with `align-items:center` the avatar and the info glyph land in
+    // the right place and only the two-line name block is pushed down, so a group
+    // name sat on the bottom border with its participant list falling outside the
+    // band. Found by exporting a PNG and looking at it, which is the only thing
+    // that finds this class of defect.
     //
-    // Export-only, for the usual reason: the preview and the archive both draw
-    // this header correctly.
-    const androidHeader = clone.querySelector('.android-header') as HTMLElement | null;
-    if (androidHeader) {
-      androidHeader.style.overflow = 'visible';
-      androidHeader.style.paddingBottom = '10px';
-      const wrapper = clone.querySelector('.android-header-name-wrapper') as HTMLElement | null;
-      if (wrapper) {
+    // Two compensations, neither of them a tuned constant:
+    //
+    //  1. top-align the block, because `align-items:center` is the specific thing
+    //     being mishandled;
+    //  2. give the band extra bottom padding, because html2canvas still paints
+    //     text a little below where Chromium measured it — the same offset that
+    //     makes emoji sit low a few blocks above. Room cannot clip, whatever that
+    //     distance turns out to be on a given font or zoom, and a marginally
+    //     taller header in a raster costs nothing.
+    //
+    // Export-only, deliberately: changing the stylesheet would move the preview
+    // and the archive, neither of which is wrong.
+    if (project.template === 'ios') {
+      const header = clone.querySelector('.ios-header') as HTMLElement | null;
+      const wrapper = clone.querySelector('.ios-header-name-wrapper') as HTMLElement | null;
+      if (header && wrapper) {
+        header.style.overflow = 'visible';
+        header.style.alignItems = 'flex-start';
+        header.style.paddingBottom = '10px';
+        wrapper.style.marginTop = '0';
         wrapper.style.overflow = 'visible';
         wrapper.style.height = 'auto';
+        // Roomier line boxes, which is where the clipping actually happens: the
+        // glyphs are painted low *within their own line*, so widening the band
+        // alone moved the border and left the text cut in the same place.
+        clone.querySelectorAll('.ios-header-name, .ios-header-subtitle').forEach(el => {
+          (el as HTMLElement).style.cssText += ';line-height:2;overflow:visible';
+        });
       }
-      clone.querySelectorAll('.android-header-name, .android-header-subtitle').forEach(el => {
-        (el as HTMLElement).style.cssText += ';line-height:1.7;padding-bottom:3px';
+    }
+
+    // Google html2canvas layout fixes
+    if (project.template === 'google') {
+      // The same bug as the tweet name line, in the one place Google clips: the
+      // search query lost the bottom of its descenders in every PNG. `.search-text`
+      // is `overflow:hidden` so `text-overflow:ellipsis` can truncate a long
+      // query, and overflow clips in BOTH directions — so html2canvas drawing
+      // text a few pixels low means the glyph bottoms fall outside the box.
+      //
+      // Padding rather than `overflow:visible`, because the ellipsis has to keep
+      // working: a long query would otherwise run out of the rounded bar in the
+      // raster instead of truncating. Overflow clips at the padding edge, so
+      // 5px of padding-bottom gives the descenders room without changing what is
+      // shown. The stylesheet is untouched — the browser and AO3 never had this
+      // problem.
+      clone.querySelectorAll('.search-text').forEach(el => {
+        (el as HTMLElement).style.cssText += ';padding-bottom:5px';
       });
     }
 
-    // The reply quote card, cut through the middle of its quoted line.
-    //
-    // `.wa-reply span` is `max-height:3.8em;overflow:hidden`. It is tempting to
-    // read that as a clamp landing mid-line, but the arithmetic rules it out:
-    // the span's line-height is 1.4 and the reproduction's quote is ONE line,
-    // so it occupies ~1.4em against a 3.8em cap and the clamp is never reached.
-    //
-    // The clipper is `overflow:hidden` on its own. The span's height is auto —
-    // exactly one line box — and html2canvas paints the glyphs a little below
-    // the line box Chromium measured, so the bottoms fall outside the span and
-    // are cut. That is the same mechanism as the header above, not a clamp
-    // problem, and it bites a one-line quote as readily as a long one.
-    //
-    // So `overflow:visible` is the fix. `max-height:none` goes with it because
-    // a clamp with visible overflow would spill instead of clipping, and
-    // because the clamp is redundant anyway: the excerpt is already capped at
-    // 180 characters where it is built. iMessage reached the same conclusion
-    // and dropped its own `max-height` in the stylesheet — see the note above
-    // `blockquote.ios-reply span` in generator.ts.
-    clone.querySelectorAll('.wa-reply span').forEach(el => {
-      (el as HTMLElement).style.cssText += ';max-height:none;overflow:visible';
+    // Android html2canvas layout fixes
+    if (project.template === 'android') {
+      // The old renderer positioned header identity overlays absolutely against
+      // a background screenshot. WhatsApp v6 draws the entire header with flex;
+      // carrying those raster-only coordinates forward removed the avatar/name
+      // from the PNG. Leave the shared stylesheet in charge of header geometry.
+      clone.querySelectorAll('.android-header').forEach(el => {
+        (el as HTMLElement).style.cssText += ';position:relative';
+      });
+      clone.querySelectorAll('dd.bubble.out,dd.bubble.in').forEach(el => {
+        (el as HTMLElement).style.cssText +=
+          ';border-radius:8px;padding:7px 10px;display:inline-block;max-width:280px;box-shadow:0 1px 2px rgba(0,0,0,0.1)';
+      });
+      // NOTE: that `padding` shorthand is an INLINE style, so it beats anything
+      // `buildAndroidCSS` says about a bubble's padding. It briefly mattered: an
+      // earlier reaction chip reserved space INSIDE the bubble with padding, and
+      // this line silently deleted the reserve in the export only. The chip now
+      // sits entirely below the bubble and needs nothing from the bubble's own
+      // box, so there is nothing to re-assert — but if you ever add padding to a
+      // bubble in the stylesheet, it will not survive this line.
+      //
+      // Emoji-only bubbles are the exception. html2canvas paints a large colour
+      // emoji below the line box Chromium measured for it. Without an explicit
+      // lower reserve, the timestamp is drawn through the glyph and the next row
+      // begins against (or over) the emoji. The shared chat correction above
+      // supplies that reserve. Here we only re-apply the native transparent box
+      // after Android's generic inline bubble override.
+      clone.querySelectorAll('dd.bubble.emoji-only').forEach(el => {
+        (el as HTMLElement).style.cssText +=
+          ';background:transparent;box-shadow:none;border-radius:0;padding:2px 3px;overflow:visible';
+      });
+      clone.querySelectorAll('.row.out').forEach(el => {
+        (el as HTMLElement).style.cssText += ';display:flex;justify-content:flex-end';
+      });
+      clone.querySelectorAll('.row.in').forEach(el => {
+        (el as HTMLElement).style.cssText += ';display:flex;justify-content:flex-start';
+      });
+      // html2canvas paints the last text line lower than Chromium measures it.
+      // Give nested cards a few extra pixels before their first painted row so
+      // captions never collide with an image/link/media card in the real PNG.
+      clone.querySelectorAll('.wa-images,.wa-link-preview,.wa-media').forEach(el => {
+        (el as HTMLElement).style.cssText += ';margin-top:12px';
+      });
+
+      // The WhatsApp group header, which is the iMessage header defect a few
+      // blocks below wearing different class names. "Squad Goals" lost its
+      // descenders and the participant list under it was sliced horizontally by
+      // the band's bottom edge. `.android-header` and `.android-header-name-
+      // wrapper` are both `overflow:hidden`, and html2canvas paints text a little
+      // below the line box Chromium measured, so the overflow is cut rather than
+      // shown. Same structure, same bug — it simply never received the same
+      // treatment when iMessage did.
+      //
+      // Deliberately NOT the iMessage remedy of `overflow:visible` on the text
+      // itself. The name and subtitle here are `white-space:nowrap` with
+      // `text-overflow:ellipsis`, and `overflow:visible` would stop a long group
+      // name truncating and run it out of the header instead. This is the
+      // `.search-text` case from the Google block: overflow clips at the PADDING
+      // edge, so padding gives the descenders room while the ellipsis keeps
+      // working. The wrapper takes `overflow:visible` because it carries no
+      // ellipsis of its own — its children each truncate themselves.
+      //
+      // Export-only, for the usual reason: the preview and the archive both draw
+      // this header correctly.
+      const androidHeader = clone.querySelector('.android-header') as HTMLElement | null;
+      if (androidHeader) {
+        androidHeader.style.overflow = 'visible';
+        androidHeader.style.paddingBottom = '10px';
+        const wrapper = clone.querySelector('.android-header-name-wrapper') as HTMLElement | null;
+        if (wrapper) {
+          wrapper.style.overflow = 'visible';
+          wrapper.style.height = 'auto';
+        }
+        clone.querySelectorAll('.android-header-name, .android-header-subtitle').forEach(el => {
+          (el as HTMLElement).style.cssText += ';line-height:1.7;padding-bottom:3px';
+        });
+      }
+
+      // The reply quote card, cut through the middle of its quoted line.
+      //
+      // `.wa-reply span` is `max-height:3.8em;overflow:hidden`. It is tempting to
+      // read that as a clamp landing mid-line, but the arithmetic rules it out:
+      // the span's line-height is 1.4 and the reproduction's quote is ONE line,
+      // so it occupies ~1.4em against a 3.8em cap and the clamp is never reached.
+      //
+      // The clipper is `overflow:hidden` on its own. The span's height is auto —
+      // exactly one line box — and html2canvas paints the glyphs a little below
+      // the line box Chromium measured, so the bottoms fall outside the span and
+      // are cut. That is the same mechanism as the header above, not a clamp
+      // problem, and it bites a one-line quote as readily as a long one.
+      //
+      // So `overflow:visible` is the fix. `max-height:none` goes with it because
+      // a clamp with visible overflow would spill instead of clipping, and
+      // because the clamp is redundant anyway: the excerpt is already capped at
+      // 180 characters where it is built. iMessage reached the same conclusion
+      // and dropped its own `max-height` in the stylesheet — see the note above
+      // `blockquote.ios-reply span` in generator.ts.
+      clone.querySelectorAll('.wa-reply span').forEach(el => {
+        (el as HTMLElement).style.cssText += ';max-height:none;overflow:visible';
+      });
+    }
+
+    // Swap remote images for same-origin data URIs before rasterising. Without
+    // this, html2canvas requests them with crossOrigin='anonymous' and any host
+    // that doesn't send CORS headers drops out of the PNG silently.
+    const unconvertible = await inlineCrossOriginImages(clone);
+
+    // Reported together, and only once. Both lists are "images that will not be
+    // in your PNG", and the proxy failures are already known by the time we wait,
+    // so raising two separate warnings for one export would just be noise. An
+    // image that failed to proxy is skipped by the wait as well — it is the same
+    // <img>, and reporting it twice would tell the user their scene lost two
+    // pictures when it lost one.
+    const proxyFailed = new Set(unconvertible.map(entry => entry.url));
+    const neverArrived = (await waitForImages(clone)).filter(entry => !proxyFailed.has(entry.url));
+    const missing = [...unconvertible, ...neverArrived];
+    if (missing.length > 0) onImageWarning?.(missing);
+
+    const captureWidth = captureArea.scrollWidth;
+    const captureHeight = captureArea.scrollHeight;
+
+    const canvas = await (html2canvas as any)(captureArea, {
+      background: '#ffffff',
+      scale,
+      logging: false,
+      // useCORS makes html2canvas set crossOrigin='anonymous' on every image, so
+      // a host without CORS headers fails to load rather than tainting. That
+      // makes allowTaint inert here — omitted rather than left as a misleading
+      // no-op. Cross-origin images are proxied to data: URIs before this runs.
+      useCORS: true,
+      width: captureWidth,
+      height: captureHeight,
+      windowWidth: captureWidth,
+      windowHeight: captureHeight,
+      foreignObjectRendering: false,
+      imageTimeout: 5000,
     });
+
+    // Add white padding
+    const padding = 24 * scale;
+    const padded = document.createElement('canvas');
+    padded.width = canvas.width + padding * 2;
+    padded.height = canvas.height + padding * 2;
+    const pCtx = padded.getContext('2d')!;
+    pCtx.fillStyle = '#ffffff';
+    pCtx.fillRect(0, 0, padded.width, padded.height);
+    pCtx.drawImage(canvas, padding, padding);
+
+    return padded;
+  } finally {
+    mount.remove();
   }
-
-  // Swap remote images for same-origin data URIs before rasterising. Without
-  // this, html2canvas requests them with crossOrigin='anonymous' and any host
-  // that doesn't send CORS headers drops out of the PNG silently.
-  const unconvertible = await inlineCrossOriginImages(clone);
-
-  // Reported together, and only once. Both lists are "images that will not be
-  // in your PNG", and the proxy failures are already known by the time we wait,
-  // so raising two separate warnings for one export would just be noise. An
-  // image that failed to proxy is skipped by the wait as well — it is the same
-  // <img>, and reporting it twice would tell the user their scene lost two
-  // pictures when it lost one.
-  const proxyFailed = new Set(unconvertible.map(entry => entry.url));
-  const neverArrived = (await waitForImages(clone)).filter(entry => !proxyFailed.has(entry.url));
-  const missing = [...unconvertible, ...neverArrived];
-  if (missing.length > 0) onImageWarning?.(missing);
-
-  const captureWidth = captureArea.scrollWidth;
-  const captureHeight = captureArea.scrollHeight;
-
-  const canvas = await (html2canvas as any)(captureArea, {
-    background: '#ffffff',
-    scale,
-    logging: false,
-    // useCORS makes html2canvas set crossOrigin='anonymous' on every image, so
-    // a host without CORS headers fails to load rather than tainting. That
-    // makes allowTaint inert here — omitted rather than left as a misleading
-    // no-op. Cross-origin images are proxied to data: URIs before this runs.
-    useCORS: true,
-    width: captureWidth,
-    height: captureHeight,
-    windowWidth: captureWidth,
-    windowHeight: captureHeight,
-    foreignObjectRendering: false,
-    imageTimeout: 5000,
-  });
-
-  document.body.removeChild(mount);
-
-  // Add white padding
-  const padding = 24 * scale;
-  const padded = document.createElement('canvas');
-  padded.width = canvas.width + padding * 2;
-  padded.height = canvas.height + padding * 2;
-  const pCtx = padded.getContext('2d')!;
-  pCtx.fillStyle = '#ffffff';
-  pCtx.fillRect(0, 0, padded.width, padded.height);
-  pCtx.drawImage(canvas, padding, padding);
-
-  return padded;
 }
 
 // ---------------------------------------------------------------------------
