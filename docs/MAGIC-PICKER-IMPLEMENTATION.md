@@ -10,16 +10,21 @@ same day (§11); Phase C — the URL picker — the same day again (§12). The r
 gate closed first, as §8 required, and P15 passed, so §6d's mapping targets
 stand as written. **Deployed to production 18 Aug 2026**, commit `5eb7cbd`,
 Netlify deploy `6a83ed61`. A reader on the site can now paste a link. §16 is the
-current handoff and the section to read first.
+current handoff and the section to read first; **§17 amends it** — the framework
+override shipped 21 Aug 2026.
 
-**Two sections reverse things this document says confidently, and both were
-found by pointing the code at the real world rather than by a failing test:**
+**Three sections reverse or bound things this document says confidently, and all
+three were found by pointing the code at the real world rather than by a failing
+test:**
 
 - **§14** — twenty real sites say `og:image` is *not* the better colour signal.
   It is the worse one on two thirds of them. Read it before §6a, which is now
   wrong where it is most emphatic.
 - **§15** — the classifier promised a font the reader would never see. Found by
   pasting fast.com into the running app and reading the sentence.
+- **§17** — §14's winner has a boundary. A stylesheet is a designer naming the
+  answer *only if a designer wrote it*; a stock framework build is a page
+  telling us about its toolchain, and we read it as taste for three days.
 
 > ## Start here
 >
@@ -40,10 +45,11 @@ found by pointing the code at the real world rather than by a failing test:**
 > got wrong. §6 is Phase C — the headline feature and the one with real risk in
 > it — and §12 is what building it actually cost and corrected.
 >
-> **The five sections where this document was wrong** are the ones to read if you
+> **The six sections where this document was wrong** are the ones to read if you
 > are deciding how much to trust the rest of it: §5f (four errors in its own
-> first draft), §11a, §12a, §14 (its central bet, overturned by measurement) and
-> §15 (a promise the code made that the product could not keep).
+> first draft), §11a, §12a, §14 (its central bet, overturned by measurement),
+> §15 (a promise the code made that the product could not keep) and §17 (§14's
+> replacement bet, believed one site too far).
 >
 > **The invariant that keeps this cheap is §8.** The output is a
 > `SiteSkinTheme` and nothing else. If you find yourself editing `compile.ts`,
@@ -1084,6 +1090,10 @@ it right now. This supersedes §13, which was written the night before the deplo
 
 ### 16a. The exact state of the world
 
+> **⚠️ Amended by §17.** The production commit and the test count below are the
+> 18 Aug figures. Everything else in §16 still holds — §17 changed one colour on
+> one code path and added nothing to the network surface.
+
 | | |
 | --- | --- |
 | Production | `main` at `5eb7cbd`, Netlify deploy `6a83ed61`, published 18 Aug 2026 05:28 UTC, build 39s |
@@ -1108,10 +1118,10 @@ Unchanged from §13b and still accurate:
 
 | File | What it owns | Open it when |
 | --- | --- | --- |
-| `src/lib/siteSkin/palette.ts` | pixels to swatches to four colours, and **the contrast floor**. Phase B's engine, and Phase C's too via `swatchesFromColors` | changing how colours are chosen |
-| `src/lib/siteSkin/siteStyle.ts` | HTML and CSS *text* to colours, fonts, radius, `og:image`, polarity. **No I/O** | changing what a page yields |
+| `src/lib/siteSkin/palette.ts` | pixels to swatches to four colours, and **the contrast floor**. Phase B's engine, and Phase C's too via `swatchesFromColors`. `colorsFromSwatches`'s `declaredAccent` is the one seam a caller may push an accent through, and it is repaired like any other (§17) | changing how colours are chosen |
+| `src/lib/siteSkin/siteStyle.ts` | HTML and CSS *text* to colours, fonts, radius, `og:image`, polarity, and `FRAMEWORK_ACCENTS` — the colours a site gets by not choosing one (§17). **No I/O** | changing what a page yields |
 | `src/lib/siteSkin/fontClassify.ts` | ~200 faces to 19 characters to a `FONT_STACKS` value, plus the sentence. `sameFace` decides what we may promise (§15) | the classifier is wrong about a font |
-| `src/lib/siteSkin/siteTheme.ts` | the merge: `declaresHue` decides which signal wins (§14b), and what we say about it | changing precedence or the notes |
+| `src/lib/siteSkin/siteTheme.ts` | the merge: `declaresHue` decides which signal wins (§14b), `frameworkOverride` decides when the stylesheet does not get to speak for the site (§17), and what we say about both | changing precedence or the notes |
 | `src/lib/server/siteFetch.ts` | the only file that opens a page. Security, the byte cap, the 9-second budget | anything about fetching |
 | `src/pages/api/site-palette.ts` | the endpoint: origin check, rate limit, **field-by-field response** | changing what crosses to the client |
 | `src/components/siteSkin/PaletteFromImage.tsx` | both doors, both polarities, the notes, the banner offer | anything the user sees |
@@ -1144,7 +1154,11 @@ likely to be wrong:
 - the weights in `siteStyle.ts` (`WEIGHTS`, `PAGE_SELECTOR`) — a coarse
   three-tier proxy for "how much of the page is this colour". §14f's nytimes row
   (`#ff1493`, which is not the New York Times) is what one of their failures
-  looks like.
+  looks like, and §17 is what the *other* kind looks like: the weights were not
+  wrong about heyoliver.com, they were faithfully measuring Bootstrap.
+- `FRAMEWORK_ACCENTS` and `OVERRIDE_HUE` (§17) — a table of other people's
+  defaults is a thing the world changes without telling you. Bootstrap 6 will
+  need a row.
 - `MIN_DELIBERATE` (2%) in `palette.ts` — still tuned against synthetic fixtures
   rather than real fan art.
 
@@ -1176,6 +1190,12 @@ Carried from §13d, with two added:
   (§14c). Per-hop timeouts alone do not bound it; that was the bug.
 - **`exact` is a promise, not a lookup result** (§15). If you touch
   `fontClassify.ts`, the sweep test that walks every face is the one to keep.
+- **A framework ships its derived shades too** (§17). `FRAMEWORK_ACCENTS` holds
+  base defaults only, so it can never be used to *filter* a colour list —
+  `darken($warning, 10%)` is not in it and out-chromas a real brand colour. The
+  table is only ever asked about `pickAccent`'s single answer. That is why the
+  override replaces the accent instead of pruning the swatches, and the
+  prune-shaped version is the one that returned gold.
 
 ### 16e. What is deliberately not built
 
@@ -1191,3 +1211,153 @@ Carried from §13d, with two added:
 - **No images shipped by us, ever.** SITE-SKIN §19b-bis, unchanged. A gradient
   costs zero bytes and cannot expire.
 
+---
+
+## 17. The framework override — §14's bet, believed one site too far
+
+**21 Aug 2026.** Not found by a test either. Found by asking whether the picker
+could read `heyoliver.com`, running it, and looking at the answer.
+
+It could. It returned **`#007bff`** and called it that site's colour. It is
+Bootstrap 4's `$primary`.
+
+### 17a. What went wrong, and why §14 made it likely
+
+§14b's finding was structural and it still stands: *a social card is a
+photograph, and a `--brand` custom property is a designer naming the answer.*
+The sentence has a silent premise. **It is a designer naming the answer only if a
+designer wrote the stylesheet.**
+
+heyoliver.com ships an unmodified 2020 Bootstrap 4 bundle. Its extracted
+colours, in weight order, are the framework's entire semantic swatch:
+
+| Colour | Weight | What it is |
+| --- | --- | --- |
+| `#ffffff` | 81.6 | paper |
+| `#007bff` | 30.2 | `$primary` |
+| `#6c757d` | 21.4 | `$secondary` |
+| `#28a745` | 20.4 | `$success` |
+| `#dc3545` | 20.4 | `$danger` |
+| `#212529` | 19.2 | `$gray-900` |
+| `#17a2b8` | 11.2 | `$info` |
+| `#ffc107` | 11.2 | `$warning` |
+
+Not one of those is a decision anybody made about this site. And the colour that
+*is* — `#425cbb`, declared in `<meta name="theme-color">` — carried
+`WEIGHTS.themeColor: 6`, the highest single weight in the table, and lost
+anyway. Weights **accumulate**; a framework repeats itself across 357 KB of CSS
+and one meta tag does not. The `'theme-color'` branch that would have rescued it
+only fires when `style.colors.length === 1`, which is the JavaScript-shell case
+§14 left it for.
+
+So the machinery worked perfectly. `WEIGHTS` measured the page honestly, and the
+page was honestly mostly Bootstrap.
+
+### 17b. The fix, and the version of it that did not work
+
+The override fires when three things hold together, and each one is what keeps
+it narrow:
+
+1. **The accent the mapping would otherwise pick is a stock framework default**
+   — asked of `pickAccent`'s single answer, never of the swatch list. A page that
+   merely *contains* Bootstrap blue somewhere is untouched.
+2. **The page declares a saturated colour of its own** — `OVERRIDE_HUE` is 0.25,
+   twice `DECLARED_HUE`. That threshold asks "is this a colour at all", which is
+   the right bar for reading a page; this one asks whether a colour is worth
+   overruling a measurement with, which is a larger claim. A brand navy
+   `#1a1a2e` reads 0.08 and does not qualify.
+3. **The two are not the same colour** — a site whose brand genuinely *is*
+   Bootstrap blue declares it as its `theme-color` as well, and there the
+   override is a no-op that would cost us nothing but the honest sentence.
+
+`FRAMEWORK_ACCENTS` draws a line worth stating, because it is the difference
+between a table that works and a table that flags half the web: **colours you get
+by not choosing one.** A stock `$primary` is a toolchain; `bg-blue-500` is a
+designer typing a decision, which is why Tailwind's ramp is deliberately absent.
+Matching is **exact only** — a recompiled Bootstrap with a customised `$primary`
+is precisely the case where the stylesheet *does* carry the brand, and a
+near-match rule would throw away the one input we most want to keep. Hued
+defaults only; every framework's greys are the greys every hand-written site
+uses and they carry the page's polarity.
+
+**The first version pruned, and it was wrong.** Dropping the framework's colours
+before the ranking is the obvious shape — and it does not reach the accent,
+because a framework ships its **derived** shades as well as its defaults.
+Bootstrap emits `darken($warning, 10%)` as `#d39e00`, which is in no table of
+base colours and reads chroma 0.83 against `#425cbb`'s 0.47. That version
+returned **gold**. The working shape replaces `pickAccent`'s answer outright, via
+a new `declaredAccent` parameter on `colorsFromSwatches`.
+
+**It enters above `fixAccent`, not around it.** A declaration is a claim about a
+brand, not a licence to fail the contrast floor. Light gets `#425cbb` exactly
+because it needs no repair; dark gets `#5e74c5`, lightened against a dark page by
+the same code that repairs a ranked accent. A test forces a near-white declared
+accent onto a light page and asserts it is *not* honoured.
+
+**What it deliberately does not change:** background, surface and text. Those
+still come from the stylesheet, and a live re-fetch confirms they are
+byte-identical to before — the override moves one colour. The note says so
+rather than claiming more:
+
+> *That page's stylesheet is a stock **Bootstrap** build, so its strongest colour
+> is Bootstrap's default rather than the site's. These are its stylesheet's
+> colours with the accent replaced by the one that page declares for itself.*
+
+Ten tests, and **the negatives are the point** — this is the only place in Phase
+C where a declaration beats a measurement, so every condition that narrows it has
+a test that would notice if it were dropped: no `theme-color`, a near-grey one,
+one that equals the framework colour, a hand-written stylesheet, and the derived
+shade that killed the prune.
+
+### 17c. The learning, and it is a new shape
+
+The four so far: §11b — *a plan that names a helper has not checked that
+helper's contract.* §12b — *when the output space is an allowlist, test identity
+and not just membership.* §14d — *a claim about the world does not become true by
+being load-bearing.* §15c — *a fix that corrects a value has not corrected the
+claim made about that value.*
+
+This one is about what happens *after* a measurement wins:
+
+> **A measurement establishes which input is better on the sites you measured. It
+> does not establish why, and the why is what carries to the site you didn't.**
+
+§14 ran twenty sites and the stylesheet beat the card on sixteen. That result is
+real and it is still the right default. But the *reason* recorded for it — a
+designer naming the answer — was inferred from the outcome, and it silently
+assumed a hand-written stylesheet. Twenty sites drawn from Notion, Apple,
+Anthropic, the NYT and the BBC will never contain a stock Bootstrap build,
+because companies that size do not ship one. **The sample that proved the rule
+had no member of the population that breaks it.**
+
+Worth noticing that §14d is the *inverse* of this and both are true: a
+load-bearing claim does not become true, and a measured claim does not become
+general. The first is about believing things you need; the second is about
+believing things you checked.
+
+And the method half, which is §15c's with one word changed: this was found by
+**asking the product a question about a specific real site** — can it read this
+one — rather than by asking whether the machinery worked. Two of the last three
+findings came from that, and neither cost more than ten minutes.
+
+### 17d. The state of the world, amending §16a
+
+| | |
+| --- | --- |
+| Production | `main` at `7eb94c7`, Netlify deploy `6a8799b9`, published 21 Aug 2026 00:20 UTC, build 32s, state `ready` |
+| Tests | **690 unit** (`--project=unit`) — 689 pass, 1 skipped, 10 of them new here. `tsc` and `eslint` clean. §16a's 644 is the 18 Aug figure and other work has landed since, so this is the measured number rather than that one plus ten |
+| Blast radius | four files, +285 −13. No new network surface, no new endpoint field, no stored theme moved, §8 untouched |
+| Verified live | `POST /api/site-palette` with `heyoliver.com` returns `themeColor: #425cbb` above a Bootstrap swatch — the exact input the override consumes |
+
+The merge runs in the browser, so the endpoint's response is unchanged and
+`analyticsPayload` never saw a new value: `palette_applied`'s `source` is
+`image | site` and is a different field from `ColorSource`. The new
+`'theme-color-accent'` member exists only to pick a sentence.
+
+**What this does not fix.** The picker still has no answer for a site whose
+stylesheet is stock *and* declares no `theme-color` — condition 2 fails, and it
+returns the framework's colour with a straight face. Handling that means
+dropping to the social card on a framework page, which is a §14-sized decision
+and wants a §14-sized measurement first. `tests/site-palette-probe.spec.ts` is
+where that would go, and it should be re-run over twenty *small* sites —
+agencies, restaurants, church pages, the population §14 never sampled.
