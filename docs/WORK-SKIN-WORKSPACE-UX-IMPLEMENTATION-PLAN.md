@@ -1,6 +1,6 @@
 # Work-Skin Workspace UX Hardening - Detailed Implementation Plan
 
-**Status:** Implemented locally and regression-verified; inherited AO3 evidence only. One unrelated full-repo lint baseline remains.
+**Status:** Implemented, regression-verified, and committed for production; inherited AO3 evidence only. One unrelated full-repo lint baseline remains.
 
 **Plan date:** 21 August 2026
 
@@ -1691,7 +1691,7 @@ Complete this section during implementation; do not mark the plan itself “impl
 
 - Implementation date: 21 August 2026
 - Implementer: Codex
-- Commits: none; changes remain in the shared working tree
+- Commits: `eccc8c5` (`feat(workspace): harden work-skin authoring UX`); production deployment is through the `main` branch push recorded on 21 August 2026.
 - Scope deviations: added a Google 2x raster test, explicit iOS 2x coverage, and the previously missing Google authoring suite so all four platforms have dedicated authoring and rendered-file evidence. The in-app Browser runtime was unavailable, so local browser checks used the installed system Edge through Playwright.
 - Output files changed: no emitted work-skin, master-skin, schema, example, or project-file generator source changed; UX shell, preflight presentation, and tests changed.
 - Highest evidence level reached: local/system-Edge browser evidence plus inspected rendered-file evidence, with inherited AO3 output evidence justified by output parity. No new signed-in AO3 save/readback was performed.

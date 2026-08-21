@@ -5,8 +5,8 @@
 and AO3 installation handoff
 **Audience:** the developer implementing the work, including a developer who has
 not worked in this codebase before
-**Status:** implemented and verified locally on 21 August 2026. Sections 14 and
-19 contain the completed acceptance record and maintainer handoff.
+**Status:** implemented, verified, and committed for production on 21 August
+2026. Sections 14 and 19 contain the completed acceptance and deployment record.
 
 ---
 
@@ -1471,11 +1471,12 @@ If this action is revisited, verify the destination while signed in and signed
 out, retain explicit user initiation, and do not automatically open AO3 after
 copying.
 
-### 19.6 Repository state and next-developer checklist
+### 19.6 Repository and production handoff
 
-This implementation was not committed or deployed. The shared worktree also
-contains unrelated modified and untracked user files. Do not reset, clean, or
-bulk-delete the worktree to isolate this feature.
+This implementation was committed as `20b2db1` and pushed to the production
+`main` branch on 21 August 2026. The shared worktree still contains unrelated
+untracked user files; they were not included in the commit or deployment. Do not
+reset, clean, or bulk-delete the worktree to isolate this feature.
 
 Before changing this surface again:
 
