@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Attachment, IOSMedia, IOSTapback, Message, SkinProject } from '../lib/schema';
+import { IOSMedia, IOSTapback, Message, SkinProject } from '../lib/schema';
 import {
   IOS_AUDIO_MIME_TYPES,
   IOS_VIDEO_MIME_TYPES,
@@ -11,6 +11,7 @@ import {
 import { normalizeYouTubeUrl } from '../lib/twitter';
 import { resolveMessageIdentity } from '../lib/identity';
 import { ImageUrlInput } from './ImageUrlInput';
+import MultiImageEditor from './MultiImageEditor';
 
 /**
  * One editor for every iOS message, wherever it is being edited.
@@ -107,7 +108,7 @@ export const IOSMessageExtrasEditor: React.FC<Props> = ({
     // reply, Tapback, attachment, link, or media. Clearing them in the same
     // update is what stops a half-converted message reaching storage.
     onChange({
-      iosEvent: { kind: next, text: '' }, content: '', attachments: undefined,
+      iosEvent: { kind: next, text: '' }, content: '', attachments: undefined, imageLayout: undefined,
       iosLinkPreview: undefined, iosMedia: undefined, iosReply: undefined,
       iosTapbacks: undefined, reaction: undefined, status: undefined, statusMode: undefined,
       isTyping: undefined, timestamp: undefined,
@@ -121,26 +122,10 @@ export const IOSMessageExtrasEditor: React.FC<Props> = ({
     setMediaPreviewError('');
     onChange({
       attachments: next === 'images' ? [{ type: 'image', url: '', alt: '' }] : undefined,
+      imageLayout: undefined,
       iosLinkPreview: next === 'link' ? { url: '', title: '' } : undefined,
       iosMedia: next === 'audio' || next === 'video' ? blankMedia(next) : undefined,
     });
-  };
-
-  const updateAttachment = (attachmentIndex: number, updates: Partial<Attachment>) => {
-    onChange({ attachments: (message.attachments || []).map((attachment, i) => i === attachmentIndex ? { ...attachment, ...updates } : attachment) });
-  };
-
-  const removeAttachment = (attachmentIndex: number) => {
-    const next = (message.attachments || []).filter((_, i) => i !== attachmentIndex);
-    // Removing the last image drops back to no primary content rather than
-    // leaving an empty images block that validates as a content card.
-    onChange({ attachments: next.length ? next : undefined });
-  };
-
-  const moveAttachment = (from: number, to: number) => {
-    const next = [...(message.attachments || [])];
-    [next[from], next[to]] = [next[to], next[from]];
-    onChange({ attachments: next });
   };
 
   const updateTapback = (tapbackIndex: number, updates: Partial<IOSTapback>) => {
@@ -213,26 +198,16 @@ export const IOSMessageExtrasEditor: React.FC<Props> = ({
             <p className="text-[11px] leading-relaxed text-stone-500">
               One to four images. Every one stays a real image with its own description, so a reader with the skin off still gets all four — a tap-to-open stack would throw three of them away.
             </p>
-            {(message.attachments || []).map((attachment, attachmentIndex) => (
-              <div key={`${idPrefix}-image-${attachmentIndex}`} className="space-y-2 rounded-lg border border-stone-200 p-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium">Image {attachmentIndex + 1}</span>
-                  <button type="button" onClick={() => removeAttachment(attachmentIndex)} className="text-xs text-red-600">Remove</button>
-                </div>
-                <ImageUrlInput value={attachment.url} onChange={url => updateAttachment(attachmentIndex, { url })} ariaLabel={`Image ${attachmentIndex + 1} address`} placeholder="Paste an image address" />
-                <input value={attachment.alt || ''} onChange={event => updateAttachment(attachmentIndex, { alt: event.target.value })} disabled={attachment.decorative} maxLength={500} aria-label={`Image ${attachmentIndex + 1} description`} placeholder="Describe the image" className="w-full rounded-lg border border-stone-200 px-2 py-1.5 text-xs disabled:bg-stone-100" />
-                <label className="flex items-center gap-2 text-xs text-stone-600">
-                  <input type="checkbox" checked={attachment.decorative === true} onChange={event => updateAttachment(attachmentIndex, { decorative: event.target.checked, ...(event.target.checked ? { alt: '' } : {}) })} /> Decorative
-                </label>
-                <div className="flex gap-2">
-                  <button type="button" disabled={attachmentIndex === 0} onClick={() => moveAttachment(attachmentIndex, attachmentIndex - 1)} className="text-xs text-violet-700 disabled:text-stone-300">Move up</button>
-                  <button type="button" disabled={attachmentIndex === (message.attachments?.length || 0) - 1} onClick={() => moveAttachment(attachmentIndex, attachmentIndex + 1)} className="text-xs text-violet-700 disabled:text-stone-300">Move down</button>
-                </div>
-              </div>
-            ))}
-            {(message.attachments?.length || 0) < 4 && (
-              <button type="button" onClick={() => onChange({ attachments: [...(message.attachments || []), { type: 'image', url: '', alt: '' }] })} className="w-full rounded-lg border border-dashed border-violet-300 px-3 py-2 text-xs font-medium text-violet-700">Add image</button>
-            )}
+            <MultiImageEditor
+              attachments={message.attachments || []}
+              imageLayout={message.imageLayout}
+              onChange={({ attachments, imageLayout }) => onChange({
+                attachments: attachments.length ? attachments : undefined,
+                imageLayout,
+              })}
+              label="Image"
+              idPrefix={`${idPrefix}-ios-media`}
+            />
           </div>
         )}
 

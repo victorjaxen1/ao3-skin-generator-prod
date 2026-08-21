@@ -90,7 +90,7 @@ test.describe('WhatsApp renderer and export contract', () => {
   test('round-trips every WhatsApp field and retains transcript/preflight detail', () => {
     const project = richWhatsApp();
     const parsed = parseProjectFile(JSON.stringify(createProjectFile(project, [])));
-    expect(parsed.schemaVersion).toBe(7);
+    expect(parsed.schemaVersion).toBe(8);
     expect(parsed.project.messages.map(message => ({
       id: message.id,
       reply: message.whatsappReply,
@@ -139,7 +139,7 @@ test.describe('WhatsApp renderer and export contract', () => {
     expect(ao3).toContain('<iframe src="https://www.youtube-nocookie.com/embed/XlcK4VYSWZk"');
     expect(ao3).not.toMatch(/<video\b/i);
     const parsed = parseProjectFile(JSON.stringify(createProjectFile(project, [])));
-    expect(parsed.schemaVersion).toBe(7);
+    expect(parsed.schemaVersion).toBe(8);
     expect(parsed.project.messages[0].whatsappMedia).toEqual({
       kind: 'video', source: 'youtube', url: 'https://www.youtube.com/watch?v=XlcK4VYSWZk',
     });

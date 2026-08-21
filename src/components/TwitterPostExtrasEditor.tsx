@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Attachment, Message, SkinProject, TwitterPoll, TwitterQuotePost, TwitterVideo } from '../lib/schema';
+import { Message, SkinProject, TwitterPoll, TwitterQuotePost, TwitterVideo } from '../lib/schema';
 import { getTwitterPollError, normalizeYouTubeUrl, validateTwitterVideo } from '../lib/twitter';
 import ImageUrlInput from './ImageUrlInput';
+import MultiImageEditor from './MultiImageEditor';
 
 interface Props {
   message: Message;
@@ -18,55 +19,6 @@ function localOptionId(): string {
 
 const inputClass = 'w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-xs focus:ring-2 focus:ring-violet-500';
 const selectClass = 'rounded-lg border border-stone-200 bg-white px-2 py-1.5 text-xs focus:ring-2 focus:ring-violet-500';
-
-function AttachmentListEditor({
-  value,
-  onChange,
-  label,
-}: {
-  value: Attachment[];
-  onChange: (value: Attachment[]) => void;
-  label: string;
-}) {
-  const update = (index: number, updates: Partial<Attachment>) =>
-    onChange(value.map((attachment, itemIndex) => itemIndex === index ? { ...attachment, ...updates } : attachment));
-  const move = (index: number, direction: -1 | 1) => {
-    const target = index + direction;
-    if (target < 0 || target >= value.length) return;
-    const next = [...value];
-    [next[index], next[target]] = [next[target], next[index]];
-    onChange(next);
-  };
-
-  return (
-    <div className="space-y-2">
-      {value.map((attachment, index) => (
-        <div key={index} className="rounded-lg border border-stone-200 bg-stone-50 p-2 space-y-2">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-[11px] font-semibold text-stone-600">{label} {index + 1}</span>
-            <div className="flex gap-1">
-              <button type="button" disabled={index === 0} onClick={() => move(index, -1)} aria-label={`Move ${label.toLowerCase()} ${index + 1} earlier`} className="rounded px-2 py-1 text-xs text-stone-600 disabled:text-stone-300">↑</button>
-              <button type="button" disabled={index === value.length - 1} onClick={() => move(index, 1)} aria-label={`Move ${label.toLowerCase()} ${index + 1} later`} className="rounded px-2 py-1 text-xs text-stone-600 disabled:text-stone-300">↓</button>
-              <button type="button" onClick={() => onChange(value.filter((_, itemIndex) => itemIndex !== index))} aria-label={`Remove ${label.toLowerCase()} ${index + 1}`} className="rounded px-2 py-1 text-xs text-red-600">Remove</button>
-            </div>
-          </div>
-          <ImageUrlInput value={attachment.url} onChange={url => update(index, { url })} ariaLabel={`${label} ${index + 1} address`} placeholder="Paste an image address" />
-          <input value={attachment.alt || ''} onChange={event => update(index, { alt: event.target.value })} disabled={attachment.decorative === true} maxLength={500} aria-label={`${label} ${index + 1} description`} placeholder="Describe this image for readers" className={inputClass} />
-          <label className="flex items-center gap-2 text-xs text-stone-600">
-            <input type="checkbox" checked={attachment.decorative === true} onChange={event => update(index, { decorative: event.target.checked, ...(event.target.checked ? { alt: '' } : {}) })} className="accent-violet-600" />
-            Decorative image — use empty alt text
-          </label>
-        </div>
-      ))}
-      {value.length < 4 && (
-        <button type="button" onClick={() => onChange([...value, { type: 'image', url: '', alt: '' }])} className="rounded-lg border border-dashed border-violet-300 px-3 py-2 text-xs font-medium text-violet-700">
-          Add {label.toLowerCase()}
-        </button>
-      )}
-      {value.length > 0 && <p className="text-[11px] text-stone-500">Preview layout: {value.length === 1 ? 'one full-width image' : value.length === 2 ? 'two columns' : value.length === 3 ? 'one large image with two stacked images' : 'two-by-two grid'}.</p>}
-    </div>
-  );
-}
 
 function defaultQuote(): TwitterQuotePost {
   return { name: '', handle: '', text: '', attachments: [] };
@@ -97,6 +49,7 @@ export default function TwitterPostExtrasEditor({ message, project, onChange }: 
   const setVideo = (updates: Partial<TwitterVideo>) => onChange({
     twitterVideo: { source: 'youtube', url: '', title: '', ...message.twitterVideo, ...updates },
     attachments: [],
+    imageLayout: undefined,
   });
   const setQuote = (updates: Partial<TwitterQuotePost>) => onChange({
     twitterQuote: { ...defaultQuote(), ...message.twitterQuote, ...updates },
@@ -122,10 +75,16 @@ export default function TwitterPostExtrasEditor({ message, project, onChange }: 
             </div>
             {!message.twitterVideo ? (
               <>
-                <AttachmentListEditor value={message.attachments || []} onChange={attachments => onChange({ attachments })} label="Image" />
+                <MultiImageEditor
+                  attachments={message.attachments || []}
+                  imageLayout={message.imageLayout}
+                  onChange={({ attachments, imageLayout }) => onChange({ attachments, imageLayout })}
+                  label="Image"
+                  idPrefix={`${message.id}-twitter-media`}
+                />
                 {!!message.attachments?.length && (
-                  <label className="block text-xs text-stone-600">Crop intent
-                    <select value={message.twitterMediaCrop || 'auto'} onChange={event => onChange({ twitterMediaCrop: event.target.value as Message['twitterMediaCrop'] })} className={`${selectClass} mt-1 block w-full`} aria-label="Media crop intent">
+                  <label className="block text-xs text-stone-600">Image sizing
+                    <select value={message.twitterMediaCrop || 'auto'} onChange={event => onChange({ twitterMediaCrop: event.target.value as Message['twitterMediaCrop'] })} className={`${selectClass} mt-1 block w-full`} aria-label="Image sizing">
                       <option value="auto">Automatic</option><option value="fill-width">Fill width</option><option value="fill-height">Fill height</option>
                     </select>
                   </label>
@@ -141,6 +100,7 @@ export default function TwitterPostExtrasEditor({ message, project, onChange }: 
                       ? { source: 'youtube', url: '', ...common }
                       : { source: 'direct', url: '', mimeType: 'video/mp4', ...common },
                     attachments: [],
+                    imageLayout: undefined,
                   });
                 }} className={`${selectClass} w-full`} aria-label="Video source type"><option value="youtube">YouTube</option><option value="direct">Direct HTTPS video</option></select>
                 <input value={message.twitterVideo.url} onChange={event => setVideo({ url: event.target.value })} aria-label="Video address" placeholder={message.twitterVideo.source === 'youtube' ? 'https://youtu.be/…' : 'https://example.com/video.mp4'} className={inputClass} />
@@ -178,7 +138,13 @@ export default function TwitterPostExtrasEditor({ message, project, onChange }: 
             {!message.twitterQuote.characterId && <><input value={message.twitterQuote.name || ''} onChange={event => setQuote({ name: event.target.value })} aria-label="Quoted account name" placeholder="Quoted account name" className={inputClass} /><input value={message.twitterQuote.handle || ''} onChange={event => setQuote({ handle: event.target.value.replace(/^@+/, '') })} aria-label="Quoted account handle" placeholder="handle" className={inputClass} /><ImageUrlInput value={message.twitterQuote.avatarUrl || ''} onChange={avatarUrl => setQuote({ avatarUrl })} ariaLabel="Quoted account avatar" placeholder="Avatar address (optional)" /><label className="flex items-center gap-2 text-xs text-stone-600"><input type="checkbox" checked={!!message.twitterQuote.verified} onChange={event => setQuote({ verified: event.target.checked })} /> Verified account</label></>}
             <textarea value={message.twitterQuote.text} onChange={event => setQuote({ text: event.target.value })} aria-label="Quoted post text" placeholder="Quoted post text" rows={2} maxLength={2000} className={inputClass} />
             <input value={message.twitterQuote.timestamp || ''} onChange={event => setQuote({ timestamp: event.target.value })} aria-label="Quoted post timestamp" placeholder="Quoted timestamp (optional)" className={inputClass} />
-            <AttachmentListEditor value={message.twitterQuote.attachments || []} onChange={attachments => setQuote({ attachments })} label="Quote image" />
+            <MultiImageEditor
+              attachments={message.twitterQuote.attachments || []}
+              imageLayout={message.twitterQuote.imageLayout}
+              onChange={({ attachments, imageLayout }) => setQuote({ attachments, imageLayout })}
+              label="Quote image"
+              idPrefix={`${message.id}-twitter-quote-media`}
+            />
             <button type="button" onClick={() => onChange({ twitterQuote: undefined })} className="text-xs text-red-600">Remove quote post</button>
           </>}
         </div>}

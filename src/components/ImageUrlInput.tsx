@@ -29,6 +29,8 @@ interface Props {
   /** Show a thumbnail of the current image. */
   showPreview?: boolean;
   previewShape?: 'square' | 'circle';
+  previewFit?: 'cover' | 'contain';
+  onMetadata?: (metadata: { src: string; width: number; height: number }) => void;
   /** Rendered to the right of the field — e.g. the avatar Presets button. */
   trailing?: React.ReactNode;
   ariaLabel?: string;
@@ -57,6 +59,8 @@ export const ImageUrlInput: React.FC<Props> = ({
   showUpload = true,
   showPreview = true,
   previewShape = 'square',
+  previewFit = 'cover',
+  onMetadata,
   trailing,
   ariaLabel = 'Image address',
   className = '',
@@ -166,11 +170,17 @@ export const ImageUrlInput: React.FC<Props> = ({
           <img
             src={previewSrc}
             alt="Preview"
-            className={`flex-shrink-0 h-9 w-9 object-cover border border-stone-200 ${
+            className={`flex-shrink-0 h-9 w-9 border border-stone-200 bg-stone-50 ${previewFit === 'contain' ? 'object-contain' : 'object-cover'} ${
               previewShape === 'circle' ? 'rounded-full' : 'rounded-lg'
             }`}
             onError={() => setLoadFailed(true)}
-            onLoad={() => setLoadFailed(false)}
+            onLoad={event => {
+              setLoadFailed(false);
+              const image = event.currentTarget;
+              if (image.naturalWidth > 0 && image.naturalHeight > 0) {
+                onMetadata?.({ src: previewSrc, width: image.naturalWidth, height: image.naturalHeight });
+              }
+            }}
           />
         )}
 

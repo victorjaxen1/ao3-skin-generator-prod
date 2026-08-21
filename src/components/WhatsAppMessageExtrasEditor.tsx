@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Attachment, Message, SkinProject, WhatsAppMedia, WhatsAppReaction } from '../lib/schema';
+import { Message, SkinProject, WhatsAppMedia, WhatsAppReaction } from '../lib/schema';
 import {
   normalizeWhatsAppReactions,
   validateWhatsAppMedia,
@@ -8,6 +8,7 @@ import {
 } from '../lib/whatsapp';
 import { normalizeYouTubeUrl } from '../lib/twitter';
 import { ImageUrlInput } from './ImageUrlInput';
+import MultiImageEditor from './MultiImageEditor';
 
 interface Props {
   message: Message;
@@ -78,7 +79,7 @@ export const WhatsAppMessageExtrasEditor: React.FC<Props> = ({
     const hasContent = !!(message.content.trim() || message.attachments?.length || message.whatsappLinkPreview || message.whatsappMedia || message.whatsappReply || message.whatsappReactions?.length);
     if (hasContent && typeof window !== 'undefined' && !window.confirm('Changing this to an event removes its message content. Continue?')) return;
     onChange({
-      whatsappEvent: { kind: next, text: '' }, content: '', attachments: undefined,
+      whatsappEvent: { kind: next, text: '' }, content: '', attachments: undefined, imageLayout: undefined,
       whatsappLinkPreview: undefined, whatsappMedia: undefined, whatsappReply: undefined,
       whatsappReactions: undefined, reaction: undefined, status: undefined, statusMode: undefined,
     });
@@ -91,13 +92,10 @@ export const WhatsAppMessageExtrasEditor: React.FC<Props> = ({
     setMediaPreviewError('');
     onChange({
       attachments: next === 'images' ? [{ type: 'image', url: '', alt: '' }] : undefined,
+      imageLayout: undefined,
       whatsappLinkPreview: next === 'link' ? { url: '', title: '' } : undefined,
       whatsappMedia: next === 'audio' || next === 'video' ? blankMedia(next) : undefined,
     });
-  };
-
-  const updateAttachment = (attachmentIndex: number, updates: Partial<Attachment>) => {
-    onChange({ attachments: (message.attachments || []).map((attachment, i) => i === attachmentIndex ? { ...attachment, ...updates } : attachment) });
   };
 
   const updateReaction = (reactionIndex: number, updates: Partial<WhatsAppReaction>) => {
@@ -154,19 +152,16 @@ export const WhatsAppMessageExtrasEditor: React.FC<Props> = ({
 
         {mode === 'images' && (
           <div className="space-y-3">
-            {(message.attachments || []).map((attachment, attachmentIndex) => (
-              <div key={`${idPrefix}-image-${attachmentIndex}`} className="space-y-2 rounded-lg border border-stone-200 p-2">
-                <div className="flex items-center justify-between"><span className="text-xs font-medium">Image {attachmentIndex + 1}</span><button type="button" onClick={() => onChange({ attachments: message.attachments?.filter((_, i) => i !== attachmentIndex) })} className="text-xs text-red-600">Remove</button></div>
-                <ImageUrlInput value={attachment.url} onChange={url => updateAttachment(attachmentIndex, { url })} ariaLabel={`Image ${attachmentIndex + 1} address`} placeholder="Paste an image address" />
-                <input value={attachment.alt || ''} onChange={event => updateAttachment(attachmentIndex, { alt: event.target.value })} disabled={attachment.decorative} maxLength={500} aria-label={`Image ${attachmentIndex + 1} description`} placeholder="Describe the image" className="w-full rounded-lg border border-stone-200 px-2 py-1.5 text-xs disabled:bg-stone-100" />
-                <label className="flex items-center gap-2 text-xs text-stone-600"><input type="checkbox" checked={attachment.decorative === true} onChange={event => updateAttachment(attachmentIndex, { decorative: event.target.checked, ...(event.target.checked ? { alt: '' } : {}) })} /> Decorative</label>
-                <div className="flex gap-2">
-                  <button type="button" disabled={attachmentIndex === 0} onClick={() => { const next = [...(message.attachments || [])]; [next[attachmentIndex - 1], next[attachmentIndex]] = [next[attachmentIndex], next[attachmentIndex - 1]]; onChange({ attachments: next }); }} className="text-xs text-violet-700 disabled:text-stone-300">Move up</button>
-                  <button type="button" disabled={attachmentIndex === (message.attachments?.length || 0) - 1} onClick={() => { const next = [...(message.attachments || [])]; [next[attachmentIndex + 1], next[attachmentIndex]] = [next[attachmentIndex], next[attachmentIndex + 1]]; onChange({ attachments: next }); }} className="text-xs text-violet-700 disabled:text-stone-300">Move down</button>
-                </div>
-              </div>
-            ))}
-            {(message.attachments?.length || 0) < 4 && <button type="button" onClick={() => onChange({ attachments: [...(message.attachments || []), { type: 'image', url: '', alt: '' }] })} className="w-full rounded-lg border border-dashed border-violet-300 px-3 py-2 text-xs font-medium text-violet-700">Add image</button>}
+            <MultiImageEditor
+              attachments={message.attachments || []}
+              imageLayout={message.imageLayout}
+              onChange={({ attachments, imageLayout }) => onChange({
+                attachments: attachments.length ? attachments : undefined,
+                imageLayout,
+              })}
+              label="Image"
+              idPrefix={`${idPrefix}-whatsapp-media`}
+            />
           </div>
         )}
 

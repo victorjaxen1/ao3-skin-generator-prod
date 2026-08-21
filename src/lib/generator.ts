@@ -1,4 +1,4 @@
-import { Attachment, Message, SkinProject, TwitterQuotePost } from './schema';
+import { Attachment, ImageLayoutChoice, Message, SkinProject, TwitterQuotePost } from './schema';
 import { sanitizeAttribute, sanitizeText, sanitizeUrl, formatMessageText } from './sanitize';
 import { PLATFORM_ASSETS, FALLBACK_TEXT } from './platformAssets';
 import { resolveMessageIdentity } from './identity';
@@ -21,6 +21,7 @@ import {
   iosMessageLabel,
   iosToneForMessage,
 } from './ios';
+import { ImageLayoutPlan, ImageSplit, resolveImageLayout } from './imageLayout';
 
 export type HtmlRenderMode = 'static' | 'ao3-work';
 
@@ -215,24 +216,89 @@ function iosDeliveryLabel(status: Message['status']): string | undefined {
   return undefined;
 }
 
+function attachmentSizeAttributes(attachment: Attachment, fallbackWidth: number, fallbackHeight: number): string {
+  const hasDimensions = Number.isInteger(attachment.intrinsicWidth)
+    && Number.isInteger(attachment.intrinsicHeight)
+    && (attachment.intrinsicWidth || 0) > 0
+    && (attachment.intrinsicHeight || 0) > 0
+    && (attachment.intrinsicWidth || 0) <= 100_000
+    && (attachment.intrinsicHeight || 0) <= 100_000;
+  const width = hasDimensions ? attachment.intrinsicWidth! : fallbackWidth;
+  const height = hasDimensions ? attachment.intrinsicHeight! : fallbackHeight;
+  return `width="${width}" height="${height}"`;
+}
+
+interface ImageComposition {
+  images: Attachment[];
+  plan: ImageLayoutPlan;
+  html: string;
+}
+
+/** Build finite, class-only collage markup that AO3 can retain verbatim. */
+function imageCompositionHTML(
+  attachments: Attachment[] | undefined,
+  requested: ImageLayoutChoice | undefined,
+  renderImage: (attachment: Attachment, index: number) => string,
+): ImageComposition | null {
+  const images = (attachments || [])
+    .filter(attachment => attachment.type === 'image' && attachment.url.trim())
+    .slice(0, 4);
+  if (!images.length) return null;
+
+  const plan = resolveImageLayout(images, requested);
+  const image = (index: number) => renderImage(images[index], index);
+  const splitClass = (split: ImageSplit) => `image-split-${split.bucket}`;
+  const row = (first: number, second: number, split: ImageSplit, last = true) =>
+    `<span class="image-layout-row ${splitClass(split)}${last ? ' image-layout-last-row' : ''}"><span class="image-layout-cell image-layout-first">${image(first)}</span><span class="image-layout-cell image-layout-second">${image(second)}</span></span>`;
+
+  let html: string;
+  if (plan.layout === 'single') {
+    html = image(0);
+  } else if (plan.layout === 'stack') {
+    html = images.map((_, index) => `<span class="image-layout-stack-item${index === images.length - 1 ? ' image-layout-last-item' : ''}">${image(index)}</span>`).join('');
+  } else if (plan.layout === 'pair') {
+    html = row(0, 1, plan.splits[0]);
+  } else if (plan.layout === 'hero-top') {
+    html = `<span class="image-layout-feature">${image(0)}</span>${row(1, 2, plan.splits[0])}`;
+  } else if (plan.layout === 'hero-side') {
+    html = `<span class="image-layout-columns ${splitClass(plan.splits[0])}"><span class="image-layout-column image-layout-first">${image(0)}</span><span class="image-layout-column image-layout-second"><span class="image-layout-side-item">${image(1)}</span><span class="image-layout-side-item image-layout-last-item">${image(2)}</span></span></span>`;
+  } else {
+    html = `${row(0, 1, plan.splits[0], false)}${row(2, 3, plan.splits[1])}`;
+  }
+  return { images, plan, html };
+}
+
+function imageCompositionCSS(scope: string): string {
+  const selector = `#workskin ${scope}`;
+  return `${selector} .image-layout-row,${selector} .image-layout-columns{display:block;width:100%;font-size:0;overflow:hidden;}
+${selector} .image-layout-row{margin-bottom:1%;}
+${selector} .image-layout-last-row{margin-bottom:0;}
+${selector} .image-layout-cell,${selector} .image-layout-column{display:inline-block;vertical-align:top;overflow:hidden;}
+${selector} .image-layout-first{margin-right:1%;}
+${selector} .image-split-33-67 .image-layout-first{width:32.5%;}${selector} .image-split-33-67 .image-layout-second{width:66.5%;}
+${selector} .image-split-40-60 .image-layout-first{width:39.5%;}${selector} .image-split-40-60 .image-layout-second{width:59.5%;}
+${selector} .image-split-50-50 .image-layout-first{width:49.5%;}${selector} .image-split-50-50 .image-layout-second{width:49.5%;}
+${selector} .image-split-60-40 .image-layout-first{width:59.5%;}${selector} .image-split-60-40 .image-layout-second{width:39.5%;}
+${selector} .image-split-67-33 .image-layout-first{width:66.5%;}${selector} .image-split-67-33 .image-layout-second{width:32.5%;}
+${selector} .image-layout-feature,${selector} .image-layout-stack-item,${selector} .image-layout-side-item{display:block;width:100%;overflow:hidden;}
+${selector} .image-layout-feature,${selector} .image-layout-stack-item{margin-bottom:1%;}
+${selector} .image-layout-side-item{margin-bottom:2%;}
+${selector} .image-layout-last-item{margin-bottom:0;}`;
+}
+
 function twitterMediaHTML(
   attachments: Attachment[] | undefined,
   crop: Message['twitterMediaCrop'] = 'auto',
   quote = false,
+  requestedLayout?: ImageLayoutChoice,
 ): string {
-  const images = (attachments || []).filter(attachment => attachment.type === 'image' && attachment.url).slice(0, 4);
-  if (images.length === 0) return '';
-  const image = (attachment: Attachment, index: number, extraClass = '') =>
-    `<img src="${sanitizeUrl(attachment.url)}" alt="${attachmentAlt(attachment)}" class="twitter-media-image ${extraClass}" width="600" height="338" />`;
+  const composition = imageCompositionHTML(attachments, requestedLayout, attachment =>
+    `<img src="${sanitizeUrl(attachment.url)}" alt="${attachmentAlt(attachment)}" class="twitter-media-image" ${attachmentSizeAttributes(attachment, 600, 338)} />`
+  );
+  if (!composition) return '';
   const prefix = quote ? 'quote-media' : 'tweet-media';
   const cropClass = `media-crop-${crop || 'auto'}`;
-  if (images.length === 1) {
-    return `<div class="${prefix} twitter-media-grid media-count-1 ${cropClass}">${image(images[0], 0)}</div>`;
-  }
-  if (images.length === 3) {
-    return `<div class="${prefix} twitter-media-grid media-count-3 ${cropClass}"><span class="media-primary">${image(images[0], 0)}</span><span class="media-stack"><span class="media-cell">${image(images[1], 1)}</span><span class="media-cell">${image(images[2], 2)}</span></span></div>`;
-  }
-  return `<div class="${prefix} twitter-media-grid media-count-${images.length} ${cropClass}">${images.map((attachment, index) => `<span class="media-cell">${image(attachment, index)}</span>`).join('')}</div>`;
+  return `<div class="${prefix} twitter-media-grid media-count-${composition.images.length} media-layout-${composition.plan.layout} ${cropClass}">${composition.html}</div>`;
 }
 
 function resolveQuoteIdentity(project: SkinProject, quote: TwitterQuotePost) {
@@ -257,7 +323,7 @@ function twitterQuoteHTML(project: SkinProject, quote: TwitterQuotePost | undefi
     ? `<span class="verified-container quote-verified-container"><span class="quote-verified-badge" title="Verified">✔</span></span>`
     : '';
   const handle = identity.handle ? `@${sanitizeText(identity.handle)}` : '';
-  const media = twitterMediaHTML(quote.attachments, 'auto', true);
+  const media = twitterMediaHTML(quote.attachments, 'auto', true, quote.imageLayout);
   const timestamp = quote.timestamp ? `<span class="quote-time"> · ${sanitizeText(quote.timestamp)}</span>` : '';
   return `<div class="quote">${srOnly('Quoted post by ')}<div class="quote-head">${avatar}<span class="quote-name">${sanitizeText(identity.name)}</span>${verified}<span class="quote-handle">${handle}</span>${timestamp}</div><div class="quote-body">${highlightTwitterText(sanitizeText(quote.text))}${media}</div></div>`;
 }
@@ -415,9 +481,11 @@ function whatsappReplyHTML(message: Message, project: SkinProject, allMessages: 
 }
 
 function whatsappImagesHTML(message: Message): string {
-  const attachments = (message.attachments || []).slice(0, 4);
-  if (!attachments.length) return '';
-  return `<span class="wa-images wa-images-${attachments.length}">${attachments.map((attachment, index) => `<img src="${sanitizeUrl(attachment.url)}" alt="${attachmentAlt(attachment)}" class="wa-image wa-image-${index + 1}" width="600" height="400" />`).join('')}</span>`;
+  const composition = imageCompositionHTML(message.attachments, message.imageLayout, (attachment, index) =>
+    `<img src="${sanitizeUrl(attachment.url)}" alt="${attachmentAlt(attachment)}" class="wa-image wa-image-${index + 1}" ${attachmentSizeAttributes(attachment, 600, 400)} />`
+  );
+  if (!composition) return '';
+  return `<span class="wa-images wa-images-${composition.images.length} image-layout-${composition.plan.layout}">${composition.html}</span>`;
 }
 
 function whatsappLinkPreviewHTML(message: Message): string {
@@ -550,7 +618,8 @@ function whatsappMessageHTML(message: Message, project: SkinProject, options: { 
   const reactions = whatsappReactionsHTML(message);
   const classes = [
     'bubble', message.outgoing ? 'out' : 'in', endsRun ? 'has-tail' : 'no-tail',
-    images ? 'image-bubble' : '', reply ? 'has-reply' : '', link ? 'has-link' : '',
+    images ? 'image-bubble' : '', images && (message.attachments || []).filter(attachment => attachment.url.trim()).length > 1 ? 'multi-image-bubble' : '',
+    reply ? 'has-reply' : '', link ? 'has-link' : '',
     media ? 'has-media' : '', reactions ? 'has-reaction' : '', emojiSize ? `emoji-only ${emojiSize}` : '',
   ].filter(Boolean).join(' ');
   return `<div class="row ${message.outgoing ? 'out' : 'in'} ${groupClass}" data-message-id="${sanitizeAttribute(message.id)}"><dl class="msg">${hiddenSpeaker}<dd class="${classes}">${groupSender}${reply}${text}${images}${link}${media}${time}${tick}${reactions}</dd></dl></div>`;
@@ -605,11 +674,11 @@ function iosReplyHTML(message: Message, project: SkinProject, sourceMessages: Me
  * one description out of four (§3.4). The count class picks the collage.
  */
 function iosImagesHTML(message: Message): string {
-  const attachments = (message.attachments || []).slice(0, 4);
-  if (!attachments.length) return '';
-  return `<span class="ios-images ios-images-${attachments.length}">${attachments.map((attachment, index) =>
-    `<img src="${sanitizeUrl(attachment.url)}" alt="${attachmentAlt(attachment)}" class="ios-image ios-image-${index + 1}" width="600" height="400" />`
-  ).join('')}</span>`;
+  const composition = imageCompositionHTML(message.attachments, message.imageLayout, (attachment, index) =>
+    `<img src="${sanitizeUrl(attachment.url)}" alt="${attachmentAlt(attachment)}" class="ios-image ios-image-${index + 1}" ${attachmentSizeAttributes(attachment, 600, 400)} />`
+  );
+  if (!composition) return '';
+  return `<span class="ios-images ios-images-${composition.images.length} image-layout-${composition.plan.layout}">${composition.html}</span>`;
 }
 
 function iosLinkPreviewHTML(message: Message): string {
@@ -793,7 +862,8 @@ function iosMessageHTML(message: Message, project: SkinProject, options: { index
 
   const classes = [
     'bubble', message.outgoing ? 'out' : 'in', endsRun && !emojiSize ? 'has-tail' : 'no-tail',
-    images ? 'image-bubble' : '', reply ? 'has-reply' : '', link ? 'has-link' : '',
+    images ? 'image-bubble' : '', images && (message.attachments || []).filter(attachment => attachment.url.trim()).length > 1 ? 'multi-image-bubble' : '',
+    reply ? 'has-reply' : '', link ? 'has-link' : '',
     media ? 'has-media' : '', tapbacks ? 'has-tapbacks' : '', legacyReaction ? 'has-reaction' : '',
     emojiSize ? `emoji-only ${emojiSize}` : '',
   ].filter(Boolean).join(' ');
@@ -1055,7 +1125,7 @@ function msgHTML(msg: Message, template: string, project: SkinProject, options?:
     
     const tweetMedia = msg.twitterVideo
       ? twitterVideoHTML(msg, options?.renderMode || 'static')
-      : twitterMediaHTML(msg.attachments, msg.twitterMediaCrop || 'auto');
+      : twitterMediaHTML(msg.attachments, msg.twitterMediaCrop || 'auto', false, msg.imageLayout);
     
     // Enhanced metrics with icons - use per-tweet metrics if available, otherwise fall back to global
     // Only use global defaults if the property doesn't exist on the message object
@@ -1854,20 +1924,12 @@ ${tones}
 #workskin blockquote.ios-reply span{font-size:0.8em;}
 #workskin .ios-reply-thumb{float:right;width:2.5em;height:2.5em;border-radius:0.25em;margin-left:0.4em;}
 #workskin blockquote.ios-reply-missing{border-left-color:#c8102e;}
-/* IMAGE COLLAGES. Flex plus child margins, never gap — AO3 keeps a property
+/* IMAGE COLLAGES. Inline-block cells plus child margins, never gap — AO3 keeps a property
    only if it is on its list or contains a shorthand name, so column-gap passes
    and bare gap does not. No object-fit either; it has no legal equivalent. */
 #workskin .ios-images{display:block;margin-top:0.4em;font-size:0;overflow:hidden;border-radius:0.7em;}
-#workskin .ios-image{display:inline-block;width:49.5%;height:auto;vertical-align:top;margin:0 1% 1% 0;}
-#workskin .ios-images-1 .ios-image{width:100%;margin-right:0;margin-bottom:0;}
-#workskin .ios-images-2 .ios-image{width:49.5%;margin-bottom:0;}
-#workskin .ios-images-2 .ios-image-2{margin-right:0;}
-/* Three images: one tall image beside a stack of two. */
-#workskin .ios-images-3 .ios-image-1{width:66%;margin-bottom:0;}
-#workskin .ios-images-3 .ios-image-2,#workskin .ios-images-3 .ios-image-3{width:32.5%;margin-right:0;}
-#workskin .ios-images-3 .ios-image-3{margin-bottom:0;}
-#workskin .ios-images-4 .ios-image-2,#workskin .ios-images-4 .ios-image-4{margin-right:0;}
-#workskin .ios-images-4 .ios-image-3,#workskin .ios-images-4 .ios-image-4{margin-bottom:0;}
+#workskin .ios-image{display:block;width:100%;height:auto;margin:0;}
+${imageCompositionCSS('.ios-images')}
 /* LINK CARD. The whole card is the anchor; the URL line keeps the destination
    readable when the skin is off. */
 #workskin a.ios-link-preview{display:block;margin-top:0.4em;border-radius:0.7em;overflow:hidden;background:${colour.cardBg};color:inherit;text-decoration:none;padding-bottom:0.4em;}
@@ -1906,6 +1968,7 @@ ${tones}
 #workskin .ios-event dd{display:inline-block;font-size:0.688em;font-weight:600;padding:0.2em 0.5em;}
 #workskin .ios-event-system dd{max-width:82%;font-weight:400;}
 #workskin dd.bubble.image-bubble{padding:0.533em 0.8em;max-width:60%;overflow:visible;}
+#workskin dd.bubble.multi-image-bubble{width:17.333em;max-width:82%;box-sizing:border-box;}
 #workskin dd.bubble.image-bubble img.message-image{width:100%;height:auto;display:block;border-radius:0.8em;margin-top:0.4em;}
 #workskin dd.bubble.image-bubble.out{border-bottom-right-radius:0.267em;}
 #workskin dd.bubble.image-bubble.out img.message-image{border-bottom-right-radius:0.267em;}
@@ -2146,6 +2209,7 @@ ${PARAGRAPH_RESET_CSS}
 #workskin .row.in dl.msg{align-items:flex-start;}
 #workskin dd{margin:0;}
 #workskin dd.bubble{position:relative;display:inline-block;min-width:2.5em;max-width:20em;padding:0.5em 0.714em;border-radius:0.571em;line-height:1.4;font-size:0.875em;box-shadow:${colour.bubbleShadow};white-space:normal;word-break:keep-all;overflow-wrap:anywhere;}
+#workskin dd.bubble.multi-image-bubble{width:20em;max-width:100%;box-sizing:border-box;}
 #workskin dd.bubble.out{background:${colour.senderBubbleBg};color:${colour.bubbleTextColor};}
 #workskin dd.bubble.in{background:${colour.receiverBubbleBg};color:${colour.bubbleTextColor};}
 #workskin .row.out.last dd.bubble,#workskin .row.out.single dd.bubble{border-bottom-right-radius:0.143em;}
@@ -2175,8 +2239,8 @@ ${tones}
 #workskin .wa-reply span{font-size:0.9em;max-height:3.8em;overflow:hidden;}
 #workskin .wa-reply-missing{border-left-color:#b3261e;}
 #workskin .wa-images{display:block;margin-top:0.4em;font-size:0;overflow:hidden;border-radius:0.45em;}
-#workskin .wa-image{display:inline-block;width:49%;height:auto;vertical-align:top;margin:0 1% 1% 0;}
-#workskin .wa-images-1 .wa-image{width:100%;margin-right:0;}
+#workskin .wa-image{display:block;width:100%;height:auto;margin:0;}
+${imageCompositionCSS('.wa-images')}
 #workskin .wa-link-preview{display:block;margin-top:0.4em;border-radius:0.4em;overflow:hidden;background:rgba(0,0,0,0.07);color:inherit;text-decoration:none;padding-bottom:0.4em;}
 #workskin .wa-link-preview b,#workskin .wa-link-preview span{display:block;margin:0.25em 0.5em 0 0.5em;}
 #workskin .wa-link-image{display:block;width:100%;height:auto;margin:0;}
@@ -2370,13 +2434,7 @@ ${PARAGRAPH_RESET_CSS}
 #workskin .tweet .tweet-image{width:100%;max-width:100%;height:auto;max-height:17.813em;border-radius:1em;margin-top:0.75em;border:1px solid ${colour.borderColor};display:block;}
 #workskin .tweet .twitter-media-grid{display:block;width:100%;margin-top:0.75em;border:1px solid ${colour.borderColor};border-radius:0.75em;overflow:hidden;box-sizing:border-box;font-size:0;}
 #workskin .tweet .twitter-media-image{display:block;width:100%;max-width:100%;height:auto;margin:0;box-sizing:border-box;}
-#workskin .tweet .media-cell{display:inline-block;width:50%;vertical-align:top;overflow:hidden;box-sizing:border-box;border:1px solid ${colour.borderColor};}
-#workskin .tweet .media-count-2 .media-cell{width:50%;}
-#workskin .tweet .media-count-4 .media-cell{width:50%;}
-#workskin .tweet .media-count-3{display:table;table-layout:fixed;}
-#workskin .tweet .media-count-3 .media-primary{display:table-cell;width:66.667%;vertical-align:middle;overflow:hidden;}
-#workskin .tweet .media-count-3 .media-stack{display:table-cell;width:33.333%;vertical-align:top;overflow:hidden;}
-#workskin .tweet .media-count-3 .media-cell{display:block;width:100%;}
+${imageCompositionCSS('.tweet .twitter-media-grid')}
 #workskin .tweet .media-crop-fill-width .twitter-media-image{width:100%;height:auto;}
 #workskin .tweet .media-crop-fill-height{height:14em;}
 #workskin .tweet .media-crop-fill-height .twitter-media-image{height:14em;width:auto;max-width:none;}

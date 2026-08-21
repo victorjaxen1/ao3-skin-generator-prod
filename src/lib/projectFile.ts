@@ -1,4 +1,4 @@
-import { defaultProject, GroupParticipant, IOSLinkPreview, IOSMedia, IOSParticipantTone, IOSTapback, Message, SceneCast, SceneCharacter, SkinProject, SkinSettings, TwitterActivity, TwitterCharacter, TwitterPoll, TwitterQuotePost, TwitterTranslation, TwitterVideo, UniversalCharacter, WhatsAppLinkPreview, WhatsAppMedia, WhatsAppParticipantTone, WhatsAppReaction } from './schema';
+import { defaultProject, GroupParticipant, ImageLayoutChoice, IOSLinkPreview, IOSMedia, IOSParticipantTone, IOSTapback, Message, SceneCast, SceneCharacter, SkinProject, SkinSettings, TwitterActivity, TwitterCharacter, TwitterPoll, TwitterQuotePost, TwitterTranslation, TwitterVideo, UniversalCharacter, WhatsAppLinkPreview, WhatsAppMedia, WhatsAppParticipantTone, WhatsAppReaction } from './schema';
 import { validateCharacterLibrary } from './characterStorage';
 import { migrateProjectIdentities, normalizeTwitterHandle } from './identity';
 import {
@@ -18,7 +18,7 @@ import { getTwitterPollError, migrateTwitterProject, validateTwitterRelationship
 import { normalizeWhatsAppReactions, validateWhatsAppMedia, validateWhatsAppMessage, WHATSAPP_TONE_IDS } from './whatsapp';
 import { IOS_AUDIO_MIME_TYPES, IOS_TONE_IDS, IOS_VIDEO_MIME_TYPES, normalizeIOSTapbacks, validateIOSMedia, validateIOSMessage } from './ios';
 
-export const PROJECT_FILE_SCHEMA_VERSION = 7;
+export const PROJECT_FILE_SCHEMA_VERSION = 8;
 export const PROJECT_FILE_MAX_BYTES = 2 * 1024 * 1024;
 export const APPLICATION_VERSION = '0.1.0';
 
@@ -94,7 +94,16 @@ export interface SceneProjectFileV7 {
   characterLibrary: UniversalCharacter[];
 }
 
-export type SceneProjectFile = SceneProjectFileV7;
+export interface SceneProjectFileV8 {
+  format: 'ao3skingen-project';
+  schemaVersion: 8;
+  exportedAt: string;
+  application: { name: 'AO3 SkinGen'; version: string };
+  project: SkinProject;
+  characterLibrary: UniversalCharacter[];
+}
+
+export type SceneProjectFile = SceneProjectFileV8;
 
 export interface SiteThemeFileV1 {
   format: 'ao3skingen-site-theme';
@@ -204,12 +213,28 @@ function safeUrl(value: unknown, label: string): string {
 function validateAttachment(value: unknown, index: number) {
   const raw = object(value, `Attachment ${index + 1}`);
   if (raw.type !== 'image') invalid(`Attachment ${index + 1} has an unsupported type.`);
+  const hasWidth = raw.intrinsicWidth !== undefined;
+  const hasHeight = raw.intrinsicHeight !== undefined;
+  if (hasWidth !== hasHeight) invalid(`Attachment ${index + 1} image dimensions must include both width and height.`);
+  if (hasWidth && (
+    typeof raw.intrinsicWidth !== 'number' || !Number.isInteger(raw.intrinsicWidth) || raw.intrinsicWidth < 1 || raw.intrinsicWidth > 100_000
+    || typeof raw.intrinsicHeight !== 'number' || !Number.isInteger(raw.intrinsicHeight) || raw.intrinsicHeight < 1 || raw.intrinsicHeight > 100_000
+  )) invalid(`Attachment ${index + 1} image dimensions are invalid.`);
   return {
     type: 'image' as const,
     url: safeUrl(raw.url, `Attachment ${index + 1} URL`),
     ...(typeof raw.alt === 'string' ? { alt: raw.alt.slice(0, 500) } : {}),
     ...(typeof raw.decorative === 'boolean' ? { decorative: raw.decorative } : {}),
+    ...(hasWidth ? { intrinsicWidth: raw.intrinsicWidth as number, intrinsicHeight: raw.intrinsicHeight as number } : {}),
   };
+}
+
+const IMAGE_LAYOUTS = new Set<ImageLayoutChoice>(['auto', 'stack', 'pair', 'hero-top', 'hero-side', 'grid']);
+
+function imageLayout(value: unknown): ImageLayoutChoice | undefined {
+  return typeof value === 'string' && IMAGE_LAYOUTS.has(value as ImageLayoutChoice)
+    ? value as ImageLayoutChoice
+    : undefined;
 }
 
 function httpsUrl(value: unknown, label: string, required = false): string {
@@ -245,6 +270,7 @@ function validateTwitterQuote(value: unknown, label: string): TwitterQuotePost {
     : Array.isArray(raw.attachments)
       ? raw.attachments.slice(0, 4).map(validateAttachment)
       : invalid(`${label} attachments must be a list.`);
+  const layout = imageLayout(raw.imageLayout);
   return {
     ...(typeof raw.characterId === 'string' ? { characterId: id(raw.characterId, `${label} character ID`) } : {}),
     ...(typeof raw.name === 'string' ? { name: string(raw.name, `${label} name`, 200) } : {}),
@@ -254,6 +280,7 @@ function validateTwitterQuote(value: unknown, label: string): TwitterQuotePost {
     text: string(raw.text, `${label} text`, 2_000),
     ...(typeof raw.timestamp === 'string' ? { timestamp: string(raw.timestamp, `${label} timestamp`, 200) } : {}),
     ...(attachments ? { attachments } : {}),
+    ...(layout ? { imageLayout: layout } : {}),
   };
 }
 
@@ -491,6 +518,7 @@ function validateMessage(value: unknown, index: number): Message {
     : Array.isArray(raw.attachments)
     ? raw.attachments.slice(0, 4).map(validateAttachment)
     : invalid(`Message ${index + 1} attachments must be a list.`);
+  const layout = imageLayout(raw.imageLayout);
   const replyToHandles = raw.replyToHandles === undefined
     ? undefined
     : Array.isArray(raw.replyToHandles)
@@ -525,6 +553,7 @@ function validateMessage(value: unknown, index: number): Message {
   if (typeof raw.status === 'string' && STATUS.has(raw.status)) result.status = raw.status as Message['status'];
   if (raw.statusMode === 'auto' || raw.statusMode === 'manual') result.statusMode = raw.statusMode;
   if (attachments) result.attachments = attachments;
+  if (layout) result.imageLayout = layout;
   if (replyToHandles) result.replyToHandles = replyToHandles;
   if (raw.twitterLayout === 'auto' || raw.twitterLayout === 'expanded' || raw.twitterLayout === 'compact') result.twitterLayout = raw.twitterLayout;
   if (raw.twitterReplyHandlesMode === 'auto' || raw.twitterReplyHandlesMode === 'manual') result.twitterReplyHandlesMode = raw.twitterReplyHandlesMode;
@@ -785,7 +814,9 @@ export const PROJECT_FILE_MIGRATIONS: Readonly<Record<number, (value: SkinProjec
   4: (project) => migrateTwitterProject(migrateProjectIdentities(project)),
   5: (project) => migrateTwitterProject(migrateProjectIdentities(project)),
   /**
-   * v6 → v7 added the structured iOS content model.
+   * v6 → v7 added the structured iOS content model. v7 → v8 adds only
+   * optional layout hints and measured image dimensions, so migration never
+   * needs to invent a value for an older project.
    *
    * This entry exists because `parseProjectFile` indexes this table for *every*
    * accepted older envelope — leaving `[6]` undefined would throw
@@ -796,12 +827,13 @@ export const PROJECT_FILE_MIGRATIONS: Readonly<Record<number, (value: SkinProjec
    * `iosTapbacks` canonically; a v6 file simply arrives without any.
    */
   6: (project) => migrateTwitterProject(migrateProjectIdentities(project)),
+  7: (project) => migrateTwitterProject(migrateProjectIdentities(project)),
 });
 
-export function createProjectFile(project: SkinProject, characterLibrary: UniversalCharacter[], now = new Date()): SceneProjectFileV7 {
+export function createProjectFile(project: SkinProject, characterLibrary: UniversalCharacter[], now = new Date()): SceneProjectFileV8 {
   return {
     format: 'ao3skingen-project',
-    schemaVersion: 7,
+    schemaVersion: 8,
     exportedAt: now.toISOString(),
     application: { name: 'AO3 SkinGen', version: APPLICATION_VERSION },
     project: validateProject(migrateTwitterProject(migrateProjectIdentities(project))),
@@ -813,7 +845,7 @@ export function serializeProjectFile(project: SkinProject, characterLibrary: Uni
   return JSON.stringify(createProjectFile(project, characterLibrary, now), null, 2);
 }
 
-export function parseProjectFile(text: string): SceneProjectFileV7 {
+export function parseProjectFile(text: string): SceneProjectFileV8 {
   const raw = parseJson(text);
   assertExactTopLevel(raw, TOP_SCENE_KEYS);
   const envelope = validateEnvelope(raw, 'ao3skingen-project', PROJECT_FILE_SCHEMA_VERSION);
@@ -823,7 +855,7 @@ export function parseProjectFile(text: string): SceneProjectFileV7 {
     : migrateTwitterProject(migrateProjectIdentities(validatedProject));
   return {
     format: 'ao3skingen-project',
-    schemaVersion: 7,
+    schemaVersion: 8,
     exportedAt: envelope.exportedAt,
     application: { name: 'AO3 SkinGen', version: string(object(raw.application, 'Application').version, 'Application version', 40, true) },
     project,

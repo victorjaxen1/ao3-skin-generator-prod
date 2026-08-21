@@ -12,7 +12,7 @@ import {
 import { cloneTheme, TEMPLATES } from '../src/lib/siteSkin/templates';
 
 test.describe('versioned project files', () => {
-  test('round-trips a scene cast and character library through schema v7', () => {
+  test('round-trips a scene cast, image metadata, and character library through schema v8', () => {
     const project = defaultProject();
     project.id = 'scene-1';
     project.messages[0].statusMode = 'auto';
@@ -21,7 +21,10 @@ test.describe('versioned project files', () => {
       url: 'https://i.ibb.co/example/image.png',
       alt: 'Cafe sign',
       decorative: false,
+      intrinsicWidth: 1200,
+      intrinsicHeight: 800,
     }];
+    project.messages[0].imageLayout = 'pair';
     const text = serializeProjectFile(project, [{
       id: 'alex',
       name: 'Alex',
@@ -31,14 +34,17 @@ test.describe('versioned project files', () => {
     }], new Date('2026-08-12T00:00:00.000Z'));
 
     const parsed = parseProjectFile(text);
-    expect(parsed.schemaVersion).toBe(7);
+    expect(parsed.schemaVersion).toBe(8);
     expect(parsed.project.cast?.selfId).toBeTruthy();
     expect(parsed.project.messages[0].attachments?.[0]).toEqual({
       type: 'image',
       url: 'https://i.ibb.co/example/image.png',
       alt: 'Cafe sign',
       decorative: false,
+      intrinsicWidth: 1200,
+      intrinsicHeight: 800,
     });
+    expect(parsed.project.messages[0].imageLayout).toBe('pair');
     expect(parsed.project.messages[0].statusMode).toBe('auto');
     expect(parsed.characterLibrary).toHaveLength(1);
     expect(summarizeProjectFile(parsed)).toEqual({
@@ -53,13 +59,28 @@ test.describe('versioned project files', () => {
 
   test('rejects future schemas, unknown top-level fields, invalid URLs, and oversized input', () => {
     const valid = createProjectFile(defaultProject(), []);
-    expect(() => parseProjectFile(JSON.stringify({ ...valid, schemaVersion: 8 }))).toThrow(ProjectFileError);
+    expect(() => parseProjectFile(JSON.stringify({ ...valid, schemaVersion: 9 }))).toThrow(ProjectFileError);
     expect(() => parseProjectFile(JSON.stringify({ ...valid, surprise: true }))).toThrow(/Unknown top-level field/);
 
     const badUrl = structuredClone(valid);
     badUrl.project.messages[0].attachments = [{ type: 'image', url: 'javascript:alert(1)' }];
     expect(() => parseProjectFile(JSON.stringify(badUrl))).toThrow(/unsupported image address/);
     expect(() => parseProjectFile(' '.repeat(2 * 1024 * 1024 + 1))).toThrow(/2 MB/);
+  });
+
+  test('rejects partial, fractional, and excessive image dimensions', () => {
+    const valid = createProjectFile(defaultProject(), []) as any;
+    valid.project.messages[0].attachments = [{
+      type: 'image', url: 'https://example.com/a.png', intrinsicWidth: 800,
+    }];
+    expect(() => parseProjectFile(JSON.stringify(valid))).toThrow(/both width and height/);
+
+    valid.project.messages[0].attachments[0].intrinsicHeight = 600.5;
+    expect(() => parseProjectFile(JSON.stringify(valid))).toThrow(/dimensions are invalid/);
+
+    valid.project.messages[0].attachments[0].intrinsicHeight = 600;
+    valid.project.messages[0].attachments[0].intrinsicWidth = 100_001;
+    expect(() => parseProjectFile(JSON.stringify(valid))).toThrow(/dimensions are invalid/);
   });
 
   test('imports a v1 scene and migrates it to stable identities', () => {
@@ -80,7 +101,7 @@ test.describe('versioned project files', () => {
     };
 
     const parsed = parseProjectFile(JSON.stringify(v1));
-    expect(parsed.schemaVersion).toBe(7);
+    expect(parsed.schemaVersion).toBe(8);
     expect(parsed.project.cast?.twitterPrimaryId).toBe('twitter-primary');
     expect(parsed.project.cast?.characters[0]).toMatchObject({
       name: 'Legacy User',

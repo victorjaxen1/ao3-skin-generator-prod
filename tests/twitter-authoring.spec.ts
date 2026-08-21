@@ -88,8 +88,16 @@ test('authors, reorders, and removes a four-image grid with accessible descripti
   await expect(preview(page).locator('.media-count-4')).toHaveCount(1);
   await expect(preview(page).locator('.twitter-media-image')).toHaveCount(4);
 
+  await card.getByRole('combobox', { name: 'Image layout' }).selectOption('stack');
+  await expect(preview(page).locator('.media-layout-stack')).toHaveCount(1);
+  await card.getByRole('combobox', { name: 'Image layout' }).selectOption('grid');
+  await expect(preview(page).locator('.media-layout-grid')).toHaveCount(1);
+
+  await card.getByRole('button', { name: 'Make primary' }).last().click();
+  await expect(preview(page).locator('.twitter-media-image').first()).toHaveAttribute('alt', 'Story image 4');
+
   await card.getByRole('button', { name: 'Move image 4 earlier' }).click();
-  await expect(preview(page).locator('.twitter-media-image').nth(2)).toHaveAttribute('alt', 'Story image 4');
+  await expect(preview(page).locator('.twitter-media-image').nth(2)).toHaveAttribute('alt', 'Story image 3');
   await card.getByRole('button', { name: 'Remove image 2' }).click();
   await expect(preview(page).locator('.media-count-3')).toHaveCount(1);
 });

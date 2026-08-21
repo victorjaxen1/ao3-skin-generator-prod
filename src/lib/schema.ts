@@ -1,9 +1,14 @@
+export type ImageLayoutChoice = 'auto' | 'stack' | 'pair' | 'hero-top' | 'hero-side' | 'grid';
+
 export type Attachment = {
   type: 'image';
   url: string;
   alt?: string;
   /** Empty alt is intentional, rather than an unfinished description. */
   decorative?: boolean;
+  /** Intrinsic dimensions captured from the author's loaded preview. */
+  intrinsicWidth?: number;
+  intrinsicHeight?: number;
 };
 
 export type TwitterSceneMode = 'single' | 'timeline' | 'thread';
@@ -147,6 +152,7 @@ export interface TwitterQuotePost {
   text: string;
   timestamp?: string;
   attachments?: Attachment[];
+  imageLayout?: ImageLayoutChoice;
 }
 
 export interface TwitterVideo {
@@ -256,6 +262,8 @@ export interface Message {
   timestamp?: string;
   outgoing: boolean; // true = author perspective sender bubble
   attachments?: Attachment[];
+  /** Composition for two-to-four image attachments. Omitted means automatic. */
+  imageLayout?: ImageLayoutChoice;
   roleColor?: string; // Overrides the participant colour for this sender's name
   // WhatsApp Group Chat
   participantId?: string; // ID of GroupParticipant (for group messages)

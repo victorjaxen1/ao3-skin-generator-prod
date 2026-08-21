@@ -1,4 +1,4 @@
-import { IOSParticipantTone, SkinProject, WhatsAppParticipantTone } from './schema';
+import { ImageLayoutChoice, IOSParticipantTone, SkinProject, WhatsAppParticipantTone } from './schema';
 import { migrateProjectIdentities } from './identity';
 import { migrateTwitterProject, normalizeYouTubeUrl } from './twitter';
 import { normalizeWhatsAppReactions, WHATSAPP_TONE_IDS } from './whatsapp';
@@ -12,6 +12,7 @@ const MAX_MESSAGES = 100; // Max messages per project
 const MAX_CONTENT_LENGTH = 10000; // Max characters per message
 const MAX_URL_LENGTH = 2048; // Standard URL length limit
 const MESSAGE_STATUSES = new Set(['sending', 'sent', 'delivered', 'read']);
+const IMAGE_LAYOUTS = new Set<ImageLayoutChoice>(['auto', 'stack', 'pair', 'hero-top', 'hero-side', 'grid']);
 const LEGACY_W3_AUDIO_SAMPLE = 'https://media.w3.org/2010/07/bunny/04-Death_Becomes_Fur.oga';
 const CORS_AUDIO_SAMPLE = 'https://archive.org/download/testmp3testfile/mpthreetest.mp3';
 
@@ -44,6 +45,12 @@ function sanitizeStoredHttpsUrl(value: unknown): string {
   }
 }
 
+function sanitizeStoredImageLayout(value: unknown): ImageLayoutChoice | undefined {
+  return typeof value === 'string' && IMAGE_LAYOUTS.has(value as ImageLayoutChoice)
+    ? value as ImageLayoutChoice
+    : undefined;
+}
+
 /**
  * Validate and sanitize a message object from storage
  */
@@ -74,6 +81,7 @@ function sanitizeMessage(msg: unknown): { id: string; sender: string; content: s
     twitterLayout: m.twitterLayout === 'expanded' || m.twitterLayout === 'compact' || m.twitterLayout === 'auto' ? m.twitterLayout : undefined,
     twitterReplyHandlesMode: m.twitterReplyHandlesMode === 'manual' || m.twitterReplyHandlesMode === 'auto' ? m.twitterReplyHandlesMode : undefined,
     twitterMediaCrop: m.twitterMediaCrop === 'auto' || m.twitterMediaCrop === 'fill-width' || m.twitterMediaCrop === 'fill-height' ? m.twitterMediaCrop : undefined,
+    imageLayout: sanitizeStoredImageLayout(m.imageLayout),
     attachments: sanitizeStoredAttachments(m.attachments),
     twitterQuote: sanitizeStoredQuote(m.twitterQuote),
     twitterVideo: sanitizeStoredVideo(m.twitterVideo),
@@ -269,11 +277,20 @@ function sanitizeStoredAttachments(value: unknown) {
     const raw = candidate as Record<string, unknown>;
     const url = sanitizeStoredUrl(raw.url);
     if (!url) return [];
+    const hasDimensions = typeof raw.intrinsicWidth === 'number'
+      && Number.isInteger(raw.intrinsicWidth)
+      && raw.intrinsicWidth >= 1
+      && raw.intrinsicWidth <= 100_000
+      && typeof raw.intrinsicHeight === 'number'
+      && Number.isInteger(raw.intrinsicHeight)
+      && raw.intrinsicHeight >= 1
+      && raw.intrinsicHeight <= 100_000;
     return [{
       type: 'image' as const,
       url,
       ...(typeof raw.alt === 'string' ? { alt: sanitizeString(raw.alt, 500) } : {}),
       ...(typeof raw.decorative === 'boolean' ? { decorative: raw.decorative } : {}),
+      ...(hasDimensions ? { intrinsicWidth: raw.intrinsicWidth, intrinsicHeight: raw.intrinsicHeight } : {}),
     }];
   });
 }
@@ -281,6 +298,8 @@ function sanitizeStoredAttachments(value: unknown) {
 function sanitizeStoredQuote(value: unknown) {
   if (!value || typeof value !== 'object') return undefined;
   const raw = value as Record<string, unknown>;
+  const attachments = sanitizeStoredAttachments(raw.attachments);
+  const layout = sanitizeStoredImageLayout(raw.imageLayout);
   return {
     ...(typeof raw.characterId === 'string' ? { characterId: sanitizeString(raw.characterId, 100) } : {}),
     ...(typeof raw.name === 'string' ? { name: sanitizeString(raw.name, 200) } : {}),
@@ -289,7 +308,8 @@ function sanitizeStoredQuote(value: unknown) {
     ...(typeof raw.verified === 'boolean' ? { verified: raw.verified } : {}),
     text: sanitizeString(raw.text, 2_000),
     ...(typeof raw.timestamp === 'string' ? { timestamp: sanitizeString(raw.timestamp, 200) } : {}),
-    ...(sanitizeStoredAttachments(raw.attachments) ? { attachments: sanitizeStoredAttachments(raw.attachments) } : {}),
+    ...(attachments ? { attachments } : {}),
+    ...(layout ? { imageLayout: layout } : {}),
   };
 }
 

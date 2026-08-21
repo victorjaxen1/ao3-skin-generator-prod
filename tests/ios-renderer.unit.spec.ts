@@ -179,10 +179,10 @@ test.describe('iOS renderer and export contract', () => {
 });
 
 test.describe('iOS persistence', () => {
-  test('v7 round-trips every iOS field and keeps transcript and preflight detail', () => {
+  test('v8 round-trips every iOS field and keeps transcript and preflight detail', () => {
     const project = richIOS();
     const parsed = parseProjectFile(JSON.stringify(createProjectFile(project, [])));
-    expect(parsed.schemaVersion).toBe(7);
+    expect(parsed.schemaVersion).toBe(8);
     const shape = (messages: Message[]) => messages.map(message => ({
       id: message.id,
       reply: message.iosReply,
