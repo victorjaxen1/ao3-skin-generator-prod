@@ -323,6 +323,13 @@ export function liftSurface(background: string): string {
  * background from the cast, surface from the background, text from both, accent
  * last so `fixAccent` is measuring against the finished page.
  *
+ * `declaredAccent` replaces what `pickAccent` would have ranked, and nothing
+ * else. It is the seam a caller needs when the page *says* what its colour is
+ * and the swatches disagree — `siteTheme.ts` uses it for a stock framework
+ * stylesheet — and it enters *above* `fixAccent` on purpose: a declared colour
+ * is a claim about the brand, not a licence to fail the contrast floor, so it is
+ * repaired against the finished page exactly like a ranked one.
+ *
  * **The loop is the feature.** A mid-tone page is the one input that defeats
  * both text colours at once — neither white nor near-black clears 4.5:1 against
  * a luminance of ~0.2 — and pushing it further toward its pole is exactly the
@@ -335,10 +342,11 @@ export function liftSurface(background: string): string {
  */
 export function colorsFromSwatches(
   swatches: readonly Swatch[],
-  polarity: Polarity
+  polarity: Polarity,
+  declaredAccent: string | null = null
 ): SiteSkinTheme['colors'] {
   const pole = POLE[polarity];
-  const rawAccent = pickAccent(swatches);
+  const rawAccent = declaredAccent ? normalizeHex(declaredAccent) : pickAccent(swatches);
   let background = mixHex(imageCast(swatches), pole, CAST_TINT[polarity]);
   let colors = resolve(background, rawAccent);
 

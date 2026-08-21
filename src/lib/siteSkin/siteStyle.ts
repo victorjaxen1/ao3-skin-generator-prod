@@ -448,12 +448,72 @@ export function snapRadius(px: number | null): string | null {
 }
 
 /**
+ * Hued colours a site gets by **not choosing one**.
+ *
+ * The distinction this table draws is not "colours frameworks contain" — it is
+ * colours that appear because nobody picked. `$primary` is what a stock
+ * Bootstrap build paints its buttons when the SASS was never recompiled, so a
+ * page carrying it is telling us about its toolchain, not its taste. That is
+ * the opposite of a Tailwind palette, where `bg-blue-500` is a designer typing
+ * a decision, and it is why Tailwind's ramp is deliberately absent below.
+ *
+ * **Matched exactly, never approximately.** A recompiled Bootstrap with a
+ * customised `$primary` is precisely the case where the stylesheet *does* carry
+ * the brand, and a near-match rule would throw that away — the one input we
+ * most want to keep.
+ *
+ * Only the hued defaults are listed. Every framework's greys are the same greys
+ * every hand-written site uses, they carry the page's polarity, and dropping
+ * them would cost the background its cast for nothing. Bootstrap's `$secondary`
+ * (`#6c757d`) reads chroma 0.07 and belongs with them, so it is not here.
+ */
+const FRAMEWORK_ACCENTS: ReadonlyMap<string, string> = new Map([
+  // Bootstrap 3 — .btn-primary through .btn-danger.
+  ['#337ab7', 'Bootstrap'], ['#5cb85c', 'Bootstrap'], ['#5bc0de', 'Bootstrap'],
+  ['#f0ad4e', 'Bootstrap'], ['#d9534f', 'Bootstrap'],
+  // Bootstrap 4.
+  ['#007bff', 'Bootstrap'], ['#28a745', 'Bootstrap'], ['#17a2b8', 'Bootstrap'],
+  ['#ffc107', 'Bootstrap'], ['#dc3545', 'Bootstrap'],
+  // Bootstrap 5 — $primary, $success and $info moved; $warning and $danger did not.
+  ['#0d6efd', 'Bootstrap'], ['#198754', 'Bootstrap'], ['#0dcaf0', 'Bootstrap'],
+  // Foundation.
+  ['#1779ba', 'Foundation'], ['#3adb76', 'Foundation'], ['#ffae00', 'Foundation'],
+  ['#cc4b37', 'Foundation'],
+  // Bulma.
+  ['#00d1b2', 'Bulma'], ['#3273dc', 'Bulma'], ['#209cee', 'Bulma'],
+  ['#23d160', 'Bulma'], ['#ffdd57', 'Bulma'], ['#ff3860', 'Bulma'],
+  // Semantic UI.
+  ['#2185d0', 'Semantic UI'], ['#21ba45', 'Semantic UI'], ['#db2828', 'Semantic UI'],
+  // Material Design's 500s, as Materialize and the MDC themes ship them.
+  ['#2196f3', 'Material'], ['#3f51b5', 'Material'], ['#26a69a', 'Material'],
+]);
+
+/**
+ * Which framework ships this exact colour as a default, if any.
+ *
+ * Exported because `siteTheme.ts` has to ask the question of *the accent the
+ * mapping would otherwise pick* — one colour, after the ranking — and it names
+ * the framework in the sentence it shows the user.
+ */
+export function stockAccentFramework(hex: string): string | null {
+  return FRAMEWORK_ACCENTS.get(normalizeHex(hex)) ?? null;
+}
+
+/**
  * The colours worth handing to the quantizer.
  *
  * Near-white and near-black are dropped *only* when something else survives:
  * every site has them, they say nothing about taste, and leaving them in makes
  * the weighted cast of every site the same off-white. A monochrome site keeps
  * them, because then they are the answer.
+ *
+ * Framework defaults are deliberately **not** dropped here, and the measurement
+ * is worth keeping: pruning the table above off this list does not reach the
+ * accent, because a framework ships its derived shades too. Bootstrap emits
+ * `darken($warning, 10%)` as `#d39e00`, which is in no table of base defaults
+ * and out-chromas a real brand colour, so heyoliver.com came back gold instead
+ * of blue. The override that works replaces the accent outright — see
+ * `frameworkOverride` in `siteTheme.ts`.
  */
 export function meaningfulColors(colors: readonly ExtractedColor[]): ExtractedColor[] {
   const hued = colors.filter(c => !isNeutralish(c.hex));

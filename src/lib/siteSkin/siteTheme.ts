@@ -34,11 +34,11 @@ import {
   swatchesFromColors,
   themeFromPalette,
 } from './palette';
-import { SiteStyle, meaningfulColors, snapRadius } from './siteStyle';
+import { SiteStyle, meaningfulColors, snapRadius, stockAccentFramework } from './siteStyle';
 import { classifyFont, describeFontMatch } from './fontClassify';
 
 /** Which input the colours actually came from. Shown to the user, and honest. */
-export type ColorSource = 'og-image' | 'stylesheet' | 'theme-color';
+export type ColorSource = 'og-image' | 'stylesheet' | 'theme-color' | 'theme-color-accent';
 
 /**
  * A "what we did" line, tagged by what it is about.
@@ -98,6 +98,55 @@ function declaresHue(swatches: readonly Swatch[]): boolean {
 }
 
 /**
+ * How much colour a `theme-color` needs before it may overrule the stylesheet.
+ *
+ * Twice `DECLARED_HUE`, and the gap is the point. `DECLARED_HUE` asks "is this a
+ * colour at all", which is the right bar for *reading* a page; this one asks
+ * whether a colour is worth **overruling measured evidence with**, which is a
+ * higher thing to claim. A brand navy like `#1a1a2e` reads 0.08 and a muted
+ * olive `#6b6b3a` reads 0.19 — both are page colours a site declares for its
+ * browser chrome rather than accents, and neither should displace anything.
+ * `#425cbb` reads 0.47 and `#c2410c` reads 0.75.
+ */
+const OVERRIDE_HUE = 0.25;
+
+/**
+ * Should the page's own `theme-color` overrule the stylesheet's accent?
+ *
+ * The narrow case, and all three conditions are load-bearing:
+ *
+ * 1. **The accent the mapping would otherwise pick is a stock framework
+ *    default** — asked of `pickAccent`'s answer, not of the swatch list, because
+ *    that one colour is the only thing this decision changes. A page that merely
+ *    *contains* Bootstrap blue somewhere is not affected.
+ * 2. **The page declares a saturated colour of its own.** Without a replacement
+ *    in hand, dropping the framework accent would leave the picker with greys
+ *    and send it to the social card — a much larger change, and one §14's
+ *    twenty-site probe argued against.
+ * 3. **The two are not the same colour.** A site whose brand genuinely *is*
+ *    Bootstrap blue declares it as its theme-color too, and there the override
+ *    is a no-op that would only cost us the honest sentence.
+ *
+ * The answer feeds `colorsFromSwatches`'s `declaredAccent`, which **replaces**
+ * the ranked accent rather than pruning the list it was ranked from. Pruning was
+ * tried first and does not work: a framework ships its derived shades as well as
+ * its defaults, and Bootstrap's `darken($warning, 10%)` — `#d39e00`, in no table
+ * of base colours — simply won the ranking instead.
+ *
+ * heyoliver.com is the case that prompted this: a stock 2020 Bootstrap 4 bundle
+ * whose top twelve colours are the framework's entire swatch, over a page that
+ * declares `#425cbb`. Before this, the picker returned Bootstrap's `#007bff`
+ * and called it that site's colour.
+ */
+function frameworkOverride(style: SiteStyle, fromCss: readonly Swatch[]): string | null {
+  if (fromCss.length === 0 || !style.themeColor) return null;
+  if (!stockAccentFramework(pickAccent(fromCss))) return null;
+  if (chromaOf(style.themeColor) < OVERRIDE_HUE) return null;
+  if (stockAccentFramework(style.themeColor)) return null;
+  return style.themeColor;
+}
+
+/**
  * Everything a page gave us → two themes and the sentences that explain them.
  *
  * `pixels` is the social card, already sampled; pass `null` when there was no
@@ -115,12 +164,21 @@ export function themesFromSite(
   const fromImage = declaresHue(fromCss) || !pixels ? [] : quantize(pixels);
   const swatches = fromImage.length > 0 ? fromImage : fromCss;
 
+  // Only ever asked of the stylesheet. When the card won, the stylesheet had no
+  // hue at all, so its accent is a grey and no framework is in the frame — but
+  // the guard is written rather than reasoned, because the next person changing
+  // the fallback order should not have to rediscover that argument.
+  const declaredAccent = fromImage.length > 0 ? null : frameworkOverride(style, fromCss);
+  const framework = declaredAccent ? stockAccentFramework(pickAccent(fromCss)) : null;
+
   const source: ColorSource =
     fromImage.length > 0
       ? 'og-image'
-      : style.colors.length === 1 && style.themeColor
-        ? 'theme-color'
-        : 'stylesheet';
+      : declaredAccent
+        ? 'theme-color-accent'
+        : style.colors.length === 1 && style.themeColor
+          ? 'theme-color'
+          : 'stylesheet';
 
   // A site that sets only a body font is telling us about its whole page, so it
   // answers for the heading too — in the heading *role*, which is what keeps a
@@ -146,14 +204,33 @@ export function themesFromSite(
   });
 
   const themes = {
-    light: dress(themeFromPalette(colorsFromSwatches(swatches, 'light'), 'light')),
-    dark: dress(themeFromPalette(colorsFromSwatches(swatches, 'dark'), 'dark')),
+    light: dress(themeFromPalette(colorsFromSwatches(swatches, 'light', declaredAccent), 'light')),
+    dark: dress(themeFromPalette(colorsFromSwatches(swatches, 'dark', declaredAccent), 'dark')),
   };
 
-  return { themes, source, sitePolarity: style.polarity, notes: buildNotes(style, source, pageUrl) };
+  return {
+    themes,
+    source,
+    sitePolarity: style.polarity,
+    notes: buildNotes(style, source, pageUrl, framework),
+  };
 }
 
-const SOURCE_NOTES: Record<ColorSource, string> = {
+/**
+ * Built rather than looked up, because it names the framework it caught — which
+ * is the difference between a sentence a reader can check and a shrug. The
+ * source it explains is a hybrid and says so: the page and its text still come
+ * from the stylesheet, and only the accent was replaced.
+ */
+function sourceNote(source: ColorSource, framework: string | null): string {
+  if (source !== 'theme-color-accent') return SOURCE_NOTES[source];
+  // The name is always in hand here — the source is only ever set alongside one
+  // — but 'stylesheet' is the honest thing to say if that ever stopped holding.
+  if (!framework) return SOURCE_NOTES.stylesheet;
+  return `That page’s stylesheet is a stock ${framework} build, so its strongest colour is ${framework}’s default rather than the site’s. These are its stylesheet’s colours with the accent replaced by the one that page declares for itself.`;
+}
+
+const SOURCE_NOTES: Record<Exclude<ColorSource, 'theme-color-accent'>, string> = {
   // Only reachable when the stylesheet had no hue in it, so the sentence says
   // that: it explains why we went looking somewhere else, and it is the truth
   // about the page rather than a boast about the method.
@@ -171,8 +248,13 @@ const SOURCE_NOTES: Record<ColorSource, string> = {
  * wrong. The polarity line is C's own move (§6e): saying *which way round the
  * site is* turns two cards from a guess into a choice.
  */
-function buildNotes(style: SiteStyle, source: ColorSource, pageUrl: string): SiteNote[] {
-  const notes: SiteNote[] = [{ kind: 'source', text: SOURCE_NOTES[source] }];
+function buildNotes(
+  style: SiteStyle,
+  source: ColorSource,
+  pageUrl: string,
+  framework: string | null
+): SiteNote[] {
+  const notes: SiteNote[] = [{ kind: 'source', text: sourceNote(source, framework) }];
 
   if (style.polarity) {
     notes.push({

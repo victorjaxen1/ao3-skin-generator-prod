@@ -7,6 +7,7 @@ import {
   readMeta,
   readStylesheetLinks,
   snapRadius,
+  stockAccentFramework,
 } from '../src/lib/siteSkin/siteStyle';
 import { fetchSiteStyle, fetchValidatedText } from '../src/lib/server/siteFetch';
 import { classifyFont } from '../src/lib/siteSkin/fontClassify';
@@ -519,5 +520,126 @@ test.describe('a website becomes a theme that the rest of the product already ha
     expect(stored.typography.bodyFont).toBe(theme.typography.bodyFont);
     expect(stored.shape.cardRadius).toBe('18px');
     expect(lintAo3Css(compile(stored))).toEqual([]);
+  });
+});
+
+
+/* ── The framework override ───────────────────────────────────────────────── */
+
+/**
+ * A stock framework stylesheet is a page telling us about its toolchain, not its
+ * taste, and heyoliver.com is the case that made it concrete: a 2020 Bootstrap 4
+ * bundle whose top twelve colours are the framework's entire swatch, over a page
+ * that declares `#425cbb` for its browser chrome.
+ *
+ * The negative tests are the ones that matter. This override is the only place
+ * in Phase C where a *declaration* beats a *measurement*, so each condition that
+ * narrows it gets a test that would notice if it were dropped.
+ */
+test.describe('a stock framework stylesheet does not get to speak for the site', () => {
+  /** Bootstrap 4's swatch, with the derived shades a real build also emits. */
+  const bootstrap = [
+    { hex: '#ffffff', weight: 80 },
+    { hex: '#007bff', weight: 30 },
+    { hex: '#6c757d', weight: 21 },
+    { hex: '#28a745', weight: 20 },
+    { hex: '#dc3545', weight: 20 },
+    { hex: '#212529', weight: 19 },
+    { hex: '#d39e00', weight: 8 },
+    { hex: '#ffc107', weight: 11 },
+  ];
+
+  const site = (themeColor: string | null, colors = bootstrap) => ({
+    ...EMPTY_SITE_STYLE,
+    colors,
+    themeColor,
+    polarity: 'light' as const,
+  });
+
+  test('the table names the framework, and only on an exact match', () => {
+    expect(stockAccentFramework('#007bff')).toBe('Bootstrap');
+    expect(stockAccentFramework('#0D6EFD')).toBe('Bootstrap');
+    expect(stockAccentFramework('#00d1b2')).toBe('Bulma');
+    // A recompiled $primary is the site's own choice and must survive.
+    expect(stockAccentFramework('#007bfe')).toBeNull();
+    expect(stockAccentFramework('#425cbb')).toBeNull();
+  });
+
+  test("the page's declared colour becomes the accent, in both polarities", () => {
+    const extraction = themesFromSite(site('#425cbb'), null, 'https://www.heyoliver.com/');
+    expect(extraction.source).toBe('theme-color-accent');
+    // Light needs no repair, so it is the declared colour exactly. Dark is
+    // lightened by `fixAccent` against a dark page — that is the contrast floor
+    // doing its job, and the hue has to survive it.
+    expect(extraction.themes.light.colors.accent).toBe('#425cbb');
+    expect(extraction.themes.dark.colors.accent).not.toBe('#007bff');
+    for (const polarity of POLARITIES) {
+      expect(findReadabilityIssues(extraction.themes[polarity].colors)).toEqual([]);
+      expect(lintAo3Css(compile(extraction.themes[polarity]))).toEqual([]);
+    }
+  });
+
+  /**
+   * The reason the override replaces the accent instead of pruning the list:
+   * `#d39e00` is `darken($warning, 10%)`, it is in no table of base defaults,
+   * and it out-chromas `#425cbb`. A prune-based version returned gold here.
+   */
+  test('a derived framework shade cannot win the accent either', () => {
+    expect(themesFromSite(site('#425cbb'), null, 'https://x.test/').themes.light.colors.accent)
+      .toBe('#425cbb');
+  });
+
+  test('what we tell the user names the framework and says what was replaced', () => {
+    const note = themesFromSite(site('#425cbb'), null, 'https://x.test/').notes[0];
+    expect(note.kind).toBe('source');
+    expect(note.text).toContain('Bootstrap');
+    expect(note.text).toContain('accent');
+    expect(note.text.toLowerCase()).not.toContain('match');
+  });
+
+  test('a page declaring no colour of its own keeps the stylesheet accent', () => {
+    const extraction = themesFromSite(site(null), null, 'https://x.test/');
+    expect(extraction.source).toBe('stylesheet');
+    expect(extraction.themes.light.colors.accent).toBe('#007bff');
+  });
+
+  test('a near-grey theme-color is a page colour, not an accent', () => {
+    // #1a1a2e is a brand navy: chroma 0.08, below the override bar on purpose.
+    const extraction = themesFromSite(site('#1a1a2e'), null, 'https://x.test/');
+    expect(extraction.source).toBe('stylesheet');
+    expect(extraction.themes.light.colors.accent).toBe('#007bff');
+  });
+
+  test('a site whose brand really is the framework colour is left alone', () => {
+    const extraction = themesFromSite(site('#007bff'), null, 'https://x.test/');
+    expect(extraction.source).toBe('stylesheet');
+    expect(extraction.themes.light.colors.accent).toBe('#007bff');
+  });
+
+  test('a hand-written stylesheet is never overruled', () => {
+    const handmade = [
+      { hex: '#ffffff', weight: 80 },
+      { hex: '#c2410c', weight: 30 },
+      { hex: '#1a1a1a', weight: 19 },
+    ];
+    const extraction = themesFromSite(site('#425cbb', handmade), null, 'https://x.test/');
+    expect(extraction.source).toBe('stylesheet');
+    expect(extraction.themes.light.colors.accent).toBe('#c2410c');
+  });
+
+  test('the declared accent is repaired, not trusted', () => {
+    // Near-white on a light page: a declaration cannot buy its way past 4.5:1.
+    const swatches = swatchesFromColors(bootstrap);
+    const forced = colorsFromSwatches(swatches, 'light', '#fdfdf2');
+    expect(forced.accent).not.toBe('#fdfdf2');
+    expect(findReadabilityIssues(forced)).toEqual([]);
+  });
+
+  test('the override leaves the rest of the palette where the stylesheet put it', () => {
+    const plain = themesFromSite(site(null), null, 'https://x.test/').themes.light.colors;
+    const overridden = themesFromSite(site('#425cbb'), null, 'https://x.test/').themes.light.colors;
+    expect(overridden.background).toBe(plain.background);
+    expect(overridden.surface).toBe(plain.surface);
+    expect(overridden.text).toBe(plain.text);
   });
 });
