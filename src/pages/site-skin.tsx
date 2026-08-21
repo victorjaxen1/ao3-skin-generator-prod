@@ -311,8 +311,8 @@ export default function SiteSkinPage() {
 
   const head = (
     <ProductHead
-      title="AO3 Site Skin Maker — AO3 SkinGen"
-      description="Pick a look, personalise it, and copy a site skin checked against bundled AO3 compatibility rules. No CSS knowledge or account required."
+      title="AO3 Site Skin Magic Picker — AO3 SkinGen"
+      description="Turn a picture or website into a personal AO3 site skin built from its colours, or start with a template. No CSS knowledge or account required."
       path="/site-skin"
     />
   );

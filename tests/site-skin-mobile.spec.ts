@@ -9,15 +9,18 @@ test.beforeEach(async ({ page }, testInfo) => {
   }, leaveConsentUnanswered);
 });
 
-test('the compact gallery shows a complete first template card in the viewport', async ({ page }) => {
+test('the compact gallery gives Magic Picker the first complete call to action', async ({ page }) => {
   await page.goto('/site-skin');
-  await expect(page.getByRole('button', { name: 'Match a picture or website' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Open Magic Picker' })).toBeVisible();
   await expect(page.getByLabel('Image address')).toHaveCount(0);
 
-  const card = page.getByRole('button', { name: /Moonlit Library/ });
-  const box = await card.boundingBox();
+  const callToAction = page.getByRole('button', { name: 'Open Magic Picker' });
+  const box = await callToAction.boundingBox();
   expect(box).not.toBeNull();
   expect((box?.y || 0) + (box?.height || 0)).toBeLessThanOrEqual(await page.evaluate(() => window.innerHeight));
+
+  await expect(page.getByLabel('A picture or website becomes a light theme and a dark theme')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Or choose a template' })).toBeVisible();
 });
 
 test('mobile uses one reachable scrolling editor pane', async ({ page }) => {
@@ -57,6 +60,10 @@ test('mobile uses one reachable scrolling editor pane', async ({ page }) => {
 });
 
 test('compact header actions do not overlap at target widths', async ({ page }) => {
+  // Three complete gallery → editor journeys. Magic Picker now intentionally
+  // sits before the templates, so each journey also scrolls past that primary
+  // acquisition surface before exercising the editor header.
+  test.slow();
   const sizes = [
     { width: 360, height: 740 },
     { width: 390, height: 844 },
@@ -66,7 +73,9 @@ test('compact header actions do not overlap at target widths', async ({ page }) 
   for (const size of sizes) {
     await page.setViewportSize(size);
     await page.goto('/site-skin');
-    await page.getByRole('button', { name: /Moonlit Library/ }).click();
+    const template = page.getByRole('button', { name: /Moonlit Library/ });
+    await template.scrollIntoViewIfNeeded();
+    await template.click();
 
     const geometry = await page.locator('header').evaluate(element => {
       const header = element.getBoundingClientRect();

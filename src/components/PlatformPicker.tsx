@@ -160,7 +160,8 @@ export const PlatformPicker: React.FC<Props> = ({
           AO3 SkinGen
         </h1>
         <p className="text-stone-500 mt-2 text-sm sm:text-base max-w-xs mx-auto leading-relaxed">
-          Social-media scenes for AO3 — export as an image or accessible real text.
+          Export a quick image or real work-skin text. Work skins can include video
+          and voice notes readers can play.
         </p>
       </div>
 
@@ -198,10 +199,11 @@ export const PlatformPicker: React.FC<Props> = ({
           <span className="text-3xl flex-shrink-0">🎨</span>
           <span className="min-w-0">
             <span className="block text-sm sm:text-base font-semibold text-stone-900">
-              Site skin
+              Site skin Magic Picker
             </span>
             <span className="block text-xs text-stone-500 mt-0.5 leading-snug">
-              Restyle AO3 itself — colours, fonts and cards, for your own browsing
+              Paste a picture or website. We build an AO3 theme from its colours, for
+              your own browsing.
             </span>
           </span>
           <svg

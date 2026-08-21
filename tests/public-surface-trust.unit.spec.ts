@@ -77,6 +77,25 @@ test('a full AO3 SkinGen section separates product promotion from Ko-fi', () => 
   expect(gallery.indexOf('</main>')).toBeLessThan(gallery.indexOf('https://ko-fi.com/ao3skingen'));
 });
 
+test('landing sources lead with playable work skins and the Site Skin Magic Picker without blurring their limits', () => {
+  for (const relativePath of [
+    'docs/landing-swipepages-2026-08.html',
+    'docs/landing-wordfokus-ao3skingen-WORDPRESS.html',
+  ]) {
+    const html = read(relativePath);
+
+    expect(html, relativePath).toContain('Social-media scenes that <span class="highlight">actually work on AO3</span>');
+    expect(html, relativePath).toContain('real, selectable work-skin text with video and voice notes');
+    expect(html, relativePath).toContain('Screenshots keep a still poster card instead');
+    expect(html, relativePath).toContain('Nothing is uploaded: the media continues streaming from the HTTPS host you provide.');
+
+    expect(html, relativePath).toContain('Site Skin Magic Picker');
+    expect(html, relativePath).toContain('Paste a picture or website. Magic Picker reads its colours');
+    expect(html, relativePath).toContain('It borrows the palette — not the source&rsquo;s layout or artwork.');
+    expect(html, relativePath).toContain('Only <strong>you</strong> see it, on every AO3 page');
+  }
+});
+
 test('publishable articles use the canonical app host', () => {
   for (const relativePath of publishedArticleSources) {
     expect(read(relativePath), relativePath).not.toContain('https://ao3skingen.netlify.app');

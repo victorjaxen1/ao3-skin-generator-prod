@@ -26,12 +26,11 @@
      2. Give the page a full-width / no-sidebar template if your theme has one.
      3. Add ONE "Custom HTML" block and paste this entire file into it.
      4. Set the SEO fields in your plugin (Yoast / RankMath):
-          Title:     AO3 Skin Generator — Fake Screenshots, Work Skins & Site
-                     Skins for Archive of Our Own
-          Meta desc: Three free tools for Archive of Our Own. Fake screenshots
-                     — iMessage, WhatsApp, Twitter, Google — to paste into a
-                     chapter. Work skins that give readers real text instead of
-                     a picture. And site skins that restyle AO3 for you.
+          Title:     AO3 SkinGen — Playable Social-Media Scenes & Site Skins
+                     for AO3
+          Meta desc: Build AO3 social-media scenes as images or real work-skin
+                     text with playable video and voice notes. Or turn a picture
+                     or website into a personal AO3 site skin. Free, no coding.
           Canonical: https://www.wordfokus.com/ao3skingen/
           OG image:  https://media.publit.io/file/AO3-Skins-App/AO3-Skin-Generator-Preview.png
 
@@ -108,7 +107,7 @@
 .ao3sg .hero-media{ flex: 1; display: flex; justify-content: center; align-items: center; }
 .ao3sg .hero-image{ width: 100%; max-width: 600px; border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); transform: perspective(1000px) rotateY(-8deg); transition: transform var(--transition-normal); overflow: hidden; background: white; border: 1px solid var(--border-light); }
 .ao3sg .hero-image:hover{ transform: perspective(1000px) rotateY(0deg) translateY(-8px); box-shadow: 0 20px 40px rgba(0,0,0,0.15); }
-.ao3sg .hero-image img{ width: 100%; height: auto; display: block; }
+.ao3sg .hero-image img{ width: 100%; height: auto; display: block; max-height: 660px; object-fit: contain; object-position: center; }
 .ao3sg .hero-buttons{ display: flex; gap: 1rem; margin-top: 2rem; flex-wrap: wrap; }
 /* Features Section */
 .ao3sg .features{ padding: clamp(4rem, 10vw, 6rem) 0; background-color: white; }
@@ -273,16 +272,16 @@
             </div>
 
             <h1>
-              Social Media AUs for <span class="highlight">Archive of Our Own</span>
+              Social-media scenes that <span class="highlight">actually work on AO3</span>
             </h1>
 
             <p>
-              Build a text conversation, tweet thread or search page, and put it straight into your chapter — as a picture, or as real text your readers can select. There's a third tool for restyling AO3 itself. No coding, no account.
+              Build iMessage, WhatsApp, X/Twitter or search scenes. Export a quick image — or real, selectable work-skin text with video and voice notes your readers can play inside the chapter. No coding, no account.
             </p>
 
             <div class="hero-buttons">
-              <a href="https://app.ao3skingen.wordfokus.com" class="btn btn-primary btn-large">Start a conversation</a>
-              <a href="https://app.ao3skingen.wordfokus.com/site-skin" class="btn btn-secondary btn-large">Build a site skin</a>
+              <a href="https://app.ao3skingen.wordfokus.com" class="btn btn-primary btn-large">Build a playable scene</a>
+              <a href="https://app.ao3skingen.wordfokus.com/site-skin" class="btn btn-secondary btn-large">Use the Site Skin Magic Picker</a>
             </div>
 
             <p class="arrived-note">
@@ -313,7 +312,7 @@
 
           <div class="hero-media">
             <div class="hero-image">
-              <img src="https://media.publit.io/file/AO3-Skins-App/AO3-Skin-Generator-Preview.png" alt="The AO3 Skin Generator, showing an iMessage conversation being built beside a live preview" width="600" height="400" loading="eager">
+              <img src="https://app.ao3skingen.wordfokus.com/hero-scene-video.png" alt="An iMessage scene with a video player that readers can play inside an AO3 chapter when exported as a work skin" width="750" height="808" loading="eager">
             </div>
           </div>
         </div>
@@ -347,7 +346,7 @@
             </div>
 
             <div class="tool-card">
-              <div class="tool-flag">Newest</div>
+              <div class="tool-flag">Playable media</div>
               <div class="feature-icon">
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 20h9"></path>
@@ -356,14 +355,14 @@
               </div>
               <div class="tool-audience">For your readers</div>
               <h3>Work skins</h3>
-              <p style="margin-bottom: 1rem;">The same conversation as <em>real text</em>. It reflows on a phone, can be selected and copied, and screen readers can read it.</p>
+              <p style="margin-bottom: 1rem;">The same conversation as <em>real text</em>. It reflows on a phone, can be selected and copied — and video and voice notes can play inside the chapter.</p>
               <ul>
                 <li>All four platforms, light and dark</li>
+                <li><strong>Playable video and voice notes</strong> on AO3</li>
                 <li>Goes in <strong>Preferences → Skins</strong>, once</li>
                 <li><strong>One skin covers every platform</strong> — a fic can only have one, so this matters</li>
-                <li>Best for long conversations</li>
               </ul>
-              <a href="https://app.ao3skingen.wordfokus.com" class="btn btn-primary">Build a work skin</a>
+              <a href="https://app.ao3skingen.wordfokus.com" class="btn btn-primary">Build a playable scene</a>
             </div>
 
             <div class="tool-card">
@@ -373,15 +372,16 @@
                 </svg>
               </div>
               <div class="tool-audience">For you</div>
-              <h3>Site skins</h3>
-              <p style="margin-bottom: 1rem;">Recolour AO3 itself — page, cards, links, tags, fonts — then copy the CSS into your preferences.</p>
+              <h3>Site Skin Magic Picker</h3>
+              <p style="margin-bottom: 1rem;">Paste a picture or website. Magic Picker reads its colours and builds a personal AO3 theme around them.</p>
               <ul>
-                <li>16 starting points, dark and light</li>
+                <li><strong>Picture or website → complete colour theme</strong></li>
+                <li>Light and dark versions to choose from</li>
+                <li>Or start with one of 16 templates</li>
                 <li>Goes in <strong>Preferences → Skins</strong></li>
-                <li>Add your own header banner image</li>
                 <li>Only <strong>you</strong> see it, on every AO3 page</li>
               </ul>
-              <a href="https://app.ao3skingen.wordfokus.com/site-skin" class="btn btn-primary">Build a site skin</a>
+              <a href="https://app.ao3skingen.wordfokus.com/site-skin" class="btn btn-primary">Use Magic Picker</a>
             </div>
           </div>
 
@@ -481,7 +481,7 @@
               </div>
               <h3>Voice notes and video that actually play</h3>
               <p>In a work skin, a voice note or a video is a real player sitting in your chapter — your readers press play on AO3 itself, no leaving the page. Screenshots keep a still poster card instead, because a picture can&rsquo;t play.</p>
-              <p>Nothing is uploaded either way. You point at a file that already lives somewhere, and the same warning as images applies: if that host stops serving it, it goes quiet in every chapter you&rsquo;ve already posted.</p>
+              <p>Nothing is uploaded: the media continues streaming from the HTTPS host you provide. If that host stops serving it, it goes quiet in every chapter you&rsquo;ve already posted.</p>
             </div>
 
             <div class="feature-card">
@@ -511,8 +511,8 @@
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
                 </svg>
               </div>
-              <h3>Live preview</h3>
-              <p>Watch it change as you work. Site skins preview over a mock AO3 page — a work listing, a chapter, your dashboard — using the exact CSS you'll copy.</p>
+              <h3>A site skin from something you love</h3>
+              <p>Paste a picture, poster, screenshot or website into Magic Picker. It builds light and dark themes from the colours, then previews the exact CSS over a mock AO3 page. It borrows the palette — not the source&rsquo;s layout or artwork.</p>
             </div>
 
             <div class="feature-card">
@@ -738,8 +738,8 @@
           <h2>Ready when you are</h2>
           <p>AO3 SkinGen's three builders are free forever, need no signup, and remember your work between visits.</p>
           <div class="hero-buttons" style="justify-content: center;">
-            <a href="https://app.ao3skingen.wordfokus.com" class="btn btn-primary btn-large">Start a conversation</a>
-            <a href="https://app.ao3skingen.wordfokus.com/site-skin" class="btn btn-secondary btn-large">Build a site skin</a>
+            <a href="https://app.ao3skingen.wordfokus.com" class="btn btn-primary btn-large">Build a playable scene</a>
+            <a href="https://app.ao3skingen.wordfokus.com/site-skin" class="btn btn-secondary btn-large">Use Magic Picker</a>
           </div>
         </div>
       </section>

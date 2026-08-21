@@ -674,7 +674,7 @@ export default function HomePage() {
   const head = (
     <ProductHead
       title="AO3 Work Skin & Fake Screenshot Generator — AO3 SkinGen"
-      description="Create fictional social-media scenes, download images, or copy AO3-compatible work-skin HTML and CSS. Free, unofficial, and no signup required."
+      description="Build AO3 social-media scenes as images or real, selectable work-skin text with video and voice notes readers can play. Free, unofficial, and no signup required."
     />
   );
 

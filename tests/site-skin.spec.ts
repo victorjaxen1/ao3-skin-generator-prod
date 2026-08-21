@@ -45,7 +45,9 @@ test('the picker offers the site skin builder as its own thing', async ({ page }
   await expect(link).toBeVisible();
   await link.click();
   await expect(page).toHaveURL(/\/site-skin/);
-  await expect(page.getByRole('heading', { name: 'Make AO3 feel like yours' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Turn a picture or website into your AO3 theme' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Paste one link. Get two AO3-ready themes.' })).toBeVisible();
+  await expect(page.getByLabel('A picture or website becomes a light theme and a dark theme')).toBeVisible();
 });
 
 test('a ?template= link opens the editor on that template', async ({ page }) => {
@@ -71,7 +73,7 @@ test('a banner-ready template arrives with its header controls set', async ({ pa
 
 test('an unknown template id falls back to the gallery, not a silent default', async ({ page }) => {
   await page.goto('/site-skin?template=not-a-real-template');
-  await expect(page.getByRole('heading', { name: 'Make AO3 feel like yours' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Turn a picture or website into your AO3 theme' })).toBeVisible();
 });
 
 test('mood filters narrow the gallery', async ({ page }) => {
@@ -922,7 +924,7 @@ test('work survives a reload', async ({ page }) => {
   await expect(page.getByText('Saving…')).toHaveCount(0, { timeout: 5000 });
 
   await page.reload();
-  await page.getByRole('button', { name: /Keep editing/ }).click();
+  await page.getByRole('button', { name: /Continue/ }).click();
   expect(await exportedCss(page)).toContain('#ff8800');
 });
 
@@ -940,7 +942,7 @@ test('the gallery offers a way out of the sixteen', async ({ page }) => {
   await page.evaluate(() => localStorage.removeItem('ao3SiteSkinTheme'));
   await page.reload();
 
-  const trigger = page.getByRole('button', { name: 'Match a picture or website' });
+  const trigger = page.getByRole('button', { name: 'Open Magic Picker' });
   await expect(trigger).toBeVisible();
   await expect(page.getByLabel('Image address')).toHaveCount(0);
   await trigger.click();
@@ -961,7 +963,7 @@ test('both doors are offered, and each says where the reading happens', async ({
   await page.reload();
 
   // The picture door is the default: it is the one that needs no server.
-  await page.getByRole('button', { name: 'Match a picture or website' }).click();
+  await page.getByRole('button', { name: 'Open Magic Picker' }).click();
   await expect(page.getByLabel('Image address')).toBeVisible();
   await expect(page.getByText(/read in your browser/)).toBeVisible();
 
@@ -978,7 +980,7 @@ test('a website address needs no scheme, but nonsense is still refused here', as
   await page.evaluate(() => localStorage.removeItem('ao3SiteSkinTheme'));
   await page.reload();
 
-  await page.getByRole('button', { name: 'Match a picture or website' }).click();
+  await page.getByRole('button', { name: 'Open Magic Picker' }).click();
   await page.getByRole('button', { name: 'A website' }).click();
 
   // Nobody types the scheme, so "example.com" must not be an error — it reaches
@@ -988,7 +990,7 @@ test('a website address needs no scheme, but nonsense is still refused here', as
   await page.getByRole('button', { name: 'Get the colours' }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'web address' })).toBeVisible();
 
-  await expect(page.getByRole('heading', { name: 'Make AO3 feel like yours' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Turn a picture or website into your AO3 theme' })).toBeVisible();
 });
 
 test('a paste that is not an address is refused without a round trip', async ({ page }) => {
@@ -998,14 +1000,14 @@ test('a paste that is not an address is refused without a round trip', async ({ 
 
   // Fail here, not after a proxy fetch: the commonest paste error deserves the
   // fastest possible answer, and the proxy is HTTPS-only anyway.
-  await page.getByRole('button', { name: 'Match a picture or website' }).click();
+  await page.getByRole('button', { name: 'Open Magic Picker' }).click();
   await page.getByLabel('Image address').fill('my-picture.png');
   await page.getByRole('button', { name: 'Get the colours' }).click();
   // Filtered, because Next's own route announcer is a second role="alert".
   await expect(page.getByRole('alert').filter({ hasText: 'full address' })).toContainText('https://');
 
   // Still on the gallery — nothing was applied.
-  await expect(page.getByRole('heading', { name: 'Make AO3 feel like yours' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Turn a picture or website into your AO3 theme' })).toBeVisible();
 });
 
 test('the editor carries the same picker, beside the colours it sets', async ({ page }) => {

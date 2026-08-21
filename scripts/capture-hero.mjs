@@ -13,6 +13,7 @@
  * the code being shipped.
  */
 import { chromium } from '@playwright/test';
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -131,6 +132,7 @@ await scenePage.screenshot({
 // silently start framing the wrong bubble.
 const videoCard = scenePage.locator('.ios-video-card').first();
 const highlightFile = outFile.replace(/\.png$/i, '-video.png');
+let videoDataUrl = '';
 if (await videoCard.count()) {
   const cardBox = await videoCard.boundingBox();
   // Reach upward for the sender's line above the card, so the frame still reads
@@ -144,6 +146,7 @@ if (await videoCard.count()) {
     fullPage: true,
     clip: { x: box.x, y: top, width: box.width, height: bottom - top },
   });
+  videoDataUrl = `data:image/png;base64,${fs.readFileSync(highlightFile).toString('base64')}`;
   console.log(`hero video crop written: ${highlightFile}`);
 } else {
   console.log('WARNING: no .ios-video-card found — video crop skipped');
@@ -165,8 +168,8 @@ await cardPage.setContent(
      html,body{margin:0;padding:0;width:1200px;height:630px;overflow:hidden;
        background:linear-gradient(135deg,#e8f0fe 0%,#f8f9fa 100%);font-family:'Segoe UI',Roboto,Arial,sans-serif;}
      .wrap{display:flex;height:630px;align-items:center;gap:40px;padding:0 56px;box-sizing:border-box;}
-     .copy{flex:0 0 470px;}
-     .copy h1{font-size:52px;line-height:1.1;margin:0 0 18px;color:#202124;font-weight:700;letter-spacing:-0.5px;}
+     .copy{flex:0 0 500px;}
+     .copy h1{font-size:50px;line-height:1.08;margin:0 0 18px;color:#202124;font-weight:700;letter-spacing:-0.5px;}
      .copy h1 em{font-style:normal;color:#1a73e8;}
      .copy p{font-size:23px;line-height:1.45;color:#5f6368;margin:0 0 22px;}
      .chips{display:flex;gap:10px;flex-wrap:wrap;}
@@ -175,14 +178,15 @@ await cardPage.setContent(
      .phone{width:375px;height:560px;background:#fff;border-radius:26px;
        box-shadow:0 22px 60px rgba(32,33,36,0.26);overflow:hidden;
        transform:rotate(-3deg);}
+     .phone img{display:block;width:100%;height:100%;object-fit:cover;object-position:top;}
    </style><style>${extracted.styles}</style></head>
    <body><div class="wrap">
      <div class="copy">
-       <h1>Social-media scenes<br>for <em>AO3</em></h1>
-       <p>Build a conversation, then publish it as a picture &mdash; or as real text your readers can select.</p>
-       <div class="chips"><span class="chip">Free, no signup</span><span class="chip">iMessage &middot; WhatsApp &middot; X &middot; Google</span></div>
+       <h1>Social-media scenes that <em>play on AO3</em></h1>
+       <p>Export real work-skin text with video and voice notes readers can play inside the chapter.</p>
+       <div class="chips"><span class="chip">Free, no signup</span><span class="chip">Image or selectable text</span></div>
      </div>
-     <div class="stage"><div class="phone">${extracted.html}</div></div>
+     <div class="stage"><div class="phone">${videoDataUrl ? `<img src="${videoDataUrl}" alt="">` : extracted.html}</div></div>
    </div></body></html>`,
   { waitUntil: 'networkidle' }
 );
