@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import fs from 'fs';
 import path from 'path';
 import { analyticsPayload } from '../src/lib/analytics';
+import { productDestination, type MoreToolsPlacement, type MoreToolsVariant } from '../src/components/MoreTools';
 import { defaultProject } from '../src/lib/schema';
 import { buildHTML, buildCSS } from '../src/lib/generator';
 import { buildWorkSkin, buildMasterWorkSkin } from '../src/lib/workSkin';
@@ -104,22 +105,73 @@ test.describe('the product surface stays where it belongs', () => {
     expect(offenders, 'a commercial destination URL escaped MoreTools.tsx').toEqual([]);
   });
 
-  test('the Tier 2 placements survive the analytics boundary', () => {
-    for (const placement of ['platform_picker', 'site_skin_gallery']) {
+  test('every passive placement survives the analytics boundary with its fixed variant', () => {
+    const placements: Array<[MoreToolsPlacement, MoreToolsVariant]> = [
+      ['platform_picker_compact', 'compact'],
+      ['platform_picker_shelf', 'shelf'],
+      ['site_skin_gallery_shelf', 'shelf'],
+      ['workspace_settings', 'settings'],
+    ];
+    for (const [placement, variant] of placements) {
       for (const product of ['wordfokus', 'worldkonstruct'] as const) {
         expect(
-          analyticsPayload({ name: 'product_cta_clicked', product, placement }),
+          analyticsPayload({ name: 'product_cta_clicked', product, placement, variant }),
           `${product} @ ${placement} must not be rejected`
-        ).toEqual({ product, placement });
+        ).toEqual({ product, placement, variant });
+        expect(
+          analyticsPayload({ name: 'product_promo_viewed', product, placement, variant })
+        ).toEqual({ product, placement, variant });
       }
     }
   });
 
-  test('an unenumerated placement is still rejected whole', () => {
+  test('unenumerated promotion values are rejected whole', () => {
     expect(analyticsPayload({
       name: 'product_cta_clicked',
       product: 'wordfokus',
       placement: 'message_timeline',
-    })).toBeNull();
+      variant: 'shelf',
+    } as never)).toBeNull();
+    expect(analyticsPayload({
+      name: 'product_promo_viewed',
+      product: 'unknown',
+      placement: 'workspace_settings',
+      variant: 'settings',
+    } as never)).toBeNull();
+    expect(analyticsPayload({
+      name: 'product_promo_viewed',
+      product: 'wordfokus',
+      placement: 'workspace_settings',
+      variant: 'banner',
+    } as never)).toBeNull();
+  });
+
+  test('destinations carry only the fixed cross-sell campaign values', () => {
+    for (const placement of [
+      'platform_picker_compact',
+      'platform_picker_shelf',
+      'site_skin_gallery_shelf',
+      'workspace_settings',
+      'hosted_image_success',
+      'work_skin_success',
+    ] as const) {
+      for (const product of ['wordfokus', 'worldkonstruct'] as const) {
+        const url = new URL(productDestination(product, placement));
+        expect(url.searchParams.get('utm_source')).toBe('ao3skingen');
+        expect(url.searchParams.get('utm_medium')).toBe('referral');
+        expect(url.searchParams.get('utm_campaign')).toBe('writer_toolkit');
+        expect(url.searchParams.get('utm_content')).toBe(placement);
+        expect([...url.searchParams.keys()]).toEqual(['utm_source', 'utm_medium', 'utm_campaign', 'utm_content']);
+      }
+    }
+  });
+
+  test('shelf cards expose a visible CTA, disclosure, and safe new-tab links', () => {
+    const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'components', 'MoreTools.tsx'), 'utf8');
+    expect(source).toContain("cta: 'Try WordFokus free'");
+    expect(source).toContain("cta: 'Try WorldKonstruct free'");
+    expect(source).toContain('not required for AO3 SkinGen');
+    expect(source).toContain('target="_blank"');
+    expect(source).toContain('rel="noopener noreferrer"');
   });
 });

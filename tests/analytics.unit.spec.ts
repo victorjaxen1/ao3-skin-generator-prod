@@ -31,6 +31,36 @@ test.describe('content-free analytics boundary', () => {
     })).toBeNull();
   });
 
+  test('accepts exact promotion payloads and rejects unenumerated values', () => {
+    expect(analyticsPayload({
+      name: 'product_promo_viewed',
+      product: 'wordfokus',
+      placement: 'platform_picker_compact',
+      variant: 'compact',
+    })).toEqual({
+      product: 'wordfokus',
+      placement: 'platform_picker_compact',
+      variant: 'compact',
+    });
+    expect(analyticsPayload({
+      name: 'product_cta_clicked',
+      product: 'worldkonstruct',
+      placement: 'workspace_settings',
+      variant: 'settings',
+      destination: 'must not escape',
+    } as never)).toEqual({
+      product: 'worldkonstruct',
+      placement: 'workspace_settings',
+      variant: 'settings',
+    });
+    expect(analyticsPayload({
+      name: 'product_promo_viewed', product: 'wordfokus', placement: 'settings', variant: 'settings',
+    } as never)).toBeNull();
+    expect(analyticsPayload({
+      name: 'product_promo_viewed', product: 'wordfokus', placement: 'workspace_settings', variant: 'unknown',
+    } as never)).toBeNull();
+  });
+
   /**
    * The gap this closes: five examples shipped without their ids in the
    * allowlist, so `analyticsPayload` rejected the entire `template_selected`

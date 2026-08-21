@@ -1,3 +1,5 @@
+import type { MoreToolsPlacement, MoreToolsVariant, ProductId } from '../components/MoreTools';
+
 export type OutputType = 'png' | 'hosted_image' | 'work_skin' | 'site_skin';
 
 export type ExportErrorCode =
@@ -36,7 +38,8 @@ export type AnalyticsEvent =
   | { name: 'cast_exported'; characterCountBucket: CountBucket; includesAvatarUrls: boolean }
   | { name: 'cast_imported'; characterCountBucket: CountBucket }
   | { name: 'next_step_shown'; nextStep: NextStep; placement: string }
-  | { name: 'product_cta_clicked'; product: 'worldkonstruct' | 'wordfokus'; placement: string }
+  | { name: 'product_promo_viewed'; product: ProductId; placement: MoreToolsPlacement; variant: MoreToolsVariant }
+  | { name: 'product_cta_clicked'; product: ProductId; placement: MoreToolsPlacement; variant: MoreToolsVariant }
   | { name: 'palette_applied'; source: 'image' | 'site'; polarity: 'light' | 'dark'; placement: 'gallery' | 'editor' }
   | { name: 'donation_clicked'; placement: string };
 
@@ -105,6 +108,12 @@ const PLACEMENTS = new Set([
   'completion', 'export_dialog', 'help', 'settings', 'site_skin_export',
   'platform_picker', 'site_skin_gallery',
 ]);
+const PRODUCT_IDS = new Set<ProductId>(['wordfokus', 'worldkonstruct']);
+const PRODUCT_PLACEMENTS = new Set<MoreToolsPlacement>([
+  'platform_picker_compact', 'platform_picker_shelf', 'site_skin_gallery_shelf',
+  'workspace_settings', 'hosted_image_success', 'work_skin_success',
+]);
+const PRODUCT_VARIANTS = new Set<MoreToolsVariant>(['compact', 'shelf', 'settings', 'contextual']);
 
 type Gtag = (...args: unknown[]) => void;
 type AnalyticsWindow = Window & {
@@ -260,9 +269,12 @@ export function analyticsPayload(event: AnalyticsEvent): Record<string, string |
         && PLACEMENTS.has(value.placement as string)
         ? { next_step: value.nextStep as string, placement: value.placement as string }
         : null;
+    case 'product_promo_viewed':
     case 'product_cta_clicked':
-      return (value.product === 'worldkonstruct' || value.product === 'wordfokus') && PLACEMENTS.has(value.placement as string)
-        ? { product: value.product, placement: value.placement as string }
+      return PRODUCT_IDS.has(value.product as ProductId)
+        && PRODUCT_PLACEMENTS.has(value.placement as MoreToolsPlacement)
+        && PRODUCT_VARIANTS.has(value.variant as MoreToolsVariant)
+        ? { product: value.product as string, placement: value.placement as string, variant: value.variant as string }
         : null;
     // Content-free by construction: which door, which way round, where from.
     // The address is never a parameter — MAGIC-PICKER §10 wants to know whether

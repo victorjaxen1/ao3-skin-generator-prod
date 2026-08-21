@@ -14,6 +14,8 @@ import { hasProjectBackup } from '../lib/backupStatus';
 import { downloadTextFile, safeFilenamePart } from '../lib/download';
 import { getTwitterSceneMode, partitionTwitterSceneForExport } from '../lib/twitter';
 import { ModalDialog } from './ModalDialog';
+import { MoreTools, type ProductId } from './MoreTools';
+import { eligibleContextualProduct, recordSceneHandoff } from '../lib/productPromotion';
 
 interface Props {
   project: SkinProject;
@@ -864,6 +866,9 @@ export const ExportPanel: React.FC<Props> = ({
   const [progressLabel, setProgressLabel] = useState('');
   const [ao3Code, setAo3Code] = useState('');
   const [copiedCode, setCopiedCode] = useState(false);
+  const [hostedHandoffComplete, setHostedHandoffComplete] = useState(false);
+  const [hostedRecommendation, setHostedRecommendation] = useState<ProductId | null>(null);
+  const hostedHandoffCompleteRef = useRef(false);
   const [showHowTo, setShowHowTo] = useState(false);
   const [showHostedConsent, setShowHostedConsent] = useState(false);
   const [showWorkSkin, setShowWorkSkin] = useState(false);
@@ -873,6 +878,8 @@ export const ExportPanel: React.FC<Props> = ({
   const [backupRevision, setBackupRevision] = useState(0);
   const [includeWorkSkinCredit, setIncludeWorkSkinCredit] = useState(false);
   const [copyState, setCopyState] = useState<WorkSkinCopyState>({ css: 'idle', html: 'idle' });
+  const [workSkinHandoffComplete, setWorkSkinHandoffComplete] = useState(false);
+  const [workSkinRecommendation, setWorkSkinRecommendation] = useState<ProductId | null>(null);
   const [manualCopyOpen, setManualCopyOpen] = useState({ css: false, html: false });
   const cssTextareaRef = useRef<HTMLTextAreaElement>(null);
   const htmlTextareaRef = useRef<HTMLTextAreaElement>(null);
@@ -1038,6 +1045,7 @@ export const ExportPanel: React.FC<Props> = ({
     setProgressLabel('Rendering...');
     try {
       await exportAsImage(project, exportScale, warnAboutImages);
+      recordSceneHandoff();
       success('PNG download started.');
       trackAnalytics({ name: 'export_ready', outputType: 'png', templateId: project.template });
     } catch (err) {
@@ -1087,6 +1095,9 @@ export const ExportPanel: React.FC<Props> = ({
   };
 
   const beginHostedSceneUpload = () => {
+    hostedHandoffCompleteRef.current = false;
+    setHostedHandoffComplete(false);
+    setHostedRecommendation(null);
     let acknowledged = false;
     try { acknowledged = localStorage.getItem(HOSTED_SCENE_ACK) === '1'; } catch { /* ignore */ }
     if (acknowledged) void handleGetAO3Code();
@@ -1103,6 +1114,12 @@ export const ExportPanel: React.FC<Props> = ({
     try {
       await navigator.clipboard.writeText(ao3Code);
       setCopiedCode(true);
+      if (!hostedHandoffCompleteRef.current) {
+        hostedHandoffCompleteRef.current = true;
+        recordSceneHandoff();
+        setHostedHandoffComplete(true);
+        setHostedRecommendation(eligibleContextualProduct());
+      }
       setTimeout(() => setCopiedCode(false), 2000);
       success('Copied! Paste into your AO3 chapter HTML editor.');
       trackAnalytics({ name: 'output_copied', outputType: 'hosted_image', part: 'embed' });
@@ -1116,6 +1133,8 @@ export const ExportPanel: React.FC<Props> = ({
   const openWorkSkin = () => {
     workSkinPartsCopiedRef.current.clear();
     workSkinHandoffTrackedRef.current = false;
+    setWorkSkinHandoffComplete(false);
+    setWorkSkinRecommendation(null);
     trackAnalytics({ name: 'export_started', outputType: 'work_skin', templateId: project.template });
     trackAnalytics({ name: 'export_ready', outputType: 'work_skin', templateId: project.template });
     setSkinScope('all');
@@ -1160,6 +1179,9 @@ export const ExportPanel: React.FC<Props> = ({
       workSkinPartsCopiedRef.current.add(part);
       if (workSkinPartsCopiedRef.current.size === 2 && !workSkinHandoffTrackedRef.current) {
         workSkinHandoffTrackedRef.current = true;
+        recordSceneHandoff();
+        setWorkSkinHandoffComplete(true);
+        setWorkSkinRecommendation(eligibleContextualProduct());
         trackAnalytics({ name: 'handoff_completed', outputType: 'work_skin', templateId: project.template });
       }
     } catch {
@@ -1178,6 +1200,8 @@ export const ExportPanel: React.FC<Props> = ({
     setCopyState({ css: 'idle', html: 'idle' });
     workSkinPartsCopiedRef.current.clear();
     workSkinHandoffTrackedRef.current = false;
+    setWorkSkinHandoffComplete(false);
+    setWorkSkinRecommendation(null);
   };
 
   return (
@@ -1507,6 +1531,14 @@ export const ExportPanel: React.FC<Props> = ({
               <button type="button" onClick={backupProject} className="w-full rounded-xl border border-stone-200 px-4 py-2.5 text-sm font-semibold text-stone-700 hover:bg-stone-50">
                 Back up editable project
               </button>
+              {hostedHandoffComplete && hostedRecommendation && (
+                <MoreTools
+                  placement="hosted_image_success"
+                  variant="contextual"
+                  product={hostedRecommendation}
+                  onDismiss={() => setHostedRecommendation(null)}
+                />
+              )}
             </div>
           </div>
         </ModalDialog>
@@ -1604,6 +1636,14 @@ export const ExportPanel: React.FC<Props> = ({
 
               <button type="button" onClick={backupProject} className="w-full rounded-xl border border-stone-200 px-4 py-2.5 text-sm font-semibold text-stone-700 hover:bg-stone-50">Back up editable project</button>
               <p className="mt-3 text-[11px] leading-relaxed text-stone-500"><strong>Remote icons and media remain external dependencies.</strong> AO3 does not copy those files. Readers and downloads may also see the skin-off fallback, so keep the editable project and transcript.</p>
+              {workSkinHandoffComplete && workSkinRecommendation && (
+                <MoreTools
+                  placement="work_skin_success"
+                  variant="contextual"
+                  product={workSkinRecommendation}
+                  onDismiss={() => setWorkSkinRecommendation(null)}
+                />
+              )}
             </div>
           </div>
         </ModalDialog>

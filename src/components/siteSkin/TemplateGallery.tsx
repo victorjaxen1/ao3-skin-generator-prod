@@ -110,7 +110,7 @@ export const TemplateGallery: React.FC<Props> = ({ onRequestSelect, onResume, re
           change what anyone else sees.
         </p>
 
-        <MoreTools placement="site_skin_gallery" />
+        <MoreTools placement="site_skin_gallery_shelf" variant="shelf" />
       </div>
 
       <PaletteFromImageDialog

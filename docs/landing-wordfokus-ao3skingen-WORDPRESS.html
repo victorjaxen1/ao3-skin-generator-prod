@@ -3,7 +3,7 @@
      AO3 Skin Generator — landing page for www.wordfokus.com/ao3skingen/
      WordPress version.
 
-     ^ THAT FIRST LINE MATTERS. "<!-- wp:html -->" (and the matching close at
+     ^ THAT FIRST LINE MATTERS. The opening WordPress HTML-block marker (and the matching close at
      the very bottom) is what tells WordPress "this is one HTML block, leave it
      alone". Without it, the editor tries to convert this into blocks and
      destroys the <style> tag. Do not delete either line.
@@ -638,7 +638,42 @@
         </div>
       </section>
 
-      <!-- AO3 Guides — only link to articles that are already published -->
+      <!-- Product family. The AO3 guides section below deliberately sits
+           between this commercial shelf and the separate Ko-fi request. -->
+      <section class="features" id="more-tools" style="background: var(--bg-light);">
+        <div class="container">
+          <div class="section-title">
+            <h2>Also by the same developer</h2>
+            <p>Separate Google&nbsp;Docs add-ons &middot; free to start &middot; not required for AO3 SkinGen.</p>
+          </div>
+
+          <div class="features-grid" style="max-width: 900px; margin: 0 auto;">
+            <div class="feature-card">
+              <div class="feature-icon">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                </svg>
+              </div>
+              <h3>WordFokus</h3>
+              <p>Draft in Google&nbsp;Docs without going back to polish every sentence. WordFokus keeps earlier text out of reach so the chapter moves forward.</p>
+              <p><a href="https://app.wordfokus.com/?utm_source=ao3skingen&amp;utm_medium=referral&amp;utm_campaign=writer_toolkit&amp;utm_content=wordpress_hub_product_shelf" target="_blank" rel="noopener noreferrer">Try WordFokus free &rarr;</a></p>
+            </div>
+
+            <div class="feature-card">
+              <div class="feature-icon">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+                </svg>
+              </div>
+              <h3>WorldKonstruct</h3>
+              <p>Keeping a long AU or series consistent? WorldKonstruct can scan an existing draft into a story bible beside your manuscript.</p>
+              <p><a href="https://app.wordfokus.com/worldkonstruct/?utm_source=ao3skingen&amp;utm_medium=referral&amp;utm_campaign=writer_toolkit&amp;utm_content=wordpress_hub_product_shelf" target="_blank" rel="noopener noreferrer">Try WorldKonstruct free &rarr;</a></p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- AO3 Guides: this core-content section also separates product and Ko-fi asks. -->
       <section class="guides" id="guides">
         <div class="container">
           <div class="section-title">
@@ -701,7 +736,7 @@
       <section class="cta-section">
         <div class="container">
           <h2>Ready when you are</h2>
-          <p>All three tools are free forever, need no signup, and remember your work between visits.</p>
+          <p>AO3 SkinGen's three builders are free forever, need no signup, and remember your work between visits.</p>
           <div class="hero-buttons" style="justify-content: center;">
             <a href="https://app.ao3skingen.wordfokus.com" class="btn btn-primary btn-large">Start a conversation</a>
             <a href="https://app.ao3skingen.wordfokus.com/site-skin" class="btn btn-secondary btn-large">Build a site skin</a>

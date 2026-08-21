@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { SkinSettings } from '../lib/schema';
 import { ImageUrlInput } from './ImageUrlInput';
 import BottomSheet from './BottomSheet';
@@ -10,6 +10,7 @@ import {
   AdvancedSection,
 } from './SettingsRows';
 import { resolveTwitterSceneMode } from '../lib/twitter';
+import { MoreTools } from './MoreTools';
 
 interface Props {
   isOpen: boolean;
@@ -69,6 +70,12 @@ export const SettingsSheet: React.FC<Props> = ({
   messageCount = 0,
   onUpdateSettings,
 }) => {
+  const [writerToolsOpen, setWriterToolsOpen] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) setWriterToolsOpen(false);
+  }, [isOpen]);
+
   // The participant add/remove/update handlers moved to CastPanel with the
   // editor they serve. They were duplicated here for iOS and Android; there is
   // one copy now, taking the field as an argument.
@@ -435,6 +442,38 @@ export const SettingsSheet: React.FC<Props> = ({
             onChange={(v) => onUpdateSettings('toolAttribution', v)}
           />
         </AdvancedSection>
+
+        <div className="py-3">
+          <button
+            type="button"
+            aria-expanded={writerToolsOpen}
+            aria-controls="writer-tools-panel"
+            onClick={() => setWriterToolsOpen(open => !open)}
+            className="flex w-full items-center gap-3 rounded-lg py-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2"
+          >
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-medium text-stone-900">Writer tools from this developer</span>
+              <span className="mt-0.5 block text-xs text-stone-500">Drafting and story-bible tools for Google Docs</span>
+            </span>
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              aria-hidden="true"
+              className={`flex-shrink-0 text-stone-400 transition-transform ${writerToolsOpen ? 'rotate-180' : ''}`}
+            >
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </button>
+          {writerToolsOpen && (
+            <div id="writer-tools-panel">
+              <MoreTools placement="workspace_settings" variant="settings" />
+            </div>
+          )}
+        </div>
       </div>
     </BottomSheet>
   );

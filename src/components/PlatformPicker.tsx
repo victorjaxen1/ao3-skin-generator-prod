@@ -220,6 +220,8 @@ export const PlatformPicker: React.FC<Props> = ({
         </Link>
       </div>
 
+      <MoreTools placement="platform_picker_compact" variant="compact" />
+
       {/* Quick Start Templates — grouped, so a chip's platform is never a surprise */}
       {Object.keys(TEMPLATE_EXAMPLES).length > 0 && (
         <div className="mt-10 w-full max-w-lg">
@@ -271,7 +273,7 @@ export const PlatformPicker: React.FC<Props> = ({
 
       {/* Section 11.6 Tier 2. Placed above the legal footer and below every
           tool choice, so it is findable and never in the way. */}
-      <MoreTools placement="platform_picker" />
+      <MoreTools placement="platform_picker_shelf" variant="shelf" />
 
       {/* Footer */}
       <div className="mt-12 text-center space-y-1">
