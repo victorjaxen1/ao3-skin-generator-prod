@@ -9,6 +9,7 @@ import {
   trackAnalytics,
   trackPageView,
 } from '../lib/analytics';
+import { ModalDialog } from './ModalDialog';
 
 export function AnalyticsConsent() {
   const router = useRouter();
@@ -76,7 +77,7 @@ export function AnalyticsConsent() {
         Analytics stays off unless you choose “Allow analytics.” You can change this later from the Privacy button.
       </p>
       <div className="mt-4 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
-        <button type="button" onClick={() => choose('denied')} className="rounded-xl border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-50">
+        <button type="button" data-autofocus onClick={() => choose('denied')} className="rounded-xl border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-50">
           Don’t allow
         </button>
         <button type="button" onClick={() => choose('granted')} className="rounded-xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700">
@@ -114,9 +115,9 @@ export function AnalyticsConsent() {
         </aside>
       )}
       {open && consent !== null && (
-        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/30 p-3" role="dialog" aria-modal="true" aria-labelledby="analytics-consent-title">
+        <ModalDialog isOpen={open} onClose={() => setOpen(false)} labelledBy="analytics-consent-title" maxWidthClass="max-w-lg">
           {choicePanel}
-        </div>
+        </ModalDialog>
       )}
     </>
   );

@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Violation } from '../../lib/siteSkin/ao3Css';
 import { SiteSkinTheme } from '../../lib/siteSkin/theme';
 import { parseSiteThemeFile, ProjectFileError, PROJECT_FILE_MAX_BYTES, serializeSiteThemeFile } from '../../lib/projectFile';
 import { downloadTextFile, safeFilenamePart } from '../../lib/download';
 import { AO3_RULESET_STATUS } from '../../lib/ao3Compatibility';
 import { trackAnalytics } from '../../lib/analytics';
+import { ModalDialog } from '../ModalDialog';
 
 interface Props {
   isOpen: boolean;
@@ -20,16 +21,16 @@ interface Props {
 
 const STEPS: { title: string; body: React.ReactNode }[] = [
   {
-    title: 'Copy your skin',
-    body: <>The button below copies the whole stylesheet. You never need to read or edit it.</>,
-  },
-  {
     title: "Open AO3's skin editor",
     body: (
       <>
         On AO3, go to <strong className="text-stone-800">Preferences → Skins → Create Site Skin</strong>.
       </>
     ),
+  },
+  {
+    title: 'Choose “Create Site Skin”',
+    body: <>Give the skin a title you will recognise later.</>,
   },
   {
     title: 'Paste it into the CSS box, and give it a title',
@@ -71,9 +72,14 @@ export const ExportSkinDialog: React.FC<Props> = ({
 }) => {
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
+  const [showManualCss, setShowManualCss] = useState(false);
   const [importCandidate, setImportCandidate] = useState<{ theme: SiteSkinTheme; exportedAt: string } | null>(null);
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    setCopied(false);
+    setError('');
+    setShowManualCss(false);
+  }, [isOpen]);
 
   const blocked = violations.length > 0;
 
@@ -117,32 +123,30 @@ export const ExportSkinDialog: React.FC<Props> = ({
       await navigator.clipboard.writeText(css);
       setCopied(true);
       setError('');
-      setTimeout(() => setCopied(false), 2500);
       trackAnalytics({ name: 'output_copied', outputType: 'site_skin', part: 'css' });
       trackAnalytics({ name: 'handoff_completed', outputType: 'site_skin', templateId });
     } catch {
       // Clipboard is blocked in plenty of ordinary situations. The textarea
       // above is already selectable, so say that rather than just failing.
-      setError('Your browser blocked the clipboard. Select the CSS above and copy it manually.');
+      setError('Your browser blocked the clipboard. The CSS is open below so you can copy it manually.');
+      setShowManualCss(true);
       trackAnalytics({ name: 'export_failed', outputType: 'site_skin', errorCode: 'CLIPBOARD_DENIED' });
     }
   };
 
   return (
-    <div
-      className="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-label="Copy your site skin"
+    <ModalDialog
+      isOpen={isOpen}
+      onClose={onClose}
+      ariaLabel="Install your site skin"
+      maxWidthClass="max-w-2xl"
     >
       <div
-        className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden"
-        onClick={e => e.stopPropagation()}
+        className="flex max-h-[90dvh] flex-col overflow-hidden"
       >
         <div className="bg-stone-900 text-white px-5 py-4 flex items-center justify-between flex-shrink-0">
           <div>
-            <h3 className="text-sm font-semibold">Your site skin is ready</h3>
+            <h3 className="text-sm font-semibold">Install your site skin</h3>
             <p className="text-xs text-stone-400 mt-0.5">{themeName}</p>
           </div>
           <button
@@ -185,19 +189,11 @@ export const ExportSkinDialog: React.FC<Props> = ({
             </div>
           )}
 
-          <textarea
-            readOnly
-            value={css}
-            rows={10}
-            aria-label="Site skin CSS"
-            className="w-full font-mono text-xs bg-gray-950 text-green-400 border border-gray-700 rounded-lg p-3 resize-none focus:outline-none"
-            onClick={e => (e.target as HTMLTextAreaElement).select()}
-          />
-
           <button
+            data-autofocus
             onClick={handleCopy}
             disabled={blocked}
-            className={`w-full mt-4 py-3 rounded-xl font-semibold text-sm transition-all ${
+            className={`w-full py-3 rounded-xl font-semibold text-sm transition-all ${
               blocked
                 ? 'bg-stone-100 text-stone-400 cursor-not-allowed'
                 : copied
@@ -214,6 +210,12 @@ export const ExportSkinDialog: React.FC<Props> = ({
             </p>
           )}
 
+          {copied && (
+            <p aria-live="polite" className="mt-2 text-center text-xs font-medium text-green-800">
+              Copied. Keep this tab open while you paste it into AO3.
+            </p>
+          )}
+
           <ol className="mt-5 space-y-3">
             {STEPS.map((step, i) => (
               <li key={step.title} className="flex gap-3">
@@ -227,6 +229,26 @@ export const ExportSkinDialog: React.FC<Props> = ({
               </li>
             ))}
           </ol>
+
+          <details
+            open={showManualCss}
+            onToggle={event => setShowManualCss(event.currentTarget.open)}
+            className="mt-5 rounded-xl border border-stone-200 bg-stone-50"
+          >
+            <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-stone-800">
+              Show CSS for manual copying
+            </summary>
+            <div className="border-t border-stone-200 p-4">
+              <textarea
+                readOnly
+                value={css}
+                rows={10}
+                aria-label="Site skin CSS"
+                className="w-full resize-none rounded-lg border border-gray-700 bg-gray-950 p-3 font-mono text-xs text-green-400 focus:outline-none"
+                onClick={event => event.currentTarget.select()}
+              />
+            </div>
+          </details>
 
           {/* Only with a banner, because only then is any of it true. AO3 does
               not copy the image — it links to it — so the skin outlives the
@@ -258,8 +280,11 @@ export const ExportSkinDialog: React.FC<Props> = ({
             </section>
           )}
 
-          <section className="mt-5 rounded-xl border border-stone-200 p-4">
-            <h4 className="text-sm font-semibold text-stone-900">Theme backup</h4>
+          <details className="mt-5 rounded-xl border border-stone-200">
+            <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-stone-900">
+              Editable theme backup
+            </summary>
+            <div className="border-t border-stone-200 p-4">
             <p className="mt-1 text-xs leading-relaxed text-stone-500">Download or restore this editable theme locally. It is separate from scene-project backups.</p>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
               <button type="button" onClick={() => downloadThemeBackup()} className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-xs font-semibold text-stone-700 hover:bg-stone-50">
@@ -281,14 +306,15 @@ export const ExportSkinDialog: React.FC<Props> = ({
                 </div>
               </div>
             )}
-          </section>
+            </div>
+          </details>
 
           <p className="text-[11px] text-stone-400 mt-5 text-center leading-relaxed">
             Unofficial. Not affiliated with the Organization for Transformative Works.
           </p>
         </div>
       </div>
-    </div>
+    </ModalDialog>
   );
 };
 

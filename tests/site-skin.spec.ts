@@ -19,7 +19,8 @@ import { test, expect, Page } from '@playwright/test';
 
 /** The CSS the user would copy, read out of the export dialog. */
 async function exportedCss(page: Page): Promise<string> {
-  await page.getByRole('button', { name: 'Copy to AO3' }).click();
+  await page.getByRole('button', { name: 'Install on AO3' }).click();
+  await page.getByText('Show CSS for manual copying').click();
   const textarea = page.getByLabel('Site skin CSS');
   await expect(textarea).toBeVisible();
   const css = await textarea.inputValue();
@@ -32,7 +33,10 @@ async function openEditor(page: Page, templateName = 'Moonlit Library') {
   await page.evaluate(() => localStorage.removeItem('ao3SiteSkinTheme'));
   await page.reload();
   await page.getByRole('button', { name: new RegExp(templateName) }).click();
-  await expect(page.getByRole('button', { name: 'Copy to AO3' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Install on AO3' })).toBeVisible();
+  for (const section of ['Type', 'Shape', 'Header', 'Depth', 'Reading', 'Details']) {
+    await page.getByRole('button', { name: new RegExp(`^${section}`) }).click();
+  }
 }
 
 test('the picker offers the site skin builder as its own thing', async ({ page }) => {
@@ -48,7 +52,7 @@ test('a ?template= link opens the editor on that template', async ({ page }) => 
   // What the examples gallery links to. Landing on the gallery instead would
   // make every card on that page a dead end.
   await page.goto('/site-skin?template=gothic');
-  await expect(page.getByRole('button', { name: 'Copy to AO3' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Install on AO3' })).toBeVisible();
   await expect(page.getByText('Gothic Velvet')).toBeVisible();
 
   // Its accent, not the default template's.
@@ -58,6 +62,7 @@ test('a ?template= link opens the editor on that template', async ({ page }) => 
 test('a banner-ready template arrives with its header controls set', async ({ page }) => {
   await page.goto('/site-skin?template=western');
   await expect(page.getByText('Sun-Bleached Western')).toBeVisible();
+  await page.getByRole('button', { name: /^Header/ }).click();
   await expect(page.getByRole('switch', { name: "Hide AO3's logo" })).toHaveAttribute(
     'aria-checked',
     'true'
@@ -783,7 +788,7 @@ test('a low-contrast accent is warned about, and the fix repairs it', async ({ p
 
 test('the export dialog copies the CSS and explains the AO3 step', async ({ page }) => {
   await openEditor(page);
-  await page.getByRole('button', { name: 'Copy to AO3' }).click();
+  await page.getByRole('button', { name: 'Install on AO3' }).click();
 
   await expect(page.getByText(/Passes the bundled AO3 CSS checks/)).toBeVisible();
 
@@ -880,12 +885,12 @@ test('the export dialog warns about image hosting, but only with a banner', asyn
   // failure one paragraph here prevents.
   await openEditor(page, 'Midnight Academia');
 
-  await page.getByRole('button', { name: 'Copy to AO3' }).click();
+  await page.getByRole('button', { name: 'Install on AO3' }).click();
   await expect(page.getByText('About your banner image')).toHaveCount(0);
   await page.getByRole('button', { name: 'Close' }).click();
 
   await page.getByLabel('Banner image').fill('https://i.imgur.com/aBcD123.png');
-  await page.getByRole('button', { name: 'Copy to AO3' }).click();
+  await page.getByRole('button', { name: 'Install on AO3' }).click();
 
   const note = page.locator('section', { hasText: 'About your banner image' });
   await expect(note).toBeVisible();
@@ -906,7 +911,7 @@ test('a Discord link is refused before the user ever reaches AO3', async ({ page
   await expect(warning).toContainText('imgur');
 
   // And it is a hard stop, not a nudge: AO3 would refuse the entire skin.
-  await page.getByRole('button', { name: 'Copy to AO3' }).click();
+  await page.getByRole('button', { name: 'Install on AO3' }).click();
   await expect(page.getByText('AO3 would refuse this skin')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Copy site skin CSS' })).toBeDisabled();
 });
@@ -935,8 +940,10 @@ test('the gallery offers a way out of the sixteen', async ({ page }) => {
   await page.evaluate(() => localStorage.removeItem('ao3SiteSkinTheme'));
   await page.reload();
 
-  const panel = page.getByRole('heading', { name: /None of these\?/ });
-  await expect(panel).toBeVisible();
+  const trigger = page.getByRole('button', { name: 'Match a picture or website' });
+  await expect(trigger).toBeVisible();
+  await expect(page.getByLabel('Image address')).toHaveCount(0);
+  await trigger.click();
 
   // §3 is a product decision, not copy: we promise colours and never a match,
   // because "match" sets up a comparison we lose on every single use.
@@ -954,6 +961,7 @@ test('both doors are offered, and each says where the reading happens', async ({
   await page.reload();
 
   // The picture door is the default: it is the one that needs no server.
+  await page.getByRole('button', { name: 'Match a picture or website' }).click();
   await expect(page.getByLabel('Image address')).toBeVisible();
   await expect(page.getByText(/read in your browser/)).toBeVisible();
 
@@ -970,6 +978,7 @@ test('a website address needs no scheme, but nonsense is still refused here', as
   await page.evaluate(() => localStorage.removeItem('ao3SiteSkinTheme'));
   await page.reload();
 
+  await page.getByRole('button', { name: 'Match a picture or website' }).click();
   await page.getByRole('button', { name: 'A website' }).click();
 
   // Nobody types the scheme, so "example.com" must not be an error — it reaches
@@ -989,6 +998,7 @@ test('a paste that is not an address is refused without a round trip', async ({ 
 
   // Fail here, not after a proxy fetch: the commonest paste error deserves the
   // fastest possible answer, and the proxy is HTTPS-only anyway.
+  await page.getByRole('button', { name: 'Match a picture or website' }).click();
   await page.getByLabel('Image address').fill('my-picture.png');
   await page.getByRole('button', { name: 'Get the colours' }).click();
   // Filtered, because Next's own route announcer is a second role="alert".

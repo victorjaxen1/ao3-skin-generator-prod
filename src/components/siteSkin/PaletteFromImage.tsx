@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { ModalDialog } from '../ModalDialog';
 import { SiteSkinTheme } from '../../lib/siteSkin/theme';
 import {
   BannerReading,
@@ -397,26 +398,28 @@ export const PaletteFromImageDialog: React.FC<{
   isOpen: boolean;
   onClose: () => void;
   onUse: (theme: SiteSkinTheme, polarity: Polarity) => void;
-}> = ({ isOpen, onClose, onUse }) => {
-  if (!isOpen) return null;
-
+  placement?: 'gallery' | 'editor';
+}> = ({ isOpen, onClose, onUse, placement = 'editor' }) => {
+  const creating = placement === 'gallery';
   return (
-    <div
-      className="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-label="Build colours from a picture or a website"
+    <ModalDialog
+      isOpen={isOpen}
+      onClose={onClose}
+      ariaLabel={creating ? 'Match a picture or website' : 'Build colours from a picture or a website'}
+      maxWidthClass="max-w-lg"
     >
       <div
-        className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] flex flex-col overflow-hidden"
-        onClick={e => e.stopPropagation()}
+        className="flex max-h-[90dvh] flex-col overflow-hidden"
       >
         <div className="bg-stone-900 text-white px-5 py-4 flex items-center justify-between flex-shrink-0">
           <div>
-            <h3 className="text-sm font-semibold">Colours from a picture or a website</h3>
+            <h3 className="text-sm font-semibold">
+              {creating ? 'Match a picture or website' : 'Colours from a picture or a website'}
+            </h3>
             <p className="text-xs text-stone-400 mt-0.5">
-              Replaces your four colours. Your fonts and shapes stay as they are.
+              {creating
+                ? 'We will build a complete starting theme from the colours.'
+                : 'Replaces your four colours. Your fonts and shapes stay as they are.'}
             </p>
           </div>
           <button
@@ -429,7 +432,7 @@ export const PaletteFromImageDialog: React.FC<{
         </div>
         <div className="p-5 overflow-y-auto">
           <PaletteFromImage
-            placement="editor"
+            placement={placement}
             onUse={(theme, polarity) => {
               onUse(theme, polarity);
               onClose();
@@ -437,7 +440,7 @@ export const PaletteFromImageDialog: React.FC<{
           />
         </div>
       </div>
-    </div>
+    </ModalDialog>
   );
 };
 

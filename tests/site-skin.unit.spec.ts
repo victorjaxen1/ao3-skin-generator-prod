@@ -1697,8 +1697,8 @@ test.describe('listboxes, indexes and meta tables', () => {
 
     // dl.meta's border was transcribed as #ddd for a year. AO3 says #ccc, and a
     // mock one shade kinder than the real page is a mock that flatters us.
-    expect(AO3_BASE_CSS).toContain('dl.meta { border: 1px solid #ccc;');
-    expect(AO3_BASE_CSS).not.toContain('dl.meta { border: 1px solid #ddd;');
+    expect(AO3_BASE_CSS).toMatch(/dl\.meta\s*\{[^}]*border: 1px solid #ccc;/);
+    expect(AO3_BASE_CSS).not.toMatch(/dl\.meta\s*\{[^}]*border: 1px solid #ddd;/);
   });
 
   test('every region the audit named is watchable in the preview', () => {
@@ -2152,18 +2152,22 @@ test.describe('preview and export cannot disagree', () => {
 
   test('every state uses AO3 selectors the compiler actually targets', () => {
     const browse = mockBody('browse');
+    const inspectedBrowse = mockBody('browse', { inspect: true });
     const reading = mockBody('reading');
+    const inspectedReading = mockBody('reading', { inspect: true });
     const dashboard = mockBody('dashboard');
 
-    // The header rules are only verifiable because an open dropdown is
-    // rendered — plan §10: if it cannot be previewed, it does not ship. It
-    // opens in Browse only; an absolutely-positioned panel left open in every
-    // state would obscure a slice of each one.
+    // Showcase stays calm. Inspect retains the deliberately open components
+    // that keep the header and autocomplete rules visibly testable.
     expect(browse).toContain('class="primary navigation actions"');
-    expect(browse).toContain('class="dropdown open"');
+    expect(browse).not.toContain('class="dropdown open"');
+    expect(browse).toContain('class="dropdown" hidden');
+    expect(inspectedBrowse).toContain('class="dropdown open"');
+    expect(inspectedBrowse).toContain('class="dropdown">');
     expect(browse).toContain('class="menu dropdown-menu"');
     expect(reading).toContain('class="menu dropdown-menu"');
     expect(reading).not.toContain('class="dropdown open"');
+    expect(inspectedReading).toContain('class="dropdown open"');
     expect(browse).toContain('li id="work_1" class="work blurb group"');
     expect(browse).toContain('class="notice"');
     expect(browse).toContain('a class="tag"');

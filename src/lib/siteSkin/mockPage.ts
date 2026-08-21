@@ -283,7 +283,14 @@ li.relationships a { background: #eee; }
    left of their values, which is what makes a work page's tags read as a list
    of rows. The border was transcribed as "#ddd" until 17 Aug 2026; AO3 says
    "#ccc", and the mock had been quietly one shade kinder than the real page. */
-dl.meta { border: 1px solid #ccc; padding: 0.75em; margin: 0 0 1em; }
+dl.meta {
+  border: 1px solid #ccc;
+  clear: right;
+  overflow: hidden;
+  position: relative;
+  padding: 0.75em;
+  margin: 0 0 1em;
+}
 dl.meta dt { float: left; clear: left; margin: 0 0.25em 0 0; font-weight: bold; }
 dl.meta dd { margin: 0 0 0.25em; padding: 0 0 0 12em; }
 dl.meta ul.commas li { display: inline; padding-right: 0.25em; }
@@ -422,12 +429,8 @@ div.preface .title, div.preface .byline, div.preface .byline a { border: 0; text
 `.trim();
 
 /**
- * `openDropdown` is what makes the header's dropdown rules previewable at all
- * — plan §10 says a rule that cannot be seen does not ship. But an open
- * dropdown is `position: absolute` on the real page too, so it hangs over
- * whatever is below it. Leaving it open in every state would permanently
- * obscure a slice of the preview, so it opens in Browse only: seen once,
- * verified once, out of the way everywhere else.
+ * Inspection mode makes the header's dropdown rules previewable without
+ * leaving an absolutely-positioned menu over the ordinary product preview.
  */
 function header(openDropdown: boolean): string {
   return `
@@ -575,7 +578,8 @@ function blurb(
  * rule that paints it, and `.selected` is a state a static mock can only show
  * by asserting it.
  */
-const BROWSE_CONTROLS = `
+function browseControls(inspect: boolean): string {
+  return `
 <ul class="actions" role="menu">
   <li><a href="#">Post</a></li>
   <li><a href="#">Sort &amp; Filter</a></li>
@@ -586,7 +590,7 @@ const BROWSE_CONTROLS = `
     <div class="autocomplete">
       <label for="tag_search">Tag</label>
       <input id="tag_search" type="text" value="slow bu" autocomplete="off">
-      <div class="dropdown">
+      <div class="dropdown"${inspect ? '' : ' hidden'}>
         <ul>
           <li class="selected">Slow Burn</li>
           <li>Slow Build</li>
@@ -597,6 +601,7 @@ const BROWSE_CONTROLS = `
     <p class="submit actions"><input type="submit" value="Search"></p>
   </fieldset>
 </form>`;
+}
 
 /** AO3 puts `.actions` on the pagination list too, so the page links are buttons. */
 const BROWSE_PAGINATION = `
@@ -608,12 +613,13 @@ const BROWSE_PAGINATION = `
   <li class="next"><a href="#">Next →</a></li>
 </ol>`;
 
-const BROWSE = `
+function browse(inspect: boolean): string {
+  return `
 <h2 class="heading">Works in Original Work</h2>
 <div class="notice" role="status">
   <p>Your filters have been applied. 5 works found.</p>
 </div>
-${BROWSE_CONTROLS}
+${browseControls(inspect)}
 <ol class="work index group">
 ${blurb(
   '1',
@@ -722,6 +728,7 @@ ${blurb(
 )}
 </ol>
 ${BROWSE_PAGINATION}`;
+}
 
 /**
  * **An author's work skin, sitting in the middle of the chapter.**
@@ -1042,23 +1049,24 @@ ${DASHBOARD_LISTBOXES}
 ${DASHBOARD_INDEXES}`;
 
 /** The `#main` content and any sibling regions, per preview state. */
-function stateMarkup(state: PreviewState): string {
+function stateMarkup(state: PreviewState, inspect: boolean): string {
   if (state === 'reading') {
     return `<div id="main" class="works-show region" role="main">${READING}</div>`;
   }
   if (state === 'dashboard') {
     return `${DASHBOARD_SIDEBAR}<div id="main" class="dashboard region" role="main">${DASHBOARD_MAIN}</div>`;
   }
-  return `<div id="main" class="works-index region" role="main">${BROWSE}</div>`;
+  return `<div id="main" class="works-index region" role="main">${browse(inspect)}</div>`;
 }
 
 /** The body content only — used when patching an already-loaded iframe. */
-export function mockBody(state: PreviewState): string {
+export function mockBody(state: PreviewState, options: { inspect?: boolean } = {}): string {
+  const inspect = options.inspect === true;
   return `
 <div id="outer" class="wrapper">
-  ${header(state === 'browse')}
+  ${header(inspect)}
   <div id="inner" class="wrapper">
-    ${stateMarkup(state)}
+    ${stateMarkup(state, inspect)}
   </div>
   ${FOOTER}
 </div>`.trim();
@@ -1079,7 +1087,11 @@ export const SKIN_STYLE_ID = 'compiled-site-skin';
  *
  * Only the middle one is ours, and only the middle one is exported.
  */
-export function mockDocument(state: PreviewState, skinCss: string): string {
+export function mockDocument(
+  state: PreviewState,
+  skinCss: string,
+  options: { inspect?: boolean } = {}
+): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1090,7 +1102,7 @@ export function mockDocument(state: PreviewState, skinCss: string): string {
 <style id="author-work-skin" data-loads-after="the site skin, as AO3 renders it in the body">${AUTHOR_WORK_SKIN_CSS}</style>
 </head>
 <body class="logged-in">
-${mockBody(state)}
+${mockBody(state, options)}
 </body>
 </html>`;
 }

@@ -2,11 +2,11 @@ import React, { useState } from 'react';
 import { SiteSkinTheme, Mood, MOODS } from '../../lib/siteSkin/theme';
 import { TEMPLATES, TEMPLATE_DESCRIPTIONS } from '../../lib/siteSkin/templates';
 import { ThemeThumbnail } from './ThemeThumbnail';
-import { PaletteFromImage } from './PaletteFromImage';
+import { PaletteFromImageDialog } from './PaletteFromImage';
 import { MoreTools } from '../MoreTools';
 
 interface Props {
-  onSelect: (theme: SiteSkinTheme) => void;
+  onRequestSelect: (theme: SiteSkinTheme) => void;
   /** Shown when a saved theme exists, so returning users don't start over. */
   onResume?: () => void;
   resumeName?: string;
@@ -19,20 +19,20 @@ const MOOD_LABELS: Record<Mood, string> = {
   decorative: 'Decorative',
 };
 
-export const TemplateGallery: React.FC<Props> = ({ onSelect, onResume, resumeName }) => {
+export const TemplateGallery: React.FC<Props> = ({ onRequestSelect, onResume, resumeName }) => {
   const [filter, setFilter] = useState<Mood | 'all'>('all');
+  const [showPicker, setShowPicker] = useState(false);
   const visible = TEMPLATES.filter(t => filter === 'all' || t.meta.moods.includes(filter));
 
   return (
-    <div className="min-h-screen bg-stone-50">
-      <div className="max-w-5xl mx-auto px-4 py-10 sm:py-14">
-        <header className="text-center mb-8">
+    <div className="min-h-screen bg-stone-50" style={{ paddingBottom: 'var(--analytics-consent-h, 0px)' }}>
+      <div className="max-w-5xl mx-auto px-4 py-10 sm:py-12">
+        <header className="text-center mb-6">
           <h1 className="text-3xl sm:text-4xl font-bold text-stone-900 tracking-tight">
             Make AO3 feel like yours
           </h1>
           <p className="text-stone-500 mt-3 text-sm sm:text-base max-w-md mx-auto leading-relaxed">
-            Pick a look, make it yours, then copy it into AO3. No CSS, no account,
-            about three minutes.
+            Pick a look, personalize it, then install it on AO3. No CSS. About three minutes.
           </p>
         </header>
 
@@ -51,15 +51,18 @@ export const TemplateGallery: React.FC<Props> = ({ onSelect, onResume, resumeNam
           </div>
         )}
 
-        {/* Above the chips, not below the grid. The premise of the picker is
-            the gallery moment itself — a reader who has looked at all sixteen
-            and wants none of them — and a panel underneath sixteen cards is a
-            panel nobody scrolls to. */}
-        <div className="mb-8">
-          <PaletteFromImage placement="gallery" onUse={onSelect} />
+        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="text-lg font-semibold text-stone-900">Choose a template</h2>
+          <button
+            type="button"
+            onClick={() => setShowPicker(true)}
+            className="w-full rounded-xl border border-violet-200 bg-violet-50 px-4 py-2.5 text-sm font-semibold text-violet-700 hover:bg-violet-100 sm:w-auto"
+          >
+            Match a picture or website
+          </button>
         </div>
 
-        <div className="flex flex-wrap justify-center gap-2 mb-8" role="group" aria-label="Filter templates">
+        <div className="flex flex-wrap gap-2 mb-5" role="group" aria-label="Filter templates">
           {(['all', ...MOODS] as const).map(mood => (
             <button
               key={mood}
@@ -83,7 +86,7 @@ export const TemplateGallery: React.FC<Props> = ({ onSelect, onResume, resumeNam
             <button
               key={theme.meta.id}
               type="button"
-              onClick={() => onSelect(theme)}
+              onClick={() => onRequestSelect(theme)}
               className="text-left bg-white border border-stone-200 rounded-xl overflow-hidden hover:border-violet-400 hover:shadow-lg hover:-translate-y-0.5 transition-all focus-visible:ring-2 focus-visible:ring-violet-500"
             >
               <ThemeThumbnail theme={theme} />
@@ -109,6 +112,13 @@ export const TemplateGallery: React.FC<Props> = ({ onSelect, onResume, resumeNam
 
         <MoreTools placement="site_skin_gallery" />
       </div>
+
+      <PaletteFromImageDialog
+        isOpen={showPicker}
+        onClose={() => setShowPicker(false)}
+        placement="gallery"
+        onUse={onRequestSelect}
+      />
     </div>
   );
 };

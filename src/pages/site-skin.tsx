@@ -19,11 +19,29 @@ import { ThemeEditor } from '../components/siteSkin/ThemeEditor';
 import { PaletteFromImageDialog } from '../components/siteSkin/PaletteFromImage';
 import { SkinPreview } from '../components/siteSkin/SkinPreview';
 import { ExportSkinDialog } from '../components/siteSkin/ExportSkinDialog';
+import { ModalDialog } from '../components/ModalDialog';
+import { SiteSkinToolbar } from '../components/siteSkin/SiteSkinToolbar';
+import {
+  EDITOR_SECTION_IDS,
+  EditorSectionId,
+  MobilePane,
+  PreviewMode,
+} from '../components/siteSkin/uiTypes';
 import { ProductHead } from '../components/ProductHead';
 import { openPrivacyChoices, trackAnalytics } from '../lib/analytics';
 import { isSiteSkinActivated, markActivatedOnce, siteSkinBaseline } from '../lib/activation';
 
 const MAX_HISTORY = 50;
+
+function isEditableTarget(target: EventTarget | null): boolean {
+  const element = target as HTMLElement | null;
+  if (!element) return false;
+  return element.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(element.tagName);
+}
+
+function resetBaselineFor(theme: SiteSkinTheme): SiteSkinTheme {
+  return cloneTheme(findTemplate(theme.meta.id) || theme);
+}
 
 /**
  * The site skin builder: gallery ⇄ editor, on one route.
@@ -42,15 +60,25 @@ export default function SiteSkinPage() {
   const [previewState, setPreviewState] = useState<PreviewState>('browse');
   const [showExport, setShowExport] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
+  const [mobilePane, setMobilePane] = useState<MobilePane>('preview');
+  const [previewMode, setPreviewMode] = useState<PreviewMode>('showcase');
+  const [openSections, setOpenSections] = useState<Set<EditorSectionId>>(
+    () => new Set(['colors'])
+  );
+  const [pendingTemplate, setPendingTemplate] = useState<SiteSkinTheme | null>(null);
+  const [cameFromEditor, setCameFromEditor] = useState(false);
+  const [resetBaseline, setResetBaseline] = useState<SiteSkinTheme | null>(null);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'failed'>('saved');
   const [saveError, setSaveError] = useState('');
 
   const [history, setHistory] = useState<SiteSkinTheme[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
+  const historyIndexRef = useRef(-1);
 
   // The template as it was chosen, so a value the author never touched is never
   // counted as their work (§5.2).
   const activationRef = useRef<string | null>(null);
+  const resetBaselineRef = useRef<SiteSkinTheme | null>(null);
 
   // ── Mount ───────────────────────────────────────────────────────────────
   // `?template=<id>` opens the editor straight onto that template, matching
@@ -74,8 +102,12 @@ export default function SiteSkinPage() {
       : cloneTheme(DEFAULT_TEMPLATE);
 
     activationRef.current = siteSkinBaseline(initial);
+    const baseline = resetBaselineFor(initial);
+    resetBaselineRef.current = baseline;
+    setResetBaseline(baseline);
     setTheme(initial);
     setHistory([initial]);
+    historyIndexRef.current = 0;
     setHistoryIndex(0);
     setHasSaved(stored);
     // An unrecognised id falls through to the gallery rather than to a silent
@@ -106,11 +138,14 @@ export default function SiteSkinPage() {
       }
 
       setHistory(prev => {
-        if (prev.length && JSON.stringify(prev[prev.length - 1]) === JSON.stringify(theme)) {
-          return prev;
-        }
-        const next = [...prev, theme];
+        const index = historyIndexRef.current;
+        const current = prev[index];
+        if (current && JSON.stringify(current) === JSON.stringify(theme)) return prev;
+
+        const next = prev.slice(0, index + 1);
+        next.push(theme);
         if (next.length > MAX_HISTORY) next.shift();
+        historyIndexRef.current = next.length - 1;
         setHistoryIndex(next.length - 1);
         return next;
       });
@@ -124,6 +159,22 @@ export default function SiteSkinPage() {
   const css = useMemo(() => compile(theme), [theme]);
   const violations = useMemo(() => lintAo3Css(css), [css]);
   const issues = useMemo(() => findReadabilityIssues(theme.colors), [theme.colors]);
+  const modifiedSections = useMemo(() => {
+    if (!resetBaseline) return new Set<EditorSectionId>();
+    return new Set(EDITOR_SECTION_IDS.filter(id => (
+      JSON.stringify(theme[id]) !== JSON.stringify(resetBaseline[id])
+    )));
+  }, [resetBaseline, theme]);
+
+  useEffect(() => {
+    if (!issues.length) return;
+    setOpenSections(previous => {
+      if (previous.has('colors')) return previous;
+      const next = new Set(previous);
+      next.add('colors');
+      return next;
+    });
+  }, [issues.length]);
 
   // ── Handlers ────────────────────────────────────────────────────────────
   const updateTheme = useCallback(
@@ -133,15 +184,46 @@ export default function SiteSkinPage() {
     []
   );
 
-  const handleSelectTemplate = useCallback((template: SiteSkinTheme) => {
+  const toggleSection = useCallback((id: EditorSectionId) => {
+    setOpenSections(previous => {
+      const next = new Set(previous);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const resetSection = useCallback((id: EditorSectionId) => {
+    const baseline = resetBaselineRef.current;
+    if (!baseline) return;
+    updateTheme(id, { ...baseline[id] });
+  }, [updateTheme]);
+
+  const applyTemplate = useCallback((template: SiteSkinTheme) => {
     const fresh = cloneTheme(template);
     activationRef.current = siteSkinBaseline(fresh);
+    const baseline = resetBaselineFor(fresh);
+    resetBaselineRef.current = baseline;
+    setResetBaseline(baseline);
     setTheme(fresh);
     setHistory([fresh]);
+    historyIndexRef.current = 0;
     setHistoryIndex(0);
+    setMobilePane('preview');
+    setOpenSections(new Set(['colors']));
     setShowGallery(false);
+    setCameFromEditor(false);
+    setPendingTemplate(null);
     trackAnalytics({ name: 'template_selected', templateId: template.meta.id });
   }, []);
+
+  const requestTemplate = useCallback((template: SiteSkinTheme) => {
+    if (hasSaved || cameFromEditor) {
+      setPendingTemplate(template);
+      return;
+    }
+    applyTemplate(template);
+  }, [applyTemplate, cameFromEditor, hasSaved]);
 
   const handleOpenExport = () => {
     if (violations.length > 0) {
@@ -195,37 +277,37 @@ export default function SiteSkinPage() {
   }, []);
 
   const undo = useCallback(() => {
-    setHistoryIndex(i => {
-      if (i <= 0) return i;
-      setTheme(history[i - 1]);
-      return i - 1;
-    });
+    const index = historyIndexRef.current;
+    if (index <= 0) return;
+    historyIndexRef.current = index - 1;
+    setHistoryIndex(index - 1);
+    setTheme(history[index - 1]);
   }, [history]);
 
   const redo = useCallback(() => {
-    setHistoryIndex(i => {
-      if (i >= history.length - 1) return i;
-      setTheme(history[i + 1]);
-      return i + 1;
-    });
+    const index = historyIndexRef.current;
+    if (index >= history.length - 1) return;
+    historyIndexRef.current = index + 1;
+    setHistoryIndex(index + 1);
+    setTheme(history[index + 1]);
   }, [history]);
 
   useEffect(() => {
     const handle = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && showExport) setShowExport(false);
-      if (e.key === 'Escape' && showPicker) setShowPicker(false);
-      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === 'z') {
+      if (isEditableTarget(e.target)) return;
+      const key = e.key.toLowerCase();
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && key === 'z') {
         e.preventDefault();
         undo();
       }
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'z') {
+      if ((e.ctrlKey || e.metaKey) && ((e.shiftKey && key === 'z') || key === 'y')) {
         e.preventDefault();
         redo();
       }
     };
     window.addEventListener('keydown', handle);
     return () => window.removeEventListener('keydown', handle);
-  }, [showExport, showPicker, undo, redo]);
+  }, [undo, redo]);
 
   const head = (
     <ProductHead
@@ -253,11 +335,47 @@ export default function SiteSkinPage() {
             ← All tools
           </Link>
           <TemplateGallery
-            onSelect={handleSelectTemplate}
-            onResume={hasSaved ? () => setShowGallery(false) : undefined}
+            onRequestSelect={requestTemplate}
+            onResume={hasSaved ? () => {
+              setMobilePane('preview');
+              setShowGallery(false);
+            } : undefined}
             resumeName={hasSaved ? theme.meta.name : undefined}
           />
         </div>
+        <ModalDialog
+          isOpen={pendingTemplate !== null}
+          onClose={() => setPendingTemplate(null)}
+          labelledBy="replace-site-skin-title"
+          maxWidthClass="max-w-md"
+        >
+          <div className="p-5 sm:p-6">
+            <h2 id="replace-site-skin-title" className="text-lg font-semibold text-stone-900">
+              Start over with {pendingTemplate?.meta.name}?
+            </h2>
+            <p className="mt-2 text-sm leading-relaxed text-stone-600">
+              This replaces the theme currently saved in this browser. Your AO3 skin is not
+              affected until you paste and use new CSS there.
+            </p>
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setPendingTemplate(null)}
+                className="rounded-lg border border-stone-300 px-4 py-2 text-sm font-semibold text-stone-700 hover:bg-stone-50"
+              >
+                Keep current theme
+              </button>
+              <button
+                type="button"
+                data-autofocus
+                onClick={() => pendingTemplate && applyTemplate(pendingTemplate)}
+                className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800"
+              >
+                Start with {pendingTemplate?.meta.name}
+              </button>
+            </div>
+          </div>
+        </ModalDialog>
       </>
     );
   }
@@ -265,57 +383,25 @@ export default function SiteSkinPage() {
   return (
     <>
       {head}
-      <div className="flex flex-col h-screen bg-stone-50 font-sans">
-        {/* ─── Top bar ─────────────────────────────────────────────────── */}
-        <header className="flex items-center gap-3 px-3 sm:px-4 py-2.5 bg-white border-b border-stone-200 flex-shrink-0">
-          <button
-            type="button"
-            onClick={() => setShowGallery(true)}
-            className="flex items-center gap-1.5 text-sm font-medium text-stone-600 hover:text-stone-900"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M15 18l-6-6 6-6" />
-            </svg>
-            <span className="hidden sm:inline">Templates</span>
-          </button>
-
-          <span className="text-sm font-semibold text-stone-900 truncate">
-            {theme.meta.name}
-          </span>
-
-          {/* AO3-safe is the sanitizer question and nothing else. Contrast
-              lives beside the colour controls — see plan §9. */}
-          <span
-            role="status"
-            className={`text-[11px] font-medium px-2 py-1 rounded-full border flex-shrink-0 ${
-              violations.length === 0
-                ? 'bg-green-50 border-green-200 text-green-800'
-                : 'bg-red-50 border-red-200 text-red-800'
-            }`}
-          >
-            {violations.length === 0 ? `Checks passed · ${AO3_RULESET.reviewedOn}` : `${violations.length} blocked`}
-          </span>
-
-          <span className="ml-auto flex items-center gap-2">
-            {saveStatus === 'saving' && (
-              <span className="text-[11px] text-stone-400 hidden sm:inline">Saving…</span>
-            )}
-            <button
-              type="button"
-              onClick={openPrivacyChoices}
-              className="rounded-xl border border-stone-200 px-3 py-2 text-sm font-medium text-stone-600 hover:bg-stone-100"
-            >
-              Privacy
-            </button>
-            <button
-              type="button"
-              onClick={handleOpenExport}
-              className="px-4 py-2 rounded-xl bg-violet-600 text-white text-sm font-semibold hover:bg-violet-700 transition-colors"
-            >
-              Copy to AO3
-            </button>
-          </span>
-        </header>
+      <div className="flex h-screen h-[100dvh] flex-col overflow-hidden bg-stone-50 font-sans">
+        <SiteSkinToolbar
+          themeName={theme.meta.name}
+          violations={violations.length}
+          reviewedOn={AO3_RULESET.reviewedOn}
+          saveStatus={saveStatus}
+          canUndo={historyIndex > 0}
+          canRedo={historyIndex < history.length - 1}
+          mobilePane={mobilePane}
+          onShowTemplates={() => {
+            setCameFromEditor(true);
+            setShowGallery(true);
+          }}
+          onUndo={undo}
+          onRedo={redo}
+          onOpenPrivacy={openPrivacyChoices}
+          onInstall={handleOpenExport}
+          onMobilePaneChange={setMobilePane}
+        />
 
         {saveStatus === 'failed' && saveError && (
           <div role="alert" className="bg-amber-50 border-b border-amber-200 px-4 py-2">
@@ -324,9 +410,10 @@ export default function SiteSkinPage() {
         )}
 
         {/* ─── Editor + preview ────────────────────────────────────────── */}
-        <div className="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
           <div
-            className="w-full lg:w-[340px] flex-shrink-0 overflow-y-auto bg-white lg:border-r border-stone-200 px-4 order-2 lg:order-1"
+            data-testid="site-skin-customize-pane"
+            className={`${mobilePane === 'customize' ? 'flex' : 'hidden'} min-h-0 w-full flex-1 flex-col overflow-y-auto bg-white px-4 lg:flex lg:w-[340px] lg:flex-none lg:border-r lg:border-stone-200`}
             style={{ paddingBottom: 'calc(1.5rem + var(--analytics-consent-h, 0px))' }}
           >
             <ThemeEditor
@@ -335,11 +422,24 @@ export default function SiteSkinPage() {
               issues={issues}
               onFix={handleFix}
               onPickFromImage={() => setShowPicker(true)}
+              openSections={openSections}
+              modifiedSections={modifiedSections}
+              onToggleSection={toggleSection}
+              onResetSection={resetSection}
             />
           </div>
 
-          <div className="flex-1 min-h-[45vh] lg:min-h-0 order-1 lg:order-2 flex flex-col">
-            <SkinPreview css={css} state={previewState} onStateChange={setPreviewState} />
+          <div
+            data-testid="site-skin-preview-pane"
+            className={`${mobilePane === 'preview' ? 'flex' : 'hidden'} min-h-0 flex-1 flex-col lg:flex`}
+          >
+            <SkinPreview
+              css={css}
+              state={previewState}
+              mode={previewMode}
+              onStateChange={setPreviewState}
+              onModeChange={setPreviewMode}
+            />
           </div>
         </div>
       </div>
@@ -359,10 +459,18 @@ export default function SiteSkinPage() {
         violations={violations}
         theme={theme}
         onReplaceTheme={(nextTheme) => {
-          setTheme(nextTheme);
-          setHistory([nextTheme]);
+          const fresh = cloneTheme(nextTheme);
+          activationRef.current = siteSkinBaseline(fresh);
+          const baseline = resetBaselineFor(fresh);
+          resetBaselineRef.current = baseline;
+          setResetBaseline(baseline);
+          setTheme(fresh);
+          setHistory([fresh]);
+          historyIndexRef.current = 0;
           setHistoryIndex(0);
           setHasSaved(true);
+          setMobilePane('preview');
+          setOpenSections(new Set(['colors']));
           setShowGallery(false);
         }}
       />

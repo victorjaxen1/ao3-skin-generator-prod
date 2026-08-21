@@ -31,7 +31,9 @@ import {
 import { ReadabilityIssue } from '../../lib/siteSkin/colors';
 import { checkAo3ImageUrl } from '../../lib/siteSkin/ao3Css';
 import { normalizeImageUrl } from '../../lib/urlNormalize';
-import { ToggleRow, SectionDivider } from '../SettingsRows';
+import { ToggleRow } from '../SettingsRows';
+import { EditorSection } from './EditorSection';
+import { EditorSectionId } from './uiTypes';
 
 interface Props {
   theme: SiteSkinTheme;
@@ -40,6 +42,10 @@ interface Props {
   onFix: (issue: ReadabilityIssue) => void;
   /** Opens the Magic Picker. The page owns the dialog and the apply path. */
   onPickFromImage: () => void;
+  openSections: ReadonlySet<EditorSectionId>;
+  modifiedSections: ReadonlySet<EditorSectionId>;
+  onToggleSection: (id: EditorSectionId) => void;
+  onResetSection: (id: EditorSectionId) => void;
 }
 
 const COLOR_LABELS: { key: keyof SiteSkinTheme['colors']; label: string; hint: string }[] = [
@@ -48,6 +54,24 @@ const COLOR_LABELS: { key: keyof SiteSkinTheme['colors']; label: string; hint: s
   { key: 'accent', label: 'Accent', hint: 'Header, links, tags, headings' },
   { key: 'text', label: 'Text', hint: 'Body copy' },
 ];
+
+function choiceLabel<T>(options: readonly { value: T; label: string }[], value: T): string {
+  return options.find(option => option.value === value)?.label || String(value);
+}
+
+const ColorSummary: React.FC<{ colors: SiteSkinTheme['colors'] }> = ({ colors }) => (
+  <span className="flex items-center gap-1" aria-label="Four current colours">
+    {COLOR_LABELS.map(({ key, label }) => (
+      <span
+        key={key}
+        aria-hidden="true"
+        title={`${label}: ${colors[key]}`}
+        className="h-3.5 w-3.5 rounded-full border border-black/15"
+        style={{ backgroundColor: colors[key] }}
+      />
+    ))}
+  </span>
+);
 
 /** A colour swatch that is also its own label — no CSS vocabulary anywhere. */
 const ColorRow: React.FC<{
@@ -249,13 +273,46 @@ const BannerRow: React.FC<{
  * readability warning next to its cause also means the fix button is next to
  * the control the user would otherwise reach for.
  */
-export const ThemeEditor: React.FC<Props> = ({ theme, onChange, issues, onFix, onPickFromImage }) => {
+export const ThemeEditor: React.FC<Props> = ({
+  theme,
+  onChange,
+  issues,
+  onFix,
+  onPickFromImage,
+  openSections,
+  modifiedSections,
+  onToggleSection,
+  onResetSection,
+}) => {
   const setColor = (key: keyof SiteSkinTheme['colors'], value: string) =>
     onChange('colors', { ...theme.colors, [key]: value });
 
+  const headingFont = fontStacksFor('heading').find(font => font.value === theme.typography.headingFont);
+  const typeSummary = `${headingFont?.label.split(' — ')[0] || 'Heading font'} · ${choiceLabel(FONT_SCALES, theme.typography.baseFontScale)} size`;
+  const shapeSummary = `${choiceLabel(CARD_RADII, theme.shape.cardRadius)} corners · ${choiceLabel(TAG_STYLES, theme.shape.tagStyle)} tags`;
+  const gradient = choiceLabel(HEADER_GRADIENTS, theme.header.gradient);
+  const headerSummary = `${theme.header.gradient === 'none' ? 'Flat header' : `${gradient} fade`} · ${theme.header.bannerUrl.trim() ? 'Banner added' : 'No banner'}`;
+  const texture = choiceLabel(PAGE_TEXTURES, theme.surface.texture);
+  const depthSummary = `${theme.surface.texture === 'none' ? 'No pattern' : `${texture} pattern`} · ${choiceLabel(CARD_ELEVATIONS, theme.surface.elevation)} cards`;
+  const readingOptions = Number(theme.reading.requiredTagsAsText)
+    + Number(theme.reading.tagLabels)
+    + Number(theme.reading.statIcons)
+    + Number(theme.reading.tagSeparator !== 'comma');
+  const readingSummary = readingOptions === 0 ? 'AO3 defaults' : `${readingOptions} ${readingOptions === 1 ? 'option' : 'options'} on`;
+  const ornament = choiceLabel(ORNAMENTS, theme.details.ornament);
+  const detailsSummary = `${theme.details.ornament === 'none' ? 'No ornament' : `${ornament} ornament`} · Divider ${theme.details.divider ? 'on' : 'off'}`;
+
+  const sectionProps = (id: EditorSectionId) => ({
+    id,
+    open: openSections.has(id),
+    modified: modifiedSections.has(id),
+    onToggle: () => onToggleSection(id),
+    onReset: () => onResetSection(id),
+  });
+
   return (
-    <div className="divide-y divide-stone-100">
-      <SectionDivider label="Colours" />
+    <div className="pb-6">
+      <EditorSection {...sectionProps('colors')} title="Colours" summary={<ColorSummary colors={theme.colors} />}>
       {COLOR_LABELS.map(({ key, label, hint }) => (
         <ColorRow
           key={key}
@@ -305,8 +362,9 @@ export const ThemeEditor: React.FC<Props> = ({ theme, onChange, issues, onFix, o
           ))}
         </div>
       )}
+      </EditorSection>
 
-      <SectionDivider label="Type" />
+      <EditorSection {...sectionProps('typography')} title="Type" summary={typeSummary}>
       {/* Headings get every face, including handwriting and display. Body text
           gets serif, sans and monospace only — a script face behind every blurb
           summary and every chapter would make the archive harder to read, which
@@ -355,8 +413,9 @@ export const ThemeEditor: React.FC<Props> = ({ theme, onChange, issues, onFix, o
         alternatives and ends in a safe fallback, so everyone sees something
         close.
       </p>
+      </EditorSection>
 
-      <SectionDivider label="Shape" />
+      <EditorSection {...sectionProps('shape')} title="Shape" summary={shapeSummary}>
       <SegmentRow
         label="Card corners"
         value={theme.shape.cardRadius}
@@ -378,8 +437,9 @@ export const ThemeEditor: React.FC<Props> = ({ theme, onChange, issues, onFix, o
         checked={theme.shape.tagColors}
         onChange={v => onChange('shape', { ...theme.shape, tagColors: v })}
       />
+      </EditorSection>
 
-      <SectionDivider label="Header" />
+      <EditorSection {...sectionProps('header')} title="Header" summary={headerSummary}>
       {/* First in the group on purpose. This is the header you get without
           finding an image, hosting it anywhere, or hoping the host outlives
           the skin — it is two literal colours the theme already implies. The
@@ -432,8 +492,9 @@ export const ThemeEditor: React.FC<Props> = ({ theme, onChange, issues, onFix, o
         checked={theme.header.hideLogo}
         onChange={v => onChange('header', { ...theme.header, hideLogo: v })}
       />
+      </EditorSection>
 
-      <SectionDivider label="Depth" />
+      <EditorSection {...sectionProps('surface')} title="Depth" summary={depthSummary}>
       {/* The image-free half of what a decorative skin does. Every popular
           skin in the corpus tiles a hosted wallpaper; we cannot ship one and
           will not host one, so the pattern is built from two colours the theme
@@ -483,8 +544,9 @@ export const ThemeEditor: React.FC<Props> = ({ theme, onChange, issues, onFix, o
           </>
         )}
       </p>
+      </EditorSection>
 
-      <SectionDivider label="Reading" />
+      <EditorSection {...sectionProps('reading')} title="Reading" summary={readingSummary}>
       {/* The one control here that makes AO3 easier to use rather than nicer
           to look at. The words are already in AO3's markup — it hides them and
           paints an icon over the top — so this un-hides them rather than
@@ -527,8 +589,9 @@ export const ThemeEditor: React.FC<Props> = ({ theme, onChange, issues, onFix, o
         All four appear in the Browse preview. "One group per line" is easiest
         to read on a work with many tags, and it pairs with the group names.
       </p>
+      </EditorSection>
 
-      <SectionDivider label="Details" />
+      <EditorSection {...sectionProps('details')} title="Details" summary={detailsSummary}>
       {/* Single code points, not emoji — so unlike the stat icons these take
           the theme's accent. It lands on the page's own title only: a flower on
           every blurb heading would be wallpaper rather than ornament. */}
@@ -560,6 +623,7 @@ export const ThemeEditor: React.FC<Props> = ({ theme, onChange, issues, onFix, o
         The divider and drop cap appear in the Reading preview. They affect
         chapter text only — not summaries or notes.
       </p>
+      </EditorSection>
     </div>
   );
 };
