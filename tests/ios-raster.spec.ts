@@ -62,6 +62,25 @@ test('real Save PNG captures the rich iOS fixture as static fiction UI', async (
   expect(size.height).toBeGreaterThan(700);
 });
 
+test('rich iOS fixture exports at materially doubled 2× resolution', async ({ page }, testInfo) => {
+  test.setTimeout(180_000);
+  await page.route('**/api/image-proxy**', route => route.fulfill({ status: 200, contentType: 'image/png', body: PIXEL }));
+  await page.route('https://picsum.photos/**', route => route.fulfill({ status: 200, contentType: 'image/png', body: PIXEL }));
+  await page.route('https://i.ytimg.com/**', route => route.fulfill({ status: 200, contentType: 'image/png', body: PIXEL }));
+  await page.goto('/?template=ios-rich-group-scene');
+  const quality = page.getByRole('button', { name: /Export quality/ });
+  await quality.click();
+  await page.getByRole('menuitemradio', { name: /2. resolution/ }).click();
+  const downloadPromise = page.waitForEvent('download', { timeout: 90_000 });
+  await page.getByRole('button', { name: 'Save PNG' }).first().click();
+  const output = testInfo.outputPath('ios-rich-2x.png');
+  await (await downloadPromise).saveAs(output);
+  const size = pngDimensions(await readFile(output));
+  expect(size.width).toBeGreaterThanOrEqual(640);
+  expect(size.width).toBeLessThanOrEqual(1000);
+  expect(size.height).toBeGreaterThan(1400);
+});
+
 test('a scrollable phone frame still exports the whole conversation', async ({ page }, testInfo) => {
   test.setTimeout(200_000);
   await page.route('**/api/image-proxy**', route => route.fulfill({ status: 200, contentType: 'image/png', body: PIXEL }));

@@ -101,6 +101,7 @@ test('defaults a new video to YouTube with a blank poster and derives the thumbn
   await expect(preview(page).locator('img[src="https://i.ytimg.com/vi/XlcK4VYSWZk/hqdefault.jpg"]')).toHaveCount(1);
 
   await page.getByRole('button', { name: /accessible work skin/i }).click();
+  await page.getByRole('button', { name: 'Copy HTML manually' }).click();
   const workHtml = await page.getByLabel('Work skin HTML').inputValue();
   expect(workHtml).toContain('<iframe src="https://www.youtube-nocookie.com/embed/XlcK4VYSWZk"');
   expect(workHtml).not.toContain('<video');
@@ -128,6 +129,7 @@ test('reveals MIME and caption controls when a video switches to a direct file',
   await expect(preview(page).locator('video,audio,iframe')).toHaveCount(0);
 
   await page.getByRole('button', { name: /accessible work skin/i }).click();
+  await page.getByRole('button', { name: 'Copy HTML manually' }).click();
   const workHtml = await page.getByLabel('Work skin HTML').inputValue();
   expect(workHtml).toContain('<source src="https://example.com/door.mp4" type="video/mp4">');
   expect(workHtml).toContain('<track src="https://example.com/door-en.vtt" kind="captions" srclang="en" label="English" default="default">');
@@ -157,6 +159,7 @@ test('plays a voice message only after explicit consent and keeps the scene stat
   await expect(preview(page).locator('audio,video')).toHaveCount(0);
 
   await page.getByRole('button', { name: /accessible work skin/i }).click();
+  await page.getByRole('button', { name: 'Copy HTML manually' }).click();
   const workHtml = await page.getByLabel('Work skin HTML').inputValue();
   expect(workHtml).toContain('<audio class="ios-native-audio" title="Voice message" controls="controls" crossorigin="anonymous" preload="metadata">');
   expect(workHtml).toContain('<source src="https://archive.org/download/testmp3testfile/mpthreetest.mp3" type="audio/mpeg">');
@@ -199,6 +202,8 @@ test('offers the all-platform CSS by default and copies both halves of the work 
   await page.getByRole('button', { name: 'Send message' }).click();
 
   await page.getByRole('button', { name: /accessible work skin/i }).click();
+  await page.getByRole('button', { name: 'Copy CSS manually' }).click();
+  await page.getByRole('button', { name: 'Copy HTML manually' }).click();
   const css = await page.getByLabel('Work skin CSS').inputValue();
   const html = await page.getByLabel('Work skin HTML').inputValue();
   // The master skin is the default because AO3 gives a work exactly one skin.

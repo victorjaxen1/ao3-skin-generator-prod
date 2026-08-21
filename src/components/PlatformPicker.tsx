@@ -1,15 +1,18 @@
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { SkinProject } from '../lib/schema';
 import { TEMPLATE_EXAMPLES } from '../lib/examples';
 import { openPrivacyChoices } from '../lib/analytics';
 import { MoreTools } from './MoreTools';
+import { ModalDialog } from './ModalDialog';
 
 interface Props {
   onSelectPlatform: (template: 'ios' | 'android' | 'twitter' | 'google') => void;
   onLoadExample: (project: SkinProject) => void;
-  /** True when the user has work in progress that a selection would discard. */
-  hasWorkInProgress?: boolean;
+  /** Show the return action independently from whether replacement needs confirmation. */
+  canReturnToProject?: boolean;
+  /** True when the current full project state is recoverable user work. */
+  protectCurrentProject?: boolean;
   /** Return to the workspace without changing anything. */
   onCancel?: () => void;
 }
@@ -91,31 +94,52 @@ const PLATFORM_NAME: Record<string, string> = {
   google: 'Google',
 };
 
+type PlatformTemplate = SkinProject['template'];
+type PendingProjectChoice =
+  | { kind: 'platform'; template: PlatformTemplate; label: string }
+  | { kind: 'example'; project: SkinProject; label: string };
+
+const BLANK_LABELS: Record<PlatformTemplate, string> = {
+  ios: 'a blank iMessage conversation',
+  android: 'a blank WhatsApp chat',
+  twitter: 'a blank X / Twitter thread',
+  google: 'a blank Google search',
+};
+
 export const PlatformPicker: React.FC<Props> = ({
   onSelectPlatform,
   onLoadExample,
-  hasWorkInProgress = false,
+  canReturnToProject = false,
+  protectCurrentProject = false,
   onCancel,
 }) => {
-  // Both actions replace the current project outright, so confirm first when
-  // there is something to lose.
-  const confirmDiscard = () =>
-    !hasWorkInProgress ||
-    window.confirm('This replaces your current conversation. Continue?');
+  const [pendingChoice, setPendingChoice] = useState<PendingProjectChoice | null>(null);
 
-  const handlePlatform = (id: 'ios' | 'android' | 'twitter' | 'google') => {
-    if (confirmDiscard()) onSelectPlatform(id);
+  const applyChoice = (choice: PendingProjectChoice) => {
+    setPendingChoice(null);
+    if (choice.kind === 'platform') onSelectPlatform(choice.template);
+    else onLoadExample(choice.project);
+  };
+
+  const requestChoice = (choice: PendingProjectChoice) => {
+    if (protectCurrentProject) setPendingChoice(choice);
+    else applyChoice(choice);
+  };
+
+  const handlePlatform = (id: PlatformTemplate) => {
+    requestChoice({ kind: 'platform', template: id, label: BLANK_LABELS[id] });
   };
 
   const handleExample = (example: SkinProject) => {
-    if (confirmDiscard()) onLoadExample(example);
+    const exampleLabel = EXAMPLE_LABELS[example.id] || example.id;
+    requestChoice({ kind: 'example', project: example, label: `the ${exampleLabel} example` });
   };
 
   return (
     <div className="min-h-screen bg-stone-50 flex flex-col items-center justify-center px-4 py-12">
       {/* Every choice below replaces the current project, so when there is work
           to lose give an explicit way back to it. */}
-      {hasWorkInProgress && onCancel && (
+      {canReturnToProject && onCancel && (
         <button
           onClick={onCancel}
           className="mb-6 inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-violet-700 bg-violet-50 border border-violet-200 rounded-full hover:bg-violet-100 transition-colors"
@@ -123,7 +147,7 @@ export const PlatformPicker: React.FC<Props> = ({
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M15 18l-6-6 6-6" />
           </svg>
-          Keep editing my conversation
+          Keep editing my project
         </button>
       )}
 
@@ -261,6 +285,37 @@ export const PlatformPicker: React.FC<Props> = ({
           <a href="/terms-of-service.html" className="hover:text-stone-500 transition-colors">Terms</a>
         </p>
       </div>
+
+      <ModalDialog
+        isOpen={pendingChoice !== null}
+        onClose={() => setPendingChoice(null)}
+        labelledBy="replace-project-title"
+        maxWidthClass="max-w-md"
+      >
+        <div className="p-5">
+          <h2 id="replace-project-title" className="text-lg font-semibold text-stone-900">Replace your current project?</h2>
+          <p className="mt-2 text-sm leading-relaxed text-stone-600">
+            Starting {pendingChoice?.label} replaces the one project stored in this browser. Choose Keep editing current project if you want to download a backup first.
+          </p>
+          <div className="mt-5 flex flex-col gap-2 sm:flex-row-reverse">
+            <button
+              type="button"
+              onClick={() => pendingChoice && applyChoice(pendingChoice)}
+              className="rounded-xl bg-red-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-800"
+            >
+              Replace with {pendingChoice?.label}
+            </button>
+            <button
+              type="button"
+              data-autofocus
+              onClick={() => setPendingChoice(null)}
+              className="rounded-xl border border-stone-300 px-4 py-2.5 text-sm font-semibold text-stone-700 hover:bg-stone-50"
+            >
+              Keep editing current project
+            </button>
+          </div>
+        </div>
+      </ModalDialog>
     </div>
   );
 };

@@ -124,6 +124,7 @@ test('authors WhatsApp YouTube as a static thumbnail and exports the real AO3 pl
   await expect(preview(page).locator('iframe,video,audio')).toHaveCount(0);
   await expect(preview(page).locator('img[src="https://i.ytimg.com/vi/XlcK4VYSWZk/hqdefault.jpg"]')).toHaveCount(1);
   await page.getByRole('button', { name: /accessible work skin/i }).click();
+  await page.getByRole('button', { name: 'Copy HTML manually' }).click();
   const workHtml = await page.getByLabel('Work skin HTML').inputValue();
   expect(workHtml).toContain('<iframe src="https://www.youtube-nocookie.com/embed/XlcK4VYSWZk"');
   expect(workHtml).not.toContain('<video');
@@ -138,6 +139,7 @@ test('exports WhatsApp audio with AO3 anonymous CORS and a typed direct MP3 sour
   await page.getByRole('textbox', { name: 'Voice message transcript' }).fill('Playable voice message.');
   await page.getByRole('button', { name: 'Send message' }).click();
   await page.getByRole('button', { name: /accessible work skin/i }).click();
+  await page.getByRole('button', { name: 'Copy HTML manually' }).click();
   const workHtml = await page.getByLabel('Work skin HTML').inputValue();
   expect(workHtml).toContain('<audio class="wa-native-audio" title="Voice message" controls="controls" crossorigin="anonymous" preload="metadata">');
   expect(workHtml).toContain('<source src="https://archive.org/download/testmp3testfile/mpthreetest.mp3" type="audio/mpeg">');
@@ -159,6 +161,7 @@ test('repairs the exact non-CORS W3 audio sample already saved in the current pr
   await page.goto('/');
   await expect(preview(page).locator('.wa-media-source')).toHaveAttribute('href', 'https://archive.org/download/testmp3testfile/mpthreetest.mp3');
   await page.getByRole('button', { name: /accessible work skin/i }).click();
+  await page.getByRole('button', { name: 'Copy HTML manually' }).click();
   const workHtml = await page.getByLabel('Work skin HTML').inputValue();
   expect(workHtml).toContain('<source src="https://archive.org/download/testmp3testfile/mpthreetest.mp3" type="audio/mpeg">');
 });

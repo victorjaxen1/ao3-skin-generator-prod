@@ -28,6 +28,9 @@ import { CastPanel, IdentityPanelMode } from '../components/CastPanel';
 import { ComposeBar } from '../components/ComposeBar';
 import { MessageTimeline } from '../components/MessageTimeline';
 import { ProjectBackupDialog } from '../components/ProjectBackupDialog';
+import { ModalDialog } from '../components/ModalDialog';
+import { WorkspaceStatusBar } from '../components/WorkspaceStatusBar';
+import { isTextEditingTarget, projectStateSnapshot } from '../lib/projectState';
 
 // Lazy load heavy components
 const ExportPanel = dynamic(() => import('../components/ExportPanel').then(mod => ({ default: mod.ExportPanel })), {
@@ -83,7 +86,7 @@ export default function HomePage() {
   const [showPicker, setShowPicker] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
   const [showCodeModal, setShowCodeModal] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<'saved' | 'unsaved' | 'saving' | 'failed'>('saved');
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'failed'>('saved');
   const [saveError, setSaveError] = useState('');
   const [showCast, setShowCast] = useState(false);
   const [identityPanelMode, setIdentityPanelMode] = useState<IdentityPanelMode>({ kind: 'overview' });
@@ -95,6 +98,7 @@ export default function HomePage() {
   // True when the picker was reached from the workspace, i.e. there is work
   // a selection would discard. On a first visit there is nothing to lose.
   const [cameFromWorkspace, setCameFromWorkspace] = useState(false);
+  const [protectPickerProject, setProtectPickerProject] = useState(false);
 
   // Characters
   const [universalCharacters, setUniversalCharacters] = useState<UniversalCharacter[]>([]);
@@ -112,6 +116,8 @@ export default function HomePage() {
   // content is never counted as the author's work (§5.2). A ref rather than
   // state: it must not trigger a render, and it is read inside the debounce.
   const activationRef = useRef<ActivationBaseline | null>(null);
+  const replacementBaselineRef = useRef<string | null>(null);
+  const protectUnchangedBaselineRef = useRef(false);
 
   // Derived
   const dark = getDarkMode(project);
@@ -199,6 +205,8 @@ export default function HomePage() {
     // For a *returning* visitor this baseline is their own saved work, which is
     // correct: activation already happened, and `markActivatedOnce` remembers it.
     activationRef.current = activationBaseline(initial);
+    replacementBaselineRef.current = projectStateSnapshot(initial);
+    protectUnchangedBaselineRef.current = returning;
     setProject(initial);
     setHistory([initial]);
     setHistoryIndex(0);
@@ -207,7 +215,7 @@ export default function HomePage() {
     // Skip the picker only for a template link or genuinely saved work.
     // defaultProject() ships with seed messages, so a length check alone would
     // hide the picker from every first-time visitor.
-    if (fromDeepLink || (returning && initial.messages.length > 0)) {
+    if (fromDeepLink || returning) {
       setShowPicker(false);
     }
 
@@ -215,13 +223,18 @@ export default function HomePage() {
   }, [router.isReady, router.query]);
 
   // ── Persist + history ───────────────────────────────────────────────────
+  const saveProjectNow = useCallback((candidate: SkinProject) => {
+    const result = persistProject(candidate);
+    setSaveStatus(result.ok ? 'saved' : 'failed');
+    setSaveError(result.ok ? '' : result.message || 'This project could not be saved.');
+    return result;
+  }, []);
+
   useEffect(() => {
     if (!isLoaded) return;
     setSaveStatus('saving');
     const timer = setTimeout(() => {
-      const result = persistProject(project);
-      setSaveStatus(result.ok ? 'saved' : 'failed');
-      setSaveError(result.ok ? '' : result.message || '');
+      saveProjectNow(project);
       // Activation rides the debounce that already runs on every project
       // change, so there is no second listener to keep in step. Only the
       // platform id is sent; the local UUID never leaves the browser.
@@ -238,30 +251,42 @@ export default function HomePage() {
       }
     }, 500);
     return () => clearTimeout(timer);
-  }, [project, isLoaded]);
+  }, [project, isLoaded, saveProjectNow]);
+
+  const undoProject = useCallback(() => {
+    if (historyIndex <= 0) return;
+    const nextIndex = historyIndex - 1;
+    setHistoryIndex(nextIndex);
+    setProject(history[nextIndex]);
+  }, [history, historyIndex]);
+
+  const redoProject = useCallback(() => {
+    if (historyIndex >= history.length - 1) return;
+    const nextIndex = historyIndex + 1;
+    setHistoryIndex(nextIndex);
+    setProject(history[nextIndex]);
+  }, [history, historyIndex]);
 
   // ── Keyboard shortcuts ──────────────────────────────────────────────────
   useEffect(() => {
     const handle = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
-        persistProject(project);
+        saveProjectNow(project);
       }
-      if (e.key === 'Escape' && showCodeModal) setShowCodeModal(false);
-      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === 'z' && historyIndex > 0) {
+      if (isTextEditingTarget(e.target)) return;
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z') {
         e.preventDefault();
-        setHistoryIndex(historyIndex - 1);
-        setProject(history[historyIndex - 1]);
+        undoProject();
       }
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'z' && historyIndex < history.length - 1) {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'z') {
         e.preventDefault();
-        setHistoryIndex(historyIndex + 1);
-        setProject(history[historyIndex + 1]);
+        redoProject();
       }
     };
     window.addEventListener('keydown', handle);
     return () => window.removeEventListener('keydown', handle);
-  }, [project, showCodeModal, history, historyIndex]);
+  }, [project, redoProject, saveProjectNow, undoProject]);
 
   // ── Handlers ────────────────────────────────────────────────────────────
   const handleSelectPlatform = useCallback((template: 'ios' | 'android' | 'twitter' | 'google') => {
@@ -279,11 +304,14 @@ export default function HomePage() {
     Object.assign(p.settings, PLATFORM_LOOK[template]);
     p = migrateTwitterProject(migrateProjectIdentities(p));
     activationRef.current = activationBaseline(p);
+    replacementBaselineRef.current = projectStateSnapshot(p);
+    protectUnchangedBaselineRef.current = false;
     setProject(p);
     setHistory([p]);
     setHistoryIndex(0);
     setShowPicker(false);
     setCameFromWorkspace(false);
+    setProtectPickerProject(false);
     trackAnalytics({ name: 'template_selected', templateId: template });
   }, []);
 
@@ -291,11 +319,14 @@ export default function HomePage() {
     const instantiated = migrateTwitterProject(migrateProjectIdentities(instantiateTemplate(example)));
     // Everything this example ships with is seeded, so none of it is activation.
     activationRef.current = activationBaseline(instantiated);
+    replacementBaselineRef.current = projectStateSnapshot(instantiated);
+    protectUnchangedBaselineRef.current = false;
     setProject(instantiated);
     setHistory([instantiated]);
     setHistoryIndex(0);
     setShowPicker(false);
     setCameFromWorkspace(false);
+    setProtectPickerProject(false);
     trackAnalytics({ name: 'template_selected', templateId: example.id });
   }, []);
 
@@ -518,6 +549,8 @@ export default function HomePage() {
     // An imported backup is finished work, not a seed. Baselining it means the
     // import alone does not fire activation; the next real edit does.
     activationRef.current = activationBaseline(nextProject);
+    replacementBaselineRef.current = projectStateSnapshot(nextProject);
+    protectUnchangedBaselineRef.current = true;
     setProject(nextProject);
     setHistory([nextProject]);
     setHistoryIndex(0);
@@ -655,15 +688,16 @@ export default function HomePage() {
     return <>{head}<PlatformPicker
       onSelectPlatform={handleSelectPlatform}
       onLoadExample={handleLoadExample}
-      hasWorkInProgress={cameFromWorkspace && project.messages.length > 0}
-      onCancel={() => { setCameFromWorkspace(false); setShowPicker(false); }}
+      canReturnToProject={cameFromWorkspace}
+      protectCurrentProject={cameFromWorkspace && protectPickerProject}
+      onCancel={() => { setCameFromWorkspace(false); setProtectPickerProject(false); setShowPicker(false); }}
     /></>;
   }
 
   return (
     <>
     {head}
-    <div className="flex flex-col h-screen bg-stone-50 font-sans">
+    <div className="flex h-screen h-[100dvh] flex-col bg-stone-50 font-sans">
       {/* ─── Header ─────────────────────────────────────────────────── */}
       <WorkspaceHeader
         contactName={displayContactName}
@@ -674,7 +708,12 @@ export default function HomePage() {
             ? handleRenameContact(name)
             : handleUpdateSettings(contactNameKey as any, name)
         }
-        onBack={() => { setCameFromWorkspace(true); setShowPicker(true); }}
+        onBack={() => {
+          const currentChanged = replacementBaselineRef.current !== projectStateSnapshot(project);
+          setProtectPickerProject(protectUnchangedBaselineRef.current || currentChanged);
+          setCameFromWorkspace(true);
+          setShowPicker(true);
+        }}
         onSettingsOpen={() => setShowSettings(true)}
         onCastOpen={openIdentityOverview}
         onIdentityOpen={() => {
@@ -686,7 +725,6 @@ export default function HomePage() {
         }}
         onBackupOpen={() => setShowBackup(true)}
         template={project.template}
-        saveStatus={saveStatus}
         messageCount={project.messages.length}
         fieldLabel={headerFieldLabel}
         fieldPlaceholder={headerFieldPlaceholder}
@@ -710,6 +748,13 @@ export default function HomePage() {
       >
         {/* Left / mobile-full: compose area */}
         <div className="flex-1 min-h-0 flex flex-col min-w-0">
+          <WorkspaceStatusBar
+            saveStatus={saveStatus}
+            canUndo={historyIndex > 0}
+            canRedo={historyIndex < history.length - 1}
+            onUndo={undoProject}
+            onRedo={redoProject}
+          />
           <div className="flex-1 overflow-y-auto px-3 py-2 sm:px-4 sm:py-3 pb-4">
             {/* The query is the one thing on a Google scene that is not a
                 message, and its only control used to be the header title —
@@ -889,7 +934,7 @@ export default function HomePage() {
       />
 
       {pendingTwitterDelete && pendingDeletedPost && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="delete-twitter-title">
+        <ModalDialog isOpen={true} onClose={() => setPendingTwitterDelete(null)} labelledBy="delete-twitter-title" maxWidthClass="max-w-md">
           <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
             <h2 id="delete-twitter-title" className="text-base font-semibold text-stone-900">Delete a post with replies?</h2>
             <p className="mt-2 text-sm text-stone-600">This post has {pendingReplyCount} direct {pendingReplyCount === 1 ? 'reply' : 'replies'}. Choose what happens to them; deeper reply relationships are preserved.</p>
@@ -903,31 +948,31 @@ export default function HomePage() {
                 Promote replies to top-level posts
               </button>
             </div>
-            <button type="button" autoFocus onClick={() => setPendingTwitterDelete(null)} className="mt-4 rounded-lg px-3 py-2 text-sm text-stone-600 hover:bg-stone-100">Cancel</button>
+            <button type="button" data-autofocus onClick={() => setPendingTwitterDelete(null)} className="mt-4 rounded-lg px-3 py-2 text-sm text-stone-600 hover:bg-stone-100">Cancel</button>
           </div>
-        </div>
+        </ModalDialog>
       )}
 
       {pendingWhatsAppDelete && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="delete-whatsapp-title">
+        <ModalDialog isOpen={true} onClose={() => setPendingWhatsAppDelete(null)} labelledBy="delete-whatsapp-title" maxWidthClass="max-w-md">
           <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
             <h2 id="delete-whatsapp-title" className="text-base font-semibold text-stone-900">Delete a replied-to message?</h2>
             <p className="mt-2 text-sm text-stone-600">{pendingWhatsAppReplyCount} later {pendingWhatsAppReplyCount === 1 ? 'message replies' : 'messages reply'} to it. Deleting it will remove those reply previews, but keep the later messages.</p>
             <button type="button" onClick={() => deleteWhatsAppMessageAndReplies(pendingWhatsAppDelete)} className="mt-4 w-full rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-left text-sm font-medium text-red-800">Delete and remove reply previews</button>
-            <button type="button" autoFocus onClick={() => setPendingWhatsAppDelete(null)} className="mt-3 rounded-lg px-3 py-2 text-sm text-stone-600 hover:bg-stone-100">Cancel</button>
+            <button type="button" data-autofocus onClick={() => setPendingWhatsAppDelete(null)} className="mt-3 rounded-lg px-3 py-2 text-sm text-stone-600 hover:bg-stone-100">Cancel</button>
           </div>
-        </div>
+        </ModalDialog>
       )}
 
       {pendingIOSDelete && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="delete-ios-title">
+        <ModalDialog isOpen={true} onClose={() => setPendingIOSDelete(null)} labelledBy="delete-ios-title" maxWidthClass="max-w-md">
           <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
             <h2 id="delete-ios-title" className="text-base font-semibold text-stone-900">Delete a replied-to message?</h2>
             <p className="mt-2 text-sm text-stone-600">{pendingIOSReplyCount} later {pendingIOSReplyCount === 1 ? 'message replies' : 'messages reply'} to it. Deleting it will remove those reply previews, but keep the later messages.</p>
             <button type="button" onClick={() => deleteIOSMessageAndReplies(pendingIOSDelete)} className="mt-4 w-full rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-left text-sm font-medium text-red-800">Delete and remove reply previews</button>
-            <button type="button" autoFocus onClick={() => setPendingIOSDelete(null)} className="mt-3 rounded-lg px-3 py-2 text-sm text-stone-600 hover:bg-stone-100">Cancel</button>
+            <button type="button" data-autofocus onClick={() => setPendingIOSDelete(null)} className="mt-3 rounded-lg px-3 py-2 text-sm text-stone-600 hover:bg-stone-100">Cancel</button>
           </div>
-        </div>
+        </ModalDialog>
       )}
 
       {/* ─── Export bar (sticky bottom) ─────────────────────────────── */}

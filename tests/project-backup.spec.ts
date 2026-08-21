@@ -49,10 +49,11 @@ test('downloads, previews, and safely replaces a scene project backup', async ({
 test('work-skin handoff exposes preflight and no-skin reading order', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Start a blank iMessage conversation' }).click();
-  await page.getByRole('button', { name: 'Accessible work skin' }).click();
+  await page.getByRole('button', { name: 'Open accessible work skin export' }).click();
 
-  const dialog = page.getByRole('dialog', { name: 'Work skin' });
-  await expect(dialog.getByLabel('Publishing preflight')).toContainText('Fallback speaker order is identifiable');
+  const dialog = page.getByRole('dialog', { name: 'Copy your work skin to AO3' });
+  await dialog.getByText(/Checks and warnings/).click();
+  await expect(dialog.getByText('Fallback speaker order is identifiable')).toBeVisible();
   await dialog.getByRole('tab', { name: 'Without work skin / downloads' }).click();
   await expect(dialog.getByText(/reading order and text your export is designed to preserve/i)).toBeVisible();
   await expect(dialog.getByLabel('Scene transcript')).toContainText('You (10:15)');
@@ -64,8 +65,9 @@ test('work-skin handoff exposes preflight and no-skin reading order', async ({ p
 
 test('site-skin handoff downloads and safely restores its separate theme format', async ({ page }) => {
   await page.goto('/site-skin?template=moonlit');
-  await page.getByRole('button', { name: 'Copy to AO3' }).click();
-  const dialog = page.getByRole('dialog', { name: 'Copy your site skin' });
+  await page.getByRole('button', { name: 'Install on AO3' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Install your site skin' });
+  await dialog.getByText('Editable theme backup').click();
 
   const firstDownload = page.waitForEvent('download');
   await dialog.getByRole('button', { name: 'Download theme backup' }).click();

@@ -63,4 +63,5 @@ test('privacy choices stay in the export bar and clear of composer controls', as
 
   await privacy.click();
   await expect(page.getByRole('dialog', { name: 'Optional analytics' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Optional analytics' }).locator('[data-autofocus]')).toBeFocused();
 });

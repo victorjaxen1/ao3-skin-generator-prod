@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { SkinProject, UniversalCharacter } from '../lib/schema';
 import {
   parseProjectFile,
@@ -9,6 +9,7 @@ import {
   summarizeProjectFile,
 } from '../lib/projectFile';
 import { trackAnalytics } from '../lib/analytics';
+import { ModalDialog } from './ModalDialog';
 
 interface Props {
   isOpen: boolean;
@@ -29,7 +30,13 @@ export const ProjectBackupDialog: React.FC<Props> = ({
   const [error, setError] = useState('');
   const [downloaded, setDownloaded] = useState(false);
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    if (!isOpen) return;
+    setCandidate(null);
+    setSummary(null);
+    setError('');
+    setDownloaded(false);
+  }, [isOpen]);
 
   const downloadCurrent = () => {
     const ok = onDownloadCurrent();
@@ -73,29 +80,23 @@ export const ProjectBackupDialog: React.FC<Props> = ({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-black bg-opacity-60 p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Project backup"
-      onClick={onClose}
-    >
-      <div className="w-full max-w-lg overflow-hidden rounded-xl bg-white shadow-2xl" onClick={event => event.stopPropagation()}>
+    <ModalDialog isOpen={isOpen} onClose={onClose} labelledBy="project-backup-title" maxWidthClass="max-w-lg">
+      <div className="flex max-h-[90dvh] flex-col">
         <div className="flex items-center justify-between bg-stone-900 px-5 py-4 text-white">
           <div>
-            <h3 className="text-sm font-semibold">Project backup</h3>
+            <h3 id="project-backup-title" className="text-sm font-semibold">Project backup</h3>
             <p className="mt-0.5 text-xs text-stone-400">Local JSON file · no account or upload</p>
           </div>
           <button type="button" onClick={onClose} aria-label="Close" className="text-2xl font-bold leading-none">×</button>
         </div>
 
-        <div className="space-y-4 p-5">
+        <div className="min-h-0 space-y-4 overflow-y-auto overscroll-contain p-5">
           <section className="rounded-xl border border-stone-200 p-4">
             <h4 className="text-sm font-semibold text-stone-900">Keep a recoverable copy</h4>
             <p className="mt-1 text-xs leading-relaxed text-stone-500">
               Includes this scene and your character library. The file stays on your device.
             </p>
-            <button type="button" onClick={downloadCurrent} className="mt-3 w-full rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-violet-700">
+            <button type="button" data-autofocus onClick={downloadCurrent} className="mt-3 w-full rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-violet-700">
               {downloaded ? '✓ Backup downloaded' : 'Download project backup'}
             </button>
           </section>
@@ -146,7 +147,7 @@ export const ProjectBackupDialog: React.FC<Props> = ({
           {error && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p>}
         </div>
       </div>
-    </div>
+    </ModalDialog>
   );
 };
 

@@ -9,7 +9,6 @@ interface Props {
   onIdentityOpen: () => void;
   onBackupOpen: () => void;
   template: 'ios' | 'android' | 'twitter' | 'google';
-  saveStatus: 'saved' | 'unsaved' | 'saving' | 'failed';
   messageCount: number;
   /**
    * What this one field is currently editing, e.g. "Contact name" or "Group
@@ -29,7 +28,6 @@ export const WorkspaceHeader: React.FC<Props> = ({
   onIdentityOpen,
   onBackupOpen,
   template,
-  saveStatus,
   messageCount,
   fieldLabel: fieldLabelProp,
   fieldPlaceholder: fieldPlaceholderProp,
@@ -133,18 +131,6 @@ export const WorkspaceHeader: React.FC<Props> = ({
               aria-label={template === 'google' ? `Edit ${fieldLabel.toLowerCase()}, currently ${displayName}` : `Edit identity for ${displayName}`}
             >
               <span className="truncate">{displayName}</span>
-              {saveStatus === 'unsaved' && (
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" />
-              )}
-              {saveStatus === 'saving' && (
-                <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-pulse flex-shrink-0" />
-              )}
-              {saveStatus === 'failed' && (
-                <span
-                  className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0"
-                  title="Not saved"
-                />
-              )}
             </button>
           )}
           {messageCount > 0 && !isEditing && (

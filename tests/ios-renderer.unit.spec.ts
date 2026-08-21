@@ -168,13 +168,13 @@ test.describe('iOS renderer and export contract', () => {
     expect(edited).not.toContain('The side door is open.<');
   });
 
-  test('a missing reply target renders an explicit fallback and blocks export', () => {
+  test('a missing reply target renders an explicit fallback and warns before export', () => {
     const project = richIOS();
     project.messages = project.messages.filter(message => message.id !== 'alex-1');
     expect(buildHTML(project)).toContain('Original message unavailable');
     const skin = buildWorkSkin(project);
     const preflight = buildWorkSkinPreflight(project, skin.html, skin.violations, true);
-    expect(preflight.find(item => item.id === 'ios-model')).toMatchObject({ severity: 'block', status: 'fail' });
+    expect(preflight.find(item => item.id === 'ios-model')).toMatchObject({ severity: 'warn', status: 'fail' });
   });
 });
 
@@ -208,7 +208,7 @@ test.describe('iOS persistence', () => {
 
     const skin = buildWorkSkin(parsed.project);
     const preflight = buildWorkSkinPreflight(parsed.project, skin.html, skin.violations, true);
-    expect(preflight.find(item => item.id === 'ios-model')).toMatchObject({ severity: 'block', status: 'pass' });
+    expect(preflight.find(item => item.id === 'ios-model')).toMatchObject({ severity: 'warn', status: 'pass' });
     expect(preflight.find(item => item.id === 'ios-media-fallback')).toMatchObject({ severity: 'warn', status: 'pass' });
     expect(preflight.find(item => item.id === 'ios-video-poster')).toMatchObject({ severity: 'warn', status: 'pass' });
     expect(preflight.find(item => item.id === 'ios-scroll-flattened')).toMatchObject({ severity: 'warn', status: 'fail' });

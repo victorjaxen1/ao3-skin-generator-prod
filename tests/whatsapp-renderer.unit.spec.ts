@@ -121,7 +121,7 @@ test.describe('WhatsApp renderer and export contract', () => {
     expect(transcript).toContain('Reactions: 😬 ×2');
     const skin = buildWorkSkin(parsed.project);
     const preflight = buildWorkSkinPreflight(parsed.project, skin.html, skin.violations, true);
-    expect(preflight.find(item => item.id === 'whatsapp-model')).toMatchObject({ severity: 'block', status: 'pass' });
+    expect(preflight.find(item => item.id === 'whatsapp-model')).toMatchObject({ severity: 'warn', status: 'pass' });
     expect(preflight.find(item => item.id === 'whatsapp-media-fallback')).toMatchObject({ severity: 'warn', status: 'pass' });
     expect(preflight.find(item => item.id === 'whatsapp-video-poster')).toMatchObject({ severity: 'warn', status: 'pass' });
   });

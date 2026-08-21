@@ -13,6 +13,7 @@ import { buildWorkSkinPreflight } from '../lib/preflight';
 import { hasProjectBackup } from '../lib/backupStatus';
 import { downloadTextFile, safeFilenamePart } from '../lib/download';
 import { getTwitterSceneMode, partitionTwitterSceneForExport } from '../lib/twitter';
+import { ModalDialog } from './ModalDialog';
 
 interface Props {
   project: SkinProject;
@@ -20,6 +21,9 @@ interface Props {
   setShowCodeModal: (show: boolean) => void;
   onBackupProject: (suffix?: string) => boolean;
 }
+
+type CopyState = 'idle' | 'copied' | 'failed';
+interface WorkSkinCopyState { css: CopyState; html: CopyState }
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -853,6 +857,7 @@ export const ExportPanel: React.FC<Props> = ({
   onBackupProject,
 }) => {
   const barRef = useRef<HTMLDivElement>(null);
+  const [showHelpPrompt, setShowHelpPrompt] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [exportScale, setExportScale] = useState(2);
   const [isExporting, setIsExporting] = useState(false);
@@ -867,7 +872,11 @@ export const ExportPanel: React.FC<Props> = ({
   const [sceneAltEdited, setSceneAltEdited] = useState(false);
   const [backupRevision, setBackupRevision] = useState(0);
   const [includeWorkSkinCredit, setIncludeWorkSkinCredit] = useState(false);
-  const [copiedPart, setCopiedPart] = useState<'css' | 'html' | null>(null);
+  const [copyState, setCopyState] = useState<WorkSkinCopyState>({ css: 'idle', html: 'idle' });
+  const [manualCopyOpen, setManualCopyOpen] = useState({ css: false, html: false });
+  const cssTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const htmlTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const copyTimersRef = useRef<Partial<Record<'css' | 'html', ReturnType<typeof setTimeout>>>>({});
   const workSkinPartsCopiedRef = useRef(new Set<'css' | 'html'>());
   const workSkinHandoffTrackedRef = useRef(false);
   /**
@@ -935,30 +944,34 @@ export const ExportPanel: React.FC<Props> = ({
   // Content issues remain visible in preflight, but they do not trap the
   // author in this dialog. Only an internal CSS/HTML contract failure means
   // the generated paste itself is unsafe to copy.
-  const workSkinBlocked = preflight.some(item =>
-    (item.id === 'ao3-css' || item.id === 'html-contract')
-    && item.severity === 'block'
-    && item.status === 'fail'
-  );
+  const blockers = preflight.filter(item => item.status === 'fail' && item.severity === 'block');
+  const warnings = preflight.filter(item => item.status === 'fail' && item.severity === 'warn');
+  const passed = preflight.filter(item => item.status === 'pass');
+  const info = preflight.filter(item => item.severity === 'info');
+  const workSkinBlocked = blockers.length > 0;
 
   useEffect(() => {
     // Getting output into an AO3 work is the genuinely confusing part of this
     // domain, so show the guidance to newcomers instead of hiding it behind a
     // click. Once someone dismisses it, respect that.
     try {
-      if (localStorage.getItem('ao3skin_help_dismissed') !== '1') setShowHelp(true);
+      if (localStorage.getItem('ao3skin_help_dismissed') !== '1') setShowHelpPrompt(true);
     } catch { /* ignore */ }
   }, []);
 
   const toggleHelp = () => {
-    setShowHelp(prev => {
-      const next = !prev;
-      try {
-        if (!next) localStorage.setItem('ao3skin_help_dismissed', '1');
-      } catch { /* ignore */ }
-      return next;
-    });
+    setShowHelp(prev => !prev);
   };
+
+  const dismissHelp = () => {
+    setShowHelp(false);
+    setShowHelpPrompt(false);
+    try { localStorage.setItem('ao3skin_help_dismissed', '1'); } catch { /* ignore */ }
+  };
+
+  useEffect(() => () => {
+    Object.values(copyTimersRef.current).forEach(timer => timer && clearTimeout(timer));
+  }, []);
 
   // A popover that outlives its trigger is worse than no popover. The trigger's
   // own wrapper stops mousedown propagating, so clicking inside the menu — or on
@@ -1106,6 +1119,10 @@ export const ExportPanel: React.FC<Props> = ({
     trackAnalytics({ name: 'export_started', outputType: 'work_skin', templateId: project.template });
     trackAnalytics({ name: 'export_ready', outputType: 'work_skin', templateId: project.template });
     setSkinScope('all');
+    setWorkSkinPreview('styled');
+    setIncludeWorkSkinCredit(false);
+    setCopyState({ css: 'idle', html: 'idle' });
+    setManualCopyOpen({ css: false, html: false });
     setShowWorkSkin(true);
   };
 
@@ -1133,8 +1150,12 @@ export const ExportPanel: React.FC<Props> = ({
     if (!skin) return;
     try {
       await navigator.clipboard.writeText(skin[part]);
-      setCopiedPart(part);
-      setTimeout(() => setCopiedPart(null), 2000);
+      setCopyState(previous => ({ ...previous, [part]: 'copied' }));
+      const previousTimer = copyTimersRef.current[part];
+      if (previousTimer) clearTimeout(previousTimer);
+      copyTimersRef.current[part] = setTimeout(() => {
+        setCopyState(previous => ({ ...previous, [part]: 'idle' }));
+      }, 2000);
       trackAnalytics({ name: 'output_copied', outputType: 'work_skin', part });
       workSkinPartsCopiedRef.current.add(part);
       if (workSkinPartsCopiedRef.current.size === 2 && !workSkinHandoffTrackedRef.current) {
@@ -1142,9 +1163,21 @@ export const ExportPanel: React.FC<Props> = ({
         trackAnalytics({ name: 'handoff_completed', outputType: 'work_skin', templateId: project.template });
       }
     } catch {
+      setCopyState(previous => ({ ...previous, [part]: 'failed' }));
+      setManualCopyOpen(previous => ({ ...previous, [part]: true }));
+      requestAnimationFrame(() => {
+        const textarea = part === 'css' ? cssTextareaRef.current : htmlTextareaRef.current;
+        textarea?.focus();
+        textarea?.select();
+      });
       trackAnalytics({ name: 'export_failed', outputType: 'work_skin', errorCode: 'CLIPBOARD_DENIED' });
-      showError('Your browser blocked the clipboard. Select this part and copy it manually.');
     }
+  };
+
+  const resetCopiedWorkSkin = () => {
+    setCopyState({ css: 'idle', html: 'idle' });
+    workSkinPartsCopiedRef.current.clear();
+    workSkinHandoffTrackedRef.current = false;
   };
 
   return (
@@ -1268,12 +1301,12 @@ export const ExportPanel: React.FC<Props> = ({
                 onClick={openWorkSkin}
                 // Set unconditionally, so the accessible name does not vary
                 // with viewport the way the visible text does.
-                aria-label="Accessible work skin"
+                aria-label="Open accessible work skin export"
                 title="Use a work skin instead — real selectable text that reflows on a phone, rather than an image"
                 className="flex-shrink-0 flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-[13px] font-medium text-stone-600 bg-stone-50 border border-stone-200 hover:bg-stone-100 transition-colors"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-                <span className="hidden sm:inline">Accessible work skin</span>
+                <span className="hidden min-[390px]:inline">Work skin</span>
               </button>
             )}
 
@@ -1314,19 +1347,30 @@ export const ExportPanel: React.FC<Props> = ({
               newcomer still lands on a tall bar — the complaint this phase
               answers is the *returning* author who dismissed it once and kept
               paying 148px for it. They now get ~52px forever. */}
+          {showHelpPrompt && !showHelp && (
+            <button
+              type="button"
+              onClick={() => setShowHelp(true)}
+              className="mt-2 w-full rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-left text-[11px] font-medium text-violet-800 hover:bg-violet-100"
+            >
+              Not sure which export to use? Compare the options.
+            </button>
+          )}
+
           {showHelp && (
             <div className="mt-2 bg-stone-50 border border-stone-200 rounded-lg p-2.5 space-y-1 text-[11px] text-stone-600 leading-relaxed">
               <p><strong className="text-stone-800">Save PNG</strong> — renders locally and downloads a PNG. Nothing is uploaded.</p>
               <p><strong className="text-stone-800">Get AO3 image code</strong> — uploads the finished scene to ImgBB, then gives you an <code className="bg-stone-200 px-1 rounded">&lt;img&gt;</code> tag. Visible story text is included in that upload.</p>
-              {workSkin && <p><strong className="text-stone-800">Accessible work skin</strong> — real selectable text with a readable skin-off fallback. Two pastes, one on your AO3 preferences page.</p>}
+              {workSkin && <p><strong className="text-stone-800">Work skin</strong> — real selectable text with a readable skin-off fallback. Two pastes, one on your AO3 preferences page.</p>}
+              <button type="button" onClick={dismissHelp} className="mt-1 rounded-md bg-stone-800 px-3 py-1.5 font-semibold text-white hover:bg-stone-900">Got it</button>
             </div>
           )}
         </div>
       </div>
 
       {showHostedConsent && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-60 p-4" role="dialog" aria-modal="true" aria-label="Confirm hosted image upload" onClick={() => setShowHostedConsent(false)}>
-          <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-2xl" onClick={event => event.stopPropagation()}>
+        <ModalDialog isOpen={showHostedConsent} onClose={() => setShowHostedConsent(false)} ariaLabel="Confirm hosted image upload" maxWidthClass="max-w-md">
+          <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-2xl">
             <h3 className="text-base font-semibold text-stone-900">Upload the finished scene?</h3>
             <p className="mt-2 text-sm leading-relaxed text-stone-600">
               To create AO3 image code, the finished scene image — including its visible text — will be uploaded to ImgBB. AO3 links to that hosted file and does not keep its own copy. Save a local PNG as a backup.
@@ -1337,6 +1381,7 @@ export const ExportPanel: React.FC<Props> = ({
               value={sceneAlt}
               maxLength={500}
               rows={2}
+              data-autofocus={!sceneAlt.trim() || undefined}
               onChange={event => { setSceneAlt(event.target.value); setSceneAltEdited(true); }}
               className="mt-2 w-full resize-none rounded-lg border border-stone-200 px-3 py-2 text-sm focus:ring-2 focus:ring-violet-500"
             />
@@ -1344,30 +1389,26 @@ export const ExportPanel: React.FC<Props> = ({
               <button type="button" onClick={confirmHostedSceneUpload} className="rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-violet-700">
                 Upload and get AO3 code
               </button>
-              <button type="button" onClick={() => setShowHostedConsent(false)} className="rounded-xl border border-stone-200 px-4 py-2.5 text-sm font-semibold text-stone-700 hover:bg-stone-50">
+              <button type="button" data-autofocus={sceneAlt.trim() ? true : undefined} onClick={() => setShowHostedConsent(false)} className="rounded-xl border border-stone-200 px-4 py-2.5 text-sm font-semibold text-stone-700 hover:bg-stone-50">
                 Cancel
               </button>
             </div>
           </div>
-        </div>
+        </ModalDialog>
       )}
 
       {/* ------------------------------------------------------------------ */}
       {/* AO3 Code modal                                                      */}
       {/* ------------------------------------------------------------------ */}
       {showCodeModal && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4"
-          onClick={() => setShowCodeModal(false)}
-        >
+        <ModalDialog isOpen={showCodeModal} onClose={() => setShowCodeModal(false)} labelledBy="ao3-code-title" maxWidthClass="max-w-2xl">
           <div
             className="bg-white rounded-xl shadow-2xl max-w-2xl w-full flex flex-col overflow-hidden"
-            onClick={e => e.stopPropagation()}
           >
             {/* Header */}
             <div className="bg-stone-900 text-white px-5 py-4 flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-semibold">Your AO3 code</h3>
+                <h3 id="ao3-code-title" className="text-sm font-semibold">Your AO3 code</h3>
                 <p className="text-xs text-stone-400 mt-0.5">
                   Paste into your chapter&apos;s HTML editor on AO3
                 </p>
@@ -1426,6 +1467,7 @@ export const ExportPanel: React.FC<Props> = ({
             <div className="px-5 pb-5 flex flex-col gap-3">
               <button
                 onClick={handleCopyCode}
+                data-autofocus
                 className={`w-full py-3 rounded-xl font-semibold text-sm transition-all ${
                   copiedCode
                     ? 'bg-green-500 text-white'
@@ -1467,307 +1509,104 @@ export const ExportPanel: React.FC<Props> = ({
               </button>
             </div>
           </div>
-        </div>
+        </ModalDialog>
       )}
 
       {/* ------------------------------------------------------------------ */}
       {/* Work skin modal — two paste targets, not one                        */}
       {/* ------------------------------------------------------------------ */}
       {showWorkSkin && skin && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4"
-          onClick={() => setShowWorkSkin(false)}
-          role="dialog"
-          aria-modal="true"
-          aria-label="Work skin"
+        <ModalDialog
+          isOpen={showWorkSkin}
+          onClose={() => setShowWorkSkin(false)}
+          ariaLabel="Copy your work skin to AO3"
+          maxWidthClass="max-w-2xl"
         >
-          <div
-            className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[92vh] flex flex-col overflow-hidden"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="bg-stone-900 text-white px-5 py-4 flex items-center justify-between flex-shrink-0">
+          <div className="flex max-h-[90dvh] flex-col">
+            <div className="flex flex-none items-center justify-between bg-stone-900 px-5 py-4 text-white">
               <div>
-                <h3 className="text-sm font-semibold">Your work skin</h3>
-                <p className="text-xs text-stone-400 mt-0.5">
-                  Two pieces, two different places on AO3
-                </p>
+                <h3 className="text-sm font-semibold">Copy your work skin to AO3</h3>
+                <p className="mt-0.5 text-xs text-stone-400">Copy the CSS once, then copy this scene&apos;s HTML into your chapter.</p>
               </div>
-              <button
-                onClick={() => setShowWorkSkin(false)}
-                aria-label="Close"
-                className="text-white hover:text-stone-300 text-2xl font-bold leading-none ml-4"
-              >
-                ×
-              </button>
+              <button type="button" data-autofocus={workSkinBlocked || undefined} onClick={() => setShowWorkSkin(false)} aria-label="Close" className="ml-4 text-2xl font-bold leading-none text-white hover:text-stone-300">×</button>
             </div>
 
-            <div className="p-5 overflow-y-auto">
-              <section className="mb-4 rounded-xl border border-stone-200 p-3" aria-label="Publishing preflight">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold text-stone-900">Publishing preflight</p>
-                    <p className="mt-0.5 text-[11px] text-stone-500">Blocks are generator/identity failures. Warnings are guidance, not claims that AO3 will reject the work.</p>
-                  </div>
-                  <button type="button" onClick={backupProject} className="flex-shrink-0 rounded-lg border border-stone-200 px-3 py-2 text-xs font-semibold text-stone-700 hover:bg-stone-50">
-                    Back up project
-                  </button>
-                </div>
-                <ul className="mt-3 space-y-1.5">
-                  {preflight.map(item => (
-                    <li key={item.id} className={`flex items-start gap-2 text-xs ${item.status === 'pass' ? 'text-green-800' : item.severity === 'block' ? 'text-red-800' : 'text-amber-800'}`}>
-                      <span aria-hidden="true">{item.status === 'pass' ? '✓' : item.severity === 'block' ? '✕' : '!'}</span>
-                      <span><strong className="uppercase text-[10px]">{item.severity}</strong> · {item.message}</span>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-
-              {skin.violations.length > 0 ? (
-                <div role="alert" className="bg-red-50 border border-red-200 rounded-xl p-3 mb-4">
-                  <p className="text-sm font-semibold text-red-900">AO3 would refuse this skin</p>
-                  <p className="text-xs text-red-800 mt-1 leading-relaxed">
-                    AO3 rejects a whole skin when it meets CSS it doesn&apos;t allow. This is a
-                    bug in the generator, not something you did — please report it, and use
-                    &ldquo;Get AO3 image code&rdquo; in the meantime.
-                  </p>
-                  <ul className="mt-2 space-y-1">
-                    {skin.violations.slice(0, 4).map((v, i) => (
-                      <li key={i} className="text-[11px] font-mono text-red-700">
-                        {v.subject}: {v.message}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : (
-                <div className="bg-green-50 border border-green-200 rounded-xl p-3 mb-4 flex items-start gap-2">
-                  <span className="text-green-600 font-bold">✓</span>
-                  <div>
-                    <p className="text-sm font-semibold text-green-900">{AO3_RULESET_STATUS}</p>
-                    <p className="text-xs text-green-800 mt-0.5">
-                      Your readers get selectable text that reflows on a phone, instead of a
-                      picture they have to zoom into.
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              <label className="mb-5 flex items-start gap-2 rounded-xl border border-stone-200 bg-stone-50 p-3 text-xs text-stone-600">
-                <input
-                  type="checkbox"
-                  checked={includeWorkSkinCredit}
-                  onChange={e => setIncludeWorkSkinCredit(e.target.checked)}
-                  className="mt-0.5 accent-violet-600"
-                />
-                <span>
-                  <strong className="text-stone-800">Add optional tool credit</strong>
-                  <span className="block mt-0.5">Adds plain “Made with AO3 SkinGen” text to the chapter HTML. No link or commercial message.</span>
-                </span>
-              </label>
-
-              <section className="mb-5 rounded-xl border border-stone-200 p-3">
-                <div role="tablist" aria-label="Work skin preview" className="flex rounded-lg bg-stone-100 p-1">
-                  <button type="button" role="tab" aria-selected={workSkinPreview === 'styled'} onClick={() => setWorkSkinPreview('styled')} className={`flex-1 rounded-md px-3 py-2 text-xs font-semibold ${workSkinPreview === 'styled' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500'}`}>
-                    Styled
-                  </button>
-                  <button type="button" role="tab" aria-selected={workSkinPreview === 'fallback'} onClick={() => { setWorkSkinPreview('fallback'); trackAnalytics({ name: 'fallback_preview_opened', templateId: project.template }); }} className={`flex-1 rounded-md px-3 py-2 text-xs font-semibold ${workSkinPreview === 'fallback' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500'}`}>
-                    Without work skin / downloads
-                  </button>
-                </div>
-                {workSkinPreview === 'styled' ? (
-                  <div className="mt-3 max-h-72 overflow-auto rounded-lg border border-stone-200 bg-white p-3">
-                    <style dangerouslySetInnerHTML={{ __html: skin.css }} />
-                    <div id="workskin" dangerouslySetInnerHTML={{ __html: skin.html }} />
+            <div className="min-h-0 overflow-y-auto overscroll-contain p-5">
+              <section aria-label="Publishing preflight">
+                {workSkinBlocked ? (
+                  <div role="alert" className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3">
+                    <p className="text-sm font-semibold text-red-900">The generated output needs repair</p>
+                    <p className="mt-1 text-xs leading-relaxed text-red-800">{blockers[0]?.message} This is a generator problem, so copying is disabled.</p>
                   </div>
                 ) : (
-                  <div className="mt-3 space-y-3">
-                    <p className="text-xs leading-relaxed text-stone-600">
-                      This is the reading order and text your export is designed to preserve when a reader hides the work skin or downloads the work. AO3 conversion can still change presentation.
-                    </p>
-                    <div className="max-h-56 overflow-auto rounded-lg border border-stone-200 bg-white p-3" dangerouslySetInnerHTML={{ __html: skin.html }} />
-                    <textarea readOnly value={transcript} rows={8} aria-label="Scene transcript" className="w-full resize-y rounded-lg border border-stone-200 bg-white p-3 font-mono text-xs" onClick={event => event.currentTarget.select()} />
-                    <button type="button" onClick={downloadTranscript} className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-xs font-semibold text-stone-700 hover:bg-stone-100">
-                      Download transcript (.txt)
-                    </button>
+                  <div className="mb-3 flex items-start gap-2 rounded-xl border border-green-200 bg-green-50 p-3">
+                    <span aria-hidden="true" className="font-bold text-green-700">✓</span>
+                    <p className="text-xs text-green-900"><strong>{AO3_RULESET_STATUS}</strong> Selectable text and the skin-off reading order are ready.</p>
+                  </div>
+                )}
+                {warnings.length > 0 && (
+                  <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                    <p className="font-semibold">{warnings.length} content warning{warnings.length === 1 ? '' : 's'} — copying remains available.</p>
+                    <ul className="mt-1.5 space-y-1">{warnings.slice(0, 3).map(item => <li key={item.id}>• {item.message}</li>)}</ul>
+                    {warnings.length > 3 && <a href="#workskin-checks" className="mt-1.5 inline-block font-semibold underline">{warnings.length - 3} more warnings</a>}
                   </div>
                 )}
               </section>
 
-              {/* Step 1 — CSS */}
-              <div className="mb-5">
-                <div className="flex items-center gap-2 mb-1.5">
-                  <span className="w-5 h-5 rounded-full bg-stone-800 text-white text-[11px] font-bold flex items-center justify-center flex-shrink-0">1</span>
-                  <p className="text-sm font-semibold text-stone-900">The style</p>
+              <section className="mb-4 rounded-xl border border-stone-200 p-3">
+                <p className="text-xs font-semibold text-stone-900">What should this one work skin cover?</p>
+                <div role="radiogroup" aria-label="What the skin covers" className="mt-2 flex rounded-lg bg-stone-100 p-1">
+                  {([
+                    ['all', 'All four platforms'],
+                    ['platform', `Just ${PLATFORM_NAME[project.template]}`],
+                  ] as const).map(([value, label]) => (
+                    <button key={value} type="button" role="radio" aria-checked={skinScope === value} onClick={() => { setSkinScope(value); resetCopiedWorkSkin(); }} className={`flex-1 rounded-md px-2 py-2 text-xs font-semibold ${skinScope === value ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500'}`}>{label}</button>
+                  ))}
                 </div>
-                <p className="text-xs text-stone-500 mb-2 ml-7 leading-relaxed">
-                  On AO3: <strong className="text-stone-700">Preferences → Skins → Create Work Skin</strong>.
-                  Paste this into the CSS box, give it a title, and submit. You only do this once —
-                  the same skin can be attached to every fic you post.
-                </p>
+                <p className="mt-2 text-[11px] leading-relaxed text-stone-500">A work can select only one work skin. Choose all four if another chapter may use a different platform.</p>
+              </section>
 
-                {/* The choice a work skin forces, because AO3 allows a work
-                    exactly one. An author whose chapter 4 is a different app
-                    cannot simply save a second skin — they would have to merge
-                    two stylesheets by hand, or lose the first. So the wider
-                    skin has to be offered here, at the moment they are about to
-                    save one, rather than discovered later.
+              <section className="mb-4 rounded-xl border border-stone-200 p-4">
+                <div className="flex items-center gap-2"><span className="flex h-5 w-5 flex-none items-center justify-center rounded-full bg-stone-800 text-[11px] font-bold text-white">1</span><h4 className="text-sm font-semibold text-stone-900">Create or update the AO3 work skin</h4></div>
+                <p className="ml-7 mt-2 text-xs leading-relaxed text-stone-600">Go to <strong>Preferences → Skins → Create Work Skin</strong>. Titles are unique across the whole of AO3, so include your username—for example <code className="rounded bg-stone-100 px-1">{skinScope === 'all' ? MASTER_TITLE_EXAMPLE : SKIN_TITLE_EXAMPLE[project.template]}</code>. If this work already has a skin, merge this CSS into it.</p>
+                <button type="button" data-autofocus={!workSkinBlocked || undefined} onClick={() => void copyWorkSkinPart('css')} disabled={workSkinBlocked} className={`mt-3 w-full rounded-xl py-2.5 text-sm font-semibold text-white ${workSkinBlocked ? 'cursor-not-allowed bg-stone-300' : copyState.css === 'copied' ? 'bg-green-600' : 'bg-stone-800 hover:bg-stone-900'}`}>{copyState.css === 'copied' ? '✓ Work skin CSS copied' : 'Copy work skin CSS'}</button>
+                <p aria-live="polite" aria-atomic="true" className="sr-only">{copyState.css === 'copied' ? 'Work skin CSS copied' : copyState.css === 'failed' ? 'Clipboard blocked. Copy the work skin CSS manually.' : ''}</p>
+                <button type="button" aria-expanded={manualCopyOpen.css} onClick={() => setManualCopyOpen(previous => ({ ...previous, css: !previous.css }))} className="mt-2 text-xs font-medium text-violet-700 underline">{manualCopyOpen.css ? 'Hide CSS' : 'Copy CSS manually'}</button>
+                {manualCopyOpen.css && <div className="mt-2">{copyState.css === 'failed' && <p role="alert" className="mb-2 text-xs text-red-700">Your browser blocked the clipboard. Select and copy this CSS manually.</p>}<textarea ref={cssTextareaRef} readOnly value={skin.css} rows={7} aria-label="Work skin CSS" className="w-full resize-y rounded-lg border border-gray-700 bg-gray-950 p-3 font-mono text-[11px] text-green-400" onClick={event => event.currentTarget.select()} /></div>}
+              </section>
 
-                    Defaults to all four platforms so a later chapter never
-                    requires a second skin or a manual merge. */}
-                <div className="ml-7 mb-2.5">
-                  <div
-                    role="radiogroup"
-                    aria-label="What the skin covers"
-                    className="flex rounded-lg border border-stone-200 p-0.5 bg-stone-50"
-                  >
-                    {([
-                      ['platform', `Just ${PLATFORM_NAME[project.template]}`],
-                      ['all', 'All four platforms'],
-                    ] as const).map(([value, label]) => (
-                      <button
-                        key={value}
-                        role="radio"
-                        aria-checked={skinScope === value}
-                        onClick={() => setSkinScope(value)}
-                        className={`flex-1 py-1.5 rounded-md text-xs font-semibold transition-colors ${
-                          skinScope === value
-                            ? 'bg-white text-stone-900 shadow-sm'
-                            : 'text-stone-500 hover:text-stone-700'
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                  <p className="text-[11px] text-stone-500 mt-1.5 leading-relaxed">
-                    {skinScope === 'all' ? (
-                      <>
-                        Covers Twitter, Google, iMessage and WhatsApp, in light and dark.
-                        A fic can only have <strong>one</strong> work skin, so this is the one
-                        to take if a later chapter might use a different app — you save it once
-                        and never come back. It is longer, because it holds every style.
-                      </>
-                    ) : (
-                      <>
-                        Only the {PLATFORM_NAME[project.template]} style — the shortest thing
-                        that works. If a later chapter uses a different app you will need the
-                        other option, since a fic can only have one work skin.
-                      </>
-                    )}
-                  </p>
+              <label className="mb-4 flex items-start gap-2 rounded-xl border border-stone-200 bg-stone-50 p-3 text-xs text-stone-600">
+                <input type="checkbox" checked={includeWorkSkinCredit} onChange={event => { setIncludeWorkSkinCredit(event.target.checked); resetCopiedWorkSkin(); }} className="mt-0.5 accent-violet-600" />
+                <span><strong className="text-stone-800">Add optional tool credit to the chapter HTML</strong><span className="mt-0.5 block">Plain “Made with AO3 SkinGen” text, with no link or commercial message.</span></span>
+              </label>
+
+              <section className="mb-4 rounded-xl border border-stone-200 p-4">
+                <div className="flex items-center gap-2"><span className="flex h-5 w-5 flex-none items-center justify-center rounded-full bg-violet-600 text-[11px] font-bold text-white">2</span><h4 className="text-sm font-semibold text-stone-900">Add this scene to the chapter</h4></div>
+                <p className="ml-7 mt-2 text-xs leading-relaxed text-stone-600">Switch the chapter editor to <strong>HTML</strong>, paste this scene, then use <strong>Select Work Skin</strong> to choose the saved skin for the work.</p>
+                <button type="button" onClick={() => void copyWorkSkinPart('html')} disabled={workSkinBlocked} className={`mt-3 w-full rounded-xl py-2.5 text-sm font-semibold text-white ${workSkinBlocked ? 'cursor-not-allowed bg-stone-300' : copyState.html === 'copied' ? 'bg-green-600' : 'bg-violet-600 hover:bg-violet-700'}`}>{copyState.html === 'copied' ? '✓ Scene HTML copied' : 'Copy scene HTML'}</button>
+                <p aria-live="polite" aria-atomic="true" className="sr-only">{copyState.html === 'copied' ? 'Scene HTML copied' : copyState.html === 'failed' ? 'Clipboard blocked. Copy the scene HTML manually.' : ''}</p>
+                <button type="button" aria-expanded={manualCopyOpen.html} onClick={() => setManualCopyOpen(previous => ({ ...previous, html: !previous.html }))} className="mt-2 text-xs font-medium text-violet-700 underline">{manualCopyOpen.html ? 'Hide HTML' : 'Copy HTML manually'}</button>
+                {manualCopyOpen.html && <div className="mt-2">{copyState.html === 'failed' && <p role="alert" className="mb-2 text-xs text-red-700">Your browser blocked the clipboard. Select and copy this HTML manually.</p>}<textarea ref={htmlTextareaRef} readOnly value={skin.html} rows={6} aria-label="Work skin HTML" className="w-full resize-y rounded-lg border border-gray-700 bg-gray-950 p-3 font-mono text-[11px] text-blue-300" onClick={event => event.currentTarget.select()} /></div>}
+              </section>
+
+              <section className="mb-4 rounded-xl border border-stone-200 p-3">
+                <div role="tablist" aria-label="Work skin preview" className="flex rounded-lg bg-stone-100 p-1">
+                  <button type="button" role="tab" aria-selected={workSkinPreview === 'styled'} onClick={() => setWorkSkinPreview('styled')} className={`flex-1 rounded-md px-3 py-2 text-xs font-semibold ${workSkinPreview === 'styled' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500'}`}>Styled</button>
+                  <button type="button" role="tab" aria-selected={workSkinPreview === 'fallback'} onClick={() => { setWorkSkinPreview('fallback'); trackAnalytics({ name: 'fallback_preview_opened', templateId: project.template }); }} className={`flex-1 rounded-md px-3 py-2 text-xs font-semibold ${workSkinPreview === 'fallback' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500'}`}>Without work skin / downloads</button>
                 </div>
+                {workSkinPreview === 'styled' ? <div className="mt-3 max-h-72 overflow-auto rounded-lg border border-stone-200 bg-white p-3"><style dangerouslySetInnerHTML={{ __html: skin.css }} /><div id="workskin" dangerouslySetInnerHTML={{ __html: skin.html }} /></div> : <div className="mt-3 space-y-3"><p className="text-xs leading-relaxed text-stone-600">This is the reading order and text your export is designed to preserve when a reader hides the work skin or downloads the work. AO3 conversion can still change presentation.</p><div className="max-h-56 overflow-auto rounded-lg border border-stone-200 bg-white p-3" dangerouslySetInnerHTML={{ __html: skin.html }} /><textarea readOnly value={transcript} rows={8} aria-label="Scene transcript" className="w-full resize-y rounded-lg border border-stone-200 bg-white p-3 font-mono text-xs" onClick={event => event.currentTarget.select()} /><button type="button" onClick={downloadTranscript} className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-xs font-semibold text-stone-700 hover:bg-stone-100">Download transcript (.txt)</button></div>}
+              </section>
 
-                {/* The two things AO3 will not tell an author until it has
-                    already cost them something: a title collision is a
-                    validation error at submit, and a second work skin on a fic
-                    that already has one is silent — AO3 applies whichever is
-                    selected and the other simply never runs. Both come from
-                    AO3's own work-skin FAQ. */}
-                <div className="ml-7 mb-2 bg-amber-50 border border-amber-200 rounded-lg p-2.5 space-y-2 text-[11px] text-amber-900 leading-relaxed">
-                  <p>
-                    <strong>Put your username in the title.</strong> Titles have to be
-                    unique across the whole of AO3, not just your account, so a plain
-                    name was claimed years ago and AO3 rejects it when you submit.
-                    Something like{' '}
-                    <code className="bg-amber-100 px-1 rounded">
-                      {skinScope === 'all'
-                        ? MASTER_TITLE_EXAMPLE
-                        : SKIN_TITLE_EXAMPLE[project.template]}
-                    </code>{' '}
-                    works.
-                  </p>
-                  <p>
-                    <strong>Already using a work skin on this fic?</strong> A work can
-                    only have one. Add this CSS to the end of that skin instead of
-                    making a second one — if you create a new skin, the fic loses
-                    whatever the old one was doing.
-                  </p>
-                </div>
-                <textarea
-                  readOnly
-                  value={skin.css}
-                  rows={6}
-                  aria-label="Work skin CSS"
-                  className="w-full font-mono text-[11px] bg-gray-950 text-green-400 border border-gray-700 rounded-lg p-3 resize-none focus:outline-none"
-                  onClick={e => (e.target as HTMLTextAreaElement).select()}
-                />
-                <button
-                  onClick={() => void copyWorkSkinPart('css')}
-                  disabled={workSkinBlocked}
-                  className={`w-full mt-2 py-2.5 rounded-xl font-semibold text-sm transition-all ${
-                    workSkinBlocked
-                      ? 'bg-stone-100 text-stone-400 cursor-not-allowed'
-                      : copiedPart === 'css'
-                      ? 'bg-green-500 text-white'
-                      : 'bg-stone-800 text-white hover:bg-stone-900'
-                  }`}
-                >
-                  {copiedPart === 'css' ? '✓ Copied' : 'Copy the CSS'}
-                </button>
-              </div>
+              <details id="workskin-checks" className="mb-4 rounded-xl border border-stone-200 p-3">
+                <summary className="cursor-pointer text-xs font-semibold text-stone-800">Checks and warnings · {passed.length} passed · {warnings.length} warnings</summary>
+                <ul className="mt-3 space-y-1.5">{[...blockers, ...warnings, ...passed, ...info.filter(item => item.status !== 'pass')].map(item => <li key={item.id} className={`text-xs ${item.status === 'pass' ? 'text-green-800' : item.severity === 'block' ? 'text-red-800' : 'text-amber-800'}`}>{item.status === 'pass' ? '✓' : item.severity === 'block' ? '✕' : '!'} {item.message}</li>)}</ul>
+              </details>
 
-              {/* Step 2 — HTML */}
-              <div>
-                <div className="flex items-center gap-2 mb-1.5">
-                  <span className="w-5 h-5 rounded-full bg-stone-800 text-white text-[11px] font-bold flex items-center justify-center flex-shrink-0">2</span>
-                  <p className="text-sm font-semibold text-stone-900">The conversation</p>
-                </div>
-                <p className="text-xs text-stone-500 mb-2 ml-7 leading-relaxed">
-                  In your chapter editor, switch to <strong className="text-stone-700">HTML mode</strong> and
-                  paste this where the conversation should appear. Then set{' '}
-                  <strong className="text-stone-700">Select Work Skin</strong> to the skin you made
-                  in step 1 — without that, this is unstyled text.
-                </p>
-                {skinScope === 'all' && (
-                  // Worth saying once: the markup is identical under either
-                  // choice, so the wider skin costs nothing here. Every block
-                  // names its own platform and theme, and the saved skin
-                  // recognises it.
-                  <p className="text-[11px] text-stone-500 mb-2 ml-7 leading-relaxed">
-                    For the next conversation — any platform, light or dark — come back and
-                    copy this part again. The skin from step 1 already knows what to do with it.
-                  </p>
-                )}
-                <textarea
-                  readOnly
-                  value={skin.html}
-                  rows={5}
-                  aria-label="Work skin HTML"
-                  className="w-full font-mono text-[11px] bg-gray-950 text-blue-300 border border-gray-700 rounded-lg p-3 resize-none focus:outline-none"
-                  onClick={e => (e.target as HTMLTextAreaElement).select()}
-                />
-                <button
-                  onClick={() => void copyWorkSkinPart('html')}
-                  disabled={workSkinBlocked}
-                  className={`w-full mt-2 py-2.5 rounded-xl font-semibold text-sm transition-all ${
-                    workSkinBlocked
-                      ? 'bg-stone-100 text-stone-400 cursor-not-allowed'
-                      : copiedPart === 'html'
-                      ? 'bg-green-500 text-white'
-                      : 'bg-violet-600 text-white hover:bg-violet-700'
-                  }`}
-                >
-                  {copiedPart === 'html' ? '✓ Copied' : 'Copy the HTML'}
-                </button>
-              </div>
-
-              {/* The third thing an author is never told, and the one that
-                  breaks a fic that has been up for a year. AO3 never copies an
-                  image — it links to wherever it lives. A skin author on
-                  Cloudinary went over the free tier and every image in every
-                  fic using their skin died at once (KNOWLEDGE §7). This does
-                  not pretend "Get AO3 image code" avoids it: that path uploads to
-                  ImgBB, which is one file rather than many, and still not AO3. */}
-              <p className="text-[11px] text-stone-400 mt-5 leading-relaxed">
-                <strong className="text-stone-500">About the icons.</strong> They load from our
-                image host each time somebody reads your fic — AO3 never keeps its own copy. If a
-                host ever stops serving a file, it disappears from every chapter you have already
-                posted, with no warning. It has happened to popular skins before.
-                &ldquo;Get AO3 image code&rdquo; is one picture instead of many, but it is hosted off
-                AO3 too, so keep the PNG somewhere you can re-upload it from.
-              </p>
+              <button type="button" onClick={backupProject} className="w-full rounded-xl border border-stone-200 px-4 py-2.5 text-sm font-semibold text-stone-700 hover:bg-stone-50">Back up editable project</button>
+              <p className="mt-3 text-[11px] leading-relaxed text-stone-500"><strong>Remote icons and media remain external dependencies.</strong> AO3 does not copy those files. Readers and downloads may also see the skin-off fallback, so keep the editable project and transcript.</p>
             </div>
           </div>
-        </div>
+        </ModalDialog>
       )}
 
       <ToastContainer toasts={toasts} removeToast={removeToast} />

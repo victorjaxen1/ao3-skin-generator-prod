@@ -132,7 +132,7 @@ export function buildWorkSkinPreflight(
   // than a defect (§11.3).
   const iosScrollFlattened = isIOS && project.settings.iosFrameMode === 'phone' && project.settings.iosScrollable === true;
 
-  return [
+  const items: PreflightItem[] = [
     {
       id: 'ao3-css',
       severity: 'block',
@@ -147,21 +147,21 @@ export function buildWorkSkinPreflight(
     },
     {
       id: 'speaker-identity',
-      severity: 'block',
+      severity: 'warn',
       status: missingSpeaker ? 'fail' : 'pass',
       message: missingSpeaker ? 'An incoming message has no speaker, making the fallback ambiguous.' : 'Fallback speaker order is identifiable.',
     },
     {
       id: 'whatsapp-model',
-      severity: 'block',
+      severity: 'warn',
       status: whatsappErrors.length ? 'fail' : 'pass',
-      message: whatsappErrors.length ? `WhatsApp has ${whatsappErrors.length} blocking content issue${whatsappErrors.length === 1 ? '' : 's'}: ${whatsappErrors[0]}` : 'WhatsApp replies, links, media, events, and reactions are valid.',
+      message: whatsappErrors.length ? `WhatsApp has ${whatsappErrors.length} content warning${whatsappErrors.length === 1 ? '' : 's'}: ${whatsappErrors[0]}` : 'WhatsApp replies, links, media, events, and reactions are valid.',
     },
     {
       id: 'ios-model',
-      severity: 'block',
+      severity: 'warn',
       status: iosErrors.length ? 'fail' : 'pass',
-      message: iosErrors.length ? `iMessage has ${iosErrors.length} blocking content issue${iosErrors.length === 1 ? '' : 's'}: ${iosErrors[0]}` : 'iMessage replies, links, media, events, and Tapbacks are valid.',
+      message: iosErrors.length ? `iMessage has ${iosErrors.length} content warning${iosErrors.length === 1 ? '' : 's'}: ${iosErrors[0]}` : 'iMessage replies, links, media, events, and Tapbacks are valid.',
     },
     {
       id: 'attachment-alt',
@@ -270,4 +270,13 @@ export function buildWorkSkinPreflight(
       message: 'A no-skin reading-order preview and transcript are available below.',
     },
   ];
+
+  return items.filter(item => {
+    if (item.id.startsWith('whatsapp-')) return project.template === 'android';
+    if (item.id.startsWith('ios-')) return project.template === 'ios';
+    if (item.id === 'video-fallback') return project.template === 'twitter';
+    if (item.id === 'speaker-identity') return project.template === 'ios' || project.template === 'android';
+    if (item.id === 'contrast') return project.template !== 'google';
+    return true;
+  });
 }

@@ -36,6 +36,19 @@ test('composes work-skin blocks and warnings without calling warnings AO3 failur
   expect(report.find(item => item.id === 'project-backup')).toMatchObject({ severity: 'warn', status: 'fail' });
 });
 
+test('preflight only returns checks applicable to the current platform', () => {
+  for (const template of ['ios', 'android', 'twitter', 'google'] as const) {
+    const project = { ...defaultProject(), template };
+    const skin = buildWorkSkin(project);
+    const ids = buildWorkSkinPreflight(project, skin.html, skin.violations, false).map(item => item.id);
+    expect(ids.some(id => id.startsWith('ios-'))).toBe(template === 'ios');
+    expect(ids.some(id => id.startsWith('whatsapp-'))).toBe(template === 'android');
+    expect(ids.includes('video-fallback')).toBe(template === 'twitter');
+    expect(ids.includes('speaker-identity')).toBe(template === 'ios' || template === 'android');
+    expect(ids.includes('contrast')).toBe(template !== 'google');
+  }
+});
+
 test('escapes attachment alt text in generated work-skin HTML', () => {
   const project = defaultProject();
   project.messages[0].attachments = [{ type: 'image', url: 'https://example.com/a.jpg', alt: 'A "quote" <tag>' }];

@@ -50,8 +50,8 @@ test('the modal hands over two pieces, each with its own destination', async ({ 
   // The step everyone forgets: the HTML does nothing without the skin attached.
   await expect(page.getByText('Select Work Skin')).toBeVisible();
 
-  await expect(page.getByRole('button', { name: 'Copy the CSS' })).toBeEnabled();
-  await expect(page.getByRole('button', { name: 'Copy the HTML' })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Copy work skin CSS' })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Copy scene HTML' })).toBeEnabled();
 });
 
 /**
@@ -74,15 +74,17 @@ test('the modal states the three things AO3 will not', async ({ page }) => {
   await expect(dialog).toContainText('yourname — chat skins');
 
   // One skin per work: an author who has one already must merge, not create.
-  await expect(dialog).toContainText('A work can only have one');
+  await expect(dialog).toContainText('A work can select only one');
 
   // The images are not AO3's, and the modal must not pretend otherwise.
-  await expect(dialog).toContainText('AO3 never keeps its own copy');
+  await expect(dialog).toContainText('AO3 does not copy those files');
 });
 
 test('the exported CSS and HTML are what AO3 will accept', async ({ page }) => {
   await openTemplate(page, 'twitter-verified-account');
   await page.getByRole('button', { name: /work skin/i }).click();
+  await page.getByRole('button', { name: 'Copy CSS manually' }).click();
+  await page.getByRole('button', { name: 'Copy HTML manually' }).click();
 
   const css = await page.getByLabel('Work skin CSS').inputValue();
   const html = await page.getByLabel('Work skin HTML').inputValue();
@@ -120,6 +122,8 @@ test('the author can take one skin for everything, or just this platform', async
   // The complete skin is the default, so later chapters never require a
   // second skin or a manual merge.
   await expect(allFour).toHaveAttribute('aria-checked', 'true');
+  await dialog.getByRole('button', { name: 'Copy CSS manually' }).click();
+  await dialog.getByRole('button', { name: 'Copy HTML manually' }).click();
   const everythingByDefault = await page.getByLabel('Work skin CSS').inputValue();
 
   await justThis.click();
@@ -171,9 +175,10 @@ test('content preflight errors never disable the CSS or HTML copy actions', asyn
   await page.goto('/');
   await page.getByRole('button', { name: /work skin/i }).click();
   const dialog = page.getByRole('dialog', { name: 'Work skin' });
-  await expect(dialog).toContainText('blocking content issue');
-  await expect(dialog.getByRole('button', { name: 'Copy the CSS' })).toBeEnabled();
-  await expect(dialog.getByRole('button', { name: 'Copy the HTML' })).toBeEnabled();
+  await expect(dialog).toContainText('content warning');
+  await expect(dialog).not.toContainText('blocking content issue');
+  await expect(dialog.getByRole('button', { name: 'Copy work skin CSS' })).toBeEnabled();
+  await expect(dialog.getByRole('button', { name: 'Copy scene HTML' })).toBeEnabled();
 });
 
 test('Twitter video players exist only in copied work HTML, never the raster preview or ImgBB payload', async ({ page }) => {
@@ -198,6 +203,7 @@ test('Twitter video players exist only in copied work HTML, never the raster pre
   await expect(preview.locator('iframe,video,source,track')).toHaveCount(0);
 
   await page.getByRole('button', { name: /work skin/i }).click();
+  await page.getByRole('button', { name: 'Copy HTML manually' }).click();
   const workHtml = await page.getByLabel('Work skin HTML').inputValue();
   expect(workHtml).toContain('<iframe');
   expect(workHtml).toContain('https://www.youtube-nocookie.com/embed/bN8449nalT8');
