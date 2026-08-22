@@ -660,13 +660,23 @@ export default function HomePage() {
    * body.overflow while a sheet is open and clears it on close — sharing one
    * property would have the sheet unlock the page every time it shut.
    *
-   * Scoped to the workspace: the platform picker returns before this runs its
-   * course, and it is a legitimately tall, scrolling page.
+   * The picker is a legitimately tall, scrolling page. Google examples are
+   * its last group, so choosing one can replace the picker while the document
+   * is still scrolled several hundred pixels down. Locking overflow preserves
+   * that old offset; it does not move the document back to the top. The fixed
+   * header and export bar then stay in place while the workspace starts above
+   * the viewport, which looks like a large blank strip above the export bar.
+   * Reset the old picker scroll before applying the lock.
+   *
+   * Scoped to the workspace: the picker returns before this runs its course.
    */
   useEffect(() => {
     if (!isLoaded || showPicker) return;
     const root = document.documentElement;
     const previous = root.style.overflow;
+    window.scrollTo(0, 0);
+    root.scrollTop = 0;
+    document.body.scrollTop = 0;
     root.style.overflow = 'hidden';
     return () => { root.style.overflow = previous; };
   }, [isLoaded, showPicker]);
@@ -743,6 +753,7 @@ export default function HomePage() {
           otherwise cover the compose input. ExportPanel publishes its own
           measured height as --export-bar-h. */}
       <div
+        data-testid="workspace-content"
         className="flex-1 min-h-0 flex overflow-hidden"
         style={{ paddingBottom: 'calc(var(--export-bar-h, 0px) + var(--analytics-consent-h, 0px))' }}
       >

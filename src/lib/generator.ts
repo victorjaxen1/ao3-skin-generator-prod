@@ -1967,8 +1967,13 @@ ${imageCompositionCSS('.ios-images')}
 #workskin .ios-event dl{margin:0;}
 #workskin .ios-event dd{display:inline-block;font-size:0.688em;font-weight:600;padding:0.2em 0.5em;}
 #workskin .ios-event-system dd{max-width:82%;font-weight:400;}
-#workskin dd.bubble.image-bubble{padding:0.533em 0.8em;max-width:60%;overflow:visible;}
-#workskin dd.bubble.multi-image-bubble{width:17.333em;max-width:82%;box-sizing:border-box;}
+/* A media bubble uses the same 17.333em ceiling as an ordinary iMessage
+   bubble, but unlike a text-only bubble it has a stable width. The old 60%
+   ceiling was resolved inside an auto-sized flex wrapper and capped media at
+   roughly 13.9em even when the row had more room. Reply cards, sender labels,
+   and captions then made that shrink-to-fit geometry needlessly fragile. One
+   image and a collage now share one predictable box. */
+#workskin dd.bubble.image-bubble{width:17.333em;padding:0.533em 0.8em;box-sizing:border-box;overflow:visible;}
 #workskin dd.bubble.image-bubble img.message-image{width:100%;height:auto;display:block;border-radius:0.8em;margin-top:0.4em;}
 #workskin dd.bubble.image-bubble.out{border-bottom-right-radius:0.267em;}
 #workskin dd.bubble.image-bubble.out img.message-image{border-bottom-right-radius:0.267em;}
@@ -2209,7 +2214,11 @@ ${PARAGRAPH_RESET_CSS}
 #workskin .row.in dl.msg{align-items:flex-start;}
 #workskin dd{margin:0;}
 #workskin dd.bubble{position:relative;display:inline-block;min-width:2.5em;max-width:20em;padding:0.5em 0.714em;border-radius:0.571em;line-height:1.4;font-size:0.875em;box-shadow:${colour.bubbleShadow};white-space:normal;word-break:keep-all;overflow-wrap:anywhere;}
-#workskin dd.bubble.multi-image-bubble{width:20em;max-width:100%;box-sizing:border-box;}
+/* WhatsApp media uses the ordinary bubble's existing 20em ceiling as a real
+   width. The msg wrapper still keeps every message inside the platform's side
+   gutter; the media box itself no longer shrink-wraps around a reply excerpt
+   or sender name. Single images and collages therefore render consistently. */
+#workskin dd.bubble.image-bubble{width:20em;max-width:100%;box-sizing:border-box;overflow:visible;}
 #workskin dd.bubble.out{background:${colour.senderBubbleBg};color:${colour.bubbleTextColor};}
 #workskin dd.bubble.in{background:${colour.receiverBubbleBg};color:${colour.bubbleTextColor};}
 #workskin .row.out.last dd.bubble,#workskin .row.out.single dd.bubble{border-bottom-right-radius:0.143em;}
